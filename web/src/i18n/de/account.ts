@@ -28,6 +28,7 @@ const account: typeof en = {
       devices: 'Geräte',
       password: 'Passwort',
       twoStep: 'Zweistufige Anmeldung',
+      provider: 'Identitätsanbieter',
     },
     metadataLanguage: {
       help: 'Die Sprache der Namen, Beschreibungen und Bilder von Titeln in deinen Apps, sofern eines der Add-ons des Servers sie in dieser Sprache beschreibt. Titel, die kein Add-on darin beschreibt, behalten die Beschreibung des Servers. Genres, Altersfreigaben und Personen bleiben für alle gleich. Namen, die Polyfin selbst erzeugt, etwa für Staffeln, folgen ihr, wenn Polyfin sie spricht: Englisch, Französisch, Deutsch, Spanisch, Italienisch oder Portugiesisch.',
@@ -493,6 +494,17 @@ const account: typeof en = {
     changePassword: 'Passwort ändern',
     changingPassword: 'Wird geändert…',
     passwordChanged: 'Dein Passwort wurde geändert.',
+    provider: {
+      help: (name: string) =>
+        `Sobald dein Konto mit deinem Konto bei ${name} verknüpft ist, öffnet „Mit ${name} anmelden“ es, in dieser Admin-App und im Web-Player.`,
+      linked: 'Verknüpft',
+      notLinked: 'Nicht verknüpft',
+      link: (name: string) => `Mit ${name} verknüpfen`,
+      otherAddress:
+        'Eine Verknüpfung beginnt an der öffentlichen Adresse des Servers. Öffne diese Seite dort:',
+      taken:
+        'Die Verknüpfung wurde nicht erstellt: Dein Konto beim Anbieter ist hier mit einem anderen Konto verknüpft, oder dieses Konto ist mit jemand anderem verknüpft.',
+    },
     twoStep: {
       help: 'Nach deinem Passwort fragt diese Admin-App nach einem Code aus einer Authenticator-App auf deinem Smartphone. Jellyfin-Apps können keinen Code abfragen: Sobald die Funktion aktiv ist, melden sie sich über Quick Connect an, das du hier bestätigst, und dein Passwort allein reicht für sie nicht mehr aus. Bereits angemeldete Apps und Browser bleiben angemeldet.',
       off: 'Aus',

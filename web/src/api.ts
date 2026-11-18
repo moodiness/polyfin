@@ -158,6 +158,13 @@ export type User = {
   twoStep: boolean
   /** Whether the user signs in through the identity provider only, their password refused. */
   providerOnly: boolean
+  /** Whether the account is linked to someone at the identity provider, who signs in as it there. */
+  providerLinked: boolean
+  /**
+   * Whether an administrator allowed the account to be linked at the next sign-in through the
+   * provider of the person it is named after; the link turns it off.
+   */
+  providerLinkAllowed: boolean
 }
 
 /** The fields of a user a group holds, in its sections: Access, Playback and access, and the rest. */
@@ -1031,6 +1038,8 @@ export type UserPatch = Partial<{
   audioRegion: string
   /** Whether the user signs in through the identity provider only, their password refused. */
   providerOnly: boolean
+  /** See User; refused for an administrator and for an account with two-step sign-in. */
+  providerLinkAllowed: boolean
   /** One of the themes offered (see WebThemes), or '' for the server's. */
   webTheme: UserWebTheme
   /** True keeps the user from changing their web player theme under My account. */
@@ -2291,6 +2300,18 @@ export const newOwnRecoveryCodes = (confirmation: TwoStepConfirmation) =>
 
 export const turnOffOwnTwoStep = (confirmation: TwoStepConfirmation) =>
   request<void>('POST', '/account/two-step/off', confirmation)
+
+/** Whether the signed-in user's account is linked to them at the identity provider. */
+export const fetchOwnProvider = (signal?: AbortSignal) =>
+  request<{ linked: boolean }>('GET', '/account/provider', undefined, signal)
+
+/**
+ * Starts the link of the signed-in user's account at the identity provider, and answers the
+ * address of the provider's page: the browser opens it, and comes back to My account with
+ * ?providerLink=, `linked` or what went wrong.
+ */
+export const startOwnProviderLink = () =>
+  request<{ address: string }>('POST', '/account/provider/link')
 
 /**
  * Returns the signed-in user, or null when there is no valid session. Without one, the web client's
@@ -6024,6 +6045,7 @@ export const queryKeys = {
   session: ['session'] as const,
   myDevices: ['account', 'devices'] as const,
   ownTwoStep: ['account', 'two-step'] as const,
+  ownProvider: ['account', 'provider'] as const,
   ownResume: ['account', 'resume'] as const,
   ownHidden: ['account', 'hidden'] as const,
   ownNextUp: ['account', 'next-up'] as const,

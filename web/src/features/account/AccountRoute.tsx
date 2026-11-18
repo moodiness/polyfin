@@ -6,6 +6,7 @@ import {
   fetchOwnAppImport,
   fetchOwnReminders,
   fetchOwnImport,
+  fetchStatus,
   fetchOwnShareLinks,
   ownAppConnections,
   ownAppReaders,
@@ -41,6 +42,7 @@ import TasteProfile from './TasteProfile'
 import { HiddenList, HomeRowList, NextUpList, ResumeList } from './WatchingLists'
 import OwnTrackChoices from './TrackChoices'
 import TwoStep from './TwoStep'
+import ProviderLink from './ProviderLink'
 
 const sectionIds = [
   'statistics',
@@ -64,6 +66,7 @@ const sectionIds = [
   'devices',
   'password',
   'two-step',
+  'provider',
 ] as const
 type SectionId = (typeof sectionIds)[number]
 
@@ -81,8 +84,9 @@ const anchorMargin =
  * track choices, the metadata language, the web player theme, the audio region, the interface
  * size, sound, shared links (while the user may share or has links), programme reminders (with
  * the Live TV permission), importing from another server and from an app (unless the server
- * turns it off), notifications, devices, password and two-step sign-in. Every setting saves as it
- * changes, so the page has no unsaved dock.
+ * turns it off), notifications, devices, password, two-step sign-in and the identity provider
+ * (while the server offers one). Every setting saves as it changes, so the page has no unsaved
+ * dock.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -127,12 +131,17 @@ export default function AccountRoute() {
   })
   const reminding = reminders.data?.available === true
   const appImportShown = importingFromApps || appConnections.length > 0
+  // The identity provider the server offers, whose link the last section makes.
+  const provider = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  }).data?.provider
   const { hash } = useLocation()
 
   // Sections drawn once their answer comes: a #section address scrolls once it is there.
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [hash, sharing, reminding])
+  }, [hash, sharing, reminding, provider])
 
   const shown: Record<SectionId, boolean> = {
     statistics: true,
@@ -156,6 +165,7 @@ export default function AccountRoute() {
     devices: true,
     password: true,
     'two-step': true,
+    provider: provider != null,
   }
   const labels: Record<SectionId, string> = {
     statistics: text.sections.statistics,
@@ -179,6 +189,7 @@ export default function AccountRoute() {
     devices: text.sections.devices,
     password: text.sections.password,
     'two-step': text.sections.twoStep,
+    provider: text.sections.provider,
   }
   // Words only, as on a user's page.
   const items: SectionNavItem[] = sectionIds
@@ -314,6 +325,15 @@ export default function AccountRoute() {
       <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
         <TwoStep />
       </AccountSection>
+      {provider != null && (
+        <AccountSection
+          id="provider"
+          title={labels.provider}
+          help={text.provider.help(provider.name)}
+        >
+          <ProviderLink provider={provider} />
+        </AccountSection>
+      )}
     </PageLayout>
   )
 }

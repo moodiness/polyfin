@@ -36,6 +36,13 @@ const users: typeof en = {
     providerOnly: 'Solo provider di identità',
     providerOnlyHelp:
       'L’utente accede con il provider di identità configurato in Impostazioni › Sicurezza, mai con una password: la password viene rifiutata, e un account creato così non ne ha bisogno. Le applicazioni Jellyfin che non possono aprire il provider accedono con Quick Connect.',
+    providerLink: 'Collegamento al provider di identità',
+    providerLinked: 'Collegato',
+    providerLinkedHelp:
+      'Una persona del provider di identità accede con questo account, comunque si chiami lì in seguito.',
+    providerLinkAllowed: 'Collega al prossimo accesso tramite il provider',
+    providerLinkAllowedHelp:
+      'Non ancora collegato. Attivo, la prossima persona che accede tramite il provider di identità con il nome di questo account, come claim o come email verificata, riceve questo account, e l’opzione si disattiva. Attivalo solo se l’account è suo. Altrimenti l’account si collega da sé in Il mio account, come fanno sempre gli amministratori e gli account con l’accesso in due passaggi.',
     ended: 'Scaduto',
     endsOn: (date: string) => `Scade il ${date}`,
     endedOn: (date: string) => `Scaduto il ${date}`,

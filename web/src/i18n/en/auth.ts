@@ -66,7 +66,7 @@ const auth = {
     providerOutcomes: {
       provider_refused: 'The sign-in with the identity provider was cancelled.',
       provider_no_account:
-        'No account on this server matches your account at the identity provider.',
+        'No account on this server is linked to your account at the identity provider. If you have an account here, sign in with its password and link it under My account. Otherwise, ask an administrator.',
       account_disabled: 'This account is disabled.',
       outside_allowed_hours: 'This account may not sign in at this time.',
       outside_local_network: 'This account may only sign in from the local network.',

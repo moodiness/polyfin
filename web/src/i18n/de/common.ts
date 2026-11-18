@@ -430,6 +430,8 @@ const common: typeof en = {
       'Das Token des Update-Werkzeugs enthält keine Leerzeichen und höchstens 1024 Zeichen.',
     invalid_provider:
       'Prüfe den Identitätsanbieter: Sein Aussteller ist eine Webadresse, die mit http:// oder https:// beginnt, ohne Abfrage und Fragment; Client-ID, Geheimnis und Claims enthalten keine Leerzeichen; ein Claim nennt den Benutzer.',
+    provider_link_refused:
+      'Ein Administrator oder ein Konto mit zweistufiger Anmeldung verknüpft sich selbst unter Mein Konto.',
     restart_unconfirmed:
       'Polyfin weiß nicht, ob es wieder gestartet wird: Bestätige zuerst die Warnung.',
     no_update: 'Polyfin Desktop bietet dieses Update gerade nicht an.',

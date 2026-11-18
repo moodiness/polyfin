@@ -68,7 +68,7 @@ const auth: typeof en = {
     providerOutcomes: {
       provider_refused: 'Die Anmeldung beim Identitätsanbieter wurde abgebrochen.',
       provider_no_account:
-        'Kein Konto dieses Servers passt zu deinem Konto beim Identitätsanbieter.',
+        'Kein Konto dieses Servers ist mit deinem Konto beim Identitätsanbieter verknüpft. Wenn du hier ein Konto hast, melde dich mit dessen Passwort an und verknüpfe es unter Mein Konto. Wende dich sonst an einen Administrator.',
       account_disabled: 'Dieses Konto ist deaktiviert.',
       outside_allowed_hours: 'Dieses Konto darf sich zu dieser Zeit nicht anmelden.',
       outside_local_network: 'Dieses Konto darf sich nur im lokalen Netzwerk anmelden.',

@@ -34,6 +34,13 @@ const users: typeof en = {
     providerOnly: 'Somente provedor de identidade',
     providerOnlyHelp:
       'O usuário entra pelo provedor de identidade configurado em Configurações › Segurança, nunca com uma senha: a senha é recusada, e uma conta criada assim não precisa de uma. Os aplicativos Jellyfin que não conseguem abrir o provedor entram com o Quick Connect.',
+    providerLink: 'Vínculo com o provedor de identidade',
+    providerLinked: 'Vinculada',
+    providerLinkedHelp:
+      'Uma pessoa do provedor de identidade entra com esta conta, seja qual for o nome dela lá depois.',
+    providerLinkAllowed: 'Vincular no próximo login pelo provedor',
+    providerLinkAllowedHelp:
+      'Ainda não vinculada. Ativado, a próxima pessoa que entrar pelo provedor de identidade com o nome desta conta, pelo claim ou pelo e-mail verificado, recebe esta conta, e a opção se desativa. Ative apenas se a conta for dela. Caso contrário, a conta se vincula por si mesma em Minha conta, como sempre fazem os administradores e as contas com login em duas etapas.',
     ended: 'Encerrada',
     endsOn: (date: string) => `Encerra em ${date}`,
     endedOn: (date: string) => `Encerrada em ${date}`,

@@ -820,10 +820,10 @@ const settings: typeof en = {
         'Le secret d’un client confidentiel\u202f; laissez vide pour un client public. Il n’est plus jamais affiché. Il est chiffré si le serveur a une POLYFIN_SECRET_KEY, et enregistré tel quel sinon.',
       userClaim: 'Claim qui nomme l’utilisateur',
       userClaimHelp:
-        'Le claim du jeton d’identité comparé aux noms des comptes, sans tenir compte de la casse, la première fois que quelqu’un se connecte\u202f: preferred_username par défaut. L’e-mail vérifié vient ensuite. Les connexions suivantes retrouvent le même compte, quoi que dise alors le claim.',
+        'Le claim du jeton d’identité qui désigne le compte de la personne, sans tenir compte de la casse\u202f: preferred_username par défaut. L’e-mail vérifié vient ensuite. Un nom seul ne donne jamais un compte existant\u202f: celui-ci se lie dans Mon compte, ou quand vous l’avez autorisé sur la page de l’utilisateur. Les connexions suivantes retrouvent le compte lié, quoi que dise alors le claim.',
       createAccounts: 'Créer les comptes',
       createAccountsHelp:
-        'Une personne qu’aucun compte ne désigne en reçoit un, nommé d’après le claim, sinon l’e-mail, avec les permissions d’un nouveau compte, qui se connecte par le fournisseur uniquement. Désactivé, elle est refusée. Désactivé par défaut.',
+        'Une personne à qui aucun compte n’est lié en reçoit un nouveau, nommé d’après le claim, sinon l’e-mail, avec les permissions d’un nouveau compte, qui se connecte par le fournisseur uniquement. Si un compte porte déjà ce nom, aucun n’est créé. Désactivé, elle est refusée. Désactivé par défaut.',
       adminClaim: 'Claim des administrateurs',
       adminClaimHelp:
         'Le claim qui liste les groupes ou rôles d’une personne, comme groups. Avec une valeur ci-dessous, celui dont le claim la contient devient administrateur en se connectant. Polyfin demande le scope groups quand le claim est groups et que le fournisseur le propose.',

@@ -67,7 +67,7 @@ const auth: typeof en = {
     providerOutcomes: {
       provider_refused: 'La connexion avec le fournisseur d’identité a été annulée.',
       provider_no_account:
-        'Aucun compte de ce serveur ne correspond à votre compte chez le fournisseur d’identité.',
+        'Aucun compte de ce serveur n’est lié à votre compte chez le fournisseur d’identité. Si vous avez un compte ici, connectez-vous avec son mot de passe et liez-le dans Mon compte. Sinon, demandez à un administrateur.',
       account_disabled: 'Ce compte est désactivé.',
       outside_allowed_hours: 'Ce compte ne peut pas se connecter à cette heure.',
       outside_local_network: 'Ce compte ne peut se connecter que depuis le réseau local.',

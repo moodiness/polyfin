@@ -28,6 +28,7 @@ const account: typeof en = {
       devices: 'Appareils',
       password: 'Mot de passe',
       twoStep: 'Connexion en deux étapes',
+      provider: 'Fournisseur d’identité',
     },
     metadataLanguage: {
       help: 'La langue des noms, des résumés et des images des titres dans vos applis, quand l’un des addons du serveur les décrit dans cette langue\u202f; les titres qu’aucun addon n’y décrit gardent la description du serveur. Les genres, les classifications et les personnes restent les mêmes pour tous. Les noms que Polyfin crée lui-même, comme les saisons, la suivent quand Polyfin la parle\u202f: anglais, français, allemand, espagnol, italien ou portugais.',
@@ -500,6 +501,17 @@ const account: typeof en = {
     changePassword: 'Changer le mot de passe',
     changingPassword: 'Modification…',
     passwordChanged: 'Votre mot de passe a été modifié.',
+    provider: {
+      help: (name: string) =>
+        `Une fois votre compte lié à votre compte chez ${name}, «\u202fSe connecter avec ${name}\u202f» l’ouvre, dans cette appli d’administration et dans le lecteur web.`,
+      linked: 'Lié',
+      notLinked: 'Non lié',
+      link: (name: string) => `Lier avec ${name}`,
+      otherAddress:
+        'Un lien se crée depuis l’adresse publique du serveur. Ouvrez cette page à cette adresse\u202f:',
+      taken:
+        'Le lien n’a pas été créé\u202f: votre compte chez le fournisseur est lié à un autre compte ici, ou ce compte est lié à quelqu’un d’autre.',
+    },
     twoStep: {
       help: 'Après votre mot de passe, cette appli d’administration demande un code d’une application d’authentification sur votre téléphone. Les applis Jellyfin ne peuvent pas en demander\u202f: une fois activée, elles se connectent avec Quick Connect, que vous approuvez ici, et votre mot de passe seul ne les connecte plus. Les applis et navigateurs déjà connectés le restent.',
       off: 'Désactivée',

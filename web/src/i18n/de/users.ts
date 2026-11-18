@@ -35,6 +35,13 @@ const users: typeof en = {
     providerOnly: 'Nur Identitätsanbieter',
     providerOnlyHelp:
       'Der Benutzer meldet sich über den unter Einstellungen › Sicherheit eingerichteten Identitätsanbieter an, nie mit einem Passwort: Das Passwort wird abgelehnt, und ein so erstelltes Konto braucht keines. Jellyfin-Apps, die den Anbieter nicht öffnen können, melden sich mit Quick Connect an.',
+    providerLink: 'Verknüpfung mit dem Identitätsanbieter',
+    providerLinked: 'Verknüpft',
+    providerLinkedHelp:
+      'Eine Person beim Identitätsanbieter meldet sich mit diesem Konto an, egal wie sie dort später heißt.',
+    providerLinkAllowed: 'Bei der nächsten Anmeldung über den Anbieter verknüpfen',
+    providerLinkAllowedHelp:
+      'Noch nicht verknüpft. Ein: Die nächste Person, die sich über den Identitätsanbieter unter dem Namen dieses Kontos anmeldet, als Claim oder als bestätigte E-Mail-Adresse, bekommt dieses Konto, und die Option schaltet sich aus. Schalte sie nur ein, wenn das Konto dieser Person gehört. Sonst verknüpft sich das Konto selbst unter Mein Konto, wie es Administratoren und Konten mit zweistufiger Anmeldung immer tun.',
     ended: 'Beendet',
     endsOn: (date: string) => `Endet am ${date}`,
     endedOn: (date: string) => `Beendet am ${date}`,

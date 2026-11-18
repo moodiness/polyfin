@@ -36,6 +36,13 @@ const users: typeof en = {
     providerOnly: 'Fournisseur d’identité uniquement',
     providerOnlyHelp:
       'L’utilisateur se connecte avec le fournisseur d’identité configuré dans Paramètres › Sécurité, jamais avec un mot de passe\u202f: le mot de passe est refusé, et un compte créé ainsi n’en a pas besoin. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect.',
+    providerLink: 'Lien avec le fournisseur d’identité',
+    providerLinked: 'Lié',
+    providerLinkedHelp:
+      'Une personne du fournisseur d’identité se connecte avec ce compte, quel que soit le nom qu’elle y porte ensuite.',
+    providerLinkAllowed: 'Lier à la prochaine connexion par le fournisseur',
+    providerLinkAllowedHelp:
+      'Pas encore lié. Activé, la prochaine personne qui se connecte par le fournisseur d’identité sous le nom de ce compte, par son claim ou son e-mail vérifié, reçoit ce compte, et l’option se désactive. Ne l’activez que si le compte est le sien. Sinon, le compte se lie lui-même dans Mon compte, comme le font toujours les administrateurs et les comptes avec la connexion en deux étapes.',
     ended: 'Terminé',
     endsOn: (date: string) => `Prend fin le ${date}`,
     endedOn: (date: string) => `A pris fin le ${date}`,

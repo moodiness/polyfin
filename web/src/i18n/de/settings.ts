@@ -812,10 +812,10 @@ const settings: typeof en = {
         'Das Geheimnis eines vertraulichen Clients; leer lassen für einen öffentlichen Client. Es wird nie wieder angezeigt. Es wird verschlüsselt, wenn der Server einen POLYFIN_SECRET_KEY hat, und sonst unverändert gespeichert.',
       userClaim: 'Claim mit dem Benutzernamen',
       userClaimHelp:
-        'Der Claim des ID-Tokens, der bei der ersten Anmeldung ohne Rücksicht auf Groß- und Kleinschreibung mit den Kontonamen verglichen wird: standardmäßig preferred_username. Danach kommt die bestätigte E-Mail-Adresse. Spätere Anmeldungen finden dasselbe Konto, egal was der Claim dann sagt.',
+        'Der Claim des ID-Tokens, der das Konto der Person benennt, ohne Rücksicht auf Groß- und Kleinschreibung: standardmäßig preferred_username. Danach kommt die bestätigte E-Mail-Adresse. Ein Name allein gibt nie ein bestehendes Konto: Es wird unter Mein Konto verknüpft, oder wenn du es auf der Seite des Benutzers erlaubt hast. Spätere Anmeldungen finden das verknüpfte Konto, egal was der Claim dann sagt.',
       createAccounts: 'Konten erstellen',
       createAccountsHelp:
-        'Wer zu keinem Konto passt, bekommt eines, benannt nach dem Claim, sonst nach der E-Mail-Adresse, mit den Berechtigungen eines neuen Kontos, das sich nur über den Anbieter anmeldet. Aus, wird die Person abgewiesen. Standardmäßig aus.',
+        'Wer mit keinem Konto verknüpft ist, bekommt ein neues, benannt nach dem Claim, sonst nach der E-Mail-Adresse, mit den Berechtigungen eines neuen Kontos, das sich nur über den Anbieter anmeldet. Trägt bereits ein Konto diesen Namen, wird keines erstellt. Aus, wird die Person abgewiesen. Standardmäßig aus.',
       adminClaim: 'Claim der Administratoren',
       adminClaimHelp:
         'Der Claim mit den Gruppen oder Rollen einer Person, etwa groups. Mit einem Wert darunter wird, wessen Claim ihn enthält, bei der Anmeldung Administrator. Polyfin fragt nach dem Scope groups, wenn der Claim groups ist und der Anbieter ihn anbietet.',

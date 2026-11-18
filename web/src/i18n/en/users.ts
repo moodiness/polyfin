@@ -32,6 +32,14 @@ const users = {
     providerOnly: 'Identity provider only',
     providerOnlyHelp:
       'The user signs in through the identity provider set up under Settings › Security, never with a password: the password is refused, and an account created so needs none. Jellyfin apps that cannot open the provider sign in with Quick Connect.',
+    /** A user's page › Access: the account's link at the identity provider, while one is set up. */
+    providerLink: 'Identity provider link',
+    providerLinked: 'Linked',
+    providerLinkedHelp:
+      'Someone at the identity provider signs in as this account, whatever their name there becomes.',
+    providerLinkAllowed: 'Link at the next provider sign-in',
+    providerLinkAllowedHelp:
+      'Not linked yet. On, the next person who signs in through the identity provider under this account’s name, as their claim or their verified email, gets this account, and it turns off. Turn it on only when the account is theirs. Otherwise the account links itself under My account, as administrators and accounts with two-step sign-in always do.',
     ended: 'Ended',
     endsOn: (date: string) => `Ends on ${date}`,
     endedOn: (date: string) => `Ended on ${date}`,

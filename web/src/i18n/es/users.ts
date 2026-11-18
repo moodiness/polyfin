@@ -36,6 +36,13 @@ const users: typeof en = {
     providerOnly: 'Solo el proveedor de identidad',
     providerOnlyHelp:
       'El usuario inicia sesión con el proveedor de identidad configurado en Ajustes › Seguridad, nunca con una contraseña: la contraseña se rechaza, y una cuenta creada así no necesita ninguna. Las aplicaciones de Jellyfin que no pueden abrir el proveedor inician sesión con Quick Connect.',
+    providerLink: 'Vínculo con el proveedor de identidad',
+    providerLinked: 'Vinculada',
+    providerLinkedHelp:
+      'Una persona del proveedor de identidad inicia sesión con esta cuenta, se llame como se llame allí después.',
+    providerLinkAllowed: 'Vincular en el próximo inicio de sesión con el proveedor',
+    providerLinkAllowedHelp:
+      'Aún sin vincular. Activado, la próxima persona que inicie sesión con el proveedor de identidad bajo el nombre de esta cuenta, por su claim o su correo verificado, recibe esta cuenta, y la opción se desactiva. Actívelo solo si la cuenta es suya. Si no, la cuenta se vincula desde Mi cuenta, como hacen siempre los administradores y las cuentas con inicio de sesión en dos pasos.',
     ended: 'Finalizada',
     endsOn: (date: string) => `Finaliza el ${date}`,
     endedOn: (date: string) => `Finalizó el ${date}`,

@@ -28,6 +28,7 @@ const account: typeof en = {
       devices: 'Dispositivos',
       password: 'Contraseña',
       twoStep: 'Inicio de sesión en dos pasos',
+      provider: 'Proveedor de identidad',
     },
     metadataLanguage: {
       help: 'El idioma de los nombres, las sinopsis y las imágenes de los títulos en sus aplicaciones, cuando alguna de las extensiones del servidor los describe en ese idioma; los títulos que ninguna extensión describe en él conservan la descripción del servidor. Los géneros, las clasificaciones y las personas son iguales para todos. Los nombres que crea el propio Polyfin, como las temporadas, lo siguen cuando Polyfin lo habla: inglés, francés, alemán, español, italiano o portugués.',
@@ -496,6 +497,17 @@ const account: typeof en = {
     changePassword: 'Cambiar contraseña',
     changingPassword: 'Cambiando…',
     passwordChanged: 'Se ha cambiado la contraseña.',
+    provider: {
+      help: (name: string) =>
+        `Cuando su cuenta esté vinculada a su cuenta de ${name}, «Iniciar sesión con ${name}» la abre, en esta aplicación de administración y en el reproductor web.`,
+      linked: 'Vinculada',
+      notLinked: 'Sin vincular',
+      link: (name: string) => `Vincular con ${name}`,
+      otherAddress:
+        'Un vínculo empieza en la dirección pública del servidor. Abra esta página allí:',
+      taken:
+        'No se ha creado el vínculo: su cuenta del proveedor está vinculada a otra cuenta de aquí, o esta cuenta está vinculada a otra persona.',
+    },
     twoStep: {
       help: 'Después de la contraseña, esta aplicación de administración pide un código de una aplicación de autenticación de su teléfono. Las aplicaciones de Jellyfin no pueden pedirlo: una vez activado, inician sesión con Quick Connect, que usted aprueba aquí, y su contraseña por sí sola ya no les permite iniciar sesión. Las aplicaciones y navegadores que ya tienen la sesión iniciada la mantienen.',
       off: 'Desactivado',

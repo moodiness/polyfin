@@ -67,7 +67,7 @@ const auth: typeof en = {
     providerOutcomes: {
       provider_refused: 'Se canceló el inicio de sesión con el proveedor de identidad.',
       provider_no_account:
-        'Ninguna cuenta de este servidor corresponde a su cuenta del proveedor de identidad.',
+        'Ninguna cuenta de este servidor está vinculada a su cuenta del proveedor de identidad. Si tiene una cuenta aquí, inicie sesión con su contraseña y vincúlela en Mi cuenta. Si no, pídaselo a un administrador.',
       account_disabled: 'Esta cuenta está desactivada.',
       outside_allowed_hours: 'Esta cuenta no puede iniciar sesión a esta hora.',
       outside_local_network: 'Esta cuenta solo puede iniciar sesión desde la red local.',

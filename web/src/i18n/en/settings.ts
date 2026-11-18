@@ -804,10 +804,10 @@ const settings = {
         'The secret of a confidential client; leave it empty for a public client. It is never shown again. It is encrypted when the server has a POLYFIN_SECRET_KEY, and stored as is otherwise.',
       userClaim: 'Claim naming the user',
       userClaimHelp:
-        'The claim of the ID token compared with account names, without regard to case, the first time someone signs in: preferred_username by default. The verified email comes next. Later sign-ins find the same account whatever the claim says.',
+        'The claim of the ID token that names someone’s account, without regard to case: preferred_username by default. The verified email comes next. A name alone never gives an existing account: it is linked under My account, or when you allowed it on the user’s page. Later sign-ins find the linked account whatever the claim says.',
       createAccounts: 'Create accounts',
       createAccountsHelp:
-        'Someone no account matches gets one, named after the claim, else the email, with the permissions of a new account, signing in through the provider only. Off, they are refused. Off by default.',
+        'Someone no account is linked to gets a new one, named after the claim, else the email, with the permissions of a new account, signing in through the provider only. When an account has that name already, none is created. Off, they are refused. Off by default.',
       adminClaim: 'Administrators’ claim',
       adminClaimHelp:
         'The claim listing someone’s groups or roles, such as groups. With a value below, someone whose claim holds it becomes an administrator as they sign in. Polyfin asks for the groups scope when the claim is groups and the provider offers it.',

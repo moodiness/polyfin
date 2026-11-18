@@ -27,6 +27,7 @@ const account = {
       devices: 'Devices',
       password: 'Password',
       twoStep: 'Two-step sign-in',
+      provider: 'Identity provider',
     },
     /** My account › Metadata language. */
     metadataLanguage: {
@@ -491,6 +492,17 @@ const account = {
     changePassword: 'Change password',
     changingPassword: 'Changing…',
     passwordChanged: 'Your password has been changed.',
+    /** My account › Identity provider: the account's link to its owner's account there. */
+    provider: {
+      help: (name: string) =>
+        `Once your account is linked to your account at ${name}, “Sign in with ${name}” opens it, in this admin app and in the web player.`,
+      linked: 'Linked',
+      notLinked: 'Not linked',
+      link: (name: string) => `Link with ${name}`,
+      otherAddress: 'A link starts at the server’s public address. Open this page there:',
+      taken:
+        'The link was not made: your account at the provider is linked to another account here, or this account is linked to someone else.',
+    },
     /** My account › Two-step sign-in, and its steps at sign-in. */
     twoStep: {
       help: 'After your password, this admin app asks for a code from an authenticator app on your phone. Jellyfin apps cannot ask for one: once it is on, they sign in with Quick Connect, which you approve here, and your password alone no longer signs in to them. The apps and browsers signed in already stay signed in.',

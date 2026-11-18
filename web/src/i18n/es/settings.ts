@@ -818,10 +818,10 @@ const settings: typeof en = {
         'El secreto de un cliente confidencial; déjelo vacío para un cliente público. No se vuelve a mostrar. Se cifra si el servidor tiene una POLYFIN_SECRET_KEY, y se guarda tal cual si no.',
       userClaim: 'Claim que nombra al usuario',
       userClaimHelp:
-        'El claim del token de ID que se compara con los nombres de las cuentas, sin distinguir mayúsculas, la primera vez que alguien inicia sesión: preferred_username por defecto. Después viene el correo verificado. Los inicios de sesión posteriores encuentran la misma cuenta diga lo que diga el claim.',
+        'El claim del token de ID que designa la cuenta de la persona, sin distinguir mayúsculas: preferred_username por defecto. Después viene el correo verificado. Un nombre solo nunca da una cuenta existente: esta se vincula en Mi cuenta, o cuando usted lo ha permitido en la página del usuario. Los inicios de sesión posteriores encuentran la cuenta vinculada diga lo que diga el claim.',
       createAccounts: 'Crear cuentas',
       createAccountsHelp:
-        'Quien no corresponde a ninguna cuenta recibe una, con el nombre del claim, si no del correo, con los permisos de una cuenta nueva, que inicia sesión solo con el proveedor. Desactivado, se rechaza. Desactivado por defecto.',
+        'Quien no tiene ninguna cuenta vinculada recibe una nueva, con el nombre del claim, si no del correo, con los permisos de una cuenta nueva, que inicia sesión solo con el proveedor. Si una cuenta ya lleva ese nombre, no se crea ninguna. Desactivado, se rechaza. Desactivado por defecto.',
       adminClaim: 'Claim de los administradores',
       adminClaimHelp:
         'El claim que enumera los grupos o roles de una persona, como groups. Con un valor abajo, quien lo tenga en su claim se convierte en administrador al iniciar sesión. Polyfin pide el scope groups cuando el claim es groups y el proveedor lo ofrece.',

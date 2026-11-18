@@ -186,7 +186,8 @@ Promise.all(Object.entries(scenarios).map(async ([name, s]) => [name, await run(
 		t.Errorf("in French: %+v", got)
 	}
 	refused := []string{"polyfinProviderButton: Sign in with Example ID",
-		"polyfinProviderMessage: No account on this server matches your account at the identity provider.", "btnManual", "btnQuick"}
+		"polyfinProviderMessage: No account on this server is linked to your account at the identity provider. If you have an account here, sign in with its password and link it under My account, in the admin app. Otherwise, ask an administrator.",
+		"btnManual", "btnQuick"}
 	if got := results["refused"]; !reflect.DeepEqual(got.Buttons, refused) || got.Address != "/web/#/login" || len(got.Traded) != 0 || got.Replaced != "" {
 		t.Errorf("refused: %+v", got)
 	}

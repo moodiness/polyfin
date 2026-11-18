@@ -15,6 +15,7 @@ import {
   fetchGroups,
   fetchImportTitleCounts,
   fetchMetadataLanguages,
+  fetchStatus,
   fetchUserDevices,
   fetchUserShareLinks,
   fetchUsers,
@@ -443,6 +444,11 @@ function AccessSection({ user }: { user: User }) {
   const { t, language } = useI18n()
   const toast = useToast()
   const access = useUserPatch(user)
+  // The identity provider the server offers: the account's link to it shows while there is one.
+  const provider = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  }).data?.provider
   // Joining a group and following it again, in Access or everywhere, replace the user's values:
   // each is asked first.
   const [asked, setAsked] = useState<
@@ -508,6 +514,27 @@ function AccessSection({ user }: { user: User }) {
         checked={user.providerOnly}
         onChange={(providerOnly) => change({ providerOnly })}
       />
+      {/* Linked, the account says so. Until then an administrator may have it linked at the next
+          sign-in under its name, but for an administrator or an account with two-step sign-in,
+          which link themselves under My account. */}
+      {provider != null &&
+        (user.providerLinked ? (
+          <OpenRow
+            label={t.users.providerLink}
+            value={t.users.providerLinked}
+            note={t.users.providerLinkedHelp}
+            disabled
+          />
+        ) : (
+          <SettingRow
+            kind="switch"
+            label={t.users.providerLinkAllowed}
+            help={t.users.providerLinkAllowedHelp}
+            checked={user.providerLinkAllowed}
+            disabled={user.isAdministrator || user.twoStep}
+            onChange={(providerLinkAllowed) => change({ providerLinkAllowed })}
+          />
+        ))}
       {user.isAdministrator ? (
         <OpenRow
           label={t.users.endTitle}

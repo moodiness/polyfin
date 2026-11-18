@@ -95,8 +95,8 @@ To set it up:
 | **Button name** | **Settings › Security** | Empty | What the buttons say after "Sign in with", up to 64 bytes. Empty shows the issuer's host name. |
 | **Client ID** | **Settings › Security** | Empty, off | The ID the provider gave Polyfin's client. |
 | **Client secret** | **Settings › Security** | Empty | A confidential client's secret, sent with HTTP Basic authentication, or in the form when the provider lists only `client_secret_post`. Encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, and never shown again. |
-| **Claim naming the user** | **Settings › Security** | `preferred_username` | The ID token's claim compared with account names the first time someone signs in; the verified email comes next. |
-| **Create accounts** | **Settings › Security** | Off | Creates an account, signing in through the provider only, for someone no account matches. Off, they are refused. |
+| **Claim naming the user** | **Settings › Security** | `preferred_username` | The ID token's claim that names someone's account the first time they sign in; the verified email comes next. A name alone never gives an existing account (see [Which account signs in](#which-account-signs-in)). |
+| **Create accounts** | **Settings › Security** | Off | Creates an account, signing in through the provider only, for someone no account is linked to, when no account has their name. Off, they are refused. |
 | **Administrators' claim**, **Administrators' value** | **Settings › Security** | Empty | Both set, someone whose claim is the value, or a list holding it, becomes an administrator on sign-in. With the claim `groups`, Polyfin asks for the `groups` scope when the provider lists it. |
 
 **Use HTTPS.** Polyfin accepts an `http://` issuer, as self-hosted providers often sit on the local network. Over HTTP, though, the client secret, codes and tokens cross the network unencrypted, between Polyfin and the provider, and between browsers and both. Anyone on the way can read them and sign in as their owners. Give the provider an `https://` address, and serve Polyfin's public address over HTTPS too, whenever the sign-in leaves a network you fully trust.
@@ -119,17 +119,34 @@ The sign-in starts and ends at the **Public address** (**Settings › Notificati
 
 ### Which account signs in
 
-The first time someone signs in through the provider, Polyfin looks for:
+Someone signing in through the provider gets the account linked to them. The link is the provider's issuer and the person's subject (`sub`), which never change there, kept on the account: it holds whatever their name or email becomes at the provider.
 
-1. the account named by the **Claim naming the user** claim (`preferred_username` by default), ignoring case;
-2. else the account named by their email, only if the ID token says it is verified (`email_verified` true). An email the provider does not vouch for, or says nothing of, matches no account;
-3. else, with **Create accounts** on, a new account named after the claim, or the email when the claim is no valid name. It has the permissions of an account created under **Users** without a group, and **Identity provider only** set. With **Create accounts** off, the default, the sign-in is refused.
+A name alone never gives someone an existing account. The first time someone signs in, no account is linked to them yet. Polyfin then looks at the account named by the **Claim naming the user** claim (`preferred_username` by default), ignoring case, else at the account named by their email, only if the ID token says it is verified (`email_verified` true):
 
-The account is then linked by the provider's issuer and the person's subject (`sub`), which never change there.
+1. an account you allowed to be linked is linked to them, and they are signed in (see [Linking an existing account](#linking-an-existing-account));
+2. any other account of that name stays as it is, and the sign-in is refused. The sign-in page says the same as when no account has the name, so it does not tell which names exist;
+3. when no account has either name, **Create accounts** makes a new one, named after the claim, or the email when the claim is no valid name. It has the permissions of an account created under **Users** without a group, and **Identity provider only** set. With **Create accounts** off, the default, the sign-in is refused.
 
-- Later sign-ins find it by that link, even if the claim or email changed.
-- An account linked to someone else at the provider, matched by name or email, is refused.
-- Changing the issuer under **Settings › Security** starts the links over.
+- An email the provider does not vouch for, or says nothing of, names no account.
+- Changing the issuer under **Settings › Security** starts the links over: each account is linked again, in one of the two ways below.
+
+### Linking an existing account
+
+An account that existed before its owner first signs in through the provider is linked in one of two ways:
+
+- **From My account:** the owner signs in to the admin app with their password, and their code with two-step sign-in, then presses **Link with …** under **My account › Identity provider**. The provider's page asks them to sign in, and the browser comes back with the account linked. Administrators and accounts with two-step sign-in are linked this way only.
+- **From the user's page:** an administrator turns on **Link at the next provider sign-in** on the user's page under **Users**. It gives the account to the next person who signs in through the provider under its name, as their claim or verified email, and turns off once the link is made.
+
+Turn **Link at the next provider sign-in** on only for an account that is that person's.
+
+- Whoever holds the account's password keeps it: set **Identity provider only**, or reset the password, when someone else may know it.
+- It is not offered for an administrator, nor for an account with two-step sign-in. Given to a member who became one since, it links nobody.
+
+A link from **My account** starts at the **Public address**, where the provider answers. Opened at another address, the page names that address instead of the button.
+
+- The link opens no session and gives no rights. The administrators' group grants at the next sign-in through the provider.
+- A person is linked to one account, and an account to one person. A second link is refused.
+- The user's page shows **Identity provider link** as **Linked** once it is made, and **My account** says **Linked**.
 
 With **Administrators' claim** and **Administrators' value** set, someone whose claim holds the value, such as a `groups` claim listing `polyfin-admins`, becomes an administrator on sign-in, unless the account is disabled. The group only grants: removing someone from it at the provider does not demote them. They stay an administrator until you turn **Administrator** off on their page under **Users**.
 

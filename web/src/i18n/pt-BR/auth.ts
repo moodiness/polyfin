@@ -67,7 +67,7 @@ const auth: typeof en = {
     providerOutcomes: {
       provider_refused: 'O login com o provedor de identidade foi cancelado.',
       provider_no_account:
-        'Nenhuma conta deste servidor corresponde à sua conta no provedor de identidade.',
+        'Nenhuma conta deste servidor está vinculada à sua conta no provedor de identidade. Se você tem uma conta aqui, entre com a senha dela e vincule-a em Minha conta. Caso contrário, peça a um administrador.',
       account_disabled: 'Esta conta está desativada.',
       outside_allowed_hours: 'Esta conta não pode entrar neste horário.',
       outside_local_network: 'Esta conta só pode entrar pela rede local.',

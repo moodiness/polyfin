@@ -412,6 +412,8 @@ const common: typeof en = {
       'Il token dello strumento di aggiornamento non contiene spazi e ha al massimo 1024 caratteri.',
     invalid_provider:
       'Controlla il provider di identità: il suo emittente è un indirizzo web che inizia con http:// o https://, senza query né frammento; l’ID client, il segreto e i claim non contengono spazi; un claim nomina l’utente.',
+    provider_link_refused:
+      'Un amministratore, o un account con l’accesso in due passaggi, si collega da sé in Il mio account.',
     restart_unconfirmed: 'Polyfin non sa se qualcosa lo riavvia: conferma prima l’avviso.',
     no_update: 'Polyfin Desktop non offre questo aggiornamento al momento.',
     not_desktop: 'Polyfin non è eseguito in Polyfin Desktop.',
