@@ -255,7 +255,7 @@ func (h *Handler) badged(ctx context.Context, url string, original artwork, badg
 	image, err := h.images.fetch(ctx, key, func(context.Context) (artwork, error) {
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
-		return drawBadges(original, b, size, width)
+		return h.drawBadges(original, b, size, width)
 	})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -267,9 +267,15 @@ func (h *Handler) badged(ctx context.Context, url string, original artwork, badg
 }
 
 // drawBadges draws badges over an image, first scaled down to width when
-// it is not 0: as a PNG when it was one, else as a JPEG.
-func drawBadges(original artwork, b mosaic.Badges, size mosaic.BadgeSize, width int) (artwork, error) {
-	source, format, err := image.Decode(bytes.NewReader(original.body))
+// it is not 0: as a PNG when it was one, else as a JPEG. An image that
+// may not be decoded gets none (see decodePicture).
+func (h *Handler) drawBadges(original artwork, b mosaic.Badges, size mosaic.BadgeSize, width int) (artwork, error) {
+	source, format, err := h.decodePicture(original.body, func(p pictureCost) int64 {
+		if width > 0 && int64(width) < p.width {
+			return p.resized(width)
+		}
+		return p.redrawn()
+	})
 	if err != nil {
 		return artwork{}, err
 	}

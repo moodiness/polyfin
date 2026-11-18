@@ -73,19 +73,25 @@ func drawStudioLogo(logo image.Image, wide, narrow bool) *image.RGBA {
 // studioLogoArtwork returns the plate of a studio's logo target stands
 // for (see library.GeneratedImage), drawn once for every request that
 // asks for it at once and kept, from TMDB's logo, which TMDB serves as a
-// PNG. A logo TMDB does not have is not found.
+// PNG. A logo TMDB does not have is not found. The logo is decoded and
+// drawn in one place among the resizes, taken once it is downloaded.
 func (h *Handler) studioLogoArtwork(ctx context.Context, target string, g library.GeneratedImage) (artwork, error) {
 	return h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
 		relayed, err := h.fetchArtwork(ctx, g.Logo, false, false)
 		if err != nil {
 			return artwork{}, err
 		}
-		logo, _, err := image.Decode(bytes.NewReader(relayed.body))
+		h.images.resizes <- struct{}{}
+		defer func() { <-h.images.resizes }()
+		logo, _, err := h.decodePicture(relayed.body, func(p pictureCost) int64 {
+			if g.Wide {
+				return p.drawnInto(studioThumbWidth, studioThumbHeight)
+			}
+			return p.drawnInto(studioPrimarySide, studioPrimarySide)
+		})
 		if err != nil {
 			return artwork{}, downloadError{http.StatusNotFound, err}
 		}
-		h.images.resizes <- struct{}{}
-		defer func() { <-h.images.resizes }()
 		var out bytes.Buffer
 		if err := png.Encode(&out, drawStudioLogo(logo, g.Wide, g.NarrowMargin)); err != nil {
 			return artwork{}, downloadError{http.StatusInternalServerError, err}

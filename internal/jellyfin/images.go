@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	xdraw "golang.org/x/image/draw"
@@ -140,6 +141,12 @@ type imageCache struct {
 	// warmResizes holds a place for each resize warming a poster, half of
 	// resizes at most (see warmImage).
 	warmResizes chan struct{}
+	// undecodable are the pictures whose decoding failed, by their bytes,
+	// and decoded counts the pictures decoded; decoding, which tests set,
+	// is called with each picture about to be (see decodePicture).
+	undecodable *cache.Cache[pictureSum, struct{}]
+	decoded     atomic.Int64
+	decoding    atomic.Pointer[func(data []byte)]
 
 	mu sync.Mutex
 	// memory holds the images in memory, most recently used first, by key;
@@ -186,6 +193,7 @@ func (c *imageCache) open(dir string, logger *slog.Logger) {
 		memory := func() time.Duration { return imageFailureMemory }
 		c.failures = cache.NewLasting[string, failedDownload](5000, memory, c.now)
 		c.dead = cache.NewLasting[string, struct{}](5000, memory, c.now)
+		c.undecodable = cache.NewLasting[pictureSum, struct{}](maxUndecodable, memory, c.now)
 		c.resizes = make(chan struct{}, imageResizes)
 		c.warmResizes = make(chan struct{}, max(1, imageResizes/2))
 		c.memory, c.order = map[string]*list.Element{}, list.New()
@@ -350,10 +358,10 @@ func (c *imageCache) usage() ImageCacheUsage {
 }
 
 // clear forgets every image kept, in memory and on disk, the downloads
-// remembered as failed, the images found dead and the posters warmed, and
-// returns what it freed. A host that asked to wait still waits. A
-// download or resize under way keeps its image once it ends, as for any
-// request.
+// remembered as failed, the images found dead, the pictures that failed
+// to decode and the posters warmed, and returns what it freed. A host
+// that asked to wait still waits. A download or resize under way keeps
+// its image once it ends, as for any request.
 func (c *imageCache) clear() ImageCacheUsage {
 	c.mu.Lock()
 	var freed ImageCacheUsage
@@ -375,6 +383,7 @@ func (c *imageCache) clear() ImageCacheUsage {
 	c.mu.Unlock()
 	c.failures.DeleteFunc(func(string, failedDownload) bool { return true })
 	c.dead.DeleteFunc(func(string, struct{}) bool { return true })
+	c.undecodable.DeleteFunc(func(pictureSum, struct{}) bool { return true })
 	for _, name := range names {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			c.logger.Debug("A cached image could not be deleted", "error", err)
@@ -937,7 +946,7 @@ func (h *Handler) resizedFor(ctx context.Context, target string, original artwor
 		}
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
-		return resize(original, width)
+		return h.resize(original, width)
 	})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -949,9 +958,10 @@ func (h *Handler) resizedFor(ctx context.Context, target string, original artwor
 }
 
 // resize scales an image down to width, keeping its proportions: as a
-// PNG when it was one, which may be transparent, else as a JPEG.
-func resize(original artwork, width int) (artwork, error) {
-	source, format, err := image.Decode(bytes.NewReader(original.body))
+// PNG when it was one, which may be transparent, else as a JPEG. An image
+// that may not be decoded is not resized (see decodePicture).
+func (h *Handler) resize(original artwork, width int) (artwork, error) {
+	source, format, err := h.decodePicture(original.body, func(p pictureCost) int64 { return p.resized(width) })
 	if err != nil {
 		return artwork{}, err
 	}

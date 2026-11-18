@@ -99,20 +99,27 @@ const generatedFetches = 3
 // image's shape takes, downloaded from public addresses only when confined
 // or g.Confined. A poster its server does not have, or that is no
 // picture, is left out for good; one that cannot be downloaded now is left
-// out of this request's image only. A studio's logo is drawn on its plate
-// (see studioLogoArtwork).
+// out of this request's image only. The downloads keep the posters as
+// they came, six at most, each within the bound of a download; they are
+// decoded once the drawing has its place among the resizes, so that the
+// images drawn at once hold no more decoded posters than those places
+// allow. No place is held while downloading. The posters of one image
+// share one budget of memory (see maxPictureMemory): one that would take
+// the image past it, with those decoded before it, the drawing and the
+// scaler, is left out as one that is no picture. A studio's logo is
+// drawn on its plate (see studioLogoArtwork).
 func (h *Handler) generatedArtwork(ctx context.Context, target string, g library.GeneratedImage, confined bool) (artwork, error) {
 	if g.Logo != "" {
 		return h.studioLogoArtwork(ctx, target, g)
 	}
 	confined = confined || g.Confined
 	drawn, err := h.images.fetch(ctx, target, func(ctx context.Context) (artwork, error) {
-		posters := make([]image.Image, min(len(g.Posters), mosaic.Tiles(g.Wide)))
+		bodies := make([][]byte, min(len(g.Posters), mosaic.Tiles(g.Wide)))
 		var missing bool
 		var mu sync.Mutex
 		var group errgroup.Group
 		group.SetLimit(generatedFetches)
-		for i := range posters {
+		for i := range bodies {
 			poster := g.Posters[i]
 			group.Go(func() error {
 				relayed, err := h.fetchArtwork(ctx, poster, confined, h.iptvHost(ctx, poster))
@@ -124,15 +131,36 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 					}
 					return nil
 				}
-				if decoded, _, err := image.Decode(bytes.NewReader(relayed.body)); err == nil {
-					posters[i] = decoded
-				}
+				bodies[i] = relayed.body
 				return nil
 			})
 		}
 		_ = group.Wait()
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
+		posters := make([]image.Image, len(bodies))
+		width, height := int64(mosaic.PosterWidth), int64(mosaic.PosterHeight)
+		if g.Wide {
+			width, height = mosaic.WideWidth, mosaic.WideHeight
+		}
+		// held is what the posters decoded so far take, and scaler the
+		// most the scaler holds for one of them.
+		var held, scaler int64
+		for i, body := range bodies {
+			if body == nil {
+				continue
+			}
+			var cost pictureCost
+			decoded, _, err := h.decodePicture(body, func(p pictureCost) int64 {
+				cost = p
+				return held + max(p.decoding, p.decoded+4*width*height+max(scaler, p.fitting(width, height), encoding(width, height)))
+			})
+			if err == nil {
+				posters[i] = decoded
+				held += cost.decoded
+				scaler = max(scaler, cost.fitting(width, height))
+			}
+		}
 		var out bytes.Buffer
 		var drawing *image.RGBA
 		if g.Emblem != "" {

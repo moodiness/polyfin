@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"image"
 	"image/jpeg"
 	"net/http"
 	"net/url"
@@ -804,7 +803,7 @@ func (h *Handler) Art(w http.ResponseWriter, r *http.Request, id accounts.ID, wi
 	}
 	body := captured.body.Bytes()
 	if !strings.HasPrefix(captured.header.Get("Content-Type"), "image/jpeg") {
-		converted, err := toJPEG(body)
+		converted, err := h.toJPEG(body)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -817,9 +816,13 @@ func (h *Handler) Art(w http.ResponseWriter, r *http.Request, id accounts.ID, wi
 	_, _ = w.Write(body)
 }
 
-// toJPEG encodes an image as a JPEG.
-func toJPEG(data []byte) ([]byte, error) {
-	decoded, _, err := image.Decode(bytes.NewReader(data))
+// toJPEG encodes an image as a JPEG, one that may be decoded (see
+// decodePicture), in a place among the resizes.
+func (h *Handler) toJPEG(data []byte) ([]byte, error) {
+	h.images.open(h.imageDir(), h.Logger)
+	h.images.resizes <- struct{}{}
+	defer func() { <-h.images.resizes }()
+	decoded, _, err := h.decodePicture(data, pictureCost.encoded)
 	if err != nil {
 		return nil, err
 	}

@@ -97,6 +97,7 @@ Polyfin relays pictures only: JPEG, PNG, GIF, WebP, BMP, ICO and AVIF. It tells 
 - **Clear the image cache**, in **System › Health**, empties both and forgets the failed downloads (see [Clearing the image cache](health.md#clearing-the-image-cache)).
 - An app asking for an image much smaller than the original gets it resized, as a JPEG, or a PNG when it was one. Sizes are rounded up to a few steps, which are kept too.
 - Polyfin resizes as many images at once as half its processors, 2 at least.
+- An image of more than 16.7 million pixels (4,096 by 4,096) is not resized: apps get it as it is, as they get an animated GIF. Nor is one whose resize would hold more than 256 MiB of memory, which Polyfin counts from the image's size and format before it reads it. A poster of 2,000 by 3,000 pixels and a 4K backdrop are resized to every size. A larger image is resized to the smaller sizes only: as a rule, one of 4,000 by 4,000 up to 1,280 pixels wide, and a backdrop of 5,120 by 2,880 up to 1,920. A PNG of 16 bits a channel, or a progressive JPEG saved at the highest quality, counts more.
 
 ### Failed downloads
 
@@ -195,6 +196,7 @@ While **Badges on posters** is on, in **Settings › Content › Posters**, Poly
 - jellyfin-web keeps the listings it read in the browser, and shows them first. So a change shows there once it reads them again.
 - A tag Polyfin did not sign draws nothing.
 - The image as the addon gives it stays in the image cache. Each one with badges is kept beside it, at each width asked for, under the same bound.
+- A poster of more than 16.7 million pixels, or one whose drawing would hold more than 256 MiB of memory, gets no badges: apps get it as it is (see [Cache](#cache)). A poster shown at its own size counts more than a resized one: a 4K image still gets its badges, one of 4,000 by 4,000 gets them when it is resized only.
 - Turned off, every title gets its image and tag back. An app that asks with a badged tag still gets the image without badges, and keeps that image for a week at most.
 - The badges follow the listings. A title a user may not see, through parental control, blocked genres, a hidden library or a hidden title, is not listed to them, badges or not.
 - While badges are on, the web player shows no ratings on hover (see [Ratings on posters](web-client.md#ratings-on-posters)).
@@ -303,6 +305,8 @@ Polyfin draws these images (see [Library images](#library-images) and [Collectio
 - It draws the image the first time an app asks for it, from the posters it relays.
 - It keeps the image with the relayed artwork, in the cache folder's `images` folder. Apps asking for a smaller size get it resized, as other artwork is.
 - A poster its artwork server does not have is left out. One that cannot be downloaded for now is left out of the image served, which is drawn again at the next request.
+- A poster that is no JPEG, PNG or WebP picture, or one of more than 16.7 million pixels, is left out too.
+- The posters of one image hold 256 MiB of memory together at most, drawing included: posters of 2,000 by 3,000 pixels all fit, and of larger ones the last are left out, such as the fifth and sixth of six covers of 3,000 by 3,000.
 
 **When it changes:**
 

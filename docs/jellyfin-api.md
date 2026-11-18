@@ -503,7 +503,7 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 ### Artwork requests for apps
 
 - An image its artwork server does not have (`404` or `410`) answers `404`, and an artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`. An artwork server that answered `429`, or `503`, with a `Retry-After` has its images answer `503` at once, with a `Retry-After` of the time left.
-- An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one.
+- An app asking for an image much smaller than the original (`maxWidth`, `maxHeight`, `fillWidth`, `fillHeight`, `width` or `height`) gets it resized, as a JPEG, or a PNG when it was one. An image of more than 16.7 million pixels (4,096 by 4,096), or whose resize to that size would hold more than 256 MiB of memory, is answered as it is.
 - An image asked for with its `tag` may be kept by the app for good: the tag changes with the image.
 - A wide poster gets a `PrimaryImageAspectRatio` of 16:9 and a square one 1:1. Other posters keep 2:3.
 - Jellyfin measures a Primary image kept on its disk, and gives a remote one the shape of the item's type ([DtoService.cs, lines 1849 to 1879](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Dto/DtoService.cs#L1849-L1879)).
