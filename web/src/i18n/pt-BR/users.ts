@@ -17,7 +17,7 @@ const users: typeof en = {
     isAdministratorHelp: 'Administradores podem gerenciar usuários e as configurações do servidor.',
     showOnSignIn: 'Mostrar na tela de login',
     showOnSignInHelp:
-      'Usuários visíveis aparecem na tela de login dos aplicativos Jellyfin. Usuários ocultos digitam o próprio nome, como no padrão do Jellyfin.',
+      'Usuários visíveis aparecem na tela de login dos aplicativos Jellyfin. Usuários ocultos digitam o próprio nome, como no padrão do Jellyfin. Os aplicativos dos outros membros só conhecem os usuários visíveis.',
     create: 'Criar usuário',
     creating: 'Criando…',
     created: (name: string) => `${name} foi criado.`,

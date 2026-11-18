@@ -16,7 +16,7 @@ const users = {
     isAdministratorHelp: 'Administrators can manage users and server settings.',
     showOnSignIn: 'Show on the sign-in screen',
     showOnSignInHelp:
-      'Visible users are listed on the sign-in screen of Jellyfin apps. Hidden users type their name, like the Jellyfin default.',
+      'Visible users are listed on the sign-in screen of Jellyfin apps. Hidden users type their name, like the Jellyfin default. Other members’ apps are told of visible users only.',
     create: 'Create user',
     creating: 'Creating…',
     created: (name: string) => `${name} has been created.`,

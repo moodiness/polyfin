@@ -17,7 +17,7 @@ const users: typeof en = {
     isAdministratorHelp: 'Administratoren können Benutzer und Servereinstellungen verwalten.',
     showOnSignIn: 'Auf dem Anmeldebildschirm anzeigen',
     showOnSignInHelp:
-      'Sichtbare Benutzer werden auf dem Anmeldebildschirm der Jellyfin-Apps aufgeführt. Ausgeblendete Benutzer geben ihren Namen ein, wie standardmäßig in Jellyfin.',
+      'Sichtbare Benutzer werden auf dem Anmeldebildschirm der Jellyfin-Apps aufgeführt. Ausgeblendete Benutzer geben ihren Namen ein, wie standardmäßig in Jellyfin. Die Apps anderer Mitglieder erfahren nur von sichtbaren Benutzern.',
     create: 'Benutzer erstellen',
     creating: 'Wird erstellt…',
     created: (name: string) => `${name} wurde erstellt.`,

@@ -18,7 +18,7 @@ const users: typeof en = {
       'Los administradores pueden gestionar los usuarios y los ajustes del servidor.',
     showOnSignIn: 'Mostrar en la pantalla de inicio de sesión',
     showOnSignInHelp:
-      'Los usuarios visibles aparecen en la pantalla de inicio de sesión de las aplicaciones de Jellyfin. Los usuarios ocultos escriben su nombre, como en Jellyfin de forma predeterminada.',
+      'Los usuarios visibles aparecen en la pantalla de inicio de sesión de las aplicaciones de Jellyfin. Los usuarios ocultos escriben su nombre, como en Jellyfin de forma predeterminada. Las aplicaciones de los demás miembros solo conocen a los usuarios visibles.',
     create: 'Crear usuario',
     creating: 'Creando…',
     created: (name: string) => `Se ha creado ${name}.`,
