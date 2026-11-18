@@ -208,6 +208,9 @@ type Handler struct {
 	// searches bounds how often users have titles' addons asked again
 	// (see searchVersions).
 	searches versionSearches
+	// uploads bounds how often each user's apps upload their logs (see
+	// clientLog).
+	uploads clientLogUploads
 	// starts are the plays whose torrents' starts the web client tells
 	// (see startprogress.go).
 	starts starts

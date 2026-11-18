@@ -633,7 +633,10 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	var posted playbackInfoRequest
 	if err := unmarshalBody(body, &posted); err != nil {
 		c := callerFrom(r.Context())
-		h.Logger.Warn("A PlaybackInfo request could not be read", "app", c.Device.Client, "device", c.Device.DeviceName, "error", err)
+		// The reason can quote a value of the body, whatever its length,
+		// and the app and the device are named in the app's words: each
+		// is cut.
+		h.Logger.Warn("A PlaybackInfo request could not be read", "app", truncate(c.Device.Client), "device", truncate(c.Device.DeviceName), "error", truncate(err.Error()))
 		b.add("$", "The JSON value could not be converted.")
 		validationProblem(w, b)
 		return false

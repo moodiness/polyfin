@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
 	"github.com/moodiness/polyfin/internal/library"
-	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/tasks"
 )
 
@@ -391,9 +392,57 @@ type ClientLogDocumentResponseDto struct {
 	FileName string
 }
 
+// The logs a user's apps may upload: an app sends one after it failed,
+// seldom.
+const (
+	clientLogsAMinute = 3
+	clientLogsAnHour  = 20
+)
+
+// clientLogUploads remembers when each user's apps last uploaded logs.
+// Its zero value is ready.
+type clientLogUploads struct {
+	mu sync.Mutex
+	at map[accounts.ID][]time.Time
+}
+
+// allow reports whether an app of user may upload a log at now, and
+// records it, or how long until one may.
+func (u *clientLogUploads) allow(user accounts.ID, now time.Time) (bool, time.Duration) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.at == nil {
+		u.at = map[accounts.ID][]time.Time{}
+	}
+	for id, at := range u.at {
+		recent := 0
+		for recent < len(at) && now.Sub(at[recent]) >= time.Hour {
+			recent++
+		}
+		if recent == len(at) {
+			delete(u.at, id)
+		} else if recent > 0 {
+			u.at[id] = at[recent:]
+		}
+	}
+	at := u.at[user]
+	if len(at) >= clientLogsAnHour {
+		return false, at[len(at)-clientLogsAnHour].Add(time.Hour).Sub(now)
+	}
+	if len(at) >= clientLogsAMinute {
+		if wait := at[len(at)-clientLogsAMinute].Add(time.Minute).Sub(now); wait > 0 {
+			return false, wait
+		}
+	}
+	u.at[user] = append(at, now)
+	return true, 0
+}
+
 // clientLog takes the log an app uploads, as jellyfin-web's "send logs"
-// does. Jellyfin writes it to a file; Polyfin writes it to its own log, at
-// the Info level, redacted, under the file name it answers with.
+// does. Jellyfin writes it to a file; Polyfin keeps none of it: its own
+// log tells, in one line at the Info level, who sent how many bytes, under
+// the file name it answers with. Past what a user's apps may upload in a
+// minute and in an hour (see clientLogUploads), the answer is 429.
 func (h *Handler) clientLog(w http.ResponseWriter, r *http.Request) {
 	tooLarge := func() {
 		writeJSON(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Payload must be less than %s bytes", "1,000,000"))
@@ -402,7 +451,14 @@ func (h *Handler) clientLog(w http.ResponseWriter, r *http.Request) {
 		tooLarge()
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxClientLog))
+	c := callerFrom(r.Context())
+	if allowed, wait := h.uploads.allow(c.User.ID, h.now()); !allowed {
+		// Whole seconds, rounded up.
+		w.Header().Set("Retry-After", strconv.Itoa(int((wait+time.Second-1)/time.Second)))
+		processingError(w, http.StatusTooManyRequests)
+		return
+	}
+	size, err := io.Copy(io.Discard, http.MaxBytesReader(w, r.Body, maxClientLog))
 	var limit *http.MaxBytesError
 	if errors.As(err, &limit) {
 		tooLarge()
@@ -412,8 +468,10 @@ func (h *Handler) clientLog(w http.ResponseWriter, r *http.Request) {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	c := callerFrom(r.Context())
-	client, version := c.Device.Client, c.Device.ClientVersion
+	// The app's name and version are the app's own words: they are cut,
+	// as the device's name is, for the file name and the log's line to
+	// stay short.
+	client, version := truncate(c.Device.Client), truncate(c.Device.ClientVersion)
 	if client == "" {
 		client = "unknown-client"
 	}
@@ -425,6 +483,6 @@ func (h *Handler) clientLog(w http.ResponseWriter, r *http.Request) {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
 	name := fmt.Sprintf("upload_%s_%s_%s_%s.log", client, version, h.now().UTC().Format("20060102150405"), hex.EncodeToString(raw[:]))
-	h.Logger.Info("An app sent its log", "file", name, "user", c.User.Name, "document", logs.Redact(string(body)))
+	h.Logger.Info("An app sent its log, which is not kept", "file", name, "user", c.User.Name, "device", truncate(c.Device.DeviceName), "bytes", size)
 	writeJSON(w, http.StatusOK, ClientLogDocumentResponseDto{FileName: name})
 }

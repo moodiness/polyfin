@@ -978,7 +978,7 @@ The web player's dashboard and other Jellyfin apps reach the server's administra
 ### Server logs in the Jellyfin API
 
 - Server log: `/System/Logs`.
-- Uploaded app logs: `/ClientLog/Document`, 1 MB at most.
+- Uploaded app logs: `/ClientLog/Document`, 1 MB at most. It answers 200 with a `FileName`, as Jellyfin does, and keeps no file: the server log tells the name, the user, the device and the size. A user's apps upload 3 logs a minute and 20 an hour; past them it answers `429 Too Many Requests` with `Retry-After` in seconds.
 
 ### Scheduled tasks in the Jellyfin API
 

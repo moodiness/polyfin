@@ -357,7 +357,8 @@ The server log is kept in memory.
 
 - Apps can download its last 5 MB as one file, `polyfin.log`.
 - URLs are reduced to their host, and tokens, keys and passwords are replaced.
-- Logs that apps upload go to the server log, redacted the same way, up to 1 MB each.
+- A log that an app uploads is not kept: the server log tells in one line who sent it, from which device, and its size. An upload is 1 MB at most, and a user's apps upload 3 a minute and 20 an hour at most.
+- A line of the in-memory log is 160 KB at most: a longer one keeps its start and ends with `… (cut)`.
 
 API details: [Server logs](jellyfin-api.md#server-logs-in-the-jellyfin-api).
 
