@@ -46,7 +46,8 @@ Set **User agent (optional)** when you add the source, or later with **Edit the 
 A channel whose address is a DASH manifest (MPD), live or static, plays as other channels do. FFmpeg's DASH demuxer reads the manifest and its segments through Polyfin, with the channel's headers and within its source's rules. FFmpeg repackages the stream into HLS for apps, or converts what they cannot take (see [How a channel plays](live-tv.md#how-a-channel-plays)). Apps never get the manifest itself.
 
 - Every address the manifest names, its `BaseURL`s, segment templates and lists, is rewritten to go through Polyfin.
-- A manifest that names an address that is not HTTP is refused.
+- A manifest that names an address that is not HTTP is refused. So is one FFmpeg would read otherwise than Polyfin does: in an encoding other than UTF-8, ASCII, ISO 8859 or Windows-125x, with a document type declaration (`<!DOCTYPE`), with an element inside a `BaseURL`, or whose template spells an address's scheme with `$RepresentationID$` or `$Bandwidth$`.
+- Elements are known whatever the case of their names, as FFmpeg knows them.
 - A live manifest of several periods plays its last one, the one airing. FFmpeg plays one period of a manifest.
 - Segment templates, timelines and lists play as FFmpeg reads them.
 - The analysis, the dead-stream rules, the [stream health](iptv.md#stream-health) and the log lines are those of HLS channels.

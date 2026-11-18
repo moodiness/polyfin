@@ -210,6 +210,7 @@ Polyfin decides how to play a track with the app's device profile, as Jellyfin d
 
 - **As it is:** through the same source and relay rules as videos (see [Playback](playback.md)). A track whose link expires before the track ends is always relayed, so that Polyfin can renew the link while it plays.
 - **Converted:** with FFmpeg, to the codec, bitrate, sample rate and channels the app asks for. It is sent progressively or in 3-second HLS segments (see [Transcoding](transcoding.md)).
+- **Playlists and manifests:** a track whose stream is an HLS playlist or a DASH manifest is read by FFmpeg through Polyfin, as a channel's is: each file it names is fetched with the stream's headers, within its source's address rules (see [What FFmpeg may open](playback.md#what-ffmpeg-may-open)).
 
 **Links:**
 

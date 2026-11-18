@@ -37,6 +37,7 @@ API details: [Direct play and media source paths for apps](jellyfin-api.md#direc
 An addon's stream may be an HLS playlist rather than one file. A finished playlist, which ends with `#EXT-X-ENDLIST`, plays as a file of its length. A video an addon lists among other titles whose playlist has no end plays live (see [Live videos](versions.md#live-videos)).
 
 - **Every file through Polyfin:** ffprobe, FFmpeg and relayed apps get the playlist with each address it names replaced by Polyfin's: variant and rendition playlists, segments, keys (`EXT-X-KEY`) and initialization sections (`EXT-X-MAP`). Polyfin fetches each with the headers the addon declares (`proxyHeaders`), within the source's address rules. Relative addresses are read from the playlist's own.
+- **Refused:** a playlist that names an address that is not HTTP is refused, and so is a line FFmpeg would read otherwise than Polyfin wrote it: an inline key (`data:`) that holds a quote or a backslash, or a tag of more than 4095 bytes cut within an address. The stream fails rather than being read past Polyfin.
 - **Byte ranges:** a segment or a section named with `EXT-X-BYTERANGE` is fetched as that range.
 - **Still finished:** the playlist keeps its tags, `#EXT-X-ENDLIST` included, so it keeps its duration and seeking.
 - **Played as it is:** an app that plays HLS, such as jellyfin-web, gets the playlist. It is sent to the source when it can reach it itself, and relayed as above otherwise.
@@ -59,6 +60,16 @@ When the app picked no version, Polyfin skips and leaves out of its list any ver
 ### Analysis timing
 
 Up to 3 versions are analyzed at once, taken in order. When a later one is ready, Polyfin waits 3 more seconds for earlier ones, then plays it. A silent source thus costs 3 seconds, not the whole analysis. Unfinished analyses continue in the background for the next play.
+
+### What FFmpeg may open
+
+ffprobe and FFmpeg read a stream at an address of Polyfin's own, on the server's loopback interface. Polyfin fetches the bytes with the headers the source needs, within the source's address rules, and tells them what they may open there:
+
+- **Protocols:** HTTP to Polyfin's address, and for an HLS playlist its encrypted segments and inline keys. They open no file, no other port and no TLS connection of their own.
+- **One file:** a file is read by the container its bytes tell, among those that hold one file or one stream. A file whose bytes are a DASH manifest, a list of files to join or a session description (SDP) is not read as one: its analysis fails with `not a playable video`.
+- **Playlists and manifests:** FFmpeg's HLS and DASH readers are used only where Polyfin found a playlist or a manifest, and rewrote its addresses.
+- **Other hosts:** Polyfin's address is also FFmpeg's HTTP proxy, and answers for itself alone. An address a playlist or a manifest would still name is refused there instead of being fetched. FFmpeg skips its proxy for the hosts the server's `no_proxy` environment variable names.
+- **Discs and Polyfin's own files on disk** are read by their path, with FFmpeg's own choice of reader.
 
 ### Which version plays
 
