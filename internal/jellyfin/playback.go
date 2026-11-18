@@ -536,7 +536,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// 2.6.3, it fetches that file with its play session alone, which then
 	// asks Polyfin to relay it.
 	asFile, tokenless := integratedPlayer(r, request)
-	session := h.Playback.Signer().Sign(playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
+	session := h.grant(playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
 		Relay: tokenless || mustRelay(r, chosen.version)})
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	// Every version listed is named for the profile sent: the one chosen
@@ -1196,31 +1196,30 @@ const (
 
 // streamAccess finds who a media request plays for. Players send no
 // credentials with media URLs: a signed grant in Path URLs, a signed play
-// session, or the caller's token stands for the user. A user outside their
-// allowed hours, or outside the local network without remote access, gets
+// session, or the caller's token stands for the user. A grant stands as
+// granted tells; one that stands no more leaves the token to decide, as a
+// play session Polyfin did not sign does. A user outside their allowed
+// hours, or outside the local network without remote access, gets
 // nothing: Jellyfin serves direct streams without checking who asks, but
 // Polyfin knows, and keeps to the hours and the network. On a route
 // servedToAnyone, the token may come as the api_key query parameter even
-// without legacy authorization (see mediaToken).
+// without legacy authorization (see mediaToken). The grant returned for a
+// token names the token's device and nothing else: what the request
+// signs in turn is given to that device (see filesGrant).
 func (h *Handler) streamAccess(r *http.Request, route mediaRoute) (accounts.User, playback.Grant, bool) {
 	for _, name := range []string{grantParameter, "playSessionId"} {
 		token := query(r, name)
 		if token == "" {
 			continue
 		}
-		grant, err := h.Playback.Signer().Verify(token)
-		if err != nil {
-			continue
-		}
-		user, err := h.Accounts.User(r.Context(), grant.User)
-		if err == nil && !user.Refused(h.now()) && !h.outsideHours(user) && !remoteRefused(r, user) {
+		if user, grant, ok := h.granted(r, token); ok {
 			return user, grant, true
 		}
 	}
 	if token := h.mediaToken(r, route); token != "" {
-		if _, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r)); err == nil && !h.outsideHours(user) &&
+		if device, user, err := h.Accounts.DeviceByToken(r.Context(), token, forwarded.Client(r)); err == nil && !h.outsideHours(user) &&
 			!remoteRefused(r, user) {
-			return user, playback.Grant{}, true
+			return user, playback.Grant{Device: device.ID}, true
 		}
 	}
 	return accounts.User{}, playback.Grant{}, false
@@ -1310,7 +1309,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// source too: relay instead of redirecting it.
 	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	if h.playsLive(r.Context(), item, version) {
-		h.serveChannel(w, r, user, item, version, relay)
+		h.serveChannel(w, r, user, item, version, relay, grant)
 		return
 	}
 	// PlaybackInfo never offers a version above the user's bitrate limit,
@@ -1339,7 +1338,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// The files of an HLS playlist relayed are the same play's (see
 	// liveFile), named with a grant signed once one is named.
 	grantToken := sync.OnceValue(func() string {
-		return h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: h.mediaDevice(r), Relay: true})
+		return h.filesGrant(grant, user, version)
 	})
 	link := func(target, name string) string { return h.liveLink(r, item.ID, grantToken())(target, name) }
 	if err := h.Playback.Serve(w, r, version, playback.Delivery{Relay: relay, ContentType: contentType, Link: link}); err != nil && r.Context().Err() == nil {

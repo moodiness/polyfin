@@ -743,6 +743,16 @@ Polyfin plays a version as it is, relays it, repackages it or converts it. These
 
 Polyfin serves a title's streams, subtitles and attached fonts for the user a media URL names: by the play session or grant Polyfin signed into it, else by the caller's access token. That user's parental control, blocked genres, visible libraries and allowed hours apply, and addon subtitles come synced to the version they play (see [Addon subtitles synced to the version](subtitles.md#addon-subtitles-synced-to-the-version)).
 
+A play session or grant stands for a time, and for the device it was given to:
+
+- **Two days:** it stands 48 hours after PlaybackInfo or the item's details gave it. Apps ask PlaybackInfo for each play, so each play has its own: a movie paused one evening goes on the next.
+- **While its play goes on:** past the two days, it stands as long as the app keeps asking with it, with never an hour between two requests. A channel left on is not cut. After an hour without a request, it is over.
+- **While its device is signed in:** the play sessions and grants given to a device end when it signs out, when it is signed out under **Devices** or as an unused device, and when a password change signs it out. The user's other devices play on. The files a relayed HLS playlist names end with the device of the request that asked for the playlist.
+- **With an API key:** the play session and grants an API key's caller is given for a user name no device, so no sign-out ends them. They stand two days and no longer, in use or not, and so do the files of a playlist asked with one. A play of more than two days asks PlaybackInfo again.
+- **Once it is over:** the address answers 401, and the app asks PlaybackInfo, or the item, again. An address that also carries a valid access token is served for the token, as one whose play session Polyfin did not sign. HLS playlists and segments read the play session alone.
+- **Upgrading:** the play sessions and grants given by earlier versions tell no time, and are refused. An app playing while the server is upgraded asks PlaybackInfo again; an address saved in an external player is read again from the item.
+- The addresses given to DLNA devices are signed apart, and play on the DLNA routes only (see [Playing](dlna.md#playing)).
+
 The token is read as on any request: from the `Authorization` header or the `ApiKey` query parameter, and with legacy authorization from the legacy headers and `api_key`. On the routes Jellyfin serves to anyone, `api_key` counts even without legacy authorization, as some apps sign the addresses they build themselves with it: the streams of videos and audio tracks, subtitles, attachments and recordings under way.
 
 - Prefer the `ApiKey` query parameter, which Polyfin's own media URLs use.

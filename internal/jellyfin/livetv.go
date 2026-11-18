@@ -893,7 +893,7 @@ func (h *Handler) livePlaybackInfo(w http.ResponseWriter, r *http.Request, user 
 		}
 		manifest := playback.Manifest(analysis)
 		relay := mustRelay(r, version) || manifest && (webApp(r) || !h.Playback.Redirectable(r.Context(), version))
-		session := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID, Relay: relay})
+		session := h.grant(playback.Grant{Version: version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID, Relay: relay})
 		permits := h.convertible(allowed, user, version)
 		source, ok := h.liveSource(r, channel, version, id, analysis, request, session, relay, permits)
 		if !ok {
@@ -1083,7 +1083,8 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 // the player may be sent to the source; an MPEG-TS stream is relayed from
 // its shared feed, or redirected to when that costs no connection (see
 // playback.Service.ServeChannel). A DASH stream plays only converted.
-func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user accounts.User, channel library.Item, version library.Version, relay bool) {
+// accepted is the grant streamAccess accepted the request with.
+func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user accounts.User, channel library.Item, version library.Version, relay bool, accepted playback.Grant) {
 	r = r.WithContext(playback.ForUser(r.Context(), user.ID))
 	analysis, err := h.Playback.AnalyzeLive(r.Context(), version)
 	if err != nil {
@@ -1105,8 +1106,7 @@ func (h *Handler) serveChannel(w http.ResponseWriter, r *http.Request, user acco
 		err = h.Playback.ServeChannel(w, r, version, relay)
 	} else if relay {
 		// The files the playlist names are the same play's.
-		grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID, Device: h.mediaDevice(r), Relay: true})
-		err = h.Playback.ServeLive(w, r, version, "", h.liveLink(r, channel.ID, grant))
+		err = h.Playback.ServeLive(w, r, version, "", h.liveLink(r, channel.ID, h.filesGrant(accepted, user, version)))
 	} else {
 		err = h.Playback.Serve(w, r, version, playback.Delivery{})
 	}
@@ -1132,15 +1132,10 @@ func (h *Handler) liveLink(r *http.Request, channel accounts.ID, grant string) f
 // analyzed as an HLS playlist (see playback.Service.Serve).
 func (h *Handler) liveFile(w http.ResponseWriter, r *http.Request) {
 	token := query(r, grantParameter)
-	grant, err := h.Playback.Signer().Verify(token)
+	user, grant, stands := h.granted(r, token)
 	target, decodeErr := base64.RawURLEncoding.DecodeString(query(r, "target"))
-	if err != nil || decodeErr != nil || !h.Playback.Signer().VerifyLink(token, string(target), query(r, "sign")) {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
 	opened, ok := parseGUID(r.PathValue("itemId"))
-	user, userErr := h.Accounts.User(r.Context(), grant.User)
-	if !ok || userErr != nil || user.Refused(h.now()) || h.outsideHours(user) || remoteRefused(r, user) {
+	if !stands || !ok || decodeErr != nil || !h.Playback.Signer().VerifyLink(token, string(target), query(r, "sign")) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

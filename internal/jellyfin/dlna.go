@@ -776,7 +776,7 @@ func (h *Handler) Captions(w http.ResponseWriter, r *http.Request, play dlna.Pla
 		id = play.Item.ID
 	}
 	subtitle := r.Clone(r.Context())
-	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: play.User.ID, Relay: true})
+	grant := h.grant(playback.Grant{Version: version.ID, User: play.User.ID, Relay: true})
 	subtitle.URL = &url.URL{Path: r.URL.Path, RawQuery: url.Values{grantParameter: {grant}}.Encode()}
 	subtitle.SetPathValue("itemId", play.Item.ID.String())
 	subtitle.SetPathValue("mediaSourceId", id.String())

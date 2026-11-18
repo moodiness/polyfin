@@ -229,7 +229,7 @@ func (a accessSetup) withGrant(t *testing.T, target string, user accounts.User, 
 	query := parsed.Query()
 	for name := range query {
 		if strings.EqualFold(name, "playSessionId") {
-			query.Set(name, a.handler.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: user.ID}))
+			query.Set(name, a.handler.grant(playback.Grant{Version: version.ID, User: user.ID}))
 		}
 	}
 	parsed.RawQuery = query.Encode()

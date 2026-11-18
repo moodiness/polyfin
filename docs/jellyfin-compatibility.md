@@ -199,6 +199,7 @@ API details: [Extras and theme media for apps](jellyfin-api.md#extras-and-theme-
 Polyfin serves a title's streams, subtitles and fonts for the user its address names. That user's parental control, blocked genres, visible libraries and allowed hours apply.
 
 - **Who plays:** the play session or grant Polyfin signed into the address names the user, else the app's access token.
+- **For how long:** a play session or grant stands two days, longer while its play goes on, and only while the device it was given to is signed in. After that the app asks PlaybackInfo again.
 - **Downloads:** a title's file download serves its first working version, under the same permissions.
 - **Smaller copies:** apps that ask for a smaller copy to download, such as Streamyfin, get one while **Converted downloads** is on (see [Converted downloads](transcoding.md#converted-downloads)).
 

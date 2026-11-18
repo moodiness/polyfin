@@ -262,6 +262,9 @@ type Handler struct {
 	// titles are the play sessions devices reported for the title they
 	// play (see leftplayback.go).
 	titles *titleSessions
+	// grantUses are the grants at the end of their life or past it that
+	// media requests were lately served for (see granted).
+	grantUses *cache.Cache[string, struct{}]
 	// decisions are the last plays of each title, what each tried and
 	// chose, for the admin app's Versions page (see playdecisions.go).
 	decisions *playDecisions
@@ -307,6 +310,8 @@ func New(options Options) *Handler {
 	}
 	// Sessions read the handler's clock, which tests set.
 	h.sessions = playback.NewSessions(func() time.Time { return h.now() })
+	// So does the memory of the grants in use.
+	h.grantUses = cache.NewLasting[string, struct{}](2000, func() time.Duration { return grantIdle }, func() time.Time { return h.now() })
 	// So do the draws of listings at random, which hold the titles drawn.
 	h.draws = cache.NewLasting[drawKey, draw](1000, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
 		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })

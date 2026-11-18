@@ -458,7 +458,7 @@ func textCopyOf(streams []playback.MediaStream, index int) int {
 // playback's (see mediaDevice).
 func (h *Handler) streamURL(r *http.Request, item, sourceID accounts.ID, version library.Version, container string, relay bool) string {
 	caller := callerFrom(r.Context())
-	grant := h.Playback.Signer().Sign(playback.Grant{Version: version.ID, User: caller.User.ID, Device: caller.Device.ID, Relay: relay})
+	grant := h.grant(playback.Grant{Version: version.ID, User: caller.User.ID, Device: caller.Device.ID, Relay: relay})
 	query := url.Values{
 		"static":        {"true"},
 		"mediaSourceId": {sourceID.String()},
