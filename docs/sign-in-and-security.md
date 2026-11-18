@@ -207,7 +207,7 @@ API details: [Identity provider sign-in](jellyfin-api.md#identity-provider-sign-
 
 <a id="known-proxies"></a>
 
-**Settings › Security** holds the eight settings below, the identity provider and HTTPS (see [HTTPS](https-and-networking.md#https)). **Settings › Diagnostics** holds a ninth. All apply at once, without a restart.
+**Settings › Security** holds the eight settings below, the identity provider and HTTPS (see [HTTPS](https-and-networking.md#https)). **Settings › Diagnostics** holds a ninth. All apply at once, without a restart. **Signing secret**, under them, is not a setting: its button makes a new signing secret, which restarts Polyfin (see [The signing secret](configuration.md#the-signing-secret)).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|

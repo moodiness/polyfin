@@ -234,7 +234,7 @@ A new Polyfin, before any administrator exists, can restore a backup instead of 
 Afterwards, everything is as it was when the backup was made: users, settings, addons, watch history, and the `devices` and `admin_sessions` tables.
 
 - **Sign-ins:** apps signed in after that time must sign in again. So does the administrator who restored, unless they signed in before it.
-- **Stream links:** those handed out before the restore stop working. The server secret that signs them comes from the backup too.
+- **Stream links:** everything Polyfin signed before the restore stops working, as after **Make a new signing secret**: apps ask again for what they were playing. The restored database gets a new signing secret, so that the backup's signs nothing for the server (see [The signing secret](configuration.md#the-signing-secret)).
 - **Server identity:** it is the backup's. Apps that knew the server before the backup reconnect without being set up again.
 - **Theme files:** a backup holds the database only. The files of a [copy of a theme](themes-and-custom-code.md#keeping-a-copy-of-a-theme) stay in the data folder. On another system, **Update the copy** downloads them again.
 
@@ -305,3 +305,5 @@ A backup also restores into the PostgreSQL 18 container with its own `pg_restore
 Polyfin comes back as it was at the time of the backup. It has the same server identity, so apps reconnect without being set up again, and the same accounts, passwords and settings.
 
 The secrets Polyfin encrypts with `POLYFIN_SECRET_KEY` can be read only with the same key. Set it again before starting Polyfin on a restored database (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
+
+A restore by hand brings the backup's signing secret back with the rest. Make a new one afterwards, with **Make a new signing secret** under **Settings › Security** (see [The signing secret](configuration.md#the-signing-secret)).

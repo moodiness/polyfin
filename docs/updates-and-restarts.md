@@ -97,6 +97,8 @@ Only the Docker socket tells a container's restart policy, not the container its
 
 Until then, **Restart** warns that Polyfin may not come back, and asks to choose **Restart anyway**. The API refuses a restart that does not say so. Without a restart policy, Polyfin stays stopped until it is started on the host. The admin app says so after 2 minutes.
 
+**Make a new signing secret**, in **Settings › Security**, restarts Polyfin the same way, with the same warning and once a minute with **Restart** (see [The signing secret](configuration.md#the-signing-secret)).
+
 <a id="polyfin-desktop-s-update"></a><a id="polyfin-desktops-update"></a>
 
 ### Polyfin Desktop update

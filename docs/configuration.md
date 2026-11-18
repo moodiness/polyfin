@@ -274,6 +274,8 @@ Polyfin stores a few secrets in its database. With `POLYFIN_SECRET_KEY` set, the
 
 Addon addresses, IPTV passwords and guide addresses stay unencrypted.
 
+The server's signing secret is not encrypted either. With the key set, a copy of the database alone signs nothing all the same (see [The signing secret](#the-signing-secret)).
+
 How the key applies:
 
 - At startup, the secrets still stored unencrypted are encrypted in place, in one go. Running again changes nothing.
@@ -285,6 +287,7 @@ How the key applies:
 - The secrets it cannot decrypt count as not set. Their services act as not configured or not connected, and a backup destination sends nothing.
 - The log shows one error naming them, never their values.
 - **System › Health** lists them.
+- What Polyfin signed before stops working, once: apps ask again for what they were playing. The same happens the first time a key is set, and when it is removed (see [The signing secret](#the-signing-secret)).
 
 Set again the key they were encrypted with, or enter them again:
 
@@ -305,3 +308,12 @@ Until a secret is entered again, saving other settings keeps the value the right
 - It then asks before going ahead (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)).
 
 Administrators can read the server's saved keys again. Each user can read their own MDBList and PublicMetaDB keys and ListenBrainz token. See [Administration](administration.md#showing-a-saved-key).
+
+### The signing secret
+
+Polyfin signs what it gives apps to use without their sign-in: playback addresses and play sessions, the links of live streams, image addresses and **Configure** links. It signs with a secret of 32 random bytes kept in its database, as it is.
+
+- With `POLYFIN_SECRET_KEY` set, Polyfin signs with a value derived from both the key and the stored secret (HMAC-SHA256). A copy of the database alone, or a backup, then signs nothing for the server.
+- Without the key, the stored secret signs by itself. It is as readable as the rest of the database, and every backup holds it.
+- **Make a new signing secret**, under **Signing secret** in **Settings › Security**, replaces it. Use it when a copy of the database or a backup may be in other hands. It asks for your password or a two-step code, then Polyfin restarts, as with **Restart** and with the same warning (see [Restart](updates-and-restarts.md#restart)). Everything signed before stops working: apps stay signed in, and ask again for what they were playing.
+- Restoring a backup from the admin app or the setup page makes a new one too (see [What a restore does](backups.md#what-a-restore-does)).
