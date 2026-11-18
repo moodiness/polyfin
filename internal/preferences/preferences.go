@@ -14,6 +14,30 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 )
 
+// MaxValueBytes bounds the display preferences kept under one id for one
+// client, in bytes of JSON. Apps keep a few kilobytes: jellyfin-web's
+// largest, its user settings with the home sections and each view's
+// filters, and a few hundred bytes for a view's sorting.
+const MaxValueBytes = 64 << 10
+
+// MaxClientBytes bounds the name of a client app. Apps name themselves in
+// a few letters, as jellyfin-web does with "emby".
+const MaxClientBytes = 64
+
+// MaxPerUser bounds the display preferences one user keeps, each id for
+// each client counting as one. Apps keep one for their settings and one a
+// view: past the bound, a new one takes the place of the one written
+// longest ago, so that an app's latest are always kept.
+const MaxPerUser = 250
+
+// ErrTooLarge reports display preferences over MaxValueBytes, or a client
+// name over MaxClientBytes.
+var ErrTooLarge = errors.New("display preferences too large to keep")
+
+// newKeyLock is the class of the advisory locks, one a user, under which
+// a user's new display preferences are counted and kept.
+const newKeyLock int32 = 0x70726566 // "pref"
+
 // Store keeps display preferences in PostgreSQL. Values are JSON objects
 // whose content belongs to the caller.
 type Store struct {
@@ -41,14 +65,45 @@ func (s *Store) Get(ctx context.Context, user accounts.ID, id, client string) (j
 	return value, true, nil
 }
 
-// Put replaces the preferences user saved under id for client. value must
-// be a JSON object.
+// Put replaces the preferences user saved under id for client, or keeps
+// them as new ones: past MaxPerUser, in place of the user's that were
+// written longest ago. value must be a JSON object as encoding/json writes
+// it. Over MaxValueBytes, or for a client over MaxClientBytes, nothing is
+// kept and the error is ErrTooLarge.
 func (s *Store) Put(ctx context.Context, user accounts.ID, id, client string, value json.RawMessage) error {
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO display_preferences (user_id, preference_id, client, value) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id, preference_id, client) DO UPDATE SET value = excluded.value`,
+	if len(value) > MaxValueBytes || len(client) > MaxClientBytes {
+		return ErrTooLarge
+	}
+	// Apps mostly save again what they saved before, which takes no room.
+	written, err := s.db.Exec(ctx, `
+		UPDATE display_preferences SET value = $4, updated_at = now()
+		WHERE user_id = $1 AND preference_id = $2 AND client = $3`,
 		user, id, client, string(value))
-	return err
+	if err != nil || written.RowsAffected() > 0 {
+		return err
+	}
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		// One new key of a user at a time: two at once would each count
+		// the user's rows without the other's.
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1, hashtext($2::uuid::text))", newKeyLock, user); err != nil {
+			return err
+		}
+		// Room is made among the user's other rows, down to one under the
+		// bound: all those over it go, as rows kept from before the bound.
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM display_preferences WHERE user_id = $1 AND (preference_id, client) IN (
+				SELECT preference_id, client FROM display_preferences
+				WHERE user_id = $1 AND (preference_id, client) <> ($2, $3)
+				ORDER BY updated_at DESC, preference_id, client OFFSET $4)`,
+			user, id, client, MaxPerUser-1); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `
+			INSERT INTO display_preferences (user_id, preference_id, client, value) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (user_id, preference_id, client) DO UPDATE SET value = excluded.value, updated_at = now()`,
+			user, id, client, string(value))
+		return err
+	})
 }
 
 // Configuration returns the configuration user saved, and whether one was

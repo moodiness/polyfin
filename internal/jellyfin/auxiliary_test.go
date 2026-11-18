@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -272,6 +273,101 @@ func TestDisplayPreferencesOfAnotherUser(t *testing.T) {
 	}
 	if status, _ := s.call(http.MethodGet, "/DisplayPreferences/home?client=web&userId=nobody", adminApp, ""); status != http.StatusBadRequest {
 		t.Errorf("malformed user id: got %d, want 400", status)
+	}
+}
+
+// What an app keeps as display preferences is bounded: a body, a value or
+// a client's name over its bound is refused and nothing is kept of it,
+// under whatever identifier and client the request names. Home sections
+// merge into the ones kept, and cannot grow a value past the bound either.
+// What apps do keep is kept and read back as before.
+func TestDisplayPreferencesOverABoundAreRefused(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	alice := s.user("alice", nil)
+	header := app("laptop", s.signIn("alice", "laptop"))
+	rows := func() int {
+		t.Helper()
+		var count int
+		if err := s.pool.QueryRow(t.Context(), "SELECT count(*) FROM display_preferences WHERE user_id = $1", alice.ID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+
+	// A megabyte under each new identifier and client, then one byte more
+	// than the bound.
+	for i, size := range []int{maxBody - 64, maxBody - 64, preferences.MaxValueBytes - 28} {
+		body := `{"CustomPrefs":{"filler":"` + strings.Repeat("A", size) + `"}}`
+		path := fmt.Sprintf("/DisplayPreferences/view-%d?client=app-%d", i, i)
+		if status, answer := s.postRaw(path, header, body); status != http.StatusRequestEntityTooLarge {
+			t.Errorf("a body of %d bytes: %d %.80s, want 413", len(body), status, answer)
+		}
+	}
+	long := strings.Repeat("c", preferences.MaxClientBytes+1)
+	for _, method := range []string{http.MethodPost, http.MethodGet} {
+		var body any
+		if method == http.MethodPost {
+			body = json.RawMessage(savedRequest)
+		}
+		status, answer := s.call(method, "/DisplayPreferences/home?client="+long, header, body)
+		var problem problemDetails
+		_ = json.Unmarshal(answer, &problem)
+		if status != http.StatusBadRequest || len(problem.Errors["client"]) != 1 {
+			t.Errorf("%s with a client of %d bytes: %d %s, want 400 for client", method, len(long), status, answer)
+		}
+	}
+	if n := rows(); n != 0 {
+		t.Fatalf("the refused requests left %d rows", n)
+	}
+
+	sections := func(from, to int) string {
+		var body strings.Builder
+		body.WriteString(`{"CustomPrefs":{"homesection` + fmt.Sprint(from) + `":"resume"`)
+		for index := from + 1; index < to; index++ {
+			fmt.Fprintf(&body, `,"homesection%d":"resume"`, index)
+		}
+		body.WriteString(`}}`)
+		return body.String()
+	}
+	if status, answer := s.postRaw("/DisplayPreferences/home?client=emby", header, sections(0, 2000)); status != http.StatusNoContent {
+		t.Fatalf("2000 home sections: %d %s", status, answer)
+	}
+	if status, answer := s.postRaw("/DisplayPreferences/home?client=emby", header, sections(2000, 4000)); status != http.StatusBadRequest {
+		t.Errorf("2000 home sections more: %d %.80s, want 400", status, answer)
+	}
+	_, answer := s.call(http.MethodGet, "/DisplayPreferences/home?client=emby", header, nil)
+	if !strings.Contains(string(answer), `"homesection1999":"resume"`) || strings.Contains(string(answer), `"homesection2000"`) {
+		t.Errorf("after a refused value, the home sections are not the ones kept before: %.200s", answer)
+	}
+
+	// An app keeps its settings under one identifier, each view's filters
+	// among them, as jellyfin-web does. A client's name of the bound's
+	// length is kept.
+	client := strings.Repeat("c", preferences.MaxClientBytes)
+	filters := map[string]string{}
+	for view := range 60 {
+		filters[fmt.Sprintf("%032x-movies", view)] = `{"SortBy":"SortName,ProductionYear","SortOrder":"Ascending","IsUnplayed":true,"Genres":"Drama|Comedy"}`
+	}
+	settings, _ := json.Marshal(map[string]any{"SortBy": "SortName", "CustomPrefs": filters, "ShowBackdrop": true, "Client": client})
+	if status, answer := s.postRaw("/DisplayPreferences/usersettings?client="+client, header, string(settings)); status != http.StatusNoContent {
+		t.Fatalf("an app's settings of %d bytes: %d %s", len(settings), status, answer)
+	}
+	status, answer := s.call(http.MethodGet, "/DisplayPreferences/usersettings?client="+client, header, nil)
+	var read struct {
+		Client      string
+		CustomPrefs map[string]*string
+	}
+	if err := json.Unmarshal(answer, &read); err != nil || status != http.StatusOK || read.Client != client {
+		t.Fatalf("an app's settings read back: %d %v %.200s", status, err, answer)
+	}
+	for key, value := range filters {
+		if got := read.CustomPrefs[key]; got == nil || *got != value {
+			t.Errorf("%s was not kept as saved", key)
+		}
+	}
+	if n := rows(); n != 2 {
+		t.Errorf("alice keeps %d rows, want 2", n)
 	}
 }
 

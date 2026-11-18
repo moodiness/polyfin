@@ -23,6 +23,7 @@ import (
 	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playlists"
+	"github.com/moodiness/polyfin/internal/preferences"
 )
 
 // auxiliaryRoutes registers the endpoints Jellyfin apps call around
@@ -481,6 +482,9 @@ func (h *Handler) displayPreferencesRequest(w http.ResponseWriter, r *http.Reque
 	client, _ = queryParam(r, "client")
 	if strings.TrimSpace(client) == "" {
 		errs.add("client", "The client field is required.")
+	} else if len(client) > preferences.MaxClientBytes {
+		// Nothing is kept under such a name, so nothing is read under it.
+		errs.add("client", fmt.Sprintf("The field client must be a string with a maximum length of %d.", preferences.MaxClientBytes))
 	}
 	userID, set := errs.guid(r, "userId")
 	for name, messages := range bodyErrors {
@@ -527,7 +531,8 @@ func (h *Handler) updateDisplayPreferences(w http.ResponseWriter, r *http.Reques
 		unsupportedMediaTypeProblem(w)
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	// A body holds little more than the value kept of it.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, preferences.MaxValueBytes))
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		processingError(w, http.StatusRequestEntityTooLarge)
@@ -553,7 +558,14 @@ func (h *Handler) updateDisplayPreferences(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	value, _ := json.Marshal(state)
-	if err := h.Preferences.Put(r.Context(), user.ID, id, client, value); err != nil {
+	err = h.Preferences.Put(r.Context(), user.ID, id, client, value)
+	if errors.Is(err, preferences.ErrTooLarge) {
+		// The body was within the bound: its home sections merge into the
+		// ones kept, and the whole is over it.
+		processingError(w, http.StatusBadRequest)
+		return
+	}
+	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}

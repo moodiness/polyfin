@@ -599,6 +599,13 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 - `/Shows/NextUp` and `/UserItems/Resume` apply it when they have no `parentId`, and `/Shows/NextUp` when it has no `seriesId` either.
 - `/Items/Latest` always needs a `parentId` in Polyfin: without one, it answers an empty list.
 
+### Display preferences for apps
+
+- `GET` and `POST /DisplayPreferences/{id}?client=` read and keep what an app saves of a view, or of its own settings, for each user, identifier and `client`, as on Jellyfin. Polyfin bounds what it keeps; apps keep a few kilobytes under a short `client`, as jellyfin-web does under `emby`.
+- A `client` over 64 bytes is answered 400, with an error for `client`, by both routes.
+- A body over 64 KiB is answered 413. Home sections add to the ones already kept: when the whole would pass 64 KiB, the answer is 400 and what was kept stays.
+- A user keeps 250 of them, each identifier for each `client` counting as one. One more takes the place of the one saved longest ago, which then reads as never saved.
+
 ### Home rows for apps
 
 - `GET /Polyfin/HomeRows` answers the user's rows, in order, as `{"Items": [...]}`: each with its `Id`, its `Name`, its `Place` (`Top`, `AfterResume`, `AfterNextUp` or `Bottom`), its `Kind` (`Catalog`, `Collection`, `BecauseYouWatched`, `New`, `NowAvailable`, `StillWaiting`, `Trakt`, `TopPicks`, `Watchlist`, `FavoritePlaylists` or `Playlist`) and its first `Items`, as `BaseItemDto`, 20 unless `Limit` asks for up to 100. `Fields` asks for their fields, as listings do.
