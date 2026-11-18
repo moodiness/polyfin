@@ -398,6 +398,27 @@ func (d described) meta() Meta {
 	return meta
 }
 
+// as is the meta described, under the identifier id it was asked by. An
+// addon may give it another one, which still tells the title's TMDB, TVDB
+// or IMDb identifier, as a title's own identifier does, where the
+// description names none.
+func (d described) as(id string) Meta {
+	given := d.ID
+	d.ID = id
+	if given != id {
+		if rest, ok := strings.CutPrefix(given, "tmdb:"); ok && d.TmdbID == "" {
+			number, _, _ := strings.Cut(rest, ":")
+			d.TmdbID = Text(number)
+		} else if rest, ok := strings.CutPrefix(given, "tvdb:"); ok && d.TvdbID == "" {
+			number, _, _ := strings.Cut(rest, ":")
+			d.TvdbID = Text(number)
+		} else if strings.HasPrefix(given, "tt") && d.ImdbID == "" {
+			d.ImdbID, _, _ = strings.Cut(given, ":")
+		}
+	}
+	return d.meta()
+}
+
 // ids fills meta's TMDB identifier from moviedb_id, and a series' TVDB
 // one from tvdb_id, when neither its Stremio identifier ("tmdb:<id>",
 // "tvdb:<id>") nor _tmdbId or _tvdbId gives it: these win, as an addon
@@ -575,7 +596,10 @@ func unmarshal(data []byte, v any) error {
 // is not the title's (see Describes) is ErrInvalidResponse, a failed
 // description, so that it is never kept as the title's; one of another
 // identifier that says the addon refused the request for its rate is,
-// whatever its type, and ErrRateLimited too.
+// whatever its type, and ErrRateLimited too. A description the addon
+// gives by another identifier is returned under the one asked, which its
+// title is recorded by: what is recorded from it, its seasons among it,
+// names that title and no other.
 func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, confined bool) (Meta, error) {
 	body, err := c.get(ctx, manifestURL, ResourceURL(manifestURL, "/meta/"+encodeComponent(metaType)+"/"+encodeComponent(id)+".json"), confined, c.timeout)
 	if err != nil {
@@ -597,7 +621,7 @@ func (c *Client) Meta(ctx context.Context, manifestURL, metaType, id string, con
 		return Meta{}, fmt.Errorf("%w: meta: asked for %s %q, the addon described %s %q", ErrInvalidResponse, metaType, id,
 			response.Meta.Type, response.Meta.Name)
 	}
-	return response.Meta.meta(), nil
+	return response.Meta.as(id), nil
 }
 
 // Describes reports whether m may describe the title of type metaType
