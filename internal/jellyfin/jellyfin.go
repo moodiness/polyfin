@@ -179,8 +179,8 @@ type Handler struct {
 	fonts    fontsFor
 	sessions *playback.Sessions
 	// subtitleFiles remembers the subtitle files described for each item,
-	// with the user they were described for, for players that fetch them
-	// without credentials (see keptSubtitles).
+	// with the user they were described for: a subtitle address names a
+	// file by its index among them (see keptSubtitles).
 	subtitleFiles *cache.Cache[accounts.ID, listedSubtitles]
 	subtitleCache *cache.Cache[accounts.ID, subtitleText]
 	// runtimes remembers, for the reports of a playback, the runtime of

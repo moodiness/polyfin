@@ -719,7 +719,9 @@ func TestStreamsNeedAGrant(t *testing.T) {
 	}
 }
 
-func TestSubtitlesNeedNoCredentials(t *testing.T) {
+// A subtitle file comes in the format its address names, asked as the
+// address PlaybackInfo gives is signed, with the device's token.
+func TestSubtitlesComeInTheFormatTheAddressNames(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
 	p.get(t, "/Items/"+p.movie, p.token, nil)
@@ -728,7 +730,7 @@ func TestSubtitlesNeedNoCredentials(t *testing.T) {
 		"srt": "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n",
 		"js":  `{"TrackEvents":[{"Id":"1","Text":"Bonjour","StartPositionTicks":10000000,"EndPositionTicks":40000000}]}`,
 	} {
-		response, err := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/0/0/Stream." + format)
+		response, err := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/0/0/Stream." + format + "?ApiKey=" + p.token)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -738,7 +740,7 @@ func TestSubtitlesNeedNoCredentials(t *testing.T) {
 			t.Errorf("%s: %d %q", format, response.StatusCode, body)
 		}
 	}
-	if response, _ := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/5/Stream.vtt"); response.StatusCode != http.StatusInternalServerError {
+	if response, _ := testClient.Get(p.url + "/Videos/" + p.movie + "/" + p.movie + "/Subtitles/5/Stream.vtt?ApiKey=" + p.token); response.StatusCode != http.StatusInternalServerError {
 		t.Errorf("a subtitle that does not exist: %d", response.StatusCode)
 	}
 }

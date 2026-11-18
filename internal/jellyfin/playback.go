@@ -1387,17 +1387,15 @@ func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
 	}
 	// A signed-in caller gets the files described for them: users see
 	// different sources, and so different files (see keptSubtitles).
-	// A player without credentials gets those described last.
+	// A caller Polyfin does not know gets nothing, and the answer of a
+	// title nobody opened whether or not this one was described lately.
 	user, _, signedIn := h.streamAccess(r, servedToAnyone)
-	var files []library.ExternalSubtitle
-	kept, ok := h.subtitleFiles.Get(item)
-	switch {
-	case ok && (!signedIn || kept.User == user.ID):
-		files = kept.Files
-	case !signedIn:
+	if !signedIn {
 		processingError(w, http.StatusNotFound)
 		return
-	default:
+	}
+	files, ok := h.keptSubtitles(user, item)
+	if !ok {
 		// Not described for the caller since the server started: describe
 		// the item again for them.
 		title, err := h.title(r.Context(), user, item)

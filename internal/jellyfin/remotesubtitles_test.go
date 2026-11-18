@@ -174,7 +174,7 @@ func TestDownloadingARemoteSubtitleKeepsItAmongTheTitles(t *testing.T) {
 		if i < 0 || source.MediaStreams[i].DisplayTitle != english.Name {
 			t.Fatalf("source %s streams: %+v", source.Id, source.MediaStreams)
 		}
-		status, body := p.call(http.MethodGet, fmt.Sprintf("/Videos/%s/%s/Subtitles/%d/Stream.srt", p.movie, source.Id, source.MediaStreams[i].Index), "", nil)
+		status, body := p.call(http.MethodGet, fmt.Sprintf("/Videos/%s/%s/Subtitles/%d/Stream.srt", p.movie, source.Id, source.MediaStreams[i].Index), app("tv", p.token), nil)
 		if status != http.StatusOK || !strings.Contains(string(body), "Hello") {
 			t.Errorf("source %s subtitle: %d %s", source.Id, status, body)
 		}
