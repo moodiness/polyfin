@@ -95,6 +95,65 @@ func TestParseReadsChapters(t *testing.T) {
 	}
 }
 
+// A duration past MaxDuration is a number a file states, not a length: it
+// is read as none, as a missing one is, and so are a chapter's times. The
+// longest duration is kept.
+func TestParseKeepsNoDurationPastTheLongest(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		duration string
+		want     time.Duration
+	}{
+		"an evening":                 {"7200.500000", 2*time.Hour + 500*time.Millisecond},
+		"the longest":                {"864000.000000", MaxDuration},
+		"a second more":              {"864001.000000", 0},
+		"285 years":                  {"9000000000.000000", 0},
+		"more than a duration holds": {"1e300", 0},
+		"without an end":             {"inf", 0},
+		"not a number":               {"nan", 0},
+		"none":                       {"", 0},
+	} {
+		analysis, err := Parse([]byte(`{"format": {"format_name": "hls", "duration": "` + c.duration + `"},
+			"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264"}],
+			"chapters": [{"start_time": "0.000000", "end_time": "` + c.duration + `"}]}`))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if analysis.Duration != c.want || len(analysis.Chapters) != 1 || analysis.Chapters[0].End != c.want {
+			t.Errorf("%s: a duration of %v and a chapter up to %v, want %v", name, analysis.Duration, analysis.Chapters[0].End, c.want)
+		}
+	}
+}
+
+// Probe reads no length from an HLS playlist that lists its one segment,
+// of 2 seconds, as lasting 285 years.
+func TestProbeReadsNoLengthFromAPlaylistListingCenturies(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	dir := t.TempDir()
+	command := exec.Command(ffmpeg, "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=160x90:r=5", "-t", "2",
+		"-c:v", "mpeg2video", "-f", "mpegts", filepath.Join(dir, "seg.ts"))
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("ffmpeg: %v: %s", err, output)
+	}
+	playlist := filepath.Join(dir, "long.m3u8")
+	if err := os.WriteFile(playlist, []byte("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n#EXT-X-MEDIA-SEQUENCE:0\n"+
+		"#EXTINF:9000000000.0,\nseg.ts\n#EXT-X-ENDLIST\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prober := Prober{Path: filepath.Join(filepath.Dir(ffmpeg), "ffprobe"), Timeout: time.Minute}
+	analysis, err := prober.Probe(t.Context(), playlist)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(analysis.Format, "hls") || len(analysis.Streams) == 0 || analysis.Streams[0].Type != "video" || analysis.Duration != 0 {
+		t.Errorf("format %q, %d tracks, a duration of %v", analysis.Format, len(analysis.Streams), analysis.Duration)
+	}
+}
+
 // Probe asks ffprobe for the chapters of a source it reads over HTTP.
 func TestProbeFindsChapters(t *testing.T) {
 	t.Parallel()

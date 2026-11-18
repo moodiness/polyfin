@@ -244,7 +244,7 @@ An addon may list an endless video among other titles, such as a sports match on
 
 - Before the first play, or when play is prepared as details open, Polyfin reads its first version's first answer. No announced size tells at once, without waiting for live bytes; otherwise the first bytes tell.
 - A file of known size plays as any video.
-- A playlist or sizeless stream is analyzed as a Live TV channel's (see [Live TV](live-tv.md)) and plays live when it has no duration. The analysis is kept for later plays.
+- A playlist or sizeless stream is analyzed as a Live TV channel's (see [Live TV](live-tv.md)) and plays live when it has no duration. A duration of more than ten days counts as none. The analysis is kept for later plays.
 - Interlaced sports, as most 1080i50 TV sports, play converted at 25 frames a second unless **Double the frame rate** is on (see [Starting a channel](live-tv.md#starting-a-channel)).
 
 It plays as a channel:

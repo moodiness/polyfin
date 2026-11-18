@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	neturl "net/url"
 	"os/exec"
 	"slices"
@@ -581,9 +582,20 @@ func integer(value string) int64 {
 	return n
 }
 
+// MaxDuration is the longest a file is taken to last, ten days: well
+// above the longest recordings, audiobooks and mixes, and short enough
+// that what is counted from a duration, such as the segments a version is
+// cut into, stays small.
+const MaxDuration = 240 * time.Hour
+
+// seconds reads a time ffprobe prints in seconds: zero for none, and for
+// one that cannot be read, is negative or passes MaxDuration, which is a
+// number its file states rather than a length. A version without a
+// duration is not cut into segments, and its stream plays as one without
+// an end does.
 func seconds(value string) time.Duration {
 	f, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || f < 0 {
+	if err != nil || math.IsNaN(f) || f < 0 || f > MaxDuration.Seconds() {
 		return 0
 	}
 	return time.Duration(f * float64(time.Second))
