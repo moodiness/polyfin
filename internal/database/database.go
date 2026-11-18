@@ -3,6 +3,7 @@ package database
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -116,8 +117,10 @@ func ServerID(ctx context.Context, db interface {
 	return id, nil
 }
 
-// Secret returns the server's signing secret, created by a migration. It
-// signs what Polyfin hands to players, so it never leaves the server.
+// Secret returns the server's signing secret as it is stored, created by
+// a migration and replaced by ReplaceSecret. What Polyfin hands to
+// players is signed with it, or with what POLYFIN_SECRET_KEY derives from
+// it (see secrets.Box.SigningSecret), so it never leaves the server.
 func Secret(ctx context.Context, db interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }) ([]byte, error) {
@@ -126,6 +129,22 @@ func Secret(ctx context.Context, db interface {
 		return nil, fmt.Errorf("read server secret: %w", err)
 	}
 	return secret, nil
+}
+
+// ReplaceSecret stores a new signing secret, 32 random bytes: what the
+// former one signed is refused by the Polyfin that starts next, as it
+// reads the secret once, at its start.
+func ReplaceSecret(ctx context.Context, db interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}) error {
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		return fmt.Errorf("make a server secret: %w", err)
+	}
+	if _, err := db.Exec(ctx, "UPDATE server_identity SET secret = $1", secret); err != nil {
+		return fmt.Errorf("replace the server secret: %w", err)
+	}
+	return nil
 }
 
 // PlexClient returns the client identifier Polyfin names itself by to

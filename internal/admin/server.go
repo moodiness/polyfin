@@ -12,13 +12,13 @@ import (
 	"github.com/moodiness/polyfin/internal/updatetool"
 )
 
-// The server's actions in the admin app: Restart, the install of the
-// update Polyfin Desktop offers, and Update now, through an update tool
-// the administrator runs beside Polyfin. Each is an administrator's
-// alone, confirmed with their password or a two-step code (see
-// checkIdentity), allowed once a minute, and recorded in the activity log.
-// None stops Polyfin for good: a container's restart policy, or Polyfin
-// Desktop, would start it again at once.
+// The server's actions in the admin app: Restart, a new signing secret,
+// the install of the update Polyfin Desktop offers, and Update now,
+// through an update tool the administrator runs beside Polyfin. Each is
+// an administrator's alone, confirmed with their password or a two-step
+// code (see checkIdentity), allowed once a minute, and recorded in the
+// activity log. None stops Polyfin for good: a container's restart
+// policy, or Polyfin Desktop, would start it again at once.
 
 // What starts Polyfin again once it exits, as the server's answer tells
 // it: Polyfin Desktop, a restart policy or service manager an
@@ -155,6 +155,45 @@ func (h *handler) restartServer(w http.ResponseWriter, r *http.Request) {
 	name := sessionFrom(r.Context()).User.Name
 	h.Logger.Info("Polyfin restarts, as an administrator asked", "administrator", name, "started_again_by", h.restartKind())
 	h.Activity.ServerRestarted(r.Context(), name)
+	writeJSON(w, http.StatusAccepted, map[string]time.Time{"startedAt": h.Health.Started})
+	// Polyfin waits for this answer to be sent before it stops.
+	h.Restart()
+}
+
+// replaceSigningSecret stores a new signing secret, then restarts Polyfin
+// as restartServer does, with its conditions and its answer: the signers
+// are made once, at the start, so the Polyfin started again refuses every
+// play session, media address, live link, image mark and configure link
+// signed before, wherever it is checked. It counts as a restart, allowed
+// once a minute with Restart. A secret that could not be stored is a 500,
+// and nothing restarts.
+func (h *handler) replaceSigningSecret(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		identity
+		Anyway bool `json:"anyway"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if h.Restart == nil || h.NewSigningSecret == nil {
+		writeError(w, http.StatusNotFound, "not_found")
+		return
+	}
+	if h.restartKind() == restartUnknown && !body.Anyway {
+		writeError(w, http.StatusConflict, "restart_unconfirmed")
+		return
+	}
+	if !h.serverAction(w, r, "restart", body.identity) {
+		return
+	}
+	if err := h.NewSigningSecret(r.Context()); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	name := sessionFrom(r.Context()).User.Name
+	h.Logger.Info("Polyfin restarts with a new signing secret, as an administrator asked", "administrator", name,
+		"started_again_by", h.restartKind())
+	h.Activity.SigningSecretReplaced(r.Context(), name)
 	writeJSON(w, http.StatusAccepted, map[string]time.Time{"startedAt": h.Health.Started})
 	// Polyfin waits for this answer to be sent before it stops.
 	h.Restart()

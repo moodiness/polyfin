@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/testdb"
 	"github.com/moodiness/polyfin/internal/testdb/migrated"
@@ -89,10 +90,12 @@ func (r *restoring) count(t *testing.T, query string, args ...any) int {
 
 // A restore of a backup of the folder brings the database back as it was
 // when the backup was made: the users and devices added since are gone, so
-// apps signed in since must sign in again, and the server's secret, which
-// signs stream links, is the backup's. The database is backed up first,
-// as a before-restore backup that retention keeps; the restore is
-// recorded in the restored database, with the administrator who asked.
+// apps signed in since must sign in again. The server's secret, which
+// signs stream links, is the one thing it does not bring back: the
+// restored server gets a new one, and refuses what the backup's signs.
+// The database is backed up first, as a before-restore backup that
+// retention keeps; the restore is recorded in the restored database, with
+// the administrator who asked.
 func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 	t.Parallel()
 	testdb.LockRestores(t)
@@ -152,8 +155,13 @@ func TestARestoreBringsTheDatabaseBackAsItWas(t *testing.T) {
 	if _, user, err := reopened.DeviceByToken(ctx, before, "127.0.0.1"); err != nil || user.Name != "alice" {
 		t.Errorf("a device signed in before the backup: %+v %v", user, err)
 	}
-	if restored, _ := database.Secret(ctx, r.pool); !bytes.Equal(restored, secret) {
-		t.Error("the server's secret is not the backup's")
+	restored, err := database.Secret(ctx, r.pool)
+	if err != nil || len(restored) != 32 || bytes.Equal(restored, secret) {
+		t.Errorf("the server's secret after the restore: %d bytes (%v), the backup's: %v", len(restored), err, bytes.Equal(restored, secret))
+	}
+	signed := playback.NewSigner(secret).Sign(playback.Grant{User: alice.ID})
+	if _, err := playback.NewSigner(restored).Verify(signed); !errors.Is(err, playback.ErrInvalidGrant) {
+		t.Errorf("a grant signed with the backup's secret: %v", err)
 	}
 	last, err := r.service.LastRestore(ctx)
 	if err != nil || last == nil || last.File != name || last.Administrator != "root" || last.Error != "" {

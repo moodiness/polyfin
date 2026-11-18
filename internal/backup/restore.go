@@ -740,9 +740,10 @@ func (s *Service) backUpBeforeRestore(ctx context.Context) (string, error) {
 }
 
 // Restore replaces the content of the database with plan's backup, in one
-// transaction, then migrates it, and records the restore there; a failure
-// leaves the database as it was, and is recorded in it. Polyfin must have
-// stopped: nothing else may use the database meanwhile.
+// transaction, then migrates it, gives it a signing secret of its own,
+// and records the restore there; a failure leaves the database as it was,
+// and is recorded in it. Polyfin must have stopped: nothing else may use
+// the database meanwhile.
 func (s *Service) Restore(ctx context.Context, plan Plan) error {
 	if plan.temporary {
 		defer os.Remove(plan.path)
@@ -773,6 +774,12 @@ func (s *Service) Restore(ctx context.Context, plan Plan) error {
 		// Polyfin's before anything is written to it.
 		if migrateErr := database.Migrate(ctx, pool); migrateErr != nil {
 			return fmt.Errorf("the backup was restored, but could not be migrated: %w", migrateErr)
+		}
+		// The backup holds the signing secret of the server it was made
+		// on, as every copy of it does: the restored server gets a new
+		// one, so that the backup's signs nothing for it.
+		if secretErr := database.ReplaceSecret(ctx, pool); secretErr != nil {
+			return fmt.Errorf("the backup was restored, but its signing secret could not be replaced: %w", secretErr)
 		}
 	}
 	message := ""

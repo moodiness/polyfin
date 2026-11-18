@@ -337,6 +337,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 	if err != nil {
 		return err
 	}
+	// With POLYFIN_SECRET_KEY, what signs is derived from the key and
+	// the stored secret, which then signs nothing by itself.
+	secret = box.SigningSecret(secret)
 	if _, err := exec.LookPath(cfg.FFprobe); err != nil {
 		logger.Warn("ffprobe was not found: nothing can be played until it is installed", "ffprobe", cfg.FFprobe)
 	}
@@ -889,6 +892,9 @@ func serve(ctx context.Context, cfg config.Config, restore *pendingRestore) erro
 		Restart:    func() { restartOnce.Do(func() { close(restartRequested) }) },
 		Desktop:    cfg.Desktop,
 		UpdateTool: updatetool.New("Polyfin/" + version),
+		// A new signing secret is stored in the database, and read by the
+		// Polyfin that Restart has started again.
+		NewSigningSecret: func(ctx context.Context) error { return database.ReplaceSecret(ctx, pool) },
 	}
 	// Notifications tell of new episodes, ended recordings, the problems
 	// System › Health finds, and once a week, a month and a year what

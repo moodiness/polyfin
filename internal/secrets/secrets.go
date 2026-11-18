@@ -6,6 +6,7 @@
 package secrets
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -63,6 +64,9 @@ func ParseKey(text string) ([]byte, error) {
 // values as they are, and cannot open sealed ones.
 type Box struct {
 	aead cipher.AEAD
+	// key is the key itself, for what is derived from it (see
+	// SigningSecret).
+	key []byte
 }
 
 // New returns a box sealing with key, KeySize bytes; nil for no key.
@@ -81,7 +85,7 @@ func New(key []byte) (*Box, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Box{aead: aead}, nil
+	return &Box{aead: aead, key: bytes.Clone(key)}, nil
 }
 
 // Enabled reports whether b has a key.

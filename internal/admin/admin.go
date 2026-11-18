@@ -228,6 +228,10 @@ type Options struct {
 	// policy, its service manager or Polyfin Desktop to start it again; it
 	// returns at once. Nil offers no restart.
 	Restart func()
+	// NewSigningSecret stores a new signing secret for the server (see
+	// database.ReplaceSecret), which the Polyfin Restart has started
+	// again signs with. Nil offers no new one.
+	NewSigningSecret func(context.Context) error
 	// Desktop tells that Polyfin Desktop runs Polyfin: it starts it again,
 	// and offers its updates in the data folder (see desktop.Offered).
 	Desktop bool
@@ -529,6 +533,7 @@ func New(options Options) http.Handler {
 	mux.Handle("POST /admin/api/server/restart", h.administrator(h.restartServer))
 	mux.Handle("POST /admin/api/server/desktop-update", h.administrator(h.installDesktopUpdate))
 	mux.Handle("POST /admin/api/server/update-tool", h.administrator(h.askUpdateTool))
+	mux.Handle("POST /admin/api/server/signing-secret", h.administrator(h.replaceSigningSecret))
 	mux.Handle("POST /admin/api/health/addons/{id}/check", h.administrator(h.checkAddon))
 	mux.Handle("GET /admin/api/health/goroutines", h.administrator(h.downloadGoroutines))
 	mux.Handle("POST /admin/api/health/images/clear", h.administrator(h.clearImageCache))

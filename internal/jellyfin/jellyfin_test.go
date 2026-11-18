@@ -35,6 +35,7 @@ import (
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
 	"github.com/moodiness/polyfin/internal/quickconnect"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/source"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -157,6 +158,15 @@ func newServerReaching(t *testing.T, failures int, ffprobe string, reach func(so
 func newServerConverting(t *testing.T, failures int, ffprobe, ffmpeg string, reach func(source.Opener) source.Opener,
 	configure ...func(*Options, *pgxpool.Pool)) testServer {
 	t.Helper()
+	return newServerSealing(t, failures, ffprobe, ffmpeg, reach, nil, configure...)
+}
+
+// newServerSealing is newServerConverting of a Polyfin started with box's
+// key, nil for none: it signs with what the key derives from the stored
+// secret, as main does.
+func newServerSealing(t *testing.T, failures int, ffprobe, ffmpeg string, reach func(source.Opener) source.Opener, box *secrets.Box,
+	configure ...func(*Options, *pgxpool.Pool)) testServer {
+	t.Helper()
 	pool := migrated.New(t)
 	store, err := accounts.Open(t.Context(), pool)
 	if err != nil {
@@ -177,6 +187,7 @@ func newServerConverting(t *testing.T, failures int, ffprobe, ffmpeg string, rea
 	if err != nil {
 		t.Fatal(err)
 	}
+	secret = box.SigningSecret(secret)
 	var opener source.Opener = client
 	if reach != nil {
 		opener = reach(client)

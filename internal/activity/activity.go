@@ -522,6 +522,13 @@ func (s *Store) ServerRestarted(ctx context.Context, administrator string) {
 		Type: "ServerRestarted"})
 }
 
+// SigningSecretReplaced records that administrator made a new signing
+// secret from the admin app, which restarts Polyfin, before it stops.
+func (s *Store) SigningSecretReplaced(ctx context.Context, administrator string) {
+	s.record(ctx, Entry{Name: s.phrase(i18n.Text{"%s made a new signing secret and restarted Polyfin", "%s a créé un nouveau secret de signature et redémarré Polyfin", "%s hat ein neues Signaturgeheimnis erstellt und Polyfin neu gestartet", "%s ha creado un nuevo secreto de firma y ha reiniciado Polyfin", "%s ha creato un nuovo segreto di firma e riavviato Polyfin", "%s criou um novo segredo de assinatura e reiniciou o Polyfin"}, administrator),
+		Type: "ServerRestarted"})
+}
+
 // DesktopUpdateStarted records that administrator had Polyfin Desktop
 // install version, which stops Polyfin.
 func (s *Store) DesktopUpdateStarted(ctx context.Context, administrator, version string) {
