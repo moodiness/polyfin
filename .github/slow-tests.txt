@@ -17,6 +17,8 @@ github.com/moodiness/polyfin/internal/jellyfin TestLocalMPEGTSFilesPlayConverted
 github.com/moodiness/polyfin/internal/thumbnails TestThumbnailsDuringThePlay # encodes a long video with FFmpeg and makes thumbnails over 10 minutes of play
 github.com/moodiness/polyfin/internal/thumbnails TestImagesFollowTheKeyframesTimes # decodes HEVC keyframes with FFmpeg, once for each read order and budget
 github.com/moodiness/polyfin/internal/iptv TestLargeLineupsStayFast # a line-up of 5,400 entries under the race detector (54,000 without), on purpose: its time bounds are the test
+github.com/moodiness/polyfin/internal/playback TestManifestsNamingMoreAddressesThanTheBoundAreRefused # rewrites manifests of 100,000 addresses, the bound, and past it, on purpose: the bound is the test
+github.com/moodiness/polyfin/internal/playback TestManifestsWrittenPastTheBoundAreRefusedBeforeTheyAreBuilt # rewrites manifests of 32 MiB once written, the bound, and past it, on purpose: the bound is the test
 #
 # These restore a whole database, or make its whole schema in one
 # transaction, in a few seconds each: their time is their turn, which
