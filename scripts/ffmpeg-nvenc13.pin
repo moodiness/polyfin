@@ -1,0 +1,12 @@
+# The commit of the build recipe that scripts/ffmpeg-nvenc13.sh builds
+# from, beside the recipe's release tag it was read at: the tag of the
+# FFmpeg the Dockerfile downloads. The script builds nothing when the
+# Dockerfile names another tag, when no commit is recorded, or when the
+# recipe's repository answers another commit for the tag.
+#
+# When the Dockerfile's FFmpeg changes, run
+#   scripts/ffmpeg-nvenc13.sh recipe-commit
+# and put the two lines it prints here, once what the recipe changed since
+# the commit recorded before is read.
+RECIPE_TAG=autobuild-2026-09-30-13-08
+RECIPE_COMMIT=6c9aec5fc9a72ec3abedd1fa84db141fa18cf52b

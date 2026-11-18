@@ -171,6 +171,11 @@ The SMB share tests run when `POLYFIN_TEST_SMB` names a share holding video file
 
 The image's FFmpeg comes from an archive the Dockerfile downloads for each platform, and checks against its SHA-256. CI keeps those archives in its cache, so that an outage of the download fails no run, and builds with them; `make image-check FFMPEG_ARCHIVES=<folder>` does the same with a folder `scripts/ffmpeg-archives.sh fetch <folder>` filled.
 
+The FFmpeg for NVIDIA drivers older than 610 is built from the same archive's build recipe by `scripts/ffmpeg-nvenc13.sh`, with the workflow `ffmpeg-nvenc13`. The recipe's commit is recorded in `scripts/ffmpeg-nvenc13.pin`, beside the release tag the Dockerfile's archive comes from. The workflow builds nothing when the Dockerfile names another tag, or when the recipe's repository answers another commit for the tag. So, when the Dockerfile's FFmpeg changes:
+
+1. Run `scripts/ffmpeg-nvenc13.sh recipe-commit`: it asks the recipe's repository, and prints the new tag and its commit.
+2. Read what the recipe changed since the commit recorded before, then put the two lines in `scripts/ffmpeg-nvenc13.pin`, in the same pull request as the Dockerfile's change.
+
 ### A synthetic Xtream Codes provider
 
 This serves a synthetic Xtream Codes provider until interrupted, to try Polyfin by hand with a large line-up:

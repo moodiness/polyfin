@@ -49,7 +49,12 @@ jobs:
           persist-credentials: false
       - name: Read the pins
         id: pins
-        run: scripts/ffmpeg-nvenc13.sh pins | tee -a "$GITHUB_OUTPUT"
+        # Fails, and nothing is built, unless the recipe's tag is at the
+        # commit scripts/ffmpeg-nvenc13.pin records: with pipefail, tee
+        # does not hide it.
+        run: |
+          set -o pipefail
+          scripts/ffmpeg-nvenc13.sh pins | tee -a "$GITHUB_OUTPUT"
       - name: Look for the release
         id: release
         env:
@@ -93,6 +98,37 @@ jobs:
         run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - name: Adjust the recipe
         run: scripts/ffmpeg-nvenc13.sh recipe "$RUNNER_TEMP/nvenc13"
+      - name: Make room on the runner
+        # A hosted runner's disk is too small for the toolchains and the
+        # dependencies: below 80 GB free, the software it comes with, which
+        # no step here uses, is removed. These lines are the workflow's
+        # own, where the recipe has a script for it: in the jobs that may
+        # write packages, the recipe's code runs inside Docker's builds
+        # only, never on the runner, where Docker is logged in.
+        run: |
+          df -h /
+          free=$(df --output=avail -BG / | tail -n 1 | tr -dc 0-9)
+          if [ "$free" -ge 80 ]; then
+            echo "$free GB free: nothing to remove."
+            exit 0
+          fi
+          sudo rm -rf \
+            /usr/local/lib/android /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache \
+            /usr/share/dotnet /usr/lib/dotnet /home/runner/.dotnet /usr/share/swift \
+            /usr/lib/jvm /usr/lib/llvm-* /usr/lib/mono /usr/local/share/powershell /opt/microsoft \
+            /usr/local/share/chromium /usr/local/share/chromedriver-linux64 \
+            /usr/local/share/edge_driver /usr/local/share/gecko_driver /opt/google /usr/lib/firefox \
+            /opt/az /usr/share/az_* /usr/lib/google-cloud-sdk /opt/google-cloud-sdk \
+            /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/rust /home/runner/.rustup \
+            /home/runner/.cargo /home/packer /etc/skel/.rustup /etc/skel/.cargo /opt/pipx \
+            /opt/pipelinesagent-cache /home/linuxbrew /usr/local/n /usr/local/lib/node_modules \
+            /usr/share/miniconda /usr/local/julia* /usr/local/share/vcpkg /usr/share/kotlinc \
+            /usr/share/gradle* /usr/share/apache-maven* /usr/share/sbt /usr/lib/heroku \
+            /usr/local/lib/lein /usr/local/graalvm /usr/local/bin/minikube /usr/local/bin/kubectl \
+            /usr/local/bin/oc /usr/local/bin/helm /usr/local/bin/packer /usr/local/bin/terraform \
+            /usr/local/bin/pulumi* /usr/local/bin/kustomize
+          docker system prune --all --force >/dev/null
+          df -h /
       - name: Build
         env:
           PUSH: "1"
@@ -100,8 +136,6 @@ jobs:
           STEP: ${{ matrix.step }}
           TARGET: ${{ matrix.target }}
         run: |
-          # The recipe's own way of making room on a hosted runner.
-          "$RUNNER_TEMP/nvenc13/recipe/util/free_disk_space.sh"
           case "$STEP" in
           base) scripts/ffmpeg-nvenc13.sh base "$RUNNER_TEMP/nvenc13" ;;
           toolchain) scripts/ffmpeg-nvenc13.sh toolchain "$RUNNER_TEMP/nvenc13" "$TARGET" ;;

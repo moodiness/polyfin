@@ -6,8 +6,9 @@
 # for API 13.1 and driver 610. Nothing else differs: the dependencies, the
 # configuration and the FFmpeg commit are the recipe's and the Dockerfile's.
 #
-# Everything the build takes is pinned: the recipe by the commit of the
-# Dockerfile's release tag, FFmpeg by the commit its build names, the
+# Everything the build takes is pinned: the recipe by the commit recorded
+# in scripts/ffmpeg-nvenc13.pin for the Dockerfile's release tag, which
+# that tag must still name, FFmpeg by the commit its build names, the
 # headers and every dependency by the commit the recipe pins them at, the
 # cross toolchains by the last crosstool-ng commit before the recipe's,
 # and the Ubuntu packages of the build images by Ubuntu's snapshot of the
@@ -15,7 +16,11 @@
 # BUILDINFO, with the digests of what was built.
 #
 # Usage:
-#   scripts/ffmpeg-nvenc13.sh pins                 print the pins, as KEY=value lines
+#   scripts/ffmpeg-nvenc13.sh pins                 print the pins, as KEY=value lines, when the
+#                                                  recipe's tag is at its recorded commit
+#   scripts/ffmpeg-nvenc13.sh recipe-commit        print what to record in ffmpeg-nvenc13.pin
+#                                                  for the Dockerfile's FFmpeg: the recipe's
+#                                                  tag, and the commit it names now
 #   scripts/ffmpeg-nvenc13.sh recipe DIR           clone and adjust the recipe into DIR
 #   scripts/ffmpeg-nvenc13.sh base DIR             build the base image (PUSH=1: push it)
 #   scripts/ffmpeg-nvenc13.sh toolchain DIR TARGET build TARGET's toolchain image on the base
@@ -40,6 +45,8 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 recipe_repo=https://github.com/BtbN/FFmpeg-Builds.git
+# The recipe's tag and commit, as recorded: KEY=value lines.
+pin_file="$root/scripts/ffmpeg-nvenc13.pin"
 ctng_repo=https://github.com/crosstool-ng/crosstool-ng.git
 variant=gpl-shared
 addin=9.0
@@ -52,23 +59,77 @@ die() { echo "$*" >&2; exit 1; }
 # The recipe's scripts name their images after GITHUB_REPOSITORY.
 export GITHUB_REPOSITORY="${NVENC13_IMAGES:-local/polyfin-ffmpeg-nvenc13}"
 
+# shipped prints where the Dockerfile downloads its linux64 FFmpeg from,
+# from releases/download on: the recipe's release tag, and the build's name.
+shipped() {
+	local build
+	build=$(grep -o 'releases/download/autobuild-[0-9-]*/ffmpeg-[^ ]*-linux64-gpl-shared-9.0.tar.xz' "$root/Dockerfile" | head -n 1)
+	[[ -n $build ]] || die "the Dockerfile names no linux64 gpl-shared 9.0 build"
+	echo "$build"
+}
+
+# tag_commit prints the commit the recipe's repository has tag at now,
+# and nothing when it has no such tag. An annotated tag is listed twice,
+# as itself, then, with ^{} after its name, as the commit it names: that
+# commit is the one checked out, and the one printed.
+tag_commit() {
+	local tag=$1
+	git ls-remote "$recipe_repo" "refs/tags/$tag" "refs/tags/$tag^{}" |
+		awk -v ref="refs/tags/$tag" '
+			$2 == ref { named = $1 }
+			$2 == ref "^{}" { commit = $1 }
+			END { print (commit != "" ? commit : named) }'
+}
+
+# recorded_commit prints the commit the pin file records for tag, and
+# fails when it records another tag's, as after a change of the
+# Dockerfile's FFmpeg, or none.
+recorded_commit() {
+	local tag=$1 recorded commit
+	local file=scripts/ffmpeg-nvenc13.pin
+	local how="run scripts/ffmpeg-nvenc13.sh recipe-commit, which asks the recipe's repository, and put the two lines it prints in $file"
+	[[ -r $pin_file ]] || die "$file is missing: $how"
+	recorded=$(sed -n 's/^RECIPE_TAG=//p' "$pin_file")
+	commit=$(sed -n 's/^RECIPE_COMMIT=//p' "$pin_file")
+	[[ $recorded == "$tag" ]] || die "the Dockerfile's FFmpeg is of the recipe's tag $tag, and $file records the commit of ${recorded:-no tag}: $how"
+	[[ -n $commit ]] || die "$file records no commit for the recipe's tag $tag: $how"
+	[[ $commit =~ ^[0-9a-f]{40}$ ]] || die "$file records $commit for the recipe's tag $tag, which is not a commit's 40 hexadecimal digits: $how"
+	echo "$commit"
+}
+
 # pins reads what the Dockerfile ships, and what the build takes with it.
+# It fails unless the recipe's tag still names the commit recorded for
+# it: the recipe is checked out at that commit, and its scripts run.
 pins() {
 	local tag describe
-	tag=$(grep -o 'releases/download/autobuild-[0-9-]*/ffmpeg-[^ ]*-linux64-gpl-shared-9.0.tar.xz' "$root/Dockerfile" | head -n 1)
-	[[ -n $tag ]] || die "the Dockerfile names no linux64 gpl-shared 9.0 build"
+	tag=$(shipped)
 	describe=${tag#*/ffmpeg-}
 	describe=${describe%-linux64-gpl-shared-9.0.tar.xz}
 	tag=${tag#releases/download/}
 	tag=${tag%%/*}
-	local commit
-	commit=$(git ls-remote "$recipe_repo" "refs/tags/$tag" | cut -f1)
-	[[ -n $commit ]] || die "the recipe has no tag $tag"
+	local commit now
+	commit=$(recorded_commit "$tag")
+	now=$(tag_commit "$tag")
+	[[ -n $now ]] || die "the recipe has no tag $tag"
+	[[ $now == "$commit" ]] || die "the recipe's tag $tag is at commit $now, and scripts/ffmpeg-nvenc13.pin records $commit: the tag moved since its commit was recorded, and nothing is built. Read what the recipe changed between the two before recording another commit."
 	echo "RECIPE_TAG=$tag"
 	echo "RECIPE_COMMIT=$commit"
 	echo "FFMPEG_DESCRIBE=$describe"
 	echo "FFMPEG_COMMIT=${describe##*-g}"
 	echo "RELEASE_TAG=ffmpeg-$suffix-$tag"
+}
+
+# recipe_commit prints what the pin file is to record for the Dockerfile's
+# FFmpeg: the recipe's tag, and the commit its repository has it at now.
+recipe_commit() {
+	local tag commit
+	tag=$(shipped)
+	tag=${tag#releases/download/}
+	tag=${tag%%/*}
+	commit=$(tag_commit "$tag")
+	[[ -n $commit ]] || die "the recipe has no tag $tag"
+	echo "RECIPE_TAG=$tag"
+	echo "RECIPE_COMMIT=$commit"
 }
 
 # recipe clones the recipe at its pinned commit into dir/recipe, and
@@ -292,13 +353,13 @@ sources() {
 	rm -rf "$dir/sources"
 }
 
-[[ $# -ge 1 ]] || die "usage: $0 pins | recipe DIR | base DIR | toolchain DIR TARGET | image DIR TARGET | quick-image DIR TARGET | ffmpeg DIR TARGET | sources DIR"
+[[ $# -ge 1 ]] || die "usage: $0 pins | recipe-commit | recipe DIR | base DIR | toolchain DIR TARGET | image DIR TARGET | quick-image DIR TARGET | ffmpeg DIR TARGET | sources DIR"
 command=$1
 shift
 # The recipe's scripts give Docker files they make with mktemp to mount:
 # they go in DIR, which Docker's host sees where this runs in a container
 # sharing it.
-[[ $command == pins ]] || {
+[[ $command == pins || $command == recipe-commit ]] || {
 	[[ $# -ge 1 ]] || die "$command needs DIR"
 	mkdir -p "$1/tmp"
 	dir=$(cd "$1" && pwd)
@@ -307,6 +368,7 @@ shift
 }
 case $command in
 pins) pins ;;
+recipe-commit) recipe_commit ;;
 recipe) recipe "$dir" ;;
 base) base "$dir" ;;
 toolchain) toolchain "$dir" "$1" ;;
