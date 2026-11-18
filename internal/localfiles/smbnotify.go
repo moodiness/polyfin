@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -52,11 +53,31 @@ type notifier interface {
 // tree of each folder in it but those skip leaves out. changed gets the
 // paths changed, relative to the folder, with slashes; none when the
 // server had too many changes to tell (STATUS_NOTIFY_ENUM_DIR).
+//
+// notify, when set, stands for the server's answer to a folder's watch:
+// tests set it.
 type notifyHow struct {
 	split   bool
 	skip    func(name string) bool
 	armed   func()
 	changed func(paths []string)
+	notify  func(ctx context.Context, dir *smb2.File, opts smb2.NotifyOptions) ([]smb2.FileNotification, error)
+}
+
+// notifyPanic is the error of a watch that ended on a panic of the code
+// reading the server's answers: what it panicked with, and where. The
+// watch's goroutines have nothing above them to recover it: the watch ends
+// as one whose session failed does, and the share is polled meanwhile.
+type notifyPanic struct {
+	cause string
+	stack string
+}
+
+func (p *notifyPanic) Error() string { return "the watch ended on a panic: " + p.cause }
+
+// notifyPanicked is the error of a watch that ended on a panic with cause.
+func notifyPanicked(cause any) *notifyPanic {
+	return &notifyPanic{cause: fmt.Sprint(cause), stack: string(debug.Stack())}
 }
 
 // notifyUnsupported reports whether err is a server's refusal of change
@@ -80,7 +101,13 @@ func (c *smbShare) watch(ctx context.Context, how notifyHow) error {
 		return err
 	}
 	err = c.watchIn(ctx, share, alive, how)
+	var ended *notifyPanic
 	switch {
+	case errors.As(err, &ended):
+		// The session is not used again; the error keeps the panic for
+		// the watcher's log.
+		c.drop(share)
+		return fmt.Errorf("%w: %w", errShareUnreachable, ended)
 	case ctx.Err() != nil:
 		return nil
 	case notifyUnsupported(err):
@@ -116,8 +143,14 @@ type smbWatched struct {
 // watchIn watches the share's folder in the session share belongs to, as
 // how asks, until ctx ends or a watch fails. The folders are opened and
 // closed with the session's context, alive, ended early when the server
-// does not answer in time.
-func (c *smbShare) watchIn(ctx context.Context, share *smb2.Share, alive context.Context, how notifyHow) error {
+// does not answer in time. A panic of the code reading the server's
+// answers, in a folder's watch or here, ends the watch with a notifyPanic.
+func (c *smbShare) watchIn(ctx context.Context, share *smb2.Share, alive context.Context, how notifyHow) (err error) {
+	defer func() {
+		if cause := recover(); cause != nil {
+			err = notifyPanicked(cause)
+		}
+	}()
 	held, release := context.WithCancel(alive)
 	defer release()
 	in := share.WithContext(held)
@@ -151,8 +184,22 @@ func (c *smbShare) watchIn(ctx context.Context, share *smb2.Share, alive context
 		watches[rel] = w
 		go func() {
 			defer close(w.done)
+			defer func() {
+				if cause := recover(); cause != nil {
+					select {
+					case notices <- smbNotice{watched: w, err: notifyPanicked(cause)}:
+					case <-watchCtx.Done():
+					}
+				}
+			}()
+			notify := dir.NotifyContext
+			if how.notify != nil {
+				notify = func(ctx context.Context, opts smb2.NotifyOptions) ([]smb2.FileNotification, error) {
+					return how.notify(ctx, dir, opts)
+				}
+			}
 			for {
-				found, err := dir.NotifyContext(watchCtx, smb2.NotifyOptions{Recursive: recursive})
+				found, err := notify(watchCtx, smb2.NotifyOptions{Recursive: recursive})
 				notice := smbNotice{watched: w, err: err}
 				switch {
 				case errors.Is(err, smb2.ErrNotifyEnumDir), err == nil && len(found) == 0:

@@ -154,6 +154,9 @@ func (n *shareNotify) takeSilenced() bool {
 func (w *watcher) notify(ctx context.Context, p *sharePoll) {
 	n := p.notify
 	split, lost, quick, warned := false, false, false, false
+	// stacked is whether a panic that ended the share's watch was logged
+	// with its stack: the next ones are warned of as any failure is.
+	stacked := false
 	for ctx.Err() == nil {
 		r, kind, err := w.shares.shareReader(ctx, p.id, p.address)
 		armed, armedAt := false, time.Time{}
@@ -218,6 +221,11 @@ func (w *watcher) notify(ctx context.Context, p *sharePoll) {
 			}
 		}
 		lost = true
+		if ended := (*notifyPanic)(nil); errors.As(err, &ended) && !stacked && ctx.Err() == nil {
+			w.logger.Error("A network share's watch ended on a panic; it is listed again every few minutes", "address", p.address,
+				"panic", ended.cause, "stack", ended.stack)
+			stacked, warned = true, true
+		}
 		if !warned && ctx.Err() == nil {
 			w.logger.Warn("A network share's server cannot tell of changes for now; it is listed again every few minutes", "address", p.address,
 				"error", err)
