@@ -71,7 +71,10 @@ type record struct {
 	// people.go and sameAs): the name's record then only points to it.
 	SameAs string `json:"sameAs,omitempty"`
 	// Confined is true when the addon may only reach public addresses, which
-	// also applies to its artwork.
+	// also applies to its artwork. A title released keeps it with its
+	// description (see cleanLeftovers). A season's or an episode's tells of
+	// the addon that described its series when it was recorded, whose
+	// poster or thumbnail the record keeps (see describedSeries).
 	Confined bool `json:"confined,omitempty"`
 	// Rating is the rating a description by one of the server's addons
 	// gave, empty when it gave none, at RatedAt, for the rating country

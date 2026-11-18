@@ -354,7 +354,7 @@ func (s *Service) embed(ctx context.Context, v view, t *target, ask bool) {
 	}
 	meta, by, ok := s.describedMeta(ctx, v, *t.holder, false, inDatabase)
 	if !ok && ask {
-		meta, by, ok = s.describeBy(ctx, v, *t.holder, false)
+		meta, by, _, ok = s.describeBy(ctx, v, *t.holder, false)
 	}
 	if !ok {
 		return

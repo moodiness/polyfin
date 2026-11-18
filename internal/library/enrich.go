@@ -22,8 +22,16 @@ import (
 // count, in memory or in the database too. ok reports whether an addon's
 // description completed the source's.
 func (s *Service) enrich(ctx context.Context, v view, source installed, meta stremio.Meta, shared bool, how reach) (_ stremio.Meta, ok bool) {
+	meta, _, ok = s.enrichBy(ctx, v, source, meta, shared, how)
+	return meta, ok
+}
+
+// enrichBy is enrich, which also returns the addon whose description
+// completed the source's: the artwork it gave is reached as that addon
+// may.
+func (s *Service) enrichBy(ctx context.Context, v view, source installed, meta stremio.Meta, shared bool, how reach) (_ stremio.Meta, by installed, ok bool) {
 	if s.iptv == nil || meta.Type != "movie" && meta.Type != "series" || !s.iptv.Enrichment(ctx, source.addon.ID) {
-		return meta, false
+		return meta, installed{}, false
 	}
 	var ids []string
 	if meta.ImdbID != "" {
@@ -49,10 +57,10 @@ func (s *Service) enrich(ctx context.Context, v view, source installed, meta str
 			} else {
 				continue
 			}
-			return enriched(meta, described), true
+			return enriched(meta, described), candidate, true
 		}
 	}
-	return meta, false
+	return meta, installed{}, false
 }
 
 // enriched is an IPTV title's description completed by an addon's.

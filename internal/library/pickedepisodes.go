@@ -51,6 +51,8 @@ type outlinedEpisodes struct {
 	layout      *episodeLayout
 	words       words
 	now         time.Time
+	// confined tells its records confined (see describedSeries).
+	confined bool
 	// aired are the indexes of shown's videos, as aired; listed are the
 	// places among aired of the episodes listed, in the series' order,
 	// and outlines theirs.
@@ -62,12 +64,12 @@ type outlinedEpisodes struct {
 // listedEpisodes lists a series' episodes for v as orderedEpisodes does,
 // of no season in particular, with their outlines (see outlinedEpisodes).
 func (s *Service) listedEpisodes(ctx context.Context, v view, seriesID accounts.ID) (*outlinedEpisodes, error) {
-	series, shown, meta, err := s.series(ctx, v, seriesID)
+	series, shown, meta, confined, err := s.describedSeries(ctx, v, seriesID)
 	if err != nil {
 		return nil, err
 	}
 	l := &outlinedEpisodes{series: series, shown: shown, meta: meta, posters: seasonPosters(meta), words: v.words, now: s.now(),
-		aired: episodeOrder(shown, nil)}
+		confined: confined, aired: episodeOrder(shown, nil)}
 	if !inAiredOrder(ctx) {
 		l.layout = s.layoutOf(ctx, series.ID, meta, v.words)
 	}
@@ -153,7 +155,7 @@ func (l *outlinedEpisodes) records(keep func(accounts.ID) bool) []record {
 	records := make([]record, 0, len(numbers)+len(l.aired))
 	for _, number := range numbers {
 		records = append(records, record{ID: itemID(seasonKey(l.meta.ID, number)), Key: seasonKey(l.meta.ID, number), Kind: KindSeason,
-			Parent: &l.series.ID, SeriesID: l.meta.ID, Season: number, Poster: l.posters[number]})
+			Parent: &l.series.ID, SeriesID: l.meta.ID, Season: number, Poster: l.posters[number], Confined: l.confined})
 	}
 	// The record of an episode keeps the description's video of the same
 	// identifier, the last one of it as orderedEpisodes reads them.
@@ -187,7 +189,7 @@ func (l *outlinedEpisodes) records(keep func(accounts.ID) bool) []record {
 		video := described(shown.ID)
 		season := itemID(seasonKey(l.shown.ID, int(shown.Season)))
 		records = append(records, record{ID: id, Key: episodeKey(video.ID), Kind: KindEpisode, Parent: &season, SeriesID: l.meta.ID,
-			Season: int(shown.Season), Video: &video})
+			Season: int(shown.Season), Video: &video, Confined: l.confined})
 	}
 	if l.layout != nil {
 		records = append(records, l.layout.records(l.series.ID, l.meta.ID)...)

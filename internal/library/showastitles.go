@@ -374,11 +374,16 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 			season := videoSeason(video)
 			video.Season = stremio.Number(season)
 			seasonID := itemID(seasonKey(r.SeriesID, season))
-			moved = record{Key: episodeKey(video.ID), Kind: KindEpisode, Parent: &seasonID, SeriesID: r.SeriesID, Season: season, Video: &video}
+			// A folder's video does not tell which addon described it: the
+			// episode it becomes is confined to public addresses until its
+			// series is listed, which records it anew (see listEpisodes).
+			moved = record{Key: episodeKey(video.ID), Kind: KindEpisode, Parent: &seasonID, SeriesID: r.SeriesID, Season: season, Video: &video,
+				Confined: true}
 			to = userdata.Item{Series: itemID(titleKey(KindSeries, r.SeriesID)), Season: seasonID}
 		} else {
 			folder := itemID(titleKey(KindVideo, r.SeriesID))
-			moved = record{Key: folderVideoKey(video.ID), Kind: KindVideo, Parent: &folder, SeriesID: r.SeriesID, Video: &video}
+			moved = record{Key: folderVideoKey(video.ID), Kind: KindVideo, Parent: &folder, SeriesID: r.SeriesID, Video: &video,
+				Confined: r.Confined}
 		}
 		moved.ID = itemID(moved.Key)
 		to.ID = moved.ID
