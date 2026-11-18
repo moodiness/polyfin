@@ -192,6 +192,10 @@ type followUps struct {
 	running map[followKey]*followUp
 	asking  map[followKey]uint64
 	asked   uint64
+	// carry, when tests set it, carries the identities of an addon's
+	// streams in place of carryIdentities (see followStreams): they count
+	// what it takes, or hold it.
+	carry func(answer, before []stremio.Stream) []stremio.Stream
 }
 
 // errForgotten is the answer to a request forgotten while the addon was
@@ -243,7 +247,11 @@ func (s *Service) SetFollowUps(delays ...time.Duration) { s.followUpDelays = del
 // saved, and told to whoever follows the title's versions (see
 // streamsChanged).
 func (s *Service) followStreams(ctx context.Context, entry installed, key streamKey, asked uint64, streams []stremio.Stream) ([]stremio.Stream, error) {
-	return followUpList(ctx, s, s.streamLists, streamKind, key, entry.addon.LogName(), asked, streams,
+	kind := streamKind
+	if s.followUps.carry != nil {
+		kind.carry = s.followUps.carry
+	}
+	return followUpList(ctx, s, s.streamLists, kind, key, entry.addon.LogName(), asked, streams,
 		func(ctx context.Context) ([]stremio.Stream, error) {
 			return s.fetchStreams(ctx, entry, key.contentType, key.id)
 		}, func() { s.streamsChanged(key) })
@@ -339,22 +347,39 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			}
 			now, life := s.now(), s.listLife()
 			before, after := 0, kind.count(answer)
-			// Checked and replaced together: a refresh that stops the
-			// schedule first forgets the list after, or finds it stopped.
-			s.followUps.mu.Lock()
-			grew := s.followUps.running[followed] == f && lists.Update(key, func(kept list[T], ok bool) (list[T], bool) {
-				if fresh, _ := kept.state(now, life); !ok || !fresh {
-					return kept, false
+			// The answer is compared with the list it may replace with no
+			// lock held: that takes a while for long lists, and the locks
+			// are those of every title's lists. It then replaces the list
+			// only if that is still the one compared, and is compared
+			// again with a list that changed meanwhile.
+			grew := false
+			for range followUpTries {
+				compared, ok := lists.Get(key)
+				if fresh, _ := compared.state(now, life); !ok || !fresh {
+					break
 				}
 				// Compared with the previous answer: the items kept from
 				// the list replaced are not the addon's.
-				before = kind.count(kept.items[:kept.answer])
+				before = kind.count(compared.items[:compared.answer])
 				if after <= before {
-					return kept, false
+					break
 				}
-				return kind.merge(kind.carried(answer, kept.items), kept.items[kept.answer:], now), true
-			})
-			s.followUps.mu.Unlock()
+				longer := kind.merge(kind.carried(answer, compared.items), compared.items[compared.answer:], now)
+				changed := false
+				// Checked and replaced together: a refresh that stops the
+				// schedule first forgets the list after, or finds it stopped.
+				s.followUps.mu.Lock()
+				grew = s.followUps.running[followed] == f && lists.Update(key, func(kept list[T], ok bool) (list[T], bool) {
+					if changed = !ok || !kept.same(compared); changed {
+						return kept, false
+					}
+					return longer, true
+				})
+				s.followUps.mu.Unlock()
+				if !changed {
+					break
+				}
+			}
 			if !grew {
 				return
 			}
@@ -364,6 +389,19 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 		}
 	}()
 	return items, nil
+}
+
+// followUpTries is how many times a follow-up's answer is compared with
+// the list it may replace, the list changing meanwhile each time: the
+// schedule then ends, the list left as it is.
+const followUpTries = 3
+
+// same reports whether l is other itself rather than a list alike: a list
+// kept is replaced, never changed, so the same items given at the same
+// time are the same list.
+func (l list[T]) same(other list[T]) bool {
+	return len(l.items) == len(other.items) && (len(l.items) == 0 || &l.items[0] == &other.items[0]) &&
+		l.answer == other.answer && l.at.Equal(other.at) && l.restored == other.restored
 }
 
 // hurryFollowUp has the next follow-up of an addon's streams for a title
