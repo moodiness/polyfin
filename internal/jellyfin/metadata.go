@@ -70,12 +70,10 @@ func (h *Handler) metadataRoutes(rt *router) {
 	administrator(http.MethodPost, "/Items/{itemId}/Images/{imageType}/{imageIndex}", h.uploadItemImage)
 	administrator(http.MethodDelete, "/Items/{itemId}/Images/{imageType}", h.deleteItemImage)
 	administrator(http.MethodDelete, "/Items/{itemId}/Images/{imageType}/{imageIndex}", h.deleteItemImage)
+	// Identify searches with the server's view, which no user's parental
+	// control nor choice of addons narrows: it is an administrator's.
 	for itemType, kind := range remoteSearchTypes {
-		if itemType == "Person" {
-			administrator(http.MethodPost, "/Items/RemoteSearch/"+itemType, h.remoteSearch(kind))
-		} else {
-			signedIn(http.MethodPost, "/Items/RemoteSearch/"+itemType, h.remoteSearch(kind))
-		}
+		administrator(http.MethodPost, "/Items/RemoteSearch/"+itemType, h.remoteSearch(kind))
 	}
 	administrator(http.MethodPost, "/Items/RemoteSearch/Apply/{itemId}", h.applyRemoteSearch)
 }

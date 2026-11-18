@@ -241,8 +241,8 @@ func TestIdentifySearchesTheServersAddonsButCannotRebind(t *testing.T) {
 		results[0].Name != "Restricted" || results[0].ProviderIds["Imdb"] != "tt2" || results[0].SearchProviderName != "Rated" {
 		t.Errorf("movie search: %d %s", status, body)
 	}
-	for path, token := range map[string]string{"/Items/RemoteSearch/Book": e.admin, "/Items/RemoteSearch/Series": e.member} {
-		status, body := e.call(http.MethodPost, path, app("tv", token), map[string]any{"SearchInfo": map[string]any{"Name": "Show"}})
+	for _, path := range []string{"/Items/RemoteSearch/Book", "/Items/RemoteSearch/Series"} {
+		status, body := e.call(http.MethodPost, path, app("dashboard", e.admin), map[string]any{"SearchInfo": map[string]any{"Name": "Show"}})
 		if status != http.StatusOK || strings.TrimSpace(string(body)) != "[]" {
 			t.Errorf("%s: %d %s", path, status, body)
 		}
@@ -253,6 +253,54 @@ func TestIdentifySearchesTheServersAddonsButCannotRebind(t *testing.T) {
 	status, body = e.call(http.MethodPost, "/Items/RemoteSearch/Apply/"+e.ids["Allowed"], app("dashboard", e.admin), results[0])
 	if status != http.StatusInternalServerError || string(body) != "Error processing request." {
 		t.Errorf("apply: %d %s", status, body)
+	}
+}
+
+// Identify searches the server's addons whatever the user's parental
+// control and addons are, so every search of it is an administrator's, as
+// applying a result is.
+func TestIdentifySearchesAreAdministrators(t *testing.T) {
+	t.Parallel()
+	e := newEdited(t)
+	// The child, whose maximum rating is 13, neither opens nor finds the
+	// movie rated R.
+	if status, _ := e.item(t, e.child, e.childID, e.ids["Restricted"]); status != http.StatusNotFound {
+		t.Fatalf("the child's details of the restricted movie: %d", status)
+	}
+	var found QueryResult
+	if status := e.get(t, "/Items?Recursive=true&IncludeItemTypes=Movie&SearchTerm=Restricted", e.child, &found); status != http.StatusOK || len(found.Items) != 0 {
+		t.Fatalf("the child's search: %d %v", status, itemNames(found.Items))
+	}
+	if len(remoteSearchTypes) < 2 || remoteSearchTypes["Movie"] == "" || remoteSearchTypes["Series"] == "" {
+		t.Fatalf("search types: %v", remoteSearchTypes)
+	}
+	search := map[string]any{"SearchInfo": map[string]any{"Name": "Restricted", "ProviderIds": map[string]string{"Imdb": ""}}}
+	for itemType := range remoteSearchTypes {
+		path := "/Items/RemoteSearch/" + itemType
+		for name, token := range map[string]string{"member": e.member, "child": e.child} {
+			// As the other administrators' routes answer: 403, no body.
+			if status, body := e.call(http.MethodPost, path, app("tablet", token), search); status != http.StatusForbidden || len(body) > 0 {
+				t.Errorf("%s, %s: %d %s", path, name, status, body)
+			}
+		}
+		var results []RemoteSearchResult
+		status, body := e.call(http.MethodPost, path, app("dashboard", e.admin), search)
+		if status != http.StatusOK || json.Unmarshal(body, &results) != nil {
+			t.Errorf("%s, administrator: %d %s", path, status, body)
+			continue
+		}
+		if itemType == "Movie" {
+			if len(results) != 1 || results[0].Name != "Restricted" || results[0].ProviderIds["Imdb"] != "tt2" {
+				t.Errorf("%s, administrator: %s", path, body)
+			}
+		} else if len(results) != 0 {
+			t.Errorf("%s, administrator: %s", path, body)
+		}
+	}
+	// Nor does an identifier find a title for them.
+	byID := map[string]any{"SearchInfo": map[string]any{"ProviderIds": map[string]string{"Imdb": "tt2"}}}
+	if status, body := e.call(http.MethodPost, "/Items/RemoteSearch/Movie", app("tablet", e.child), byID); status != http.StatusForbidden || len(body) > 0 {
+		t.Errorf("the child's search by identifier: %d %s", status, body)
 	}
 }
 
