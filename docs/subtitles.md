@@ -336,6 +336,7 @@ How the pictures are read:
 - For MPEG-TS files (such as a Blu-ray's `.m2ts`), MPEG program streams (such as `.vob`), AVI files and discs, times count from the start of the video, as their playbacks do.
 - A picture is drawn only within the video the track names, at least a DVD's for VobSub, and at most 3840×2160. What a track places past it is left out.
 - Tesseract reads a track's pictures in batches of at most 64 MiB, so that a long track never holds all of them in memory at once.
+- The pictures of a track may cover, in all, the pixels of 128 screens of 3840×2160, plus 1,024 for each byte of the track, and at most those of 4,096 screens. A track of text stays far below it: a 4K track of a movie's dialogue covers about 16 pixels a byte. A track whose pictures go past it is not read, and is logged as a track that could not be read.
 
 How apps see the copy:
 

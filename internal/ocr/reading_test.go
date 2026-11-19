@@ -98,7 +98,7 @@ func vobsubWhole(idx, sub []byte) ([]Picture, error) {
 				return
 			}
 		}
-	}, index, func(p Picture) error {
+	}, index, newPixelBudget(len(sub)), func(p Picture) error {
 		pictures = append(pictures, p)
 		return nil
 	})

@@ -151,7 +151,8 @@ func luma(r, g, b uint8) uint8 {
 // A line listing a position before the end of the subpicture last read
 // is skipped: its bytes were read already. The subpictures read are then
 // apart from one another in the .sub file, which bounds them all by its
-// size, whatever the lines of the .idx file say.
+// size, whatever the lines of the .idx file say, and so does it bound
+// the pixels they compose (see pixelBudget).
 func VobSub(ctx context.Context, idx, sub []byte, emit func(Picture) error) error {
 	index, err := parseIndex(idx, func(entry vobsubEntry) error {
 		if entry.position < 0 || entry.position >= int64(len(sub)) {
@@ -162,7 +163,13 @@ func VobSub(ctx context.Context, idx, sub []byte, emit func(Picture) error) erro
 	if err != nil {
 		return err
 	}
-	return decodeUnits(ctx, func(yield func(timedUnit, error) bool) {
+	return decodeUnits(ctx, pairUnits(idx, sub), index, newPixelBudget(len(sub)), emit)
+}
+
+// pairUnits are the subpicture units of a .idx and .sub pair that was
+// checked, each read when its line of the .idx file is.
+func pairUnits(idx, sub []byte) iter.Seq2[timedUnit, error] {
+	return func(yield func(timedUnit, error) bool) {
 		stopped := errors.New("stopped")
 		end := 0
 		_, _ = parseIndex(idx, func(entry vobsubEntry) error {
@@ -176,7 +183,7 @@ func VobSub(ctx context.Context, idx, sub []byte, emit func(Picture) error) erro
 			}
 			return nil
 		})
-	}, index, emit)
+	}
 }
 
 // VobSubBlocks reads the pictures of a Matroska VobSub track, from its
@@ -186,13 +193,18 @@ func VobSubBlocks(ctx context.Context, private []byte, blocks []container.Block,
 	if err != nil {
 		return err
 	}
-	return decodeUnits(ctx, func(yield func(timedUnit, error) bool) {
+	return decodeUnits(ctx, blockUnits(blocks), index, newPixelBudget(blocksSize(blocks)), emit)
+}
+
+// blockUnits are the subpicture units of a Matroska VobSub track's blocks.
+func blockUnits(blocks []container.Block) iter.Seq2[timedUnit, error] {
+	return func(yield func(timedUnit, error) bool) {
 		for _, block := range blocks {
 			if !yield(timedUnit{at: block.Start, duration: block.Duration, data: block.Data}, nil) {
 				return
 			}
 		}
-	}, index, emit)
+	}
 }
 
 // timedUnit is a subpicture unit with its time, and its block's duration
@@ -207,8 +219,9 @@ type timedUnit struct {
 // its stop delay, its block's end, or the next one. It hands each picture
 // to emit once its end is known, holding only one that waits for the
 // next. An error from emit stops the decoding, and so does ctx when it
-// ends: it is asked before each unit.
-func decodeUnits(ctx context.Context, units iter.Seq2[timedUnit, error], index vobsubIndex, emit func(Picture) error) error {
+// ends: it is asked before each unit. So does budget when the pixels
+// decoded and prepared run past it.
+func decodeUnits(ctx context.Context, units iter.Seq2[timedUnit, error], index vobsubIndex, budget *pixelBudget, emit func(Picture) error) error {
 	width, height := index.screen()
 	var waiting Picture
 	open := false
@@ -219,7 +232,7 @@ func decodeUnits(ctx context.Context, units iter.Seq2[timedUnit, error], index v
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		spu, err := decodeSubpicture(unit.data, index.palette, width, height)
+		spu, err := decodeSubpicture(unit.data, index.palette, width, height, budget)
 		if err != nil {
 			return err
 		}
@@ -231,7 +244,10 @@ func decodeUnits(ctx context.Context, units iter.Seq2[timedUnit, error], index v
 			}
 		}
 		open = false
-		prepared, ok := prepare(spu.bitmap)
+		prepared, ok, err := prepare(spu.bitmap, budget)
+		if err != nil {
+			return err
+		}
 		if !ok {
 			continue
 		}
@@ -321,8 +337,9 @@ type subpicture struct {
 
 // decodeSubpicture decodes a subpicture unit through the palette's
 // luminances, on a screen of width by height: the part of its picture
-// past the screen is neither drawn nor allocated.
-func decodeSubpicture(data []byte, palette *[16]uint8, screenWidth, screenHeight int) (subpicture, error) {
+// past the screen is neither drawn nor allocated. The pixels drawn are
+// taken from budget first.
+func decodeSubpicture(data []byte, palette *[16]uint8, screenWidth, screenHeight int, budget *pixelBudget) (subpicture, error) {
 	if len(data) < 4 {
 		return subpicture{}, fmt.Errorf("%w: short subpicture", errInvalid)
 	}
@@ -392,6 +409,9 @@ func decodeSubpicture(data []byte, palette *[16]uint8, screenWidth, screenHeight
 		if palette != nil {
 			values[i].luma = palette[colors[i]]
 		}
+	}
+	if err := budget.spend(shownWidth * shownHeight); err != nil {
+		return subpicture{}, err
 	}
 	spu.bitmap = newBitmap(shownWidth, shownHeight)
 	fields := [2]int{top * 2, bottom * 2}

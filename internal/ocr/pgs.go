@@ -51,7 +51,8 @@ type displaySet struct {
 //
 // The file's segments are checked first, so that a file cut short hands
 // over nothing. Its display sets are then decoded one at a time, each
-// where the file holds it: none is copied, nor held once decoded.
+// where the file holds it: none is copied, nor held once decoded. The
+// pixels they compose are bounded by the file's size (see pixelBudget).
 func PGS(ctx context.Context, sup []byte, emit func(Picture) error) error {
 	for rest := sup; len(rest) > 0; {
 		if len(rest) < 13 || rest[0] != 'P' || rest[1] != 'G' {
@@ -63,7 +64,12 @@ func PGS(ctx context.Context, sup []byte, emit func(Picture) error) error {
 		}
 		rest = rest[n:]
 	}
-	return decodePGS(ctx, func(yield func(displaySet) bool) {
+	return decodePGS(ctx, supSets(sup), newPixelBudget(len(sup)), emit)
+}
+
+// supSets are the display sets of a SUP file whose segments were checked.
+func supSets(sup []byte) iter.Seq[displaySet] {
+	return func(yield func(displaySet) bool) {
 		for len(sup) > 0 {
 			// A display set runs to its end segment, or to the file's end.
 			n, ended := 0, false
@@ -76,19 +82,24 @@ func PGS(ctx context.Context, sup []byte, emit func(Picture) error) error {
 			}
 			sup = sup[n:]
 		}
-	}, emit)
+	}
 }
 
 // PGSBlocks reads the pictures of a Matroska PGS track, as PGS does: each
 // block a display set, its segments without a header.
 func PGSBlocks(ctx context.Context, blocks []container.Block, emit func(Picture) error) error {
-	return decodePGS(ctx, func(yield func(displaySet) bool) {
+	return decodePGS(ctx, blockSets(blocks), newPixelBudget(blocksSize(blocks)), emit)
+}
+
+// blockSets are the display sets of a Matroska PGS track's blocks.
+func blockSets(blocks []container.Block) iter.Seq[displaySet] {
+	return func(yield func(displaySet) bool) {
 		for _, block := range blocks {
 			if !yield(displaySet{at: block.Start, segments: block.Data}) {
 				return
 			}
 		}
-	}, emit)
+	}
 }
 
 // ticks converts 90 kHz ticks to a duration.
@@ -196,6 +207,15 @@ func (o *pgsObject) trim() {
 	o.data = o.data[:o.kept+copy(o.data[o.kept:], o.data[i:])]
 }
 
+// rows is how many of its lines the object's data reaches: those it
+// ended, and the one it has pixels of. The lines after are never drawn.
+func (o *pgsObject) rows() int {
+	if o.x > 0 {
+		return min(o.line+1, o.height)
+	}
+	return min(o.line, o.height)
+}
+
 // seek is where in data to read line y, one the data has reached, for a
 // part whose left edge is pixel x: at a run of that line, which starts
 // at pixel at, x or before it. It is found from the last mark before,
@@ -235,8 +255,9 @@ type placement struct {
 // set, which it hands to emit then. Only the picture showing is held: the
 // caller decides how many it keeps. An error from emit stops the
 // decoding, and so does ctx when it ends: it is asked before each display
-// set, and as one's composition is drawn.
-func decodePGS(ctx context.Context, sets iter.Seq[displaySet], emit func(Picture) error) error {
+// set, and as one's composition is drawn. So does budget when the pixels
+// composed and prepared run past it.
+func decodePGS(ctx context.Context, sets iter.Seq[displaySet], budget *pixelBudget, emit func(Picture) error) error {
 	palettes := map[byte]*[256]pixel{}
 	objects := map[uint16]*pgsObject{}
 	var showing Picture
@@ -339,11 +360,15 @@ func decodePGS(ctx context.Context, sets iter.Seq[displaySet], emit func(Picture
 		if len(placed) == 0 || palette == nil {
 			continue
 		}
-		b, forced, err := composePGS(ctx, placed, objects, palette, width, height)
+		b, forced, err := composePGS(ctx, placed, objects, palette, width, height, budget)
 		if err != nil {
 			return err
 		}
-		if prepared, ok := prepare(b); ok {
+		prepared, ok, err := prepare(b, budget)
+		if err != nil {
+			return err
+		}
+		if ok {
 			showing = Picture{Start: set.at, Forced: forced, Image: prepared}
 			shown = true
 		}
@@ -359,9 +384,11 @@ func decodePGS(ctx context.Context, sets iter.Seq[displaySet], emit func(Picture
 // the palette, onto a bitmap covering them all within the screen, the
 // composition's video of width by height, at most maxWidth by maxHeight:
 // what lies outside is neither drawn nor allocated, whatever the stream
-// declares. ctx is asked as the objects are drawn, every pgsWork runs and
-// pixels of them.
-func composePGS(ctx context.Context, placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel, width, height int) (bitmap, bool, error) {
+// declares, nor are an object's lines past those its data reaches. The
+// bitmap's pixels are taken from budget first. ctx is asked as the
+// objects are drawn, every pgsWork runs and pixels of them.
+func composePGS(ctx context.Context, placed []placement, objects map[uint16]*pgsObject, palette *[256]pixel, width, height int,
+	budget *pixelBudget) (bitmap, bool, error) {
 	type drawn struct {
 		object *pgsObject
 		// part is the part of the object shown, by the object's pixels, and
@@ -377,7 +404,7 @@ func composePGS(ctx context.Context, placed []placement, objects map[uint16]*pgs
 		if object == nil {
 			continue
 		}
-		part := image.Rect(0, 0, object.width, object.height)
+		part := image.Rect(0, 0, object.width, object.rows())
 		if p.cropped {
 			part = part.Intersect(image.Rect(p.cropX, p.cropY, p.cropX+p.cropW, p.cropY+p.cropH))
 		}
@@ -392,6 +419,9 @@ func composePGS(ctx context.Context, placed []placement, objects map[uint16]*pgs
 	}
 	if len(parts) == 0 {
 		return bitmap{}, false, nil
+	}
+	if err := budget.spend(bounds.Dx() * bounds.Dy()); err != nil {
+		return bitmap{}, false, err
 	}
 	canvas := newBitmap(bounds.Dx(), bounds.Dy())
 	work := 0
