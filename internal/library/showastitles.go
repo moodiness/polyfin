@@ -384,8 +384,10 @@ func (s *Service) followTitles(ctx context.Context, key addons.LibraryKey, shown
 			// A folder's video does not tell which addon described it: the
 			// episode it becomes is confined to public addresses until its
 			// series is listed, which records it anew (see listEpisodes).
-			moved = record{Key: episodeKey(video.ID), Kind: KindEpisode, Parent: &seasonID, SeriesID: r.SeriesID, Season: season, Video: &video,
-				Confined: true}
+			// It names the library's addon, whose owner decides whether it
+			// replaces a stored episode (see savedData).
+			moved = record{Key: episodeKey(video.ID), Kind: KindEpisode, Addon: &key.AddonID, Parent: &seasonID, SeriesID: r.SeriesID,
+				Season: season, Video: &video, Confined: true}
 			to = userdata.Item{Series: itemID(titleKey(KindSeries, r.SeriesID)), Season: seasonID}
 		} else {
 			folder := itemID(titleKey(KindVideo, r.SeriesID))

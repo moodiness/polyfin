@@ -78,12 +78,12 @@ func TestEpisodeAndSeasonArtworkFollowsTheDescribingAddon(t *testing.T) {
 }
 
 // A member who turns the server's addons off for themselves has their own
-// addons alone describe a series of the server's. Its episodes then show
-// the thumbnails their addon gave, confined; once a server addon describes
-// the series again, they show its thumbnails, with its reach. A season
-// shows the poster of the description the server's addons keep, with its
-// reach, whichever addon its record was last written from.
-func TestOwnAddonsDescribingAServersSeriesConfineItsEpisodes(t *testing.T) {
+// addons alone describe a series of the server's. The records of its
+// episodes and seasons stay the server addon's: its episodes show the
+// thumbnails that addon gave, with its reach, and the local address the
+// member's addon gave is never asked. A season shows the poster of the
+// description the server's addons keep, with its reach.
+func TestOwnAddonsDescribingAServersSeriesLeaveItsEpisodes(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
 	ctx := t.Context()
@@ -139,11 +139,8 @@ func TestOwnAddonsDescribingAServersSeriesConfineItsEpisodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	episode, season := artwork(member)
-	if episode.URL != local+"/episode.png" {
-		t.Fatalf("the episode's image is not the member's addon's: %+v", episode)
-	}
-	if !e.refused(episode) {
-		t.Error("the thumbnail the member's addon gave is downloaded from a local address")
+	if episode.URL != "https://images.example/e1.jpg" || episode.URLConfined() {
+		t.Errorf("the episode's image: %+v, want the server's addon's, with its reach", episode)
 	}
 	if season.URL != "https://images.example/s1.jpg" || season.URLConfined() {
 		t.Errorf("the season's image: %+v, want the server's addon's, with its reach", season)

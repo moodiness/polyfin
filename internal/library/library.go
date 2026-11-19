@@ -2098,13 +2098,14 @@ func (s *Service) readRest(ctx context.Context, user accounts.User, parent accou
 }
 
 // listedAddon returns the addon whose catalogs list parent: a library's,
-// or a collection's.
+// or a collection's. A season names the addon that described its series,
+// whose catalogs do not list it.
 func (s *Service) listedAddon(ctx context.Context, v view, parent accounts.ID) (installed, bool) {
 	if l, ok := v.library(parent); ok {
 		return l.addon, true
 	}
 	r, err := s.load(ctx, parent)
-	if err != nil || r.Addon == nil {
+	if err != nil || r.Addon == nil || r.Kind == KindSeason {
 		return installed{}, false
 	}
 	return v.addon(*r.Addon)
@@ -2797,28 +2798,41 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 	return item, shown, meta, err
 }
 
-// describedSeries is series, which also tells whether what is recorded of
-// the description is confined to public addresses (see record.Confined):
-// the posters of its seasons and the thumbnails of its episodes are the
-// addon's that described the series, or the one's that completed its
-// description, whichever addon listed it. They are confined when either
-// addon is, or when the series is.
-func (s *Service) describedSeries(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, stremio.Meta, bool, error) {
+// seriesRecords is what the records of a series' seasons and episodes
+// keep of the description they are made from (see describedSeries).
+type seriesRecords struct {
+	// addon described the series: its owner decides whether the records
+	// replace the stored ones (see savedData), so that a user's own
+	// description never replaces the records of a series the server's
+	// addons describe.
+	addon accounts.ID
+	// confined tells whether the records are confined to public
+	// addresses (see record.Confined).
+	confined bool
+}
+
+// describedSeries is series, which also tells what the records of its
+// seasons and episodes keep (see seriesRecords): the posters of its
+// seasons and the thumbnails of its episodes are the addon's that
+// described the series, or the one's that completed its description,
+// whichever addon listed it. They are confined when either addon is, or
+// when the series is.
+func (s *Service) describedSeries(ctx context.Context, v view, id accounts.ID) (Item, stremio.Meta, stremio.Meta, seriesRecords, error) {
 	// A series' seasons and episodes need its details: they open it.
 	ctx = iptv.Opening(ctx)
 	r, err := s.load(ctx, id)
 	if err != nil || r.Kind != KindSeries && !r.shownTitle() || v.withholds(r) || v.misplaced(r) {
-		return Item{}, stremio.Meta{}, stremio.Meta{}, false, ErrNotFound
+		return Item{}, stremio.Meta{}, stremio.Meta{}, seriesRecords{}, ErrNotFound
 	}
 	meta, by, completedBy, ok := s.describeBy(ctx, v, r, false)
 	if !ok || r.shownTitle() && shownKind(meta) != KindSeries || !v.allows(KindSeries, s.overriddenTraits(id, describedTraits(meta, v.country))) {
-		return Item{}, stremio.Meta{}, stremio.Meta{}, false, ErrNotFound
+		return Item{}, stremio.Meta{}, stremio.Meta{}, seriesRecords{}, ErrNotFound
 	}
 	shown := s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta)
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
 	s.fromMeta(&item, shown, v.country)
 	item.Contents = contents(meta, nil, s.now())
-	return item, shown, meta, r.Confined || by.confined || completedBy.confined, nil
+	return item, shown, meta, seriesRecords{addon: by.addon.ID, confined: r.Confined || by.confined || completedBy.confined}, nil
 }
 
 func seasonNumbers(meta stremio.Meta) []int {
@@ -3003,7 +3017,7 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 	if err != nil {
 		return nil, err
 	}
-	series, shown, meta, confined, err := s.describedSeries(ctx, v, seriesID)
+	series, shown, meta, recorded, err := s.describedSeries(ctx, v, seriesID)
 	if err != nil {
 		return nil, err
 	}
@@ -3011,8 +3025,8 @@ func (s *Service) Seasons(ctx context.Context, user accounts.User, seriesID acco
 	result := seasons(series, shown, posters, v.words, s.now())
 	records := make([]record, 0, len(result))
 	for _, season := range result {
-		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason,
-			Parent: &series.ID, SeriesID: meta.ID, Season: season.IndexNumber, Poster: posters[season.IndexNumber], Confined: confined})
+		records = append(records, record{ID: season.ID, Key: seasonKey(meta.ID, season.IndexNumber), Kind: KindSeason, Addon: &recorded.addon,
+			Parent: &series.ID, SeriesID: meta.ID, Season: season.IndexNumber, Poster: posters[season.IndexNumber], Confined: recorded.confined})
 	}
 	if layout := s.layoutOf(ctx, series.ID, meta, v.words); layout != nil {
 		result = layout.seasonItems(result, series, shown, s.now())
@@ -3054,7 +3068,7 @@ func (s *Service) SeriesEpisodes(ctx context.Context, user accounts.User, series
 // the records of them, of the series' seasons, and of the seasons of its
 // order.
 func (s *Service) orderedEpisodes(ctx context.Context, v view, seriesID accounts.ID, seasonID *accounts.ID) ([]Item, []record, error) {
-	series, shown, meta, confined, err := s.describedSeries(ctx, v, seriesID)
+	series, shown, meta, recorded, err := s.describedSeries(ctx, v, seriesID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3063,11 +3077,11 @@ func (s *Service) orderedEpisodes(ctx context.Context, v view, seriesID accounts
 		layout = s.layoutOf(ctx, series.ID, meta, v.words)
 	}
 	if layout == nil {
-		result, records, err := listEpisodes(series, shown, meta, confined, seasonID, v.words, s.now())
+		result, records, err := listEpisodes(series, shown, meta, recorded, seasonID, v.words, s.now())
 		s.episodeLengthsOf(ctx, meta.ID, result)
 		return result, records, err
 	}
-	result, records, err := listEpisodes(series, shown, meta, confined, nil, v.words, s.now())
+	result, records, err := listEpisodes(series, shown, meta, recorded, nil, v.words, s.now())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3082,11 +3096,11 @@ func (s *Service) orderedEpisodes(ctx context.Context, v view, seriesID accounts
 // episodes lists a series' episodes for v as aired, of one season when
 // seasonID is set, and records them and the series' seasons.
 func (s *Service) episodes(ctx context.Context, v view, seriesID accounts.ID, seasonID *accounts.ID) ([]Item, error) {
-	series, shown, meta, confined, err := s.describedSeries(ctx, v, seriesID)
+	series, shown, meta, recorded, err := s.describedSeries(ctx, v, seriesID)
 	if err != nil {
 		return nil, err
 	}
-	result, records, err := listEpisodes(series, shown, meta, confined, seasonID, v.words, s.now())
+	result, records, err := listEpisodes(series, shown, meta, recorded, seasonID, v.words, s.now())
 	if err != nil {
 		return nil, err
 	}
@@ -3096,8 +3110,9 @@ func (s *Service) episodes(ctx context.Context, v view, seriesID accounts.ID, se
 
 // listEpisodes lists the episodes of a series described (see
 // describedSeries) as aired, of one season when seasonID is set, with the
-// records of them and of the series' seasons, confined when confined.
-func listEpisodes(series Item, shown, meta stremio.Meta, confined bool, seasonID *accounts.ID, w words, now time.Time) ([]Item, []record, error) {
+// records of them and of the series' seasons, which keep what recorded
+// tells.
+func listEpisodes(series Item, shown, meta stremio.Meta, recorded seriesRecords, seasonID *accounts.ID, w words, now time.Time) ([]Item, []record, error) {
 	var season *int
 	if seasonID != nil {
 		for _, number := range seasonNumbers(meta) {
@@ -3116,8 +3131,8 @@ func listEpisodes(series Item, shown, meta stremio.Meta, confined bool, seasonID
 	result := episodes(series, shown, posters, season, w, now)
 	records := make([]record, 0, len(result)+len(seasonNumbers(meta)))
 	for _, number := range seasonNumbers(meta) {
-		records = append(records, record{ID: itemID(seasonKey(meta.ID, number)), Key: seasonKey(meta.ID, number), Kind: KindSeason,
-			Parent: &series.ID, SeriesID: meta.ID, Season: number, Poster: posters[number], Confined: confined})
+		records = append(records, record{ID: itemID(seasonKey(meta.ID, number)), Key: seasonKey(meta.ID, number), Kind: KindSeason, Addon: &recorded.addon,
+			Parent: &series.ID, SeriesID: meta.ID, Season: number, Poster: posters[number], Confined: recorded.confined})
 	}
 	videos := make(map[string]stremio.Video, len(meta.Videos))
 	for _, video := range meta.Videos {
@@ -3125,8 +3140,8 @@ func listEpisodes(series Item, shown, meta stremio.Meta, confined bool, seasonID
 	}
 	for i, episode := range result {
 		video := videos[episode.StremioID]
-		records = append(records, record{ID: episode.ID, Key: episodeKey(video.ID), Kind: KindEpisode,
-			Parent: &result[i].SeasonID, SeriesID: meta.ID, Season: episode.ParentIndexNumber, Video: &video, Confined: confined})
+		records = append(records, record{ID: episode.ID, Key: episodeKey(video.ID), Kind: KindEpisode, Addon: &recorded.addon,
+			Parent: &result[i].SeasonID, SeriesID: meta.ID, Season: episode.ParentIndexNumber, Video: &video, Confined: recorded.confined})
 	}
 	return result, records, nil
 }
