@@ -251,18 +251,12 @@ func (s *sftpShare) close() {
 // once over a new connection. The request reads the server's answers in
 // the caller's goroutine, a scan's or a request's: a panic of what reads
 // them, the SSH and SFTP clients or the listing's own reader (see
-// sftpLister), is logged with its stack and fails the request, and the
-// connection, whose state is then not known, is dropped.
+// sftpLister), fails the request (see panicked).
 func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) error) (err error) {
 	var client *sftp.Client
 	defer func() {
 		if cause := recover(); cause != nil {
-			if client != nil {
-				s.drop(client)
-			}
-			s.logger.Error("A network share's request ended on a panic", "host", s.host, "panic", fmt.Sprint(cause),
-				"stack", string(debug.Stack()))
-			err = fmt.Errorf("%w: the request ended on a panic: %v", errShareUnreachable, cause)
+			err = s.panicked(client, cause)
 		}
 	}()
 	for attempt := 0; ; attempt++ {
@@ -290,6 +284,19 @@ func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) er
 			return fmt.Errorf("%w: %v", errShareUnreachable, err)
 		}
 	}
+}
+
+// panicked logs a panic of the SSH or SFTP client with its stack, drops
+// the connection client, whose state is then not known, when there is
+// one, and returns the error of the request the panic ended: the server
+// goes on, and the next request connects again.
+func (s *sftpShare) panicked(client *sftp.Client, cause any) error {
+	if client != nil {
+		s.drop(client)
+	}
+	s.logger.Error("A network share's request ended on a panic", "host", s.host, "panic", fmt.Sprint(cause),
+		"stack", string(debug.Stack()))
+	return fmt.Errorf("%w: the request ended on a panic: %v", errShareUnreachable, cause)
 }
 
 // file is the path on the server of a file or folder of the folder.
@@ -487,28 +494,72 @@ func (s *sftpShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, ti
 }
 
 // openFile opens a file of the server, by its path there.
-func (s *sftpShare) openFile(ctx context.Context, name string) (*sftp.File, fs.FileInfo, error) {
-	var file *sftp.File
+func (s *sftpShare) openFile(ctx context.Context, name string) (*sftpFile, fs.FileInfo, error) {
+	var file *sftpFile
 	var info fs.FileInfo
 	err := s.do(ctx, func(client *sftp.Client) error {
-		var err error
-		if file, err = client.Open(name); err != nil {
+		opened, err := client.Open(name)
+		if err != nil {
 			return err
 		}
-		if info, err = file.Stat(); err != nil {
-			file.Close()
+		if info, err = opened.Stat(); err != nil {
+			opened.Close()
 			return err
 		}
 		if !info.Mode().IsRegular() {
-			file.Close()
+			opened.Close()
 			return fs.ErrNotExist
 		}
+		file = &sftpFile{share: s, client: client, file: opened}
 		return nil
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 	return file, info, nil
+}
+
+// sftpFile reads a file of an SFTP folder over the connection client. Its
+// reads run the SFTP client outside do, in the reader's goroutine, which
+// no request's handler or scan may stand above: a panic of the client
+// fails the read, the seek or the close, and drops the connection (see
+// sftpShare.panicked).
+type sftpFile struct {
+	share  *sftpShare
+	client *sftp.Client
+	// file is the file the client opened, an *sftp.File.
+	file interface {
+		io.ReadSeekCloser
+		io.ReaderAt
+	}
+}
+
+func (f *sftpFile) Read(p []byte) (n int, err error) {
+	defer f.failOnPanic(&err)
+	return f.file.Read(p)
+}
+
+func (f *sftpFile) ReadAt(p []byte, off int64) (n int, err error) {
+	defer f.failOnPanic(&err)
+	return f.file.ReadAt(p, off)
+}
+
+func (f *sftpFile) Seek(offset int64, whence int) (at int64, err error) {
+	defer f.failOnPanic(&err)
+	return f.file.Seek(offset, whence)
+}
+
+func (f *sftpFile) Close() (err error) {
+	defer f.failOnPanic(&err)
+	return f.file.Close()
+}
+
+// failOnPanic, deferred by a method of the file, turns a panic of it into
+// its error.
+func (f *sftpFile) failOnPanic(err *error) {
+	if cause := recover(); cause != nil {
+		*err = f.share.panicked(f.client, cause)
+	}
 }
 
 // location reads a file through the source cache in blocks over the

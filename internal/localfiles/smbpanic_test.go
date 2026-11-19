@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -132,6 +133,69 @@ func TestAPanicUnderAnSFTPRequestIsItsError(t *testing.T) {
 	share.mu.Unlock()
 	if !dropped {
 		t.Error("the connection a request panicked in is kept")
+	}
+	if _, err := share.list(t.Context(), ""); err != nil {
+		t.Fatalf("the next listing: %v", err)
+	}
+}
+
+// panicFile panics at each of its reads, seeks and its close, as the SFTP
+// client reading a broken answer may.
+type panicFile struct{}
+
+func (panicFile) Read([]byte) (int, error)          { panic("a broken read") }
+func (panicFile) ReadAt([]byte, int64) (int, error) { panic("a broken read") }
+func (panicFile) Seek(int64, int) (int64, error)    { panic("a broken read") }
+func (panicFile) Close() error                      { panic("a broken read") }
+
+// A panic of the SFTP client under a file opened on an SFTP folder, read
+// outside any request to the share, fails that read, seek or close,
+// logged with its stack, and drops the connection; the next request
+// connects again.
+func TestAPanicReadingAnSFTPFileIsItsError(t *testing.T) {
+	t.Parallel()
+	var logs syncBuffer
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "Nosferatu (1922).mkv"), 10)
+	server := serveSFTP(t, "reader", "pass phrase", nil)
+	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + sftpPath(dir), user: "reader", password: "pass phrase"},
+		hostKeys{}, slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(r.close)
+	share := r.(*sftpShare)
+	steps := map[string]func(f io.ReadSeekCloser) error{
+		"read": func(f io.ReadSeekCloser) error { _, err := f.Read(make([]byte, 4)); return err },
+		"read at": func(f io.ReadSeekCloser) error {
+			_, err := f.(io.ReaderAt).ReadAt(make([]byte, 4), 2)
+			return err
+		},
+		"seek":  func(f io.ReadSeekCloser) error { _, err := f.Seek(2, io.SeekStart); return err },
+		"close": func(f io.ReadSeekCloser) error { return f.Close() },
+	}
+	for name, step := range steps {
+		opened, _, err := share.open(t.Context(), "Nosferatu (1922).mkv")
+		if err != nil {
+			t.Fatalf("%s: opening the file: %v", name, err)
+		}
+		f := opened.(*sftpFile)
+		if err := f.file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		f.file = panicFile{}
+		if err := step(f); !errors.Is(err, errShareUnreachable) || !strings.Contains(err.Error(), "a broken read") {
+			t.Errorf("a %s that panicked: %v, want the share unreachable, with the panic", name, err)
+		}
+		share.mu.Lock()
+		dropped := share.client == nil
+		share.mu.Unlock()
+		if !dropped {
+			t.Errorf("the connection a %s panicked under is kept", name)
+		}
+	}
+	if out := logs.String(); strings.Count(out, "ended on a panic") != len(steps) || !strings.Contains(out, "stack=") {
+		t.Fatalf("the panics were not logged once each with their stack: %s", out)
 	}
 	if _, err := share.list(t.Context(), ""); err != nil {
 		t.Fatalf("the next listing: %v", err)
