@@ -87,7 +87,6 @@ export function LanguageProvider({
 
   useEffect(() => {
     document.documentElement.lang = shown.language
-    document.title = shown.t.documentTitle
   }, [shown])
 
   const value = useMemo<I18nContextValue>(

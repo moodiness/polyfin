@@ -1,7 +1,6 @@
 import type en from '../en/common'
 
 const common: typeof en = {
-  documentTitle: 'Amministrazione Polyfin',
   header: {
     productName: 'Polyfin',
   },

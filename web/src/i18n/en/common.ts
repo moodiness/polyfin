@@ -3,7 +3,6 @@
  * vocabulary and the design system (`ui`). Areas add keys here; they never change or remove one.
  */
 const common = {
-  documentTitle: 'Polyfin administration',
   header: {
     productName: 'Polyfin',
   },
