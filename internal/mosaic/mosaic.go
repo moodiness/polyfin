@@ -48,25 +48,56 @@ var background = color.RGBA{R: 0x14, G: 0x16, B: 0x1a, A: 0xff}
 // image. Posters missing (nil) are left out; with none, the image is the
 // gradient and the name alone.
 func Draw(name string, posters []image.Image, wide bool, fonts *Fonts) *image.RGBA {
-	width, height := PosterWidth, PosterHeight
-	if wide {
-		width, height = WideWidth, WideHeight
-	}
-	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
-	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
 	var shown []image.Image
 	for _, poster := range posters {
 		if poster != nil && !poster.Bounds().Empty() {
 			shown = append(shown, poster)
 		}
 	}
-	shown = shown[:min(len(shown), Tiles(wide))]
-	for i, cell := range cells(len(shown), wide, canvas.Bounds()) {
-		cover(canvas, cell, shown[i])
+	drawing := NewDrawing(len(shown), wide)
+	for i := range drawing.Shown() {
+		drawing.Cover(i, shown[i])
 	}
-	shade(canvas)
-	write(canvas, name, wide, fonts)
-	return canvas
+	return drawing.Finish(name, fonts)
+}
+
+// Drawing is an image being drawn as Draw draws it, one poster at a time,
+// so that a caller holds one decoded poster at a time beside it.
+type Drawing struct {
+	canvas *image.RGBA
+	wide   bool
+	cells  []image.Rectangle
+}
+
+// NewDrawing starts the image, a poster or a wide image, of posters
+// posters: its background, and the cells of those it shows (see Shown).
+func NewDrawing(posters int, wide bool) *Drawing {
+	width, height := PosterWidth, PosterHeight
+	if wide {
+		width, height = WideWidth, WideHeight
+	}
+	canvas := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(background), image.Point{}, draw.Src)
+	return &Drawing{canvas: canvas, wide: wide, cells: cells(min(posters, Tiles(wide)), wide, canvas.Bounds())}
+}
+
+// Shown is how many of its posters the image shows, the first ones: as
+// many as its cells, which may be fewer than its posters, as three of
+// five on a wide image.
+func (d *Drawing) Shown() int { return len(d.cells) }
+
+// Cover draws the poster shown at index i, from 0 to Shown, into its
+// cell; the image keeps nothing of the poster.
+func (d *Drawing) Cover(i int, poster image.Image) {
+	cover(d.canvas, d.cells[i], poster)
+}
+
+// Finish ends the image, once its posters are drawn: it shades it and
+// writes name across it.
+func (d *Drawing) Finish(name string, fonts *Fonts) *image.RGBA {
+	shade(d.canvas)
+	write(d.canvas, name, d.wide, fonts)
+	return d.canvas
 }
 
 // cells divides bounds into the cells of n posters: for a poster, a 2 by 2

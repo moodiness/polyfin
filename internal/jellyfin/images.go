@@ -148,6 +148,10 @@ type imageCache struct {
 	undecodable *cache.Cache[pictureSum, struct{}]
 	decoded     atomic.Int64
 	decoding    atomic.Pointer[func(data []byte)]
+	// drawingBeside is memory counted beside each poster a generated image
+	// draws (see drawPosters): none, more in tests, so that small posters
+	// reach the memory of a picture.
+	drawingBeside int64
 
 	mu sync.Mutex
 	// memory holds the images in memory, most recently used first, by key;

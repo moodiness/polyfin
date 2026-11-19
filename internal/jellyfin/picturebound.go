@@ -29,8 +29,8 @@ import (
 // imageResizes) from before the decode until it lets the decoded picture
 // go, so that those places bound what is held at once: maxPictureMemory
 // for each, whether it resizes a picture, draws badges, a studio's plate
-// or a DLNA thumbnail, or draws the posters of a generated image, six at
-// most, which share the one budget.
+// or a DLNA thumbnail, or draws the posters of a generated image, one at
+// a time beside the drawing.
 
 const (
 	// maxDecodedPixels bounds the pictures decoded whatever they hold: a

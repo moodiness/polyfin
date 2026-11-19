@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/jpeg"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -103,11 +104,8 @@ const generatedFetches = 3
 // they came, six at most, each within the bound of a download; they are
 // decoded once the drawing has its place among the resizes, so that the
 // images drawn at once hold no more decoded posters than those places
-// allow. No place is held while downloading. The posters of one image
-// share one budget of memory (see maxPictureMemory): one that would take
-// the image past it, with those decoded before it, the drawing and the
-// scaler, is left out as one that is no picture. A studio's logo is
-// drawn on its plate (see studioLogoArtwork).
+// allow (see drawPosters). No place is held while downloading. A studio's
+// logo is drawn on its plate (see studioLogoArtwork).
 func (h *Handler) generatedArtwork(ctx context.Context, target string, g library.GeneratedImage, confined bool) (artwork, error) {
 	if g.Logo != "" {
 		return h.studioLogoArtwork(ctx, target, g)
@@ -138,35 +136,12 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 		_ = group.Wait()
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
-		posters := make([]image.Image, len(bodies))
-		width, height := int64(mosaic.PosterWidth), int64(mosaic.PosterHeight)
-		if g.Wide {
-			width, height = mosaic.WideWidth, mosaic.WideHeight
-		}
-		// held is what the posters decoded so far take, and scaler the
-		// most the scaler holds for one of them.
-		var held, scaler int64
-		for i, body := range bodies {
-			if body == nil {
-				continue
-			}
-			var cost pictureCost
-			decoded, _, err := h.decodePicture(body, func(p pictureCost) int64 {
-				cost = p
-				return held + max(p.decoding, p.decoded+4*width*height+max(scaler, p.fitting(width, height), encoding(width, height)))
-			})
-			if err == nil {
-				posters[i] = decoded
-				held += cost.decoded
-				scaler = max(scaler, cost.fitting(width, height))
-			}
-		}
 		var out bytes.Buffer
 		var drawing *image.RGBA
 		if g.Emblem != "" {
 			drawing = mosaic.DrawEmblem(g.Emblem)
 		} else {
-			drawing = mosaic.Draw(g.Name, posters, g.Wide, h.fonts.of(h.FontsDir))
+			drawing = h.drawPosters(g, bodies)
 		}
 		if err := jpeg.Encode(&out, drawing, &jpeg.Options{Quality: 88}); err != nil {
 			return artwork{}, downloadError{http.StatusInternalServerError, err}
@@ -181,4 +156,44 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 		return partial.image, nil
 	}
 	return drawn, err
+}
+
+// drawPosters draws the image of g from the posters downloaded, bodies,
+// nil for one missing: each is decoded, then scaled into its cell and let
+// go before the next is decoded, so that the drawing holds one decoded
+// poster at a time, within the memory of a picture (see
+// maxPictureMemory) beside the drawing. A poster that would hold more, or
+// that fails to decode, is left out as one that is no picture: the
+// posters within the bound by their header make the cells, and the image
+// shows the first of them it has cells for (see mosaic.Drawing.Shown).
+// It is drawn again without one that then fails to decode. The drawing is
+// encoded once its posters are let go: it and its encoding hold 20 bytes
+// for each of its pixels, 41 MB at most.
+func (h *Handler) drawPosters(g library.GeneratedImage, bodies [][]byte) *image.RGBA {
+	width, height := int64(mosaic.PosterWidth), int64(mosaic.PosterHeight)
+	if g.Wide {
+		width, height = mosaic.WideWidth, mosaic.WideHeight
+	}
+	held := func(p pictureCost) int64 {
+		return h.images.drawingBeside + 4*width*height + max(p.decoding, p.decoded+p.fitting(width, height))
+	}
+	var candidates [][]byte
+	for _, body := range bodies {
+		if body != nil && decodable(body, held) == nil {
+			candidates = append(candidates, body)
+		}
+	}
+again:
+	for {
+		drawing := mosaic.NewDrawing(len(candidates), g.Wide)
+		for i, body := range candidates[:drawing.Shown()] {
+			poster, _, err := h.decodePicture(body, held)
+			if err != nil {
+				candidates = slices.Delete(candidates, i, i+1)
+				continue again
+			}
+			drawing.Cover(i, poster)
+		}
+		return drawing.Finish(g.Name, h.fonts.of(h.FontsDir))
+	}
 }

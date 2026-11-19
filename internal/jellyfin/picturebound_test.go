@@ -492,8 +492,8 @@ func TestEveryPictureIsDecodedInAPlaceAmongTheResizes(t *testing.T) {
 }
 
 // Collections' images asked for at once decode their posters in their
-// places among the resizes: no more decoded posters are held at once than
-// those places times the posters of an image, however many images wait.
+// places among the resizes, one at a time: no more decoded posters are
+// held at once than those places, however many images wait.
 func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
@@ -526,7 +526,7 @@ func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) 
 	}
 
 	// Each decode waits for its image's gate, or for free. An image holds
-	// the posters it decoded from its first until its last is let through.
+	// one decoded poster from its first until its last is let through.
 	var mu sync.Mutex
 	var inside, held, high, unheld int
 	entered := make([]int, images)
@@ -546,7 +546,9 @@ func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) 
 		entered[n]++
 		last := entered[n] == tiles
 		inside++
-		held++
+		if entered[n] == 1 {
+			held++
+		}
 		high = max(high, held)
 		if inside > len(h.images.resizes) {
 			unheld++
@@ -561,7 +563,7 @@ func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) 
 		mu.Lock()
 		inside--
 		if last {
-			held -= tiles
+			held--
 		}
 		mu.Unlock()
 	}
@@ -607,8 +609,8 @@ func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) 
 	}
 	if !freed() {
 		mu.Lock()
-		if held != imageResizes*tiles || len(h.images.resizes) != imageResizes {
-			t.Errorf("%d decoded posters held in %d places, want %d in %d", held, len(h.images.resizes), imageResizes*tiles, imageResizes)
+		if held != imageResizes || len(h.images.resizes) != imageResizes {
+			t.Errorf("%d decoded posters held in %d places, want %d in %d", held, len(h.images.resizes), imageResizes, imageResizes)
 		}
 		mu.Unlock()
 	}
@@ -623,8 +625,8 @@ func TestImagesDrawnAtOnceHoldTheirDecodedPostersWithinTheResizes(t *testing.T) 
 	if unheld != 0 {
 		t.Errorf("%d posters decoded outside a place among the resizes", unheld)
 	}
-	if high != imageResizes*tiles {
-		t.Errorf("%d decoded posters held at once at most, want the %d of %d images", high, imageResizes*tiles, imageResizes)
+	if high != imageResizes {
+		t.Errorf("%d decoded posters held at once at most, want one for each of %d images", high, imageResizes)
 	}
 	for n, count := range entered {
 		if count != tiles {
@@ -910,27 +912,96 @@ func TestAPictureIsDecodedUpToTheMemoryOfAPictureAndNotAByteOver(t *testing.T) {
 	}
 }
 
-// The posters of a collection's image share the memory of a picture:
-// those that would take the image past it, with the ones decoded before
-// them, are left out and not decoded.
-func TestACollectionsImageHoldsItsPostersWithinTheMemoryOfAPicture(t *testing.T) {
-	t.Parallel()
+// generatedImage serves posters, by path, and returns the generated image
+// of collection, whose posters name those paths, drawn with beside counted
+// beside each poster, and the image mosaic draws from want, the posters
+// decoded beforehand.
+func generatedImage(t *testing.T, collection library.GeneratedImage, beside int64, posters map[string][]byte, want ...[]byte) (h *Handler, drawn, drawnAhead []byte) {
+	t.Helper()
 	s := newTestServer(t, 10)
-	// Each poster counts 64 MB decoded, a quarter of the memory of a
-	// picture, and the scaler and the drawing take half of it.
-	poster := flatPNG(t, 4000, 4000, false)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(poster)
+		_, _ = w.Write(posters[r.URL.Path])
 	}))
 	t.Cleanup(server.Close)
-	h := s.handler
+	for i, path := range collection.Posters {
+		collection.Posters[i] = server.URL + path
+	}
+	h = s.handler
 	h.images.open(h.imageDir(), h.Logger)
-	collection := library.GeneratedImage{Name: "Harbor", Posters: []string{server.URL + "/1.png", server.URL + "/2.png", server.URL + "/3.png", server.URL + "/4.png"}}
-	if _, err := h.generatedArtwork(t.Context(), collection.URL(), collection, false); err != nil {
+	h.images.drawingBeside = beside
+	generated, err := h.generatedArtwork(t.Context(), collection.URL(), collection, false)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := h.images.decoded.Load(); got != 2 {
-		t.Errorf("%d posters decoded, want the 2 that the memory of a picture holds", got)
+	var decoded []image.Image
+	for _, poster := range want {
+		picture, _, err := image.Decode(bytes.NewReader(poster))
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded = append(decoded, picture)
+	}
+	var ahead bytes.Buffer
+	if err := jpeg.Encode(&ahead, mosaic.Draw(collection.Name, decoded, collection.Wide, h.fonts.of(h.FontsDir)), &jpeg.Options{Quality: 88}); err != nil {
+		t.Fatal(err)
+	}
+	return h, generated.body, ahead.Bytes()
+}
+
+// The posters of a generated image are decoded and drawn one at a time,
+// each within the memory of a picture beside the drawing. Six covers of
+// 1,000 by 1,000, each counted 4 MB decoded and 35 MB to scale into its
+// cell, with 207 MB counted beside each, are all drawn, each once: held
+// together, as large covers were, the fifth and sixth would not fit.
+func TestAWideImageDrawsSixCoversOneAtATime(t *testing.T) {
+	t.Parallel()
+	cover := flatPNG(t, 1000, 1000, false)
+	collection := library.GeneratedImage{Name: "Harbor", Wide: true}
+	posters := map[string][]byte{}
+	for _, path := range []string{"/1.png", "/2.png", "/3.png", "/4.png", "/5.png", "/6.png"} {
+		collection.Posters = append(collection.Posters, path)
+		posters[path] = cover
+	}
+	h, drawn, want := generatedImage(t, collection, 207_000_000, posters, cover, cover, cover, cover, cover, cover)
+	if got := h.images.decoded.Load(); got != 6 {
+		t.Errorf("%d covers decoded, want 6", got)
+	}
+	if !bytes.Equal(drawn, want) {
+		t.Error("the image is not the one drawn from the six covers")
+	}
+}
+
+// A poster that fails to decode is left out of a generated image as one
+// that is no picture: the image is the one drawn from the others alone,
+// in the cells of two.
+func TestAPosterThatFailsToDecodeIsLeftOutOfAGeneratedImage(t *testing.T) {
+	t.Parallel()
+	poster := flatPNG(t, 600, 900, false)
+	collection := library.GeneratedImage{Name: "Harbor", Posters: []string{"/1.png", "/2.png", "/3.png"}}
+	posters := map[string][]byte{"/1.png": poster, "/2.png": flatPNG(t, 600, 900, true), "/3.png": poster}
+	_, drawn, want := generatedImage(t, collection, 0, posters, poster, poster)
+	if !bytes.Equal(drawn, want) {
+		t.Error("the image is not the one drawn from the two posters that decode")
+	}
+}
+
+// A wide image of five posters has cells for three: it shows the first
+// three, as before, and decodes no other.
+func TestAWideImageOfFivePostersDecodesTheThreeItShows(t *testing.T) {
+	t.Parallel()
+	poster := flatPNG(t, 600, 900, false)
+	collection := library.GeneratedImage{Name: "Harbor", Wide: true}
+	posters := map[string][]byte{}
+	for _, path := range []string{"/1.png", "/2.png", "/3.png", "/4.png", "/5.png"} {
+		collection.Posters = append(collection.Posters, path)
+		posters[path] = poster
+	}
+	h, drawn, want := generatedImage(t, collection, 0, posters, poster, poster, poster, poster, poster)
+	if got := h.images.decoded.Load(); got != 3 {
+		t.Errorf("%d posters decoded, want the 3 shown", got)
+	}
+	if !bytes.Equal(drawn, want) {
+		t.Error("the image is not the one drawn from the five posters")
 	}
 }

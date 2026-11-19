@@ -307,7 +307,7 @@ Polyfin draws these images (see [Library images](#library-images) and [Collectio
 - It keeps the image with the relayed artwork, in the cache folder's `images` folder. Apps asking for a smaller size get it resized, as other artwork is.
 - A poster its artwork server does not have is left out. One that cannot be downloaded for now is left out of the image served, which is drawn again at the next request.
 - A poster that is no JPEG, PNG or WebP picture, or one of more than 16.7 million pixels, is left out too.
-- The posters of one image hold 256 MiB of memory together at most, drawing included: posters of 2,000 by 3,000 pixels all fit, and of larger ones the last are left out, such as the fifth and sixth of six covers of 3,000 by 3,000.
+- Polyfin decodes and draws the posters of one image one at a time. Each, with the drawing, holds 256 MiB of memory at most, so six covers of 3,000 by 3,000 pixels are all drawn. A poster that would hold more on its own, as some progressive JPEGs of near 16.7 million pixels would, is left out, and so is one that fails to decode: the others then share the image.
 
 **When it changes:**
 
