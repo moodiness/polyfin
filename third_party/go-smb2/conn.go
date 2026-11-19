@@ -96,7 +96,7 @@ func (n *Negotiator) negotiate(ctx context.Context, t transport, a *account) (*c
 		account:             a,
 		rdone:               make(chan struct{}, 1),
 		wdone:               make(chan struct{}, 1),
-		write:               make(chan []byte, 1),
+		write:               make(chan outgoing, 1),
 		werr:                make(chan error, 1),
 	}
 
@@ -329,11 +329,11 @@ type conn struct {
 
 	rdone         chan struct{}
 	wdone         chan struct{}
-	write         chan []byte
-	werr          chan error
-	recvPool      sync.Pool // reusable receive buffers
-	encodeBuf     []byte    // retained request encoding buffer; reused under conn.m
-	compoundSizes []int     // retained sizes buffer for compound requests; reused under conn.m
+	write         chan outgoing
+	werr          chan error // the next write's result; replaced by abandon
+	recvPool      sync.Pool  // reusable receive buffers
+	encodeBuf     []byte     // retained request encoding buffer; reused under conn.m, replaced by abandon
+	compoundSizes []int      // retained sizes buffer for compound requests; reused under conn.m
 
 	m sync.Mutex
 
@@ -440,7 +440,7 @@ func (conn *conn) sendWith(ctx context.Context, req smb2.Packet, tc *treeConn, b
 	}
 
 	select {
-	case conn.write <- rr.pkt:
+	case conn.write <- outgoing{pkt: rr.pkt, done: conn.werr}:
 		select {
 		case err = <-conn.werr:
 			if err != nil {
@@ -451,6 +451,7 @@ func (conn *conn) sendWith(ctx context.Context, req smb2.Packet, tc *treeConn, b
 				return nil, &TransportError{err}
 			}
 		case <-ctx.Done():
+			conn.abandon()
 			if _, ok := conn.outstandingRequests.pop(rr.msgId); ok {
 				conn.refundCredits(rr.claimLoan())
 			}
@@ -661,7 +662,7 @@ func (conn *conn) sendCompound(ctx context.Context, entries []compoundEntry) ([]
 	}
 
 	select {
-	case conn.write <- wirePkt:
+	case conn.write <- outgoing{pkt: wirePkt, done: conn.werr}:
 		select {
 		case err := <-conn.werr:
 			if err != nil {
@@ -669,6 +670,7 @@ func (conn *conn) sendCompound(ctx context.Context, entries []compoundEntry) ([]
 				return nil, &TransportError{err}
 			}
 		case <-ctx.Done():
+			conn.abandon()
 			conn.refundCompound(rrs)
 			return nil, ctx.Err()
 		}
@@ -803,15 +805,37 @@ func (conn *conn) recv(rr *requestResponse) ([]byte, error) {
 	}
 }
 
+// outgoing is a packet for the sender to write, and the channel it tells
+// the write's result on.
+type outgoing struct {
+	pkt  []byte
+	done chan<- error
+}
+
+// abandon gives up, under conn.m, the packet of a request whose context
+// ended while the sender had it: the sender may still be writing it, and
+// will tell the result on the channel it was given. The next requests
+// encode into buffers of their own, so that the packet's bytes stay as
+// they are until written, and wait for their writes' results on a channel
+// of their own, so that none takes the abandoned write's result for its
+// own.
+func (conn *conn) abandon() {
+	conn.encodeBuf = nil
+	if s := conn.session.Load(); s != nil {
+		s.encryptBuf = nil
+	}
+	conn.werr = make(chan error, 1)
+}
+
 func (conn *conn) runSender() {
 	for {
 		select {
 		case <-conn.wdone:
 			return
-		case pkt := <-conn.write:
-			_, err := conn.t.Write(pkt)
+		case w := <-conn.write:
+			_, err := conn.t.Write(w.pkt)
 
-			conn.werr <- err
+			w.done <- err
 		}
 	}
 }
