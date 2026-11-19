@@ -31,6 +31,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/appimport"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -131,14 +132,16 @@ type Reader struct {
 // the default one: whoever closes the idle connections of
 // http.DefaultTransport, as httptest.Server.Close does, cannot break a
 // request whose answer without a body has just put its connection back
-// among the idle ones (#958). The confined client's is its own too.
+// among the idle ones (#958). The confined client's is its own too. Both
+// follow redirects by redirect's rule, which keeps the backend's key and
+// a password or refresh token from another host.
 func New(options Options) *Reader {
 	confined := options.Confined
 	if confined == nil {
 		confined = stremio.HTTPClient(true)
 	}
-	return &Reader{anime: options.Anime, version: options.Version, client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
-		confined: confined, timing: defaultTiming}
+	client := &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), CheckRedirect: redirect.Follow(redirect.Default)}
+	return &Reader{anime: options.Anime, version: options.Version, client: client, confined: confined, timing: defaultTiming}
 }
 
 // ParseBackend reads the address of a Nuvio backend as a user types it:
@@ -190,7 +193,7 @@ func (r *Reader) Read(ctx context.Context, address, email, password string, keep
 		return appimport.Account{}, err
 	}
 	var t token
-	switch err := s.send(ctx, http.MethodPost, "/auth/v1/token?grant_type=password", credentials, &t); {
+	switch err := s.send(redirect.SecretBody(ctx), http.MethodPost, "/auth/v1/token?grant_type=password", credentials, &t); {
 	case errors.Is(err, errRefused):
 		return appimport.Account{}, ErrSignInRefused
 	case err != nil:
@@ -277,7 +280,7 @@ func (s *session) refresh(ctx context.Context, refresh string) (token, error) {
 		return token{}, err
 	}
 	var t token
-	if err := s.send(ctx, http.MethodPost, "/auth/v1/token?grant_type=refresh_token", body, &t); err != nil {
+	if err := s.send(redirect.SecretBody(ctx), http.MethodPost, "/auth/v1/token?grant_type=refresh_token", body, &t); err != nil {
 		if errors.Is(err, errMissing) {
 			return token{}, ErrNotNuvio
 		}
@@ -419,9 +422,11 @@ func (s *session) send(ctx context.Context, method, path string, body []byte, in
 }
 
 // do sends one request, with the publishable key and the session's token
-// once known, in headers: never in the URL, which errors would hold.
+// once known, in headers: never in the URL, which errors would hold. A
+// redirect to another host is sent neither: Go's client keeps the token's
+// Authorization from it, and redirect the key.
 func (s *session) do(ctx context.Context, method, path string, body []byte) (int, http.Header, []byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.r.timing.request)
+	ctx, cancel := context.WithTimeout(redirect.SecretHeaders(ctx, "apikey"), s.r.timing.request)
 	defer cancel()
 	var content io.Reader
 	if body != nil {

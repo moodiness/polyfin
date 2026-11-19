@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 // The rules Last.fm sets for a scrobble, which ListenBrainz follows too: a
@@ -293,7 +294,8 @@ func lastFMSignature(params url.Values, secret string) string {
 
 // lastFM calls a method of Last.fm's API with params, signed with the API
 // account of settings: method GET for reads, POST, as a form, for writes,
-// which keeps the session key out of the address.
+// which keeps the session key out of the address. A write's form goes to
+// no other host a redirect names.
 func (s *Service) lastFM(ctx context.Context, settings accounts.Settings, method string, params url.Values) (reply, error) {
 	params.Set("api_key", settings.LastFMAPIKey)
 	params.Set("api_sig", lastFMSignature(params, settings.LastFMSecret))
@@ -307,7 +309,7 @@ func (s *Service) lastFM(ctx context.Context, settings accounts.Settings, method
 		header.Set("Content-Type", "application/x-www-form-urlencoded")
 		body = []byte(params.Encode())
 	}
-	return s.call(ctx, method, target, header, body)
+	return s.call(redirect.SecretBody(ctx), method, target, header, body)
 }
 
 // lastFMToken asks Last.fm for a request token, and returns the sign-in it

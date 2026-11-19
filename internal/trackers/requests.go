@@ -16,6 +16,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/pace"
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 // maxReply bounds the bytes read from a service.
@@ -58,14 +59,16 @@ func traktApp(settings accounts.Settings, body map[string]string) map[string]str
 
 // traktAuth posts body as JSON to Trakt's OAuth endpoint path, on the
 // host Trakt's spec names for every /oauth call (auth.trakt.tv, required
-// from February 2027), with its API's headers.
+// from February 2027), with its API's headers. The body, which holds the
+// app's secret, a code or a refresh token, goes to no other host a
+// redirect names.
 func (s *Service) traktAuth(ctx context.Context, settings accounts.Settings, path string, body map[string]string) (reply, error) {
 	header := http.Header{}
 	header.Set("trakt-api-key", settings.TraktClientID)
 	header.Set("trakt-api-version", "2")
 	header.Set("Content-Type", "application/json")
 	data, _ := json.Marshal(body)
-	return s.call(ctx, http.MethodPost, s.authURLs[Trakt]+path, header, data)
+	return s.call(redirect.SecretBody(ctx), http.MethodPost, s.authURLs[Trakt]+path, header, data)
 }
 
 // reply is a service's answer.
@@ -183,11 +186,13 @@ func (s *Service) writePace(service, token, method string) *pace.Pace {
 }
 
 // form sends a form to an OAuth endpoint of Simkl, which takes them so.
+// The form, which holds a code or a refresh token, goes to no other host
+// a redirect names.
 func (s *Service) form(ctx context.Context, path string, values url.Values) (reply, error) {
 	header := http.Header{}
 	header.Set("Content-Type", "application/x-www-form-urlencoded")
 	query := url.Values{"client_id": {values.Get("client_id")}, "app-name": {simklApp}, "app-version": {s.version}}
-	return s.call(ctx, http.MethodPost, s.urls[Simkl]+path+"?"+query.Encode(), header, []byte(values.Encode()))
+	return s.call(redirect.SecretBody(ctx), http.MethodPost, s.urls[Simkl]+path+"?"+query.Encode(), header, []byte(values.Encode()))
 }
 
 // outcome is what came of a send.

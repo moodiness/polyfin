@@ -49,6 +49,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/anime"
 	"github.com/moodiness/polyfin/internal/appimport"
+	"github.com/moodiness/polyfin/internal/redirect"
 	addon "github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -141,7 +142,9 @@ type pendingLink struct {
 
 // New returns a reader with options. Its transport is its own, a clone of
 // the default one: whoever closes the idle connections of
-// http.DefaultTransport cannot break its requests (#958).
+// http.DefaultTransport cannot break its requests (#958). It follows
+// redirects by redirect's rule, which keeps a password or an auth key
+// from another host.
 func New(options Options) *Reader {
 	api, link := DefaultAPI, DefaultLink
 	if options.API != "" {
@@ -151,7 +154,7 @@ func New(options Options) *Reader {
 		link = strings.TrimRight(options.Link, "/")
 	}
 	return &Reader{anime: options.Anime, metas: options.Metas, version: options.Version, api: api, link: link,
-		client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		client: &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), CheckRedirect: redirect.Follow(redirect.Default)},
 		timing: defaultTiming, now: time.Now, links: map[accounts.ID]*pendingLink{}}
 }
 
@@ -632,9 +635,10 @@ var errRefused = errors.New("refused")
 
 // call sends a request, a GET or a POST of body as JSON, and reads the
 // result Stremio answers into into. Auth keys go in bodies, never in the
-// address, which errors would hold.
+// address, which errors would hold, and a body goes to no other host a
+// redirect names.
 func (r *Reader) call(ctx context.Context, method, address string, body, into any) error {
-	ctx, cancel := context.WithTimeout(ctx, r.timing.request)
+	ctx, cancel := context.WithTimeout(redirect.SecretBody(ctx), r.timing.request)
 	defer cancel()
 	var content io.Reader
 	if body != nil {

@@ -189,6 +189,7 @@ Jellyfin apps cannot open the provider's page. They use Quick Connect: the app s
 - The discovery document must name the issuer set, exactly. Polyfin keeps it an hour, and the keys until a token needs another.
 - The redirect URI is built from the public address, and must be registered at the provider exactly as **Settings › Security** shows it.
 - An `http://` issuer is accepted for a local network provider, but sends the client secret, codes and tokens unencrypted: use HTTPS for the provider and public address (see [Identity provider](#identity-provider-settings)).
+- The token request, which holds the code, the verifier and, in the form, the client secret for some providers, goes to the token endpoint's host only, or to one of its subdomains: a 307 or 308 from there to another host fails the sign-in.
 - Each return from the provider counts toward the client's failed attempts as a password sign-in: a refused state, code or token counts as a wrong password. Once too many, the browser comes back with "Too many attempts". A return to a browser that began no sign-in there, or that a page of another site has the browser send, is refused and counts nothing.
 - Someone whose account is refused counts as no wrong guess.
 - No token, code, state or secret is logged or sent back.

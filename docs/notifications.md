@@ -75,6 +75,7 @@ Polyfin encrypts a target's secrets when the server has a `POLYFIN_SECRET_KEY`, 
 - A secret is never shown again: the list shows a webhook's or Discord address's host only.
 - A secret is never written to the log.
 - A secret that cannot be decrypted shows the target as **Enter it again**, and on **System › Health** under **Stored keys**.
+- A secret goes to its target's host only, or to one of its subdomains. A Gotify server that redirects to another host is sent the message there without its application token, and a Pushover message redirected with a 307 or 308 to another host is not sent there: a test says **redirected to another host**.
 - An email target's address, a Telegram chat and a Gotify server are not secrets, and are shown as they are.
 
 ### Target states

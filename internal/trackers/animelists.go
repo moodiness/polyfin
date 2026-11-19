@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/anime"
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 // AniList and MyAnimeList keep, for each user, a list of anime entries,
@@ -148,7 +149,7 @@ func (s *Service) Exchange(ctx context.Context, user accounts.ID, service, paste
 		header.Set("Content-Type", "application/json")
 		body, _ := json.Marshal(map[string]string{"grant_type": "authorization_code", "client_id": settings.AniListClientID,
 			"client_secret": settings.AniListClientSecret, "redirect_uri": anilistPIN, "code": code})
-		r, err = s.call(ctx, http.MethodPost, s.authURLs[AniList]+"/token", header, body)
+		r, err = s.call(redirect.SecretBody(ctx), http.MethodPost, s.authURLs[AniList]+"/token", header, body)
 	} else {
 		if p == nil || state != "" && state != p.state {
 			return Status{}, ErrInvalidCode
@@ -195,11 +196,12 @@ func (s *Service) Exchange(ctx context.Context, user accounts.ID, service, paste
 }
 
 // oauthForm sends a form to the OAuth endpoint of service that gives
-// tokens.
+// tokens. The form, which holds the app's secret and a code or a refresh
+// token, goes to no other host a redirect names.
 func (s *Service) oauthForm(ctx context.Context, service string, values url.Values) (reply, error) {
 	header := http.Header{}
 	header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return s.call(ctx, http.MethodPost, s.authURLs[service]+"/token", header, []byte(values.Encode()))
+	return s.call(redirect.SecretBody(ctx), http.MethodPost, s.authURLs[service]+"/token", header, []byte(values.Encode()))
 }
 
 // listAccount asks AniList or MyAnimeList the name of the account token

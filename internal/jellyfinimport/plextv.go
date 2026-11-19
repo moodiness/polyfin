@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -892,9 +893,10 @@ func (s *Service) plexSignOut(token string) {
 // with query, as token when there is one, naming Polyfin as Plex's apps
 // name themselves, and reads an answer of status 200 or 201 into into, in
 // JSON, or in XML for an xmlAnswer. It returns the answer's status, and
-// ErrPlexTVUnreachable when none came.
+// ErrPlexTVUnreachable when none came. The token goes to no other host a
+// redirect names.
 func (s *Service) plexTVDo(ctx context.Context, method, address string, query url.Values, token string, into any) (int, error) {
-	ctx, cancel := context.WithTimeout(ctx, s.timing.request)
+	ctx, cancel := context.WithTimeout(redirect.SecretHeaders(ctx, "X-Plex-Token"), s.timing.request)
 	defer cancel()
 	if len(query) > 0 {
 		address += "?" + query.Encode()

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/moodiness/polyfin/internal/redirect"
 )
 
 const (
@@ -193,7 +195,9 @@ func (c *Client) SignIn(ctx context.Context, cfg Config, code string, flow Flow)
 	if post {
 		form.Set("client_secret", cfg.ClientSecret)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, m.TokenEndpoint, strings.NewReader(form.Encode()))
+	// The form holds the code and the verifier, and the secret for some:
+	// it goes to no other host a redirect names.
+	request, err := http.NewRequestWithContext(redirect.SecretBody(ctx), http.MethodPost, m.TokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, ErrDiscovery
 	}

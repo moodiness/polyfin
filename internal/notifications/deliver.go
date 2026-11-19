@@ -16,6 +16,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/metrics"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -332,7 +333,7 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	if t.kind == Email {
 		return s.sendEmail(ctx, t, ev)
 	}
-	response, err := client.Do(request.WithContext(ctx))
+	response, err := client.Do(request.WithContext(withSecrets(ctx, t.kind)))
 	if err != nil {
 		return result{outcome: retry, err: describeError(err)}
 	}
@@ -358,6 +359,8 @@ func describeError(err error) string {
 	switch {
 	case errors.Is(err, stremio.ErrPrivateNetwork):
 		return "on a local network"
+	case errors.Is(err, redirect.ErrSecretBody):
+		return "redirected to another host"
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &timeout) && timeout.Timeout():
 		return "no answer in time"
 	}
@@ -656,4 +659,19 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Polyfin/"+s.version)
 	return request, nil
+}
+
+// withSecrets marks ctx with what the request to a target of kind holds for
+// the host it is sent to, which a redirect to another host is not given
+// (see redirect): Gotify's application token in its header, and a
+// Pushover user's key and app token in the body. Ntfy's token goes as
+// Authorization, which Go's client already keeps from another host.
+func withSecrets(ctx context.Context, kind string) context.Context {
+	switch kind {
+	case Gotify:
+		return redirect.SecretHeaders(ctx, "X-Gotify-Key")
+	case Pushover:
+		return redirect.SecretBody(ctx)
+	}
+	return ctx
 }

@@ -63,6 +63,7 @@ import (
 	"github.com/moodiness/polyfin/internal/importlinks"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playlists"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
 	"github.com/moodiness/polyfin/internal/watchlist"
@@ -250,7 +251,9 @@ type Service struct {
 // a clone of the default one: whoever closes the idle connections of
 // http.DefaultTransport, as httptest.Server.Close does, cannot break a
 // request whose answer without a body has just put its connection back
-// among the idle ones (#958). The confined client's is its own too.
+// among the idle ones (#958). The confined client's is its own too. Both
+// follow redirects by redirect's rule, which keeps a server's key from
+// another host.
 func New(options Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	device := options.PlexClient
@@ -271,7 +274,7 @@ func New(options Options) *Service {
 		playlists:   options.Playlists,
 		version:     options.Version,
 		logger:      options.Logger,
-		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), CheckRedirect: redirect.Follow(redirect.Default)},
 		confined:    confined,
 		timing:      defaultTiming,
 		now:         time.Now,

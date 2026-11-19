@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -157,12 +158,14 @@ func (c *client) send(ctx context.Context, method, path string, query url.Values
 // do sends one request, a POST of body as JSON when there is one. The key
 // goes in the header the server reads keys from, never in the URL, which
 // errors would hold: Authorization for Jellyfin, X-Emby-Token for Emby, and
-// X-Plex-Token for Plex, which is also told Polyfin's device. Without a
-// key, the header names Polyfin as the app and device signing in, as
-// Jellyfin's and Emby's apps do: a server missing the device may sign the
-// user out of every other device.
+// X-Plex-Token for Plex, which is also told Polyfin's device. A redirect
+// to another host is sent none of them: Go's client keeps Authorization
+// from it, and redirect the other two. Without a key, the header names
+// Polyfin as the app and device signing in, as Jellyfin's and Emby's apps
+// do: a server missing the device may sign the user out of every other
+// device.
 func (c *client) do(ctx context.Context, method, path string, query url.Values, body []byte) (int, http.Header, []byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.s.timing.request)
+	ctx, cancel := context.WithTimeout(redirect.SecretHeaders(ctx, "X-Emby-Token", "X-Plex-Token"), c.s.timing.request)
 	defer cancel()
 	target := c.address + path
 	if len(query) > 0 {
@@ -229,7 +232,8 @@ func (c *client) signIn(ctx context.Context, name, password string) (string, err
 		}
 		AccessToken string
 	}
-	err = c.send(ctx, http.MethodPost, "/Users/AuthenticateByName", nil, body, &signed)
+	// The password goes to no other host a 307 or 308 names.
+	err = c.send(redirect.SecretBody(ctx), http.MethodPost, "/Users/AuthenticateByName", nil, body, &signed)
 	switch {
 	case errors.Is(err, ErrKeyRefused):
 		return "", ErrSignInRefused

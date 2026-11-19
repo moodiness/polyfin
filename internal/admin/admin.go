@@ -38,6 +38,7 @@ import (
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/recordings"
+	"github.com/moodiness/polyfin/internal/redirect"
 	"github.com/moodiness/polyfin/internal/reminders"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/tasks"
@@ -315,8 +316,11 @@ func New(options Options) http.Handler {
 	h.actions.last = map[string]time.Time{"restart": h.Health.Started}
 	// The identity provider's client has a transport of its own, a clone
 	// of the default one: whoever closes the idle connections of
-	// http.DefaultTransport cannot break a sign-in (#958).
-	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout}, h.now)
+	// http.DefaultTransport cannot break a sign-in (#958). It follows
+	// redirects by redirect's rule, which keeps the token request's form
+	// from another host.
+	h.provider = oidc.New(&http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone(), Timeout: providerTimeout,
+		CheckRedirect: redirect.Follow(redirect.Default)}, h.now)
 	// A sign-in waiting for its second step ends with the account's
 	// sessions when the account is signed out everywhere.
 	options.Accounts.OnSignOutEverywhere(h.steps.forget)
