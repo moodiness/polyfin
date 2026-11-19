@@ -1,6 +1,7 @@
 package localfiles
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -498,5 +499,71 @@ func TestAnSFTPServerOfOneSessionIsListedAsBefore(t *testing.T) {
 	}
 	if asked, told := server.asked.Load(), told.Load(); asked != 4 || told != 2 {
 		t.Fatalf("%d sessions asked for, the server told %d times; want 4, twice", asked, told)
+	}
+}
+
+// An SFTP server that opens a second session on a connection and never
+// answers it is listed as one that opens none, once the session's opening
+// is past its time: through the session files are read over, without
+// asking for the second session again on the same connection. A session
+// whose opening completes past its time is closed.
+func TestAnSFTPServerLeavingTheSecondSessionUnansweredIsListedAsBefore(t *testing.T) {
+	t.Parallel()
+	if sftpOpenTimeout >= listTimeout/2 {
+		t.Fatalf("the listing session opens within %v, want well under the %v of a listing", sftpOpenTimeout, listTimeout)
+	}
+	for _, c := range []struct {
+		name, silent string
+		late         bool
+	}{
+		{name: "the subsystem unanswered", silent: "subsystem"},
+		{name: "the version unanswered", silent: "version"},
+		{name: "the subsystem answered late", silent: "subsystem", late: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			folder := &sftpListing{holds: 300, name: func(i int) string { return fmt.Sprintf("Movie %06d (2020).mkv", i) }}
+			handlers := sftp.InMemHandler()
+			handlers.FileList = folder
+			fake := &fakeSFTP{user: "reader", password: "pass phrase", handlers: &handlers, silent: c.silent}
+			if c.late {
+				fake.late, fake.ended = make(chan struct{}), make(chan struct{}, 1)
+			}
+			server := serveFakeSFTP(t, fake)
+			var told atomic.Int32
+			keys := hostKeys{single: func(string) { told.Add(1) }}
+			r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, keys,
+				slog.New(slog.DiscardHandler))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(r.close)
+			share := r.(*sftpShare)
+			if share.openTimeout != sftpOpenTimeout {
+				t.Fatalf("the listing session opens within %v, want %v", share.openTimeout, sftpOpenTimeout)
+			}
+			share.openTimeout = 50 * time.Millisecond
+			// The listing's own time ends a listing left waiting on the
+			// session's opening.
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			for range 2 {
+				entries, err := share.list(ctx, "")
+				if err != nil || len(entries) != 300 {
+					t.Fatalf("%d entries listed, %v; want 300", len(entries), err)
+				}
+			}
+			if asked, told := server.asked.Load(), told.Load(); asked != 2 || told != 1 {
+				t.Fatalf("%d sessions asked for, the server told %d times; want 2, once", asked, told)
+			}
+			if c.late {
+				close(fake.late)
+				select {
+				case <-fake.ended:
+				case <-ctx.Done():
+					t.Fatal("the session opened past its time was left open")
+				}
+			}
+		})
 	}
 }

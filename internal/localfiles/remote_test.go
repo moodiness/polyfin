@@ -205,12 +205,19 @@ func (f *fakeS3) readRanges() []string {
 // offered when it got them. With handlers set, it serves theirs instead.
 // With sessions set, it opens that many sessions on a connection at most,
 // and refuses the others; asked counts the sessions it was asked for.
+// With silent set, it opens the sessions after the first and never
+// answers them: neither the request for the subsystem when silent is
+// "subsystem", nor the SFTP version when it is "version". With late set
+// too, the request for the subsystem is answered once late is closed,
+// the session then served, and ended sent to once it ends.
 type fakeSFTP struct {
 	addr           string
 	user, password string
 	authorized     ssh.PublicKey
 	handlers       *sftp.Handlers
 	sessions       int
+	silent         string
+	late, ended    chan struct{}
 	asked          atomic.Int32
 
 	mu       sync.Mutex
@@ -326,12 +333,27 @@ func (f *fakeSFTP) serve(conn net.Conn, hostKey ssh.Signer) {
 		if err != nil {
 			continue
 		}
+		silent := opened > 1 && f.silent != ""
 		go func() {
 			for ask := range asked {
+				if silent && f.silent == "subsystem" {
+					if f.late == nil {
+						continue
+					}
+					<-f.late
+				}
 				ok := ask.Type == "subsystem" && len(ask.Payload) > 4 && string(ask.Payload[4:]) == "sftp"
 				_ = ask.Reply(ok, nil)
+				if ok && silent && f.silent == "version" {
+					// What the client sends is read, and never answered.
+					_, _ = io.Copy(io.Discard, channel)
+					return
+				}
 				if ok {
 					f.subsystem(channel)
+					if silent {
+						f.ended <- struct{}{}
+					}
 					return
 				}
 			}

@@ -53,6 +53,13 @@ const (
 // servers bound theirs.
 const sftpMaxPacket = 256 << 10
 
+// sftpOpenTimeout bounds the opening of the channel for listings: the
+// channel, the request for the subsystem and the SFTP version, fewer
+// round trips than signing in, which connectTimeout bounds. It is well
+// under a listing's listTimeout, so that a server that leaves the channel
+// unanswered is still listed through the client's, in the time left.
+const sftpOpenTimeout = connectTimeout
+
 // sftpLister lists the folders of an SFTP server over a channel of the
 // connection of its own, beside the one files are read over. The client
 // reading files gives a folder's entries only once it read all of them;
@@ -80,7 +87,9 @@ type sftpListEntry struct {
 	modified time.Time
 }
 
-// openSFTPLister opens a channel of conn for listings, beside client's.
+// openSFTPLister opens a channel of conn for listings, beside client's. It
+// waits on the server's answers as long as the connection lasts; see
+// sftpShare.openLister for its time.
 func openSFTPLister(conn *ssh.Client, client *sftp.Client) (*sftpLister, error) {
 	session, err := conn.NewSession()
 	if err != nil {

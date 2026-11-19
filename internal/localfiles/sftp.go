@@ -36,6 +36,9 @@ type sftpShare struct {
 	// bounds bound what is read and kept of one folder's listing, answer
 	// being the bytes of all the answers listing it.
 	bounds listBounds
+	// openTimeout bounds the opening of the channel for listings (see
+	// sftpOpenTimeout).
+	openTimeout time.Duration
 	// logger logs a panic of the SSH client waiting on the connection,
 	// which nothing stands above (see connect).
 	logger *slog.Logger
@@ -60,6 +63,10 @@ type sftpShare struct {
 // listings (see sftpShare.listed).
 var errSingleSession = errors.New("the SFTP server opens no second session")
 
+// errOpenLate is a channel for listings the server did not open within
+// its time (see sftpShare.openLister).
+var errOpenLate = errors.New("the SFTP server did not open the session for listings in time")
+
 func newSFTP(u *url.URL, access shareAccess, keys hostKeys, logger *slog.Logger) (*sftpShare, error) {
 	host := u.Host
 	if u.Port() == "" {
@@ -69,7 +76,8 @@ func newSFTP(u *url.URL, access shareAccess, keys hostKeys, logger *slog.Logger)
 	if folder == "" {
 		folder = "/"
 	}
-	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved, bounds: folderBounds, logger: logger}
+	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved, bounds: folderBounds, openTimeout: sftpOpenTimeout,
+		logger: logger}
 	var auth []ssh.AuthMethod
 	if access.privateKey != "" {
 		signer, err := parsePrivateKey(access.privateKey, access.passphrase)
@@ -249,9 +257,10 @@ func (s *sftpShare) close() {
 // do runs a request over the connection, connecting first. A request the
 // connection failed under, as once the server restarted, is run again
 // once over a new connection. The request reads the server's answers in
-// the caller's goroutine, a scan's or a request's: a panic of what reads
-// them, the SSH and SFTP clients or the listing's own reader (see
-// sftpLister), fails the request (see panicked).
+// the caller's goroutine, a scan's or a request's, but for the opening of
+// the channel for listings (see openLister): a panic of what reads them,
+// the SSH and SFTP clients or the listing's own reader (see sftpLister),
+// fails the request (see panicked).
 func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) error) (err error) {
 	var client *sftp.Client
 	defer func() {
@@ -376,7 +385,8 @@ func (s *sftpShare) list(ctx context.Context, rel string) ([]remoteEntry, error)
 
 // listed lists the folder at dir over the connection client is on, as
 // each entry comes (see sftpLister): errSingleSession when its server
-// opens no channel for listings, which is tried once a connection.
+// opens no channel for listings, or none within s.openTimeout, which is
+// tried once a connection.
 func (s *sftpShare) listed(ctx context.Context, client *sftp.Client, dir string, each func(entry sftpListEntry) error) error {
 	s.listing.Lock()
 	defer s.listing.Unlock()
@@ -395,10 +405,11 @@ func (s *sftpShare) listed(ctx context.Context, client *sftp.Client, dir string,
 		if !open {
 			return errors.New("the connection closed")
 		}
-		lister, err := openSFTPLister(conn, client)
+		lister, err := s.openLister(ctx, conn, client)
 		if err != nil {
 			// A server that still answers over the client's channel
-			// refused the one for listings, or ended it at once.
+			// refused the one for listings, ended it at once, or left it
+			// unanswered.
 			if _, alive := client.Getwd(); alive != nil || ctx.Err() != nil {
 				return err
 			}
@@ -421,6 +432,53 @@ func (s *sftpShare) listed(ctx context.Context, client *sftp.Client, dir string,
 		s.lister = nil
 	}
 	return err
+}
+
+// openLister opens the channel of conn for listings, beside client's (see
+// openSFTPLister), within s.openTimeout: errOpenLate past it. Closing a
+// channel whose server leaves a request unanswered does not end the wait
+// for the answer; only the connection's end does. So the channel is opened
+// in a goroutine of its own, which closes it when it opens after the
+// caller left, and ends with the connection when it never opens. A panic
+// there is logged with its stack and drops the connection, as one in a
+// request does (see do).
+func (s *sftpShare) openLister(ctx context.Context, conn *ssh.Client, client *sftp.Client) (*sftpLister, error) {
+	type opening struct {
+		lister *sftpLister
+		err    error
+	}
+	opened, left := make(chan opening), make(chan struct{})
+	go func() {
+		var o opening
+		defer func() {
+			if cause := recover(); cause != nil {
+				s.drop(client)
+				s.logger.Error("A network share's request ended on a panic", "host", s.host, "panic", fmt.Sprint(cause),
+					"stack", string(debug.Stack()))
+				o = opening{err: fmt.Errorf("the opening of the session for listings ended on a panic: %v", cause)}
+			}
+			select {
+			case opened <- o:
+			case <-left:
+				if o.lister != nil {
+					o.lister.close()
+				}
+			}
+		}()
+		o.lister, o.err = openSFTPLister(conn, client)
+	}()
+	timer := time.NewTimer(s.openTimeout)
+	defer timer.Stop()
+	select {
+	case o := <-opened:
+		return o.lister, o.err
+	case <-timer.C:
+		close(left)
+		return nil, errOpenLate
+	case <-ctx.Done():
+		close(left)
+		return nil, ctx.Err()
+	}
 }
 
 // readDir lists the folder at dir through client, which reads all of its
