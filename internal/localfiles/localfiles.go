@@ -429,12 +429,15 @@ type Folder struct {
 	// has a private key and a passphrase stored, never them; HostKey is
 	// the fingerprint of the host key saved at its first connection, and
 	// OfferedHostKey that of another one its server offered since, which
-	// refuses it until an administrator accepts it. PollMinutes is how
-	// often the folder is listed again for changes, 0 only at its scans,
-	// nil for a folder whose kind has no such setting.
+	// refuses it until an administrator accepts it. HostKeyForgotten tells
+	// a folder moved to another server since: the key it offers is shown
+	// as OfferedHostKey, not saved. PollMinutes is how often the folder is
+	// listed again for changes, 0 only at its scans, nil for a folder
+	// whose kind has no such setting.
 	Endpoint, Region, Remote     string
 	PrivateKeySet, PassphraseSet bool
 	HostKey, OfferedHostKey      string
+	HostKeyForgotten             bool
 	PollMinutes                  *int
 	// SearchFailed counts the files left unmatched as their titles'
 	// searches failed, SearchAddon and SearchFailure telling the addon
@@ -676,7 +679,8 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	moved := location != current.Addon.ManifestURL
 	retyped := kind != current.Kind
 	credentials := user != current.User || changes.Password != nil || !extra.same(stored) || changes.AcceptHostKey != ""
-	// A folder on another server forgets the host key of the former.
+	// A folder on another server forgets the host key of the former, and
+	// saves none of the new one without its acceptance.
 	rehosted := serverOf(location) != serverOf(current.Addon.ManifestURL)
 	release := func() {}
 	if moved || retyped {
@@ -719,7 +723,8 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 				if offered == "" || Fingerprint(offered) != changes.AcceptHostKey {
 					return ErrOfferedKeyChanged
 				}
-				if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_host_key = $2, share_offered_key = '' WHERE addon_id = $1", id,
+				if _, err := tx.Exec(ctx, `UPDATE local_folders SET share_host_key = $2, share_offered_key = '', share_host_key_forgotten = false
+					WHERE addon_id = $1`, id,
 					offered); err != nil {
 					return err
 				}
@@ -731,7 +736,8 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 			}
 		}
 		if rehosted {
-			if _, err := tx.Exec(ctx, "UPDATE local_folders SET share_host_key = '', share_offered_key = '' WHERE addon_id = $1", id); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE local_folders SET share_host_key = '', share_offered_key = '', share_host_key_forgotten = true
+				WHERE addon_id = $1`, id); err != nil {
 				return err
 			}
 		}
@@ -812,7 +818,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	var password, hostKey, offeredKey string
 	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras,
 			share_endpoint, share_region, share_remote, share_private_key <> '', share_passphrase <> '', share_host_key, share_offered_key,
-			poll_minutes, search_retry_at, search_retries,
+			share_host_key_forgotten, poll_minutes, search_retry_at, search_retries,
 			(SELECT count(*) FROM local_extras WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1) + (SELECT count(*) FROM local_tracks WHERE addon_id = $1),
 			(SELECT count(*) FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL) +
@@ -823,7 +829,7 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL),
 			`+unlistedCount+`
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
-		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey,
+		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey, &f.HostKeyForgotten,
 		&f.PollMinutes, &f.SearchRetryAt, &f.SearchRetries, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured,
 		&f.Unlisted)
 	f.PasswordSet = password != ""

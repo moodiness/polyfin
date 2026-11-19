@@ -327,6 +327,7 @@ const sources: typeof en = {
     hostKeyHint:
       'Enregistrée à la première connexion. Polyfin refuse le serveur quand il en présente une autre.',
     hostKeyNone: 'Enregistrée à la première connexion',
+    hostKeyForgotten: 'Affichée à la prochaine connexion, à accepter',
     hostKeyOffered: (fingerprint: string) =>
       `Le serveur présente désormais une autre clé d’hôte, ${fingerprint}, et Polyfin la refuse. Acceptez-la seulement si le serveur a été réinstallé ou si sa clé a été changée volontairement.`,
     acceptHostKey: 'Accepter la nouvelle clé',

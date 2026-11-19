@@ -142,7 +142,9 @@ func Fingerprint(key string) string {
 }
 
 // connect returns the connection open, connecting first when there is
-// none. The first connection saves the host key the server offers.
+// none. The first connection saves the host key the server offers, unless
+// the folder moved to another server since its key was saved: that key is
+// refused, and kept to be accepted, as another key than the one saved is.
 func (s *sftpShare) connect(ctx context.Context) (*sftp.Client, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -154,6 +156,10 @@ func (s *sftpShare) connect(ctx context.Context) (*sftp.Client, error) {
 	config.HostKeyCallback = func(_ string, _ net.Addr, key ssh.PublicKey) error {
 		line := authorizedKey(key)
 		if s.saved == "" {
+			if s.keys.forgotten {
+				offered = line
+				return errShareHostKey
+			}
 			first = line
 			return nil
 		}

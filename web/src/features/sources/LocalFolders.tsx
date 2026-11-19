@@ -800,9 +800,15 @@ function HostKey({ folder, addonId }: { folder: LocalFolder; addonId: string }) 
   return (
     <Field label={text.hostKey} help={text.hostKeyHint}>
       <div className="flex flex-col gap-3">
-        <code className="font-mono text-small break-all text-ink-2">
-          {folder.hostKey === '' ? text.hostKeyNone : folder.hostKey}
-        </code>
+        {folder.hostKey !== '' ? (
+          <code className="font-mono text-small break-all text-ink-2">{folder.hostKey}</code>
+        ) : (
+          folder.offeredHostKey === '' && (
+            <p className="text-small text-ink-2">
+              {folder.hostKeyForgotten ? text.hostKeyForgotten : text.hostKeyNone}
+            </p>
+          )
+        )}
         {folder.offeredHostKey !== '' && (
           <Notice tone="danger">
             {/* The fingerprint is one long word: it wraps, so that it shows whole to compare. */}

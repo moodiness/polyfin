@@ -320,6 +320,7 @@ const sources = {
     hostKeyHint:
       'Saved at the first connection. Polyfin refuses the server when it offers another one.',
     hostKeyNone: 'Saved at the first connection',
+    hostKeyForgotten: 'Shown at the next connection, to accept',
     hostKeyOffered: (fingerprint: string) =>
       `The server now offers another host key, ${fingerprint}, and Polyfin refuses it. Accept it only if the server was reinstalled or its key was changed on purpose.`,
     acceptHostKey: 'Accept the new key',

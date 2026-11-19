@@ -1248,9 +1248,12 @@ export type LocalFolder = {
   /**
    * The SHA-256 fingerprint of the SFTP server's host key saved at the first connection, and of
    * another one it offers since, which Polyfin refuses until it is accepted; '' for none.
+   * `hostKeyForgotten` tells a folder moved to another server since: the key it offers is shown
+   * as `offeredHostKey`, to accept, not saved.
    */
   hostKey: string
   offeredHostKey: string
+  hostKeyForgotten: boolean
   /**
    * How often an S3 bucket, an SFTP folder or an rclone remote is listed again for changes, in
    * minutes, 0 only at its scans; null for the other folders.

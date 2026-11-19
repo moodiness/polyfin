@@ -56,16 +56,19 @@ type folderJSON struct {
 	// An S3 bucket's endpoint and region, an rclone remote's name,
 	// whether an SFTP folder has a private key and a passphrase stored,
 	// never them, the fingerprints of the host key saved and of another
-	// its server offered since, and how often the folder is listed again,
-	// 0 only at its scans, null for the other folders.
-	Endpoint       string `json:"endpoint"`
-	Region         string `json:"region"`
-	RcloneRemote   string `json:"rcloneRemote"`
-	PrivateKeySet  bool   `json:"privateKeySet"`
-	PassphraseSet  bool   `json:"passphraseSet"`
-	HostKey        string `json:"hostKey"`
-	OfferedHostKey string `json:"offeredHostKey"`
-	PollMinutes    *int   `json:"pollMinutes"`
+	// its server offered since, whether the folder moved to another server
+	// since its key was saved, so that the next key is shown rather than
+	// saved, and how often the folder is listed again, 0 only at its
+	// scans, null for the other folders.
+	Endpoint         string `json:"endpoint"`
+	Region           string `json:"region"`
+	RcloneRemote     string `json:"rcloneRemote"`
+	PrivateKeySet    bool   `json:"privateKeySet"`
+	PassphraseSet    bool   `json:"passphraseSet"`
+	HostKey          string `json:"hostKey"`
+	OfferedHostKey   string `json:"offeredHostKey"`
+	HostKeyForgotten bool   `json:"hostKeyForgotten"`
+	PollMinutes      *int   `json:"pollMinutes"`
 	// SearchFailed counts the files left unmatched as their titles'
 	// searches failed, searchFailure tells the addon that failed most of
 	// them and why (null when none did), and searchRetryAt when the folder
@@ -170,7 +173,7 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		DatedBy: datedByJSON{NFO: f.Dated.NFO, Created: f.Dated.Created, File: f.Dated.File},
 		Links:   links, Episodes: episodes, UseArtwork: f.UseArtwork, ReadExtras: f.ReadExtras, Extras: f.Extras,
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
-		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, PollMinutes: f.PollMinutes,
+		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, HostKeyForgotten: f.HostKeyForgotten, PollMinutes: f.PollMinutes,
 		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
 		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute, UnmappedEpisodes: f.Unmapped}
 }

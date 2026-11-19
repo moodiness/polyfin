@@ -356,14 +356,17 @@ type shareAccess struct {
 // hostKeys keeps an SFTP server's host key: saved is the one saved,
 // empty before the first connection, save saves the one the first
 // connection was offered, and offered tells the one a server offers in
-// place of the one saved, which an administrator may accept. single
-// tells, once a connection, of a server at host that opens no session
-// for listings beside the one files are read over (see sftpShare.list).
+// place of the one saved, which an administrator may accept. forgotten
+// tells a folder moved to another server since its key was saved: no key
+// is saved without being accepted. single tells, once a connection, of a
+// server at host that opens no session for listings beside the one files
+// are read over (see sftpShare.list).
 type hostKeys struct {
-	saved   string
-	save    func(key string)
-	offered func(key string)
-	single  func(host string)
+	saved     string
+	forgotten bool
+	save      func(key string)
+	offered   func(key string)
+	single    func(host string)
 }
 
 // newRemote returns the reader of a share; it connects when first used.
@@ -467,9 +470,9 @@ func (s *Service) folderRemote(ctx context.Context, id accounts.ID, address, use
 	var keys hostKeys
 	if cachedKind(shareKind(address)) {
 		var sealedKey, sealedPassphrase string
-		err := s.db.QueryRow(ctx, `SELECT share_endpoint, share_region, share_remote, share_private_key, share_passphrase, share_host_key
-			FROM local_folders WHERE addon_id = $1`, id).Scan(&access.endpoint, &access.region, &access.remote, &sealedKey, &sealedPassphrase,
-			&keys.saved)
+		err := s.db.QueryRow(ctx, `SELECT share_endpoint, share_region, share_remote, share_private_key, share_passphrase, share_host_key,
+			share_host_key_forgotten FROM local_folders WHERE addon_id = $1`, id).Scan(&access.endpoint, &access.region, &access.remote,
+			&sealedKey, &sealedPassphrase, &keys.saved, &keys.forgotten)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fs.ErrNotExist
 		}
@@ -493,24 +496,27 @@ func (s *Service) folderRemote(ctx context.Context, id accounts.ID, address, use
 }
 
 // saveHostKey saves the host key an SFTP server offered at its folder's
-// first connection, unless one was saved meanwhile.
+// first connection, unless one was saved meanwhile, or the folder moved
+// since.
 func (s *Service) saveHostKey(id accounts.ID, address, key string) {
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 	if _, err := s.db.Exec(ctx, `UPDATE local_folders SET share_host_key = $3, share_offered_key = '' FROM addons a
-		WHERE addon_id = $1 AND a.id = addon_id AND a.manifest_url = $2 AND share_host_key = ''`, id, address, key); err != nil {
+		WHERE addon_id = $1 AND a.id = addon_id AND a.manifest_url = $2 AND share_host_key = '' AND NOT share_host_key_forgotten`,
+		id, address, key); err != nil {
 		s.logger.Warn("The host key of an SFTP folder could not be saved", "address", address, "error", err)
 	}
 }
 
 // offerHostKey keeps the host key an SFTP server offers in place of the
-// one saved, which an administrator may accept (see Changes.AcceptHostKey).
+// one saved, or after the folder moved to it, which an administrator may
+// accept (see Changes.AcceptHostKey).
 func (s *Service) offerHostKey(id accounts.ID, address, key string) {
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 	if _, err := s.db.Exec(ctx, `UPDATE local_folders SET share_offered_key = $3 FROM addons a
-		WHERE addon_id = $1 AND a.id = addon_id AND a.manifest_url = $2 AND share_host_key <> '' AND share_host_key <> $3`, id, address,
-		key); err != nil {
+		WHERE addon_id = $1 AND a.id = addon_id AND a.manifest_url = $2 AND (share_host_key <> '' OR share_host_key_forgotten)
+		AND share_host_key <> $3`, id, address, key); err != nil {
 		s.logger.Warn("The new host key of an SFTP folder could not be kept", "address", address, "error", err)
 	}
 }

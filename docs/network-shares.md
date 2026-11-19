@@ -98,7 +98,13 @@ Accept it only when the server was reinstalled or its key changed on purpose, af
 
 When the server has offered yet another key by the time you accept, nothing is accepted and the saved key stays. The page says so and shows the fingerprint now offered, to compare again.
 
-A folder moved to another server forgets the former server's key.
+A folder moved to another server, or another port, forgets the former server's key, and saves none of the new server's without your acceptance:
+
+- the new server's key is refused before the password or the private key is sent, and the folder fails with `host_key_changed` and keeps no file;
+- until the first connection, **Edit the folder** says the key will be shown at the next connection;
+- then it shows the key's fingerprint, with **Accept the new key**, as above.
+
+SFTP folders that had no saved key when Polyfin was updated to 0.84.0 are treated the same way at their next connection, as Polyfin cannot tell whether they moved since their last one. A folder added since saves its first key, as before.
 
 ## Performance
 

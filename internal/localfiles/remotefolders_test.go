@@ -723,9 +723,13 @@ func TestStoredSecretsStayWithTheirServer(t *testing.T) {
 	if folder := update(sftpFolder, Changes{Path: &address}); folder.PrivateKeySet || folder.PassphraseSet {
 		t.Errorf("a folder moved to another server: %+v", folder)
 	}
-	if folder := update(sftpFolder, Changes{PrivateKey: &key, Passphrase: new("pass phrase")}); !folder.PrivateKeySet || folder.Error != "" ||
-		folder.Files != 1 {
-		t.Errorf("the key given again: %+v", folder)
+	// The moved folder's new server shows its host key, to accept.
+	folder := update(sftpFolder, Changes{PrivateKey: &key, Passphrase: new("pass phrase")})
+	if !folder.PrivateKeySet || folder.Error != errHostKey || folder.OfferedHostKey == "" {
+		t.Fatalf("the key given again: %+v", folder)
+	}
+	if folder := update(sftpFolder, Changes{AcceptHostKey: folder.OfferedHostKey}); folder.Error != "" || folder.Files != 1 {
+		t.Errorf("the host key accepted: %+v", folder)
 	}
 }
 
@@ -771,5 +775,57 @@ func TestFolderChangesRetryItsVersions(t *testing.T) {
 		if want := []accounts.ID{addon.ID}; c.retried != slices.Equal(retried, want) || !c.retried && retried != nil {
 			t.Errorf("%s: retried %v", c.name, retried)
 		}
+	}
+}
+
+// A folder moved to another SFTP server saves none of its keys unseen: the
+// key the new server offers is refused before the password is sent, shown,
+// and saved only once accepted by its fingerprint.
+func TestAMovedFoldersHostKeyIsShownBeforeItIsSaved(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "movies", "Nosferatu (1922).mkv"), 10)
+	const password = "pass phrase"
+	first := serveSFTP(t, "reader", password, nil)
+	moved := serveSFTP(t, "reader", password, nil)
+	path := sftpPath(filepath.Join(dir, "movies"))
+	addon, err := e.service.Add(t.Context(), NewFolder{Name: "Server", Path: "sftp://" + first.addr + path, Kind: KindMovies, User: "reader",
+		Password: password})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	if folder, err := e.service.Folder(t.Context(), addon.ID); err != nil || folder.Error != "" || folder.HostKey == "" || folder.HostKeyForgotten {
+		t.Fatalf("first connection: %+v %v", folder, err)
+	}
+
+	// The password goes only to the server it was given for: it is given
+	// again with the new one.
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{Path: new("sftp://" + moved.addr + path), Password: new(password)}); err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	moved.mu.Lock()
+	shown := ssh.FingerprintSHA256(moved.hostKey.PublicKey())
+	moved.mu.Unlock()
+	folder, err := e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != errHostKey || folder.HostKey != "" || folder.OfferedHostKey != shown || !folder.HostKeyForgotten {
+		t.Fatalf("moved: %+v %v", folder, err)
+	}
+	if got := moved.sentTo(shown); len(got) != 0 {
+		t.Errorf("a key that was not accepted was sent %q", got)
+	}
+
+	if _, err := e.service.Update(t.Context(), addon.ID, Changes{AcceptHostKey: shown}); err != nil {
+		t.Fatal(err)
+	}
+	e.idle(addon.ID)
+	folder, err = e.service.Folder(t.Context(), addon.ID)
+	if err != nil || folder.Error != "" || folder.Files != 1 || folder.HostKey != shown || folder.OfferedHostKey != "" || folder.HostKeyForgotten {
+		t.Errorf("the host key accepted: %+v %v", folder, err)
+	}
+	if got := moved.sentTo(shown); len(got) == 0 {
+		t.Error("the key accepted was sent no password")
 	}
 }
