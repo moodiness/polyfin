@@ -56,6 +56,14 @@ const (
 	// decodes to is smaller (see stremio.MaxMetas).
 	keptBytes   = 96 << 20
 	searchBytes = 24 << 20
+	// pageReadsAtOnce bounds the catalog pages read from the database at
+	// once, across listings, under the connections of the database's pool
+	// (10): a listing that reads many catalogs, catalogFetches at a time,
+	// then waits for a place here rather than for a connection, and leaves
+	// four connections at least to the health checks, the stream lists
+	// saved and the users' views. Pages kept in memory, and those asked of
+	// addons, take no place.
+	pageReadsAtOnce = 6
 )
 
 // fetched is what an addon gave, at the time it gave it.
@@ -518,10 +526,15 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	}
 	var data []byte
 	var kept fetched[[]stremio.Meta]
-	err := s.db.QueryRow(ctx, `SELECT metas, fetched_at FROM catalog_pages
+	release, err := s.pageRead(ctx)
+	if err != nil {
+		return kept, false
+	}
+	err = s.db.QueryRow(ctx, `SELECT metas, fetched_at FROM catalog_pages
 		WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 AND skip = $5 AND config = $6 AND fetched_at > $7`,
 		key.addon, key.catalogType, key.catalogID, key.genre, key.skip, configOf(src.addon.addon), s.now().Add(-s.keptCatalogLife())).
 		Scan(&data, &kept.at)
+	release()
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Debug("A kept catalog page could not be read", "catalog", key.catalogID, "error", err)
@@ -535,6 +548,20 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	s.pages.Put(key, kept)
 	_, held := s.pages.Get(key)
 	return kept, held
+}
+
+// pageRead waits for one of the pageReadsAtOnce places of the pages read
+// from the database, and returns what frees it.
+func (s *Service) pageRead(ctx context.Context) (release func(), err error) {
+	select {
+	case s.pageReads <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if s.pageReadHook != nil {
+		s.pageReadHook()
+	}
+	return func() { <-s.pageReads }, nil
 }
 
 // storePage keeps a page in the database. A page the addon gave again

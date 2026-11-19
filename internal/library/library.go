@@ -238,6 +238,10 @@ type Service struct {
 	smartCache   *cache.Cache[smartKey, []smartTitle]
 	smartFetches chan struct{}
 	smartWait    time.Duration
+	// pageReads holds a place for each catalog page read from the
+	// database, and pageReadHook, set by tests, runs in it (see pageRead).
+	pageReads    chan struct{}
+	pageReadHook func()
 	// plain holds the searches in plain words users made lately, which
 	// stand for smart lists (see plainsearch.go).
 	plain plainSearches
@@ -443,6 +447,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize),
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
+		pageReads:      make(chan struct{}, pageReadsAtOnce),
 		hintSpacing:    hintSpacing,
 		personLookups:  personLookups{slots: make(chan struct{}, personLookupsAtOnce)},
 		programs:       newProgramIndex(),
