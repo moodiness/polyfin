@@ -208,6 +208,7 @@ func (d *described) decode(decoder *json.Decoder, within *room) error {
 		d.Meta.Extras = &Extras{}
 		_ = d.Meta.Extras.decode(d.Extras, within)
 	}
+	d.Meta.bound()
 	d.Videos, d.Trailers, d.Collection, d.Extras = nil, nil, nil, nil
 	return err
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/stremio"
 )
 
 // words are the names Polyfin generates, in one server language.
@@ -175,6 +176,7 @@ func LibraryNames(libraries []addons.Library, language string) []string {
 		} else if genre := strings.TrimSpace(l.Genre); genre != "" {
 			base += " · " + genre
 		}
+		base = stremio.Cut(base, stremio.MaxName)
 		switch level[i] {
 		case 0:
 			return base

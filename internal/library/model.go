@@ -507,11 +507,13 @@ func (s *Service) ProviderIDs(kind Kind, meta stremio.Meta) map[string]string {
 // what administrators set of them (see providerIDs).
 func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 	// Some addons wrap names in direction marks, which would upset sorting.
-	item.Name = strings.TrimFunc(meta.Name, func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) })
+	// Names and overviews are bounded as an addon's are (see stremio.Cut),
+	// whatever gave them.
+	item.Name = stremio.Cut(strings.TrimFunc(meta.Name, func(r rune) bool { return unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) }), stremio.MaxName)
 	if item.Kind == KindMovie || item.Kind == KindSeries {
 		item.OriginalTitle = item.Name
 	}
-	item.Overview = meta.Description
+	item.Overview = stremio.Cut(meta.Description, stremio.MaxOverview)
 	item.Genres = slices.Clip(meta.Genres)
 	first, last := parseYears(string(meta.ReleaseInfo))
 	if first == 0 {

@@ -99,7 +99,7 @@ func (n *Names) UnmarshalJSON(data []byte) error {
 		for _, element := range elements {
 			var name string
 			if json.Unmarshal(element, &name) == nil {
-				*n = append(*n, name)
+				*n = append(*n, Cut(name, MaxName))
 			}
 		}
 		return nil
@@ -107,8 +107,11 @@ func (n *Names) UnmarshalJSON(data []byte) error {
 	var text string
 	if json.Unmarshal(data, &text) == nil {
 		for name := range strings.SplitSeq(text, ",") {
+			if len(*n) == maxNested {
+				break
+			}
 			if name = strings.TrimSpace(name); name != "" {
-				*n = append(*n, name)
+				*n = append(*n, Cut(name, MaxName))
 			}
 		}
 	}
@@ -517,7 +520,7 @@ func (l links) credit(meta *Meta) {
 		for _, entry := range l {
 			name := strings.TrimSpace(entry.Name)
 			if name != "" && slices.Contains(list.categories, strings.ToLower(strings.TrimSpace(entry.Category))) {
-				*list.names = append(*list.names, name)
+				*list.names = append(*list.names, Cut(name, MaxName))
 			}
 		}
 	}

@@ -113,6 +113,7 @@ func (c *Catalog) UnmarshalJSON(data []byte) error {
 	if c.Name = strings.TrimSpace(c.Name); c.Name == "" {
 		c.Name = c.ID
 	}
+	c.Name = Cut(c.Name, MaxName)
 	return nil
 }
 
@@ -174,6 +175,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if manifest.Logo != "" && !strings.HasPrefix(manifest.Logo, "https://") {
 		manifest.Logo = ""
 	}
+	manifest.Name = Cut(manifest.Name, MaxName)
 	return manifest, nil
 }
 
