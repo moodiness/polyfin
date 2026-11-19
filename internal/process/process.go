@@ -26,8 +26,9 @@ type Outputs struct {
 // NewOutputs gives cmd, not started yet, n outputs: on Linux and macOS,
 // pipes it inherits as file descriptors 3 to 3+n-1; on Windows, which passes
 // none past the standard ones, connections on the loopback, whose
-// addresses replace pipe:3 to pipe:3+n-1 in cmd's arguments. Once cmd is
-// started, Started must be called.
+// addresses replace pipe:3 to pipe:3+n-1 in cmd's arguments, and which
+// are taken from cmd's process alone. Once cmd is started, Started must be
+// called.
 func NewOutputs(cmd *exec.Cmd, n int) (*Outputs, error) {
 	o := &Outputs{}
 	if err := o.open(cmd, n); err != nil {
