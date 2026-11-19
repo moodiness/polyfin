@@ -316,14 +316,15 @@ func TestAnSFTPLinkLeadingBackIsNotEntered(t *testing.T) {
 	write(t, filepath.Join(movies, "Silent", "The General (1926).mkv"), 10)
 	write(t, filepath.Join(dir, "other", "Metropolis (1927).mkv"), 10)
 	links := map[string]string{
-		filepath.Join(movies, "Elsewhere"):      filepath.Join("..", "other"),
-		filepath.Join(movies, "Again"):          ".",
-		filepath.Join(movies, "Silent", "Up"):   "..",
-		filepath.Join(movies, "Silent", "Same"): filepath.Join("..", "Silent"),
+		filepath.Join(movies, "Elsewhere"):    filepath.Join("..", "other"),
+		filepath.Join(movies, "Again"):        ".",
+		filepath.Join(movies, "Silent", "Up"): "..",
 	}
 	if runtime.GOOS != "windows" {
-		// By its full path too, which the fake server tells as Windows
-		// writes it.
+		// Back to its own folder through a path, and by its full path:
+		// on Windows the fake server tells a link's target as Windows
+		// writes it, with \ where the walk reads /.
+		links[filepath.Join(movies, "Silent", "Same")] = filepath.Join("..", "Silent")
 		links[filepath.Join(movies, "Silent", "Whole")] = movies
 	}
 	for link, target := range links {
