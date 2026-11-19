@@ -178,13 +178,17 @@ func TestAnAppsLongNameIsCutInItsLogsFileName(t *testing.T) {
 	t.Parallel()
 	s, stderr, _ := loggingServer(t)
 	// The app's name, its version and the device's name are what the app
-	// said when it signed in.
+	// said when it signed in. A sign-in keeps none this long any more:
+	// they are those of a device signed in before sign-ins were bounded.
 	long := strings.Repeat("n", 100_000)
-	authorization := fmt.Sprintf(`MediaBrowser Client="%s", Device="%s", DeviceId="tv-id", Version="%s"`, long, long, long)
-	status, body := s.call(http.MethodPost, "/Users/AuthenticateByName", authorization, map[string]string{"Username": "alice", "Pw": "correct horse"})
+	status, body := s.call(http.MethodPost, "/Users/AuthenticateByName", `MediaBrowser Client="app", Device="tv", DeviceId="tv-id", Version="1"`,
+		map[string]string{"Username": "alice", "Pw": "correct horse"})
 	var signedIn AuthenticationResult
 	if err := json.Unmarshal(body, &signedIn); status != http.StatusOK || err != nil || signedIn.AccessToken == "" {
 		t.Fatalf("sign-in: %d %.200s", status, body)
+	}
+	if _, err := s.pool.Exec(t.Context(), "UPDATE devices SET client = $1, device_name = $1, client_version = $1 WHERE device_id = 'tv-id'", long); err != nil {
+		t.Fatal(err)
 	}
 	before := len(stderr.String())
 	status, body = s.postRaw("/ClientLog/Document", app("tv", signedIn.AccessToken), "app log")
