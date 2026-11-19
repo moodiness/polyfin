@@ -187,6 +187,7 @@ func (t *torrent) queuePEX() {
 		if !t.knows(address) && len(t.known) <= 2000 {
 			t.known[address] = candidate{}
 			t.queue = append(t.queue, address)
+			t.makeRoom()
 		}
 	}
 	t.pexWaiting = nil

@@ -83,6 +83,19 @@ const (
 	// keptPeers is how many of the peers a torrent connected to it keeps
 	// for its next run (see Engine.keepLocked).
 	keptPeers = 50
+	// maxKnown is how many peers a torrent knows of: past it, a peer told
+	// is dropped, unless one whose dials failed makes room for it (see
+	// makeRoom).
+	maxKnown = 2000
+	// maxSpoilt is how many pieces that failed their hash with blocks of
+	// several peers are remembered (see blame), and maxBanned how many
+	// addresses are not dialed again (see ban).
+	maxSpoilt = 8
+	maxBanned = 200
+	// maxMetadataHeld bounds the copies of the info dictionary being
+	// received from peers, by the sizes they announced: two of the
+	// largest dictionary (see askMetadata).
+	maxMetadataHeld = 2 * maxInfoSize
 )
 
 // errStopped reports a read of a torrent that stopped: its playback ended.
@@ -111,16 +124,12 @@ type torrent struct {
 	dht      bool
 	info     *Info
 	infoData []byte
-	// metadata is the info dictionary being received from peers, by
-	// pieces of metadataBlock.
-	metadata    []byte
-	metadataGot []bool
-	have        []bool
-	inflight    map[int]*inflightPiece
-	peers       map[netip.AddrPort]*peer
-	known       map[netip.AddrPort]candidate
-	queue       []netip.AddrPort
-	dialing     int
+	have     []bool
+	inflight map[int]*inflightPiece
+	peers    map[netip.AddrPort]*peer
+	known    map[netip.AddrPort]candidate
+	queue    []netip.AddrPort
+	dialing  int
 	// redials are the peers waiting to be dialed again, nextRedial the
 	// soonest time one may be, zero when none waits.
 	redials    []netip.AddrPort
@@ -174,6 +183,12 @@ type torrent struct {
 	// duplicates counts the blocks asked of more than one peer, once for
 	// each peer past the first.
 	duplicates int
+	// banned are the addresses of the peers that sent wrong bytes, not
+	// dialed again while the torrent runs (see ban), and spoilt the
+	// pieces that failed their hash with blocks of several peers, asked
+	// again of one peer at a time (see blame).
+	banned map[netip.Addr]struct{}
+	spoilt map[int]*spoiltPiece
 	// flags are the flags peer exchange told of peers (pexUTP among
 	// them), and pexWaiting the peers it told before the torrent's info
 	// tells whether it is private, dialed once it is not.
@@ -207,6 +222,9 @@ type inflightPiece struct {
 	requested []time.Time
 	asks      []uint8
 	left      int
+	// from is the peer that sent each block received, nil before the
+	// first one (see blame).
+	from []*peer
 }
 
 // readSpan is what a read waits for: the bytes from at to end, among the
@@ -558,6 +576,7 @@ func (t *torrent) addPeers(peers []netip.AddrPort) {
 		}
 		t.known[address] = candidate{}
 		t.queue = append(t.queue, address)
+		t.makeRoom()
 	}
 	t.signal()
 }
@@ -569,19 +588,29 @@ func (t *torrent) knows(address netip.AddrPort) bool {
 }
 
 // connect keeps the torrent connected to up to maxPeers peers, dialing
-// again those that wait once their time comes (see redial).
+// again those that wait once their time comes (see redial). An address
+// that sent wrong bytes is not dialed (see ban), and while every place is
+// taken, the peers of no use give theirs to those that wait (see
+// relieve).
 func (t *torrent) connect() {
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
 	defer timer.Stop()
 	for {
 		t.mu.Lock()
-		next := t.requeue(time.Now())
+		now := time.Now()
+		next := t.requeue(now)
 		for len(t.queue) > 0 && t.dialing < maxDialing && len(t.peers)+t.dialing < maxPeers && t.err == nil {
 			address := t.queue[0]
 			t.queue = t.queue[1:]
+			if t.isBanned(address.Addr()) {
+				continue
+			}
 			t.dialing++
 			go t.dial(address)
+		}
+		if at := t.relieve(now); !at.IsZero() && (next.IsZero() || at.Before(next)) {
+			next = at
 		}
 		changed := t.changed
 		t.mu.Unlock()
@@ -648,6 +677,7 @@ func (t *torrent) redial(address netip.AddrPort, last outcome, fails int) {
 	if t.nextRedial.IsZero() || c.retryAt.Before(t.nextRedial) {
 		t.nextRedial = c.retryAt
 	}
+	t.makeRoom()
 	t.signal()
 }
 
@@ -898,10 +928,15 @@ func (t *torrent) cancelOthers(in *inflightPiece, b block) {
 func (t *torrent) reask() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.info == nil || t.err != nil {
+	if t.err != nil {
+		return
+	}
+	if t.info == nil {
+		t.askWaiting(time.Now())
 		return
 	}
 	now := time.Now()
+	t.oversee(now)
 	var asked []*peer
 	again := map[*peer]block{}
 	cancel := func(p *peer, b block) {
@@ -988,7 +1023,7 @@ func (t *torrent) probe(p *peer, now time.Time) bool {
 		in := t.inflightOf(index)
 		for i := range in.got {
 			b := blockOf(in, index, i)
-			if !in.got[i] && in.asks[i] == 0 && p.reasked[b] <= maxReasks {
+			if !in.got[i] && in.asks[i] == 0 && !t.spares(p, b) {
 				t.ask(p, in, i, b, now)
 				return true
 			}
@@ -1640,7 +1675,7 @@ func (t *torrent) fill(p *peer) {
 				continue
 			}
 			b := blockOf(in, index, i)
-			if p.reasked[b] > maxReasks {
+			if t.spares(p, b) {
 				continue
 			}
 			t.ask(p, in, i, b, now)
@@ -1686,7 +1721,7 @@ func (t *torrent) endgame(p *peer, now time.Time) {
 				continue
 			}
 			b := blockOf(in, index, i)
-			if _, mine := p.requests[b]; !mine && p.reasked[b] <= maxReasks {
+			if _, mine := p.requests[b]; !mine && !t.spares(p, b) {
 				blocks = append(blocks, held{in: in, i: i, b: b, since: in.requested[i]})
 			}
 		}
@@ -1701,7 +1736,8 @@ func (t *torrent) endgame(p *peer, now time.Time) {
 }
 
 // received keeps a block a peer sent, and the piece once it is whole and
-// matches its hash.
+// matches its hash. A piece that does not is dropped, and counted against
+// who sent it (see blame).
 func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 	in, expected, whole := t.keepBlock(p, index, offset, data)
 	if !whole {
@@ -1709,7 +1745,9 @@ func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 	}
 	if sha1.Sum(in.data) != expected {
 		t.engine.config.Logger.Debug("A torrent's piece did not match its hash")
+		t.blame(index, in)
 		t.discard(p, index)
+		t.refill()
 		return
 	}
 	if err := t.engine.store.put(pieceKey{t.hash, index}, in.data); errors.Is(err, errClosed) {
@@ -1719,20 +1757,24 @@ func (t *torrent) received(p *peer, index int, offset int64, data []byte) {
 		t.discard(p, index)
 		return
 	}
+	t.acquit(index, in)
 	t.completed(index)
 }
 
 // keepBlock copies a block into its piece, cancels it where others were
 // asked for it too, and returns the piece and its hash once it is whole;
-// until then, it asks the peer for more.
+// until then, it asks the peer for more. A block is kept only from a peer
+// asked for it, whose request stands: one no peer was asked, or one whose
+// request was cancelled, is dropped as a block already received is, and
+// leaves the block to the peer asked. Who sent each block is noted.
 func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inflightPiece, Hash, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	in := t.inflight[index]
 	b := block{piece: index, offset: offset, length: int64(len(data))}
-	t.arrived(p, b, time.Now())
-	t.forget(p, b)
-	if in == nil || offset%blockSize != 0 || offset >= int64(len(in.data)) || in.got[offset/blockSize] ||
+	now := time.Now()
+	t.arrived(p, b, now)
+	if !t.forget(p, b) || in == nil || offset%blockSize != 0 || offset >= int64(len(in.data)) || in.got[offset/blockSize] ||
 		b != blockOf(in, index, int(offset/blockSize)) {
 		t.fill(p)
 		return nil, Hash{}, false
@@ -1740,6 +1782,10 @@ func (t *torrent) keepBlock(p *peer, index int, offset int64, data []byte) (*inf
 	copy(in.data[offset:], data)
 	in.got[offset/blockSize] = true
 	in.left--
+	if in.from == nil {
+		in.from = make([]*peer, len(in.got))
+	}
+	in.from[offset/blockSize], p.used = p, now
 	t.downBytes += int64(len(data))
 	close(t.flowing)
 	t.flowing = make(chan struct{})
@@ -1843,52 +1889,76 @@ func (t *torrent) extended(p *peer, id byte, payload []byte) error {
 		p.send(msgExtended, []byte{byte(p.metadataID)},
 			encode(map[string]any{"msg_type": 1, "piece": piece, "total_size": len(t.infoData)}), t.infoData[start:end])
 	case 1:
-		t.receivedMetadata(piece, rest)
+		t.receivedMetadata(p, piece, rest)
 	}
 	return nil
 }
 
-// askMetadata asks a peer for the pieces of the info dictionary Polyfin
-// lacks. The lock is held.
+// askMetadata asks a peer for the pieces it has not sent of the info
+// dictionary. Each peer's copy is its own, of the size it announced, so
+// that no peer changes, by what it announces or sends, what another sent.
+// The copies being received stay within maxMetadataHeld by the sizes
+// announced: a peer whose copy has no room waits (see metadataRoom and
+// askWaiting). The lock is held.
 func (t *torrent) askMetadata(p *peer) {
-	if t.info != nil || p.metadataID == 0 || p.metadataSize == 0 {
+	if t.info != nil || p.metadataID == 0 || p.metadataSize == 0 || p.metadataOver {
 		return
 	}
-	if t.metadata == nil || len(t.metadata) != p.metadataSize {
-		t.metadata = make([]byte, p.metadataSize)
-		t.metadataGot = make([]bool, (p.metadataSize+metadataBlock-1)/metadataBlock)
+	if p.metadataWant != p.metadataSize {
+		p.dropMetadata()
+		if !t.metadataRoom(p) {
+			return
+		}
+		p.metadataWant, p.metadataHeard = p.metadataSize, time.Now()
+		p.metadataGot = make([]bool, (p.metadataSize+metadataBlock-1)/metadataBlock)
 	}
-	for i, got := range t.metadataGot {
+	for i, got := range p.metadataGot {
 		if !got {
 			p.send(msgExtended, []byte{byte(p.metadataID)}, encode(map[string]any{"msg_type": 0, "piece": i}))
 		}
 	}
 }
 
-// receivedMetadata keeps a piece of the info dictionary, and reads it once
-// whole. The lock is held.
-func (t *torrent) receivedMetadata(index int64, data []byte) {
-	if t.info != nil || index < 0 || index >= int64(len(t.metadataGot)) {
+// receivedMetadata keeps a piece of the info dictionary in its peer's
+// copy, allocated at its first piece, and reads the copy once whole. One
+// that does not match the torrent's hash is its peer's doing alone: the
+// peer is banned, and those that wait are asked. One that matches and is
+// refused is dropped, and its peer not asked again. The lock is held.
+func (t *torrent) receivedMetadata(p *peer, index int64, data []byte) {
+	if t.info != nil || index < 0 || index >= int64(len(p.metadataGot)) {
 		return
 	}
 	piece := int(index)
 	start := piece * metadataBlock
-	if len(data) != min(metadataBlock, len(t.metadata)-start) {
+	if len(data) != min(metadataBlock, p.metadataWant-start) {
 		return
 	}
-	copy(t.metadata[start:], data)
-	t.metadataGot[piece] = true
-	if slices.Contains(t.metadataGot, false) {
+	if p.metadata == nil {
+		p.metadata = make([]byte, p.metadataWant)
+	}
+	now := time.Now()
+	copy(p.metadata[start:], data)
+	p.metadataGot[piece] = true
+	p.metadataHeard, p.used = now, now
+	if slices.Contains(p.metadataGot, false) {
 		return
 	}
-	info, err := checkInfo(t.hash, t.metadata)
+	info, err := checkInfo(t.hash, p.metadata)
 	if err != nil {
-		// A peer sent wrong pieces: start over.
-		clear(t.metadataGot)
+		wrong := sha1.Sum(p.metadata) != t.hash
+		p.dropMetadata()
+		p.metadataOver = true
+		if wrong {
+			t.engine.config.Logger.Debug("A torrent's peer is not dialed again: the info dictionary it sent did not match the torrent's hash")
+			t.ban(p.address.Addr())
+		}
+		t.askWaiting(now)
 		return
 	}
-	t.info, t.infoData = &info, t.metadata
-	t.metadata, t.metadataGot = nil, nil
+	t.info, t.infoData = &info, p.metadata
+	for _, other := range t.peers {
+		other.dropMetadata()
+	}
 	t.have = make([]bool, len(info.Pieces))
 	t.engine.store.mark(t.hash, t.have)
 	for _, p := range t.peers {

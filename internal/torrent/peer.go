@@ -101,6 +101,17 @@ type peer struct {
 	// when it does not; metadataSize the size it announced.
 	metadataID   int
 	metadataSize int
+	// metadata is the peer's copy of the info dictionary being received,
+	// allocated at its first piece, metadataGot its pieces received, and
+	// metadataWant its size, 0 while the peer is not asked for it;
+	// metadataHeard is when it was asked, or last sent a piece of it, and
+	// metadataOver tells that the peer is not asked for it again on this
+	// connection (see torrent.askMetadata).
+	metadata      []byte
+	metadataGot   []bool
+	metadataWant  int
+	metadataHeard time.Time
+	metadataOver  bool
 	// extended tells that Polyfin sent the peer its extension handshake;
 	// pexCount counts the peer's ut_pex messages read since pexSince.
 	extended bool
@@ -129,6 +140,12 @@ type peer struct {
 	// it was closed as the peer sent none of the blocks asked.
 	joined  time.Time
 	givenUp bool
+	// used is when the peer last sent a block, or a piece of the info
+	// dictionary, that was kept: one of no use for long gives its place
+	// to a peer that waits (see torrent.relieve). good counts its blocks
+	// of pieces that passed their hash (see torrent.entrust).
+	used time.Time
+	good int
 
 	outMu  sync.Mutex
 	outbox [][]byte

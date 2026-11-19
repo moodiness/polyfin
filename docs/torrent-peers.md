@@ -45,6 +45,9 @@ Every connection on this page goes through the torrents' route alone (see [Route
 - A peer given up for sending none of the blocks asked waits the 5 minutes.
 - A dial the route did not carry, as through a proxy that does not answer, is not the peer's failure.
 - Once the route answers again after an outage, the peers waiting are dialed at once, those given up aside.
+- When the 30 are connected and other peers wait to be dialed, the peers that are asked nothing and sent nothing kept for 3 minutes give their places, one for each peer that waits. A peer that chokes for less, or that sends blocks, keeps its place.
+- Such a peer is dialed again in its turn, as any peer whose connection ended.
+- A torrent knows of 2,000 peers at most. Once it does, a peer told takes the place of the one whose dials failed most; a peer that was connected is never forgotten for another.
 
 ## Peer exchange
 
@@ -80,11 +83,22 @@ A peer may drop a request without telling it:
 - A peer that drops the same block three times is no longer asked for it, and keeps sending the others.
 - A peer that sends no block asked for 3 minutes, keep-alives aside, is given up. Its connection is closed, and it is dialed again only 5 minutes later.
 
+## Peers that send wrong bytes
+
+- A block is kept only from the peer asked for it. A block nobody asked for, or one that comes after its request was cancelled, is dropped.
+- A piece is checked against its hash. When it fails and one peer sent all its blocks, that peer is disconnected, and its address is not dialed again while the torrent runs, on any port.
+- When several peers sent its blocks, none is disconnected, since all but one may be honest. The piece is asked again of one peer alone, the one whose blocks made the most pieces so far.
+- Once the piece passes, the peers whose block differed from the right one are disconnected and not dialed again, and the others stay.
+- The peer asked alone that lets a block of that piece wait 30 seconds is given up, and the piece goes to another.
+- Each peer's copy of the info dictionary is its own, of the size it announced. A copy that does not match the torrent's hash has its peer disconnected and not dialed again, and changes nothing of what the others send.
+- The copies being received take 32 MiB at most, by the sizes announced. A peer whose copy has no room waits, unless it announces less than another, whose place it takes.
+
 ## Bounds on what others send
 
 - What peers, trackers, DHT nodes and the proxy send is checked against bounds before Polyfin keeps it.
 - A malformed message ends only its own connection, announce or lookup, and the torrent goes on with the others.
 - A peer exchange message of more than 8 KiB, or of more than 100 peers added or dropped, is malformed.
+- One answer of a tracker or of a DHT node adds 50 peers at most, as the announce asks, and one DHT lookup 200. An HTTP tracker's answer of more than 64 KiB is malformed.
 - A peer that keeps asking without reading the answers is disconnected once 4 MiB wait for it.
 
 ## uTP

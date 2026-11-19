@@ -1,7 +1,6 @@
 package torrent
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha1"
 	"errors"
@@ -177,7 +176,7 @@ func TestAPeersInfoNamingTooMuchIsNotTaken(t *testing.T) {
 	defer stop()
 
 	// The dictionary came whole from the peer and was read: taken, or
-	// refused, its pieces then to be asked again.
+	// refused, its peer then not asked for it again.
 	var taken *Info
 	waitFor(t, "the peer's info dictionary", func() bool {
 		running := torrentOf(e, spec.Hash)
@@ -187,7 +186,15 @@ func TestAPeersInfoNamingTooMuchIsNotTaken(t *testing.T) {
 		running.mu.Lock()
 		defer running.mu.Unlock()
 		taken = running.info
-		return taken != nil || bytes.Equal(running.metadata, data) && !slices.Contains(running.metadataGot, true)
+		if taken != nil {
+			return true
+		}
+		for _, p := range running.peers {
+			if p.metadataOver {
+				return true
+			}
+		}
+		return false
 	})
 	if taken != nil {
 		kept := 0
