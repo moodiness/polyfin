@@ -25,13 +25,31 @@ const (
 	// show it small, and a larger one would only cost space and transfer.
 	MaxImageSide = 512
 	// MaxImageMemory bounds what normalizing a profile picture may hold
-	// (see imageMemory): a photo of 16 million pixels fits, 4,624 by
-	// 3,468, and a PNG of 16 bits a channel of 10 million.
-	MaxImageMemory = 128 << 20
+	// (see imageMemory): a photo of 20 million pixels fits, 5,472 by
+	// 3,648, a progressive one of 8 million, a PNG of 16 bits a channel
+	// of 12 million, and a lossless WebP of 1,600 by 1,600.
+	MaxImageMemory = 160 << 20
 	// maxImagePixels bounds the pictures decoded whatever they hold:
 	// decoding and scaling one takes time by its pixels.
 	maxImagePixels = 50_000_000
+	// maxWebPGroups is the most groups of prefix codes the WebP decoder
+	// builds for a lossless picture: one for each tile of 4 by 4 pixels
+	// at most, and 2,600 at most whatever the picture.
+	maxWebPGroups = 2600
+	// webPGroup is what one of those groups holds, as allocated: 2,680
+	// bytes for its five codes, then the nodes of each, 40 KiB for green
+	// with the largest colour cache, 4 KiB for each of red, blue and
+	// alpha, and 640 bytes for distances. 2,600 of them hold 147 MB.
+	webPGroup = 2680 + 40<<10 + 3*4<<10 + 640
 )
+
+// WebPPrefixCodes returns what the groups of prefix codes the WebP
+// decoder builds for a lossless picture of width by height, or for a
+// lossless transparency of that size, hold at most, beside the picture:
+// up to 147 MB, more than the largest picture, even for a small one.
+func WebPPrefixCodes(width, height int64) int64 {
+	return min((width+3)/4*((height+3)/4), maxWebPGroups) * webPGroup
+}
 
 // ErrInvalidImage is returned for a picture that is not a JPEG, PNG or
 // WebP image within the sizes allowed: MaxImageBytes and MaxImageMemory
@@ -151,8 +169,9 @@ func keptSize(width, height, maxSide int) (int, int) {
 // encoded. The counts are read from the decoders, Go's image/jpeg and
 // image/png and golang.org/x/image/webp, and from the Catmull-Rom scaler
 // of golang.org/x/image/draw. Where the header leaves a doubt, the
-// heavier is counted. The tables a decoder builds are not: they do not
-// grow with the picture.
+// heavier is counted. The tables a decoder builds are not, as they do not
+// grow with the picture, but for a WebP picture that may be lossless (see
+// WebPPrefixCodes).
 func imageMemory(data []byte, format string, config image.Config, maxSide int) int64 {
 	width, height := int64(config.Width), int64(config.Height)
 	// Decoders round the sides up to whole blocks, of 32 pixels at most.
@@ -201,8 +220,9 @@ func imageMemory(data []byte, format string, config image.Config, maxSide int) i
 		// WebP. A lossy picture by itself is 12 bits a pixel. Any other
 		// may be lossless, or have a lossless transparency: 4 bytes a
 		// pixel, and up to 3 more while it is decoded, for the indices
-		// of its palette and the pictures of its transforms.
-		decoded, decoding = 4*pixels, 7*pixels
+		// of its palette and the pictures of its transforms, and beside
+		// them the prefix codes it is decoded with.
+		decoded, decoding = 4*pixels, 7*pixels+WebPPrefixCodes(width, height)
 		if len(data) > 15 && data[15] == ' ' {
 			decoded, decoding = 2*pixels, 2*pixels
 		}

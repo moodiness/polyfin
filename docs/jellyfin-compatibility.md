@@ -141,7 +141,7 @@ A user changes their own profile picture from their app; an administrator can ch
 
 - Polyfin accepts a JPEG, PNG or WebP picture of up to 5 MB and keeps it in the database.
 - It is scaled down to 512 pixels and stored as JPEG, or PNG when it is transparent.
-- A picture whose scaling down would take more than 128 MB of memory is refused, as a file that is no picture is. A photo of 16 million pixels (4,624 by 3,468) is within that, and so are a progressive JPEG of 6 million pixels and a PNG of 16 bits a channel of 10 million. Polyfin scales one picture at a time; the others wait their turn.
+- A picture whose decoding or scaling down would take more than 160 MB of memory is refused, as a file that is no picture is. A photo of 20 million pixels (5,472 by 3,648) is within that, and so are a progressive JPEG of 8 million pixels, a PNG of 16 bits a channel of 12 million and a lossless WebP of 1,600 by 1,600. Decoding a lossless WebP may take up to 147 MB whatever its size, for the tables it is decoded with. Polyfin scales one picture at a time; the others wait their turn.
 - It shows in users, sign-in screens and sessions, and on the admin app's **Users** page.
 
 API details: [Profile pictures for apps](jellyfin-api.md#profile-pictures-for-apps).

@@ -29,6 +29,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/mosaic"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/testpictures"
 )
 
 // boundSide is the width of the test's pictures at the bound and over
@@ -850,6 +851,41 @@ func TestAPictureTooHeavyToDrawGetsNoBadgesNoThumbnailAndNoPlate(t *testing.T) {
 	}
 	if got := p.decoded(); got != 0 {
 		t.Errorf("%d pictures decoded once the plate was asked for, want none", got)
+	}
+}
+
+// A WebP picture that may be lossless is counted with the groups of
+// prefix codes its decoder builds, which may hold far more than its
+// pixels: once every group is built, decoding holds no more than the
+// count, for a picture with one group of the largest codes for each of
+// its tiles. The allowance is for what the test binary may hold
+// meanwhile. A larger picture counts the decoder's 2,600 groups at most,
+// 147 MB, beside its pixels.
+//
+//nolint:paralleltest // measures the memory the whole test binary holds
+func TestALosslessWebPIsCountedWithItsPrefixCodes(t *testing.T) {
+	picture, at, err := testpictures.LosslessWebP(128, 128, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, format, err := image.DecodeConfig(bytes.NewReader(picture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cost := costOf(picture, format, config)
+	held, err := testpictures.HeldAt(picture, at, func(r io.Reader) error {
+		_, _, err := image.Decode(r)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if held > cost.decoding+1<<20 {
+		t.Errorf("decoding holds %d bytes, counted %d", held, cost.decoding)
+	}
+	header := []byte("RIFF\x00\x00\x00\x00WEBPVP8L")
+	if got, want := costOf(header, "webp", image.Config{Width: 208, Height: 200}).decoding, int64(7*223*215+2600*56_568); got != want {
+		t.Errorf("208 by 200: %d bytes counted while decoded, want %d", got, want)
 	}
 }
 

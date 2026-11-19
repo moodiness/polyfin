@@ -7,6 +7,8 @@ import (
 	"hash/maphash"
 	"image"
 	"image/color"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 // Pictures decoded.
@@ -60,8 +62,10 @@ var errUndecodable = errors.New("the picture could not be decoded before")
 // decoded, and what the decoded picture takes, in bytes. The counts are
 // read from the decoders, Go's image/jpeg and image/png and
 // golang.org/x/image/webp. Where the header leaves a doubt, the heavier
-// is counted. The tables a decoder builds are not: they do not grow with
-// the picture.
+// is counted. The tables a decoder builds are not, as they do not grow
+// with the picture, but for a WebP picture that may be lossless: its
+// prefix codes may hold more than the picture (see
+// accounts.WebPPrefixCodes).
 type pictureCost struct {
 	width, height     int64
 	decoding, decoded int64
@@ -116,9 +120,10 @@ func costOf(data []byte, format string, config image.Config) pictureCost {
 		// lossy picture by itself is 12 bits a pixel. Any other may be
 		// lossless, or have a lossless transparency: 4 bytes a pixel,
 		// and up to 3 more while it is decoded, for the indices of its
-		// palette and the pictures of its transforms.
+		// palette and the pictures of its transforms, and beside them the
+		// groups of prefix codes it is decoded with.
 		pixels = (cost.width + 15) * (cost.height + 15)
-		cost.decoding, cost.decoded = 7*pixels, 4*pixels
+		cost.decoding, cost.decoded = 7*pixels+accounts.WebPPrefixCodes(cost.width, cost.height), 4*pixels
 		if len(data) >= 16 && string(data[12:16]) == "VP8 " {
 			cost.decoding, cost.decoded = 2*pixels, 2*pixels
 		}

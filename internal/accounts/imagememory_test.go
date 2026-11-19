@@ -14,6 +14,8 @@ import (
 	"io"
 	"sync"
 	"testing"
+
+	"github.com/moodiness/polyfin/internal/testpictures"
 )
 
 // blankPNG returns a PNG picture of width by height transparent pixels of
@@ -125,23 +127,34 @@ func TestTheMemoryAPictureTakesIsCountedFromItsHeader(t *testing.T) {
 		{"a photo of 16 million pixels", "jpeg", jpegHeader(4624, 3468, baseline), color.YCbCrModel, 4624, 3468, MaxImageSide, 123_325_588},
 		{"a photo of 12 million pixels", "jpeg", jpegHeader(4032, 3024, baseline), color.YCbCrModel, 4032, 3024, MaxImageSide, 100_483_268},
 		{"a photo of 19 million pixels", "jpeg", jpegHeader(5000, 3750, baseline), color.YCbCrModel, 5000, 3750, MaxImageSide, 138_925_452},
+		{"a photo of 20 million pixels", "jpeg", jpegHeader(5472, 3648, baseline), color.YCbCrModel, 5472, 3648, MaxImageSide, 142_080_796},
+		{"a photo of 24 million pixels", "jpeg", jpegHeader(6000, 4000, baseline), color.YCbCrModel, 6000, 4000, MaxImageSide, 170_176_727},
 		// 3 bytes a pixel, 4 to gather them and 12 of coefficients.
 		{"the same photo, progressive", "jpeg", jpegHeader(4624, 3468, progressive), color.YCbCrModel, 4624, 3468, MaxImageSide, 309_469_055},
 		{"a progressive photo of 7 million pixels", "jpeg", jpegHeader(3000, 2250, progressive), color.YCbCrModel, 3000, 2250, MaxImageSide, 131_360_509},
+		{"a progressive photo of 8 million pixels", "jpeg", jpegHeader(3264, 2448, progressive), color.YCbCrModel, 3264, 2448, MaxImageSide, 155_197_795},
 		{"a grey photo", "jpeg", jpegHeader(4000, 3000, baseline), color.GrayModel, 4000, 3000, MaxImageSide, 62_654_569},
 		{"a progressive photo in CMYK", "jpeg", jpegHeader(2000, 2000, progressive), color.CMYKModel, 2000, 2000, MaxImageSide, 98_999_064},
 		// Kept at its size: 4 bytes a pixel, and 16 for its encoding.
 		{"a small photo", "jpeg", jpegHeader(512, 512, baseline), color.YCbCrModel, 512, 512, MaxImageSide, 5_373_700},
 		{"50 million pixels at 16 bits a channel", "png", png(0), color.NRGBA64Model, 7071, 7071, MaxImageSide, 521_369_504},
 		{"11 million pixels at 16 bits a channel", "png", png(0), color.NRGBA64Model, 3250, 3250, MaxImageSide, 140_889_608},
+		{"12 million pixels at 16 bits a channel", "png", png(0), color.NRGBA64Model, 3500, 3500, MaxImageSide, 158_641_608},
+		{"14 million pixels at 16 bits a channel", "png", png(0), color.NRGBA64Model, 3700, 3700, MaxImageSide, 173_563_208},
 		{"11 million pixels at 8 bits a channel", "png", png(0), color.NRGBAModel, 3250, 3250, MaxImageSide, 97_829_764},
 		{"a drawing with a palette", "png", png(0), color.Palette{color.Black}, 4000, 3000, MaxImageSide, 62_654_569},
 		{"a grey drawing, counted in colours", "png", png(0), color.GrayModel, 4000, 3000, MaxImageSide, 99_308_452},
 		// Half the picture more while its passes are read.
 		{"an interlaced strip at 16 bits a channel", "png", png(1), color.RGBA64Model, 6000, 1000, MaxImageSide, 74_615_532},
 		{"a lossy WebP picture", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8 "), color.YCbCrModel, 4000, 3000, MaxImageSide, 74_872_530},
-		{"a lossless WebP picture", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8L"), color.NRGBAModel, 4000, 3000, MaxImageSide, 99_308_452},
-		{"an extended WebP strip", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8X"), color.YCbCrModel, 8000, 600, MaxImageSide, 35_472_927},
+		// A lossless picture or transparency counts its decoder's prefix
+		// codes beside its pixels: one group of 56,568 bytes for each tile
+		// of 4 by 4 pixels, 2,600 groups at most.
+		{"a lossless WebP picture", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8L"), color.NRGBAModel, 4000, 3000, MaxImageSide, 232_602_527},
+		{"a lossless WebP of 1,600 by 1,600", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8L"), color.NRGBAModel, 1600, 1600, MaxImageSide, 165_697_927},
+		{"a lossless WebP of 208 by 200", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8L"), color.NRGBAModel, 208, 200, MaxImageSide, 147_463_263},
+		{"a lossless WebP of 40 by 40", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8L"), color.NRGBAModel, 40, 40, MaxImageSide, 5_692_087},
+		{"an extended WebP strip", "webp", []byte("RIFF\x00\x00\x00\x00WEBPVP8X"), color.YCbCrModel, 8000, 600, MaxImageSide, 182_549_727},
 		// The scaler keeps weights for each row or column of the picture,
 		// however thin the picture is.
 		{"a column of 50 million pixels", "png", png(0), color.GrayModel, 1, 50_000_000, MaxImageSide, 11_200_034_808},
@@ -158,6 +171,37 @@ func TestTheMemoryAPictureTakesIsCountedFromItsHeader(t *testing.T) {
 		if got := imageMemory(c.data, c.format, config, c.maxSide); got != c.want {
 			t.Errorf("%s: counted %d bytes, want %d", c.name, got, c.want)
 		}
+	}
+}
+
+// A WebP picture that may be lossless is counted with the groups of
+// prefix codes its decoder builds, which may hold far more than its
+// pixels: once every group is built, decoding holds no more than the
+// count, for a picture with one group of the largest codes for each of
+// its tiles. The count at the decoder's 2,600 groups, kept as a profile
+// picture, is in TestTheMemoryAPictureTakesIsCountedFromItsHeader.
+//
+//nolint:paralleltest // measures the memory the whole test binary holds
+func TestALosslessWebPIsCountedWithItsPrefixCodes(t *testing.T) {
+	picture, at, err := testpictures.LosslessWebP(128, 128, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, format, err := image.DecodeConfig(bytes.NewReader(picture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counted := imageMemory(picture, format, config, MaxImageSide)
+	held, err := testpictures.HeldAt(picture, at, func(r io.Reader) error {
+		_, _, err := image.Decode(r)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The allowance is for what the test binary may hold meanwhile.
+	if held > counted+1<<20 {
+		t.Errorf("decoding holds %d bytes, counted %d", held, counted)
 	}
 }
 
@@ -227,7 +271,7 @@ func TestADeeperPictureIsRefusedWhereTheSameAtEightBitsIsKept(t *testing.T) {
 		t.Errorf("16 bits a channel within 13 MiB: %v", err)
 	}
 
-	// A profile picture of 11 million pixels, a fifth of the pixels a
+	// A profile picture of 14 million pixels, a quarter of the pixels a
 	// picture may have, is over its bound at 16 bits a channel.
 	store := newStore(t)
 	user := mustCreate(t, store, NewUser{Name: "member", Password: "correct horse"})
@@ -238,8 +282,8 @@ func TestADeeperPictureIsRefusedWhereTheSameAtEightBitsIsKept(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.SetImage(t.Context(), user.ID, blankPNG(t, 3250, 3250, 16)); !errors.Is(err, ErrInvalidImage) {
-		t.Errorf("a profile picture of 3250 by 3250 at 16 bits a channel: %v, want ErrInvalidImage", err)
+	if _, err := store.SetImage(t.Context(), user.ID, blankPNG(t, 3700, 3700, 16)); !errors.Is(err, ErrInvalidImage) {
+		t.Errorf("a profile picture of 3700 by 3700 at 16 bits a channel: %v, want ErrInvalidImage", err)
 	}
 	if after, err := store.Image(t.Context(), user.ID); err != nil || after.Tag != before.Tag {
 		t.Errorf("after the refused picture: tag %q, %v, want %q kept", after.Tag, err, before.Tag)
@@ -265,12 +309,12 @@ func TestAPictureOverItsMemoryBoundIsNeverDecoded(t *testing.T) {
 		data []byte
 		want int
 	}{
-		{"11 million pixels at 16 bits a channel", blankPNG(t, 3250, 3250, 16), 0},
-		{"a photo of 19 million pixels", jpegHeader(5000, 3750, 0xc0), 0},
+		{"14 million pixels at 16 bits a channel", blankPNG(t, 3700, 3700, 16), 0},
+		{"a photo of 24 million pixels", jpegHeader(6000, 4000, 0xc0), 0},
 		{"a progressive photo of 16 million pixels", jpegHeader(4624, 3468, 0xc2), 0},
 		// Within the bound, and nothing but a header: its decoder runs,
 		// and finds no picture.
-		{"a photo of 16 million pixels", jpegHeader(4624, 3468, 0xc0), 1},
+		{"a photo of 20 million pixels", jpegHeader(5472, 3648, 0xc0), 1},
 	} {
 		*decoded = 0
 		if _, err := NormalizeImage(t.Context(), c.data, MaxImageBytes, MaxImageSide, MaxImageMemory); !errors.Is(err, ErrInvalidImage) {
