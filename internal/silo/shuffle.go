@@ -47,8 +47,10 @@ func (s *Server) shuffleCapabilities(w http.ResponseWriter, _ *http.Request, _ v
 const (
 	// shuffleTitles bounds the titles a shuffle draws from.
 	shuffleTitles = 500
-	// shufflesKept bounds the shuffles each user keeps; the oldest goes.
+	// shufflesKept bounds the shuffles each user keeps, and maxShuffles
+	// those of all users; past either the one unused the longest goes.
 	shufflesKept = 8
+	maxShuffles  = 1024
 )
 
 type shuffleScope struct {
@@ -113,8 +115,8 @@ type shuffles struct {
 
 func newShuffles() *shuffles { return &shuffles{byID: map[string]*shuffle{}} }
 
-// add keeps a shuffle, forgetting those unused for a day and the user's
-// oldest past shufflesKept.
+// add keeps a shuffle, forgetting those unused for a day, the user's
+// unused the longest past shufflesKept, and the server's past maxShuffles.
 func (s *shuffles) add(sh *shuffle) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -131,6 +133,15 @@ func (s *shuffles) add(sh *shuffle) {
 	for len(mine) >= shufflesKept {
 		delete(s.byID, mine[0].id)
 		mine = mine[1:]
+	}
+	for len(s.byID) >= maxShuffles {
+		var oldest *shuffle
+		for _, other := range s.byID {
+			if oldest == nil || other.seen.Before(oldest.seen) {
+				oldest = other
+			}
+		}
+		delete(s.byID, oldest.id)
 	}
 	s.byID[sh.id] = sh
 }

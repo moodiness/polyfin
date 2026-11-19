@@ -200,6 +200,37 @@ func TestTheServerKeepsABoundedNumberOfPlaybacks(t *testing.T) {
 	}
 }
 
+// The server keeps maxShuffles shuffles of all its users: one more
+// forgets the one unused the longest, whoever started it.
+func TestTheServerKeepsABoundedNumberOfShuffles(t *testing.T) {
+	t.Parallel()
+	store := newShuffles()
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	// Each user stays under their own bound.
+	const each = shufflesKept / 2
+	user := func(n int) accounts.ID { return accounts.ID{1, byte(n / each >> 8), byte(n / each)} }
+	for n := range maxShuffles {
+		store.add(&shuffle{id: "shuffle-" + strconv.Itoa(n), user: user(n), seen: now.Add(time.Duration(n) * time.Second)})
+	}
+	if len(store.byID) != maxShuffles {
+		t.Fatalf("%d shuffles kept, want %d", len(store.byID), maxShuffles)
+	}
+	later := now.Add(time.Hour)
+	// The first is used: the second is the one unused the longest.
+	if _, done, ok := store.get("shuffle-0", user(0), later); ok {
+		done()
+	} else {
+		t.Fatal("the first shuffle is gone")
+	}
+	store.add(&shuffle{id: "one-more", user: accounts.ID{2}, seen: later.Add(time.Second)})
+	if len(store.byID) != maxShuffles {
+		t.Errorf("%d shuffles kept, want %d", len(store.byID), maxShuffles)
+	}
+	if store.byID["shuffle-1"] != nil || store.byID["shuffle-0"] == nil || store.byID["one-more"] == nil {
+		t.Error("the server forgot another shuffle than the one unused the longest")
+	}
+}
+
 // A session forgotten for the server's bound is another user's: the
 // request that took its place stops nothing in that user's name.
 func TestAPlaybackForgottenForTheServersBoundIsNotStoppedInItsUsersName(t *testing.T) {
