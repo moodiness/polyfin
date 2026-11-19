@@ -16,8 +16,9 @@ import (
 
 // collectionsView answers Polyfin's Collections view as the Jellyfin API
 // does: a library of collections it lists no title of, whose collections
-// tell how many titles the user sees in them when asked, and each list
-// theirs. It counts the collections read.
+// it lists a page at a time, 100 unless asked otherwise, telling how many
+// titles the user sees in them when asked, and each list theirs. It counts
+// the pages of collections listed and the collections read.
 type collectionsView struct {
 	collections []map[string]any
 	titles      map[string][]any
@@ -25,6 +26,7 @@ type collectionsView struct {
 	read func()
 
 	mu    sync.Mutex
+	pages int
 	reads map[string]int
 }
 
@@ -57,16 +59,26 @@ func (c *collectionsView) answer(w http.ResponseWriter, asked call) {
 		case parent == testLibrary && asked.query.Get("Recursive") == "true":
 			jsonAnswer(w, map[string]any{"Items": []any{}, "TotalRecordCount": 0})
 		case parent == testLibrary:
-			listed := make([]map[string]any, len(c.collections))
-			for n, collection := range c.collections {
-				listed[n] = map[string]any{}
+			c.mu.Lock()
+			c.pages++
+			c.mu.Unlock()
+			start, _ := strconv.Atoi(asked.query.Get("StartIndex"))
+			limit, err := strconv.Atoi(asked.query.Get("Limit"))
+			if err != nil {
+				limit = 100
+			}
+			from, to := min(start, len(c.collections)), min(start+limit, len(c.collections))
+			listed := make([]map[string]any, 0, to-from)
+			for _, collection := range c.collections[from:to] {
+				shown := map[string]any{}
 				for key, value := range collection {
 					if key != "ChildCount" || strings.Contains(asked.query.Get("Fields"), "ChildCount") {
-						listed[n][key] = value
+						shown[key] = value
 					}
 				}
+				listed = append(listed, shown)
 			}
-			jsonAnswer(w, map[string]any{"Items": listed, "TotalRecordCount": len(listed)})
+			jsonAnswer(w, map[string]any{"Items": listed, "TotalRecordCount": len(c.collections)})
 		default:
 			if c.read != nil {
 				c.read()
@@ -96,6 +108,13 @@ func (c *collectionsView) readTimes(ids ...string) int {
 		}
 	}
 	return times
+}
+
+// pagesListed is how many pages of collections were listed.
+func (c *collectionsView) pagesListed() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pages
 }
 
 // collectionsRow is the row of the Collections view on Home: its titles.
@@ -150,9 +169,9 @@ func TestHomeReadsOnlyCollectionsWithTitles(t *testing.T) {
 	}
 }
 
-// The titles of a library of collections are gathered from at most
-// maxListings collections: those that add no title, as they hold one
-// already listed, are not read without end.
+// The titles of a library of collections are gathered with at most
+// maxListings listings, of its collections and of their titles: those that
+// add no title, as they hold one already listed, are not read without end.
 func TestALibraryOfCollectionsReadsABoundedNumberOfThem(t *testing.T) {
 	t.Parallel()
 	view := &collectionsView{}
@@ -163,8 +182,31 @@ func TestALibraryOfCollectionsReadsABoundedNumberOfThem(t *testing.T) {
 	if titles := h.collectionsRow(); !slices.Equal(titles, []string{"One"}) {
 		t.Errorf("the row lists %q", titles)
 	}
-	if read := view.readTimes(); read != maxListings {
-		t.Errorf("%d collections read, want %d", read, maxListings)
+	if listed := view.pagesListed() + view.readTimes(); listed != maxListings {
+		t.Errorf("%d listings asked, want %d", listed, maxListings)
+	}
+}
+
+// The collections of a library of collections are listed past a first
+// page that holds no title for the user: the titles of those that follow
+// are gathered.
+func TestALibraryOfCollectionsListsPastEmptyCollections(t *testing.T) {
+	t.Parallel()
+	view := &collectionsView{}
+	var without []string
+	for n := range 2*scanChunk + 10 {
+		without = append(without, view.add("Empty "+strconv.Itoa(n)))
+	}
+	view.add("Picks", "One", "Two")
+	h := newHarness(t, view.answer)
+	if titles, want := h.collectionsRow(), []string{"One", "Two"}; !slices.Equal(titles, want) {
+		t.Errorf("the row lists %q, want %q", titles, want)
+	}
+	if read := view.readTimes(without...); read != 0 {
+		t.Errorf("empty collections read %d times", read)
+	}
+	if pages := view.pagesListed(); pages != 3 {
+		t.Errorf("%d pages of collections listed, want 3", pages)
 	}
 }
 

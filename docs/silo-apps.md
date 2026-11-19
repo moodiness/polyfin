@@ -88,9 +88,10 @@ A library opens on its titles, page by page.
   - The apps offer no Rotten Tomatoes sort: Polyfin tells them it shows no rating source.
 - **Narrow:** to its favorites or a search.
 - **A library of collections:** it opens on the titles of its collections, each once, in its order.
-  - Polyfin's Collections view gathers these titles from its first 100 collections, of which it reads those that hold a title the user sees.
+  - Polyfin's Collections view gathers these titles from its collections, listed 100 at a time, of which it reads those that hold a title the user sees. A page asks at most 100 lists, of collections and of their titles together.
 - **The first page:** what the user is watching in the library, and its latest titles. A library of collections shows instead a row for each of its first 24 collections.
 - **Shuffle:** a library, a series, a season or a collection. No title plays twice until all have played, and a series plays one of its episodes.
+  - Each user keeps their 8 most recent shuffles, and the server 1,024 in all. One more ends the one unused the longest, and a shuffle nobody used for a day is forgotten too. A shuffle no longer kept answers as unknown (404).
 - **Its count:** the Android app's library bar on phones shows how many titles a library holds when Polyfin knows it whole: always for an IPTV source's movies or series, and for a catalog read to its end, such as one that fits on a page. While an addon's catalog, or a local folder, is known only as far as it was read, the bar shows no count rather than a short one.
 
 #### Title order and A to Z

@@ -102,45 +102,58 @@ func (s *Server) gatheredPage(r *http.Request, v viewer, view item, query url.Va
 
 // gatheredTitles are the titles of a library's collections keep keeps, in
 // their order, each once, read collection by collection until more than
-// want of them are read; more reports whether there are. A collection the
-// Jellyfin API counts no title of for the user is not read, and the
-// others are read while the listings a page may ask are not spent (see
-// allowance). It asks nothing once the request's context is done.
+// want of them are read; more reports whether there are. The collections
+// are listed scanChunk at a time, past those that hold no title for the
+// user. A collection the Jellyfin API counts no title of for the user is
+// not read, and the listings of collections and of their titles are asked
+// while those a page may ask are not spent (see allowance). It asks
+// nothing once the request's context is done.
 func (s *Server) gatheredTitles(r *http.Request, v viewer, view item, query url.Values, want int, keep func(item) bool) (titles []item, more bool, a answer, err error) {
-	var collections queryResult
-	a, err = s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}, "Fields": {"ChildCount"}}.Encode(), nil, &collections)
-	if err != nil || !a.ok() {
-		return nil, false, a, err
-	}
 	seen := map[string]bool{}
 	left := newAllowance()
-	for _, collection := range collections.Items {
-		if collection.Type != "BoxSet" || collection.ChildCount != nil && *collection.ChildCount == 0 {
-			continue
-		}
-		if left.spent() {
-			break
-		}
+	for start, total := 0, 1; start < total && !left.spent(); {
 		if err := r.Context().Err(); err != nil {
 			return nil, false, a, err
 		}
-		listed := maps.Clone(query)
-		listed.Set("ParentId", collection.Id)
-		var result queryResult
-		// A collection the user may no longer open lists nothing.
-		read, err := s.call(r, v, http.MethodGet, "/Items?"+listed.Encode(), nil, &result)
-		if err != nil {
+		var collections queryResult
+		a, err = s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {view.Id}, "Fields": {"ChildCount"},
+			"StartIndex": {strconv.Itoa(start)}, "Limit": {strconv.Itoa(scanChunk)}, "EnableTotalRecordCount": {"true"}}.Encode(), nil, &collections)
+		if err != nil || !a.ok() {
 			return nil, false, a, err
 		}
-		left.take(read)
-		for _, title := range result.Items {
-			if !seen[title.Id] && slices.Contains(browsable, title.Type) && keep(title) {
-				seen[title.Id] = true
-				titles = append(titles, title)
-			}
-		}
-		if len(titles) > want {
+		left.take(a)
+		if len(collections.Items) == 0 {
 			break
+		}
+		start, total = start+len(collections.Items), collections.TotalRecordCount
+		for _, collection := range collections.Items {
+			if collection.Type != "BoxSet" || collection.ChildCount != nil && *collection.ChildCount == 0 {
+				continue
+			}
+			if left.spent() {
+				break
+			}
+			if err := r.Context().Err(); err != nil {
+				return nil, false, a, err
+			}
+			listed := maps.Clone(query)
+			listed.Set("ParentId", collection.Id)
+			var result queryResult
+			// A collection the user may no longer open lists nothing.
+			read, err := s.call(r, v, http.MethodGet, "/Items?"+listed.Encode(), nil, &result)
+			if err != nil {
+				return nil, false, a, err
+			}
+			left.take(read)
+			for _, title := range result.Items {
+				if !seen[title.Id] && slices.Contains(browsable, title.Type) && keep(title) {
+					seen[title.Id] = true
+					titles = append(titles, title)
+				}
+			}
+			if len(titles) > want {
+				return titles, true, a, nil
+			}
 		}
 	}
 	return titles, len(titles) > want, a, nil
