@@ -76,6 +76,47 @@ func TestShownCoversEveryThumbnail(t *testing.T) {
 	}
 }
 
+// Each chapter keeps the image of the keyframe read nearest its start,
+// as shown chooses it among every keyframe read, the earlier of two as
+// near, whatever the order they come in: the others are dropped as they
+// come.
+func TestChapterImagesKeepTheNearestKeyframe(t *testing.T) {
+	t.Parallel()
+	read := secondsOf(30, 0, 14, 6)
+	starts := secondsOf(0, 5, 10, 15, 20, 25, 30, 35)
+	images := make([][]byte, len(read))
+	for i := range read {
+		data, err := encodeJPEG(thumbnail(16, 16, uint8(40*(i+1))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		images[i] = data
+	}
+	var orders func(prefix, left []int)
+	orders = func(prefix, left []int) {
+		if len(left) == 0 {
+			chapters := newChapterImages(starts)
+			var times []time.Duration
+			for _, k := range prefix {
+				if err := chapters.offer(read[k], thumbnail(16, 16, uint8(40*(k+1)))); err != nil {
+					t.Fatal(err)
+				}
+				times = append(times, read[k])
+			}
+			for c, k := range shown(times, starts) {
+				if want := images[prefix[k]]; !slices.Equal(chapters.data[c], want) {
+					t.Errorf("read in the order %v: chapter %d shows another keyframe than the one at %v", prefix, c, times[k])
+				}
+			}
+			return
+		}
+		for i, k := range left {
+			orders(append(slices.Clone(prefix), k), slices.Delete(slices.Clone(left), i, i+1))
+		}
+	}
+	orders(nil, []int{0, 1, 2, 3})
+}
+
 // Thumbnails come every interval asked while the reads give each its own
 // keyframe; a longer version spreads them over its runtime, one per read,
 // in whole seconds, rather than repeating images.

@@ -11,10 +11,12 @@
 package thumbnails
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
+	"image/jpeg"
 	"log/slog"
 	"math"
 	"runtime/debug"
@@ -205,13 +207,14 @@ type Service struct {
 	skipped *cache.Cache[accounts.ID, string]
 
 	// budget is that above, which tests lower, as they do frameBytes, the
-	// most the decoded keyframes kept for one set weigh: maxFrameBytes
-	// when zero.
+	// most the images kept for one set weigh until its tiles are made:
+	// maxFrameBytes when zero.
 	budget     int
 	frameBytes int64
 }
 
-// frameBudget is the most the decoded keyframes kept for one set weigh.
+// frameBudget is the most the images kept for one set weigh until its
+// tiles are made.
 func (s *Service) frameBudget() int64 {
 	if s.frameBytes > 0 {
 		return s.frameBytes
@@ -842,24 +845,39 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 	if len(want.chapters) > 0 {
 		filters = append(filters, chapterFilter(hdr))
 	}
-	// Each keyframe is decoded as soon as it is read, and its images kept
-	// with its time: the images shown are chosen by time, whatever the
-	// order the keyframes were read in.
+	// Each keyframe is decoded as soon as it is read, and its thumbnail
+	// kept with its time, encoded as a JPEG: the thumbnails shown are
+	// chosen by time, whatever the order the keyframes were read in, and a
+	// set holds about what its tiles weigh, not its decoded keyframes. Each
+	// chapter keeps the image of the keyframe read nearest its start so far.
 	var frames []decodedFrame
 	var held int64
+	var pictures *chapterImages
+	if len(chapters) > 0 {
+		pictures = newChapterImages(chapters)
+	}
 	done := map[int]bool{}
 	decodeFrame := func(index int, frame []byte) error {
 		done[index] = true
 		images, err := s.decode(ctx, hw, video, frame, filters, false)
 		switch {
 		case err == nil:
-			for _, img := range images {
-				held += imageBytes(img)
+			decoded := decodedFrame{at: video.Keyframes[index]}
+			if want.trickplay {
+				if decoded.thumbnail, err = encodeJPEG(images[0]); err != nil {
+					return err
+				}
+				held += int64(len(decoded.thumbnail))
 			}
-			if held > s.frameBudget() {
+			if pictures != nil {
+				if err := pictures.offer(decoded.at, images[len(images)-1]); err != nil {
+					return err
+				}
+			}
+			if held+pictures.weight() > s.frameBudget() {
 				return fmt.Errorf("%w: its keyframes weigh more than the %d bytes a set may keep", errNoVideo, s.frameBudget())
 			}
-			frames = append(frames, decodedFrame{at: video.Keyframes[index], images: images})
+			frames = append(frames, decoded)
 			return nil
 		case ctx.Err() != nil:
 			return ctx.Err()
@@ -904,23 +922,41 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 		n = len(done) + int(float64(p.left)*perRequest)
 	}
 	read := reads{requests: p.requests, keyframes: len(frames)}
-	times := make([]time.Duration, len(frames))
-	for i, f := range frames {
-		times[i] = f.at
-	}
 	if want.trickplay {
+		times := make([]time.Duration, len(frames))
+		for i, f := range frames {
+			times[i] = f.at
+		}
 		asked := thumbnailTimes(analysis.Duration, interval)
 		count := len(asked)
 		tiles := newTiler(count, interval)
 		tiles.info.Width = want.width
 		made := &madeThumbnails{s: s, version: version.ID, info: want.partial}
+		// The thumbnails show the keyframes in the order of their times: a
+		// keyframe's thumbnail is decoded once, and dropped once the next
+		// keyframe shows.
+		last := -1
+		var img *image.YCbCr
 		for i, k := range shown(times, asked) {
-			img := frames[k].images[0]
 			if asked[i] < kept {
 				nearest := min(want.partial.ThumbnailCount-1, int((asked[i]+want.interval/2)/want.interval))
-				if img, err = made.at(ctx, nearest); err != nil {
+				placed, err := made.at(ctx, nearest)
+				if err != nil {
 					return read, err
 				}
+				if err := tiles.add(placed); err != nil {
+					return read, err
+				}
+				continue
+			}
+			if k != last {
+				if last >= 0 {
+					frames[last].thumbnail = nil
+				}
+				if img, err = decodeThumbnail(frames[k].thumbnail); err != nil {
+					return read, err
+				}
+				last = k
 			}
 			if err := tiles.add(img); err != nil {
 				return read, err
@@ -934,29 +970,85 @@ func (s *Service) make(ctx context.Context, version library.Version, analysis me
 			return read, err
 		}
 	}
-	if len(chapters) > 0 {
-		encoded := map[int][]byte{}
-		data := make([][]byte, len(chapters))
-		for c, k := range shown(times, chapters) {
-			if encoded[k] == nil {
-				if encoded[k], err = encodeJPEG(frames[k].images[len(filters)-1]); err != nil {
-					return read, err
-				}
-			}
-			data[c] = encoded[k]
-		}
-		if err := s.SaveChapterImages(ctx, version.ID, version.Item, data); err != nil {
+	if pictures != nil {
+		if err := s.SaveChapterImages(ctx, version.ID, version.Item, pictures.data); err != nil {
 			return read, err
 		}
 	}
 	return read, nil
 }
 
-// decodedFrame is a keyframe decoded: its time, and its image through each
-// filter.
+// decodedFrame is a keyframe decoded: its time, and its thumbnail as a
+// JPEG, nil when no thumbnail is made.
 type decodedFrame struct {
-	at     time.Duration
-	images []*image.YCbCr
+	at        time.Duration
+	thumbnail []byte
+}
+
+// errThumbnail reports a thumbnail kept that does not decode as it was
+// encoded.
+var errThumbnail = errors.New("a thumbnail kept does not decode as it was encoded")
+
+// decodeThumbnail decodes a thumbnail kept as a JPEG.
+func decodeThumbnail(data []byte) (*image.YCbCr, error) {
+	img, err := jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	thumbnail, ok := img.(*image.YCbCr)
+	if !ok || thumbnail.SubsampleRatio != image.YCbCrSubsampleRatio420 || thumbnail.Rect.Min != (image.Point{}) {
+		return nil, errThumbnail
+	}
+	return thumbnail, nil
+}
+
+// chapterImages keeps, for each chapter, the image of the keyframe read
+// nearest its start, as a JPEG, as shown chooses it among every keyframe
+// read: the earlier of two as near. The others are dropped as they come.
+type chapterImages struct {
+	starts []time.Duration
+	at     []time.Duration
+	data   [][]byte
+	// held counts each chapter's image, though chapters may share one.
+	held int64
+}
+
+func newChapterImages(starts []time.Duration) *chapterImages {
+	return &chapterImages{starts: starts, at: make([]time.Duration, len(starts)), data: make([][]byte, len(starts))}
+}
+
+// offer takes img, the image of the keyframe at at, for the chapters it
+// is the nearest keyframe of so far, encoding it once.
+func (c *chapterImages) offer(at time.Duration, img *image.YCbCr) error {
+	var encoded []byte
+	for i, start := range c.starts {
+		if c.data[i] != nil && !nearer(at, c.at[i], start) {
+			continue
+		}
+		if encoded == nil {
+			var err error
+			if encoded, err = encodeJPEG(img); err != nil {
+				return err
+			}
+		}
+		c.held += int64(len(encoded) - len(c.data[i]))
+		c.at[i], c.data[i] = at, encoded
+	}
+	return nil
+}
+
+// weight is what the chapter images kept weigh, none for nil.
+func (c *chapterImages) weight() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.held
+}
+
+// nearer reports whether a is nearer t than b, or as near and earlier.
+func nearer(a, b, t time.Duration) bool {
+	da, db := (a - t).Abs(), (b - t).Abs()
+	return da < db || da == db && a < b
 }
 
 // thumbnailFilter scales keyframes to thumbnails width pixels wide,

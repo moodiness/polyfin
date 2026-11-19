@@ -2,7 +2,6 @@ package thumbnails
 
 import (
 	"cmp"
-	"image"
 	"math/bits"
 	"slices"
 	"sort"
@@ -44,26 +43,18 @@ const maxThumbnails = int(longestVersion / (accounts.MinTrickplayInterval * time
 //     at the shortest interval and the largest width takes about half of
 //     it. A set past it is given up, as one past maxThumbnails, and it
 //     is also the most one set writes.
-//   - maxFrameBytes is the most the decoded keyframes kept for one set
-//     weigh, 2 GiB, a keyframe taking its thumbnail's picture and, when
-//     chapter images are made with it, one of theirs. For a local
-//     folder's file of 16:9 pictures, read one keyframe a thumbnail,
-//     that covers 15 hours at the shortest interval and the largest
-//     width, 5 seconds and 480 pixels, and 5 and a half with chapter
-//     images; at the defaults, 10 seconds and 320 pixels, 69 hours, and
-//     13 with chapter images. A four-hour movie at 5 seconds and 480
-//     pixels takes about half a gigabyte. After a play, a set past it
-//     is given up; during a play, a pass stops there and the next goes
-//     on from what it kept.
+//   - maxFrameBytes is the most the images kept for one set weigh until
+//     its tiles are made, 2 GiB: each keyframe's thumbnail, encoded as a
+//     JPEG as soon as it is decoded, and each chapter's image. A
+//     thumbnail encoded alone weighs about its place in a tile, so a set
+//     within maxTileBytes keeps about as much; the bound guards against
+//     thumbnails that would weigh far more alone. A set past it is given
+//     up. During a play, thumbnails go into their tiles as their
+//     keyframes are decoded, and a pass keeps its tiles alone.
 const (
 	maxTileBytes  int64 = 256 << 20
 	maxFrameBytes int64 = 2 << 30
 )
-
-// imageBytes is what a decoded image takes.
-func imageBytes(img *image.YCbCr) int64 {
-	return int64(len(img.Y) + len(img.Cb) + len(img.Cr))
-}
 
 // thumbnailCount is how many thumbnails a version lasting duration has,
 // one every interval from its start, as Jellyfin makes them: none

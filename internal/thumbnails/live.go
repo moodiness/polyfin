@@ -37,10 +37,6 @@ const liveInterval = 30 * time.Second
 // the processor.
 var errConverting = errors.New("a conversion runs on the processor")
 
-// errHeld stops a pass that keeps maxFrameBytes of decoded keyframes: the
-// thumbnails they give are kept, and the next pass makes the following.
-var errHeld = errors.New("the keyframes of a pass are all it keeps")
-
 // live extends, every LiveEvery, the thumbnails of the versions played
 // now, one at a time.
 func (s *Service) live(ctx context.Context) {
@@ -198,9 +194,18 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 	}
 	hw, hdr := s.decoder(stream)
 	filters := []string{thumbnailFilter(info.Width, hdr)}
-	images := map[int]*image.YCbCr{}
+	// The keyframes come in the order of their times: each thumbnail goes
+	// into its tile as its keyframe is decoded, and a pass holds its tiles
+	// and the last keyframe's thumbnail alone. The set's last tile kept,
+	// when not full, is read again at the first.
+	perTile := info.TileWidth * info.TileHeight
+	first := from / perTile
+	var tiles *tiler
 	var last *image.YCbCr
-	var held int64
+	added := 0
+	// tileErr is the error of the tiles, which fails the pass whatever
+	// was added.
+	var tileErr error
 	err = video.ReadFrames(ctx, src, order, func(index int, frame []byte) error {
 		if guarded && s.converting() {
 			return errConverting
@@ -209,47 +214,33 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 		switch {
 		case err == nil:
 			last = decoded[0]
-			held += imageBytes(last)
 		case ctx.Err() != nil:
 			return ctx.Err()
 		case !errors.Is(err, errNoImage) || last == nil:
 			return fmt.Errorf("%w: %w", container.ErrUnreadable, err)
 		}
+		if tiles == nil {
+			if tiles, tileErr = s.resumeTiles(ctx, version.ID, info, from); tileErr != nil {
+				return tileErr
+			}
+		}
 		// A keyframe that does not decode shows the one before.
-		images[index] = last
-		if held > s.frameBudget() {
-			return errHeld
+		for ; added < len(shows) && shows[added] == index; added++ {
+			if tileErr = tiles.add(last); tileErr != nil {
+				return tileErr
+			}
 		}
 		return nil
 	})
-	added := 0
-	for added < len(shows) && images[shows[added]] != nil {
-		added++
-	}
-	if added == 0 {
+	switch {
+	case tileErr != nil:
+		return 0, tileErr
+	case added == 0:
 		return 0, err
-	}
-	if err != nil && !errors.Is(err, source.ErrNotCached) && !errors.Is(err, errConverting) && !errors.Is(err, errHeld) {
-		return 0, err
-	}
-	perTile := info.TileWidth * info.TileHeight
-	first := from / perTile
-	var tile []byte
-	if from%perTile > 0 {
-		if tile, err = s.keptTile(ctx, version.ID, info.Width, first); err != nil {
-			return 0, err
-		}
-	}
-	tiles, err := resumeTiler(info, tile, from%perTile)
-	if err != nil {
+	case err != nil && !errors.Is(err, source.ErrNotCached) && !errors.Is(err, errConverting):
 		return 0, err
 	}
 	tiles.info.ThumbnailCount = from + added
-	for _, k := range shows[:added] {
-		if err := tiles.add(images[k]); err != nil {
-			return 0, err
-		}
-	}
 	info, data, err := tiles.finish()
 	if err != nil {
 		return 0, err
@@ -258,6 +249,21 @@ func (s *Service) extend(ctx context.Context, version library.Version, analysis 
 		return 0, err
 	}
 	return added, nil
+}
+
+// resumeTiles packs the thumbnails following the first from of a set
+// described by info, from its tile that holds the thumbnail from: the
+// kept one, read again, when it is not full.
+func (s *Service) resumeTiles(ctx context.Context, version accounts.ID, info Info, from int) (*tiler, error) {
+	perTile := info.TileWidth * info.TileHeight
+	var tile []byte
+	if from%perTile > 0 {
+		var err error
+		if tile, err = s.keptTile(ctx, version, info.Width, from/perTile); err != nil {
+			return nil, err
+		}
+	}
+	return resumeTiler(info, tile, from%perTile)
 }
 
 // complete reports whether a set of thumbnails covers a version lasting

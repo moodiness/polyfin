@@ -36,7 +36,7 @@ Polyfin makes thumbnails during a play from what it reads, and the rest after wa
 - It adds what the source cache still holds, then reads only missing keyframes, located through the index (Matroska Cues or MP4 sample tables), never the whole file: one a request, or several when the host serves several ranges in one answer.
 - One version at a time, with a short queue.
 
-DVDs, recordings and Replay get no images. A torrent's file gets thumbnails from what its plays read alone ([Torrents' files](#torrents-files)). A version has 172,800 thumbnails at most, ten days at one every 5 seconds, weighing 256 MB at most, about twice what a day takes at one every 5 seconds, 480 wide; making them after a play keeps at most 2 GB of keyframes in memory, which a local file reaches after about 15 hours at one every 5 seconds, 480 wide (5 and a half with chapter images), or 69 hours at the default settings (13 with chapter images). A version past one of these gets no thumbnails, as one without a length, and a local file then shows "Cannot be made: no video". The log tells why a version gets none, with the title, once a day for each version.
+DVDs, recordings and Replay get no images. A torrent's file gets thumbnails from what its plays read alone ([Torrents' files](#torrents-files)). A version has 172,800 thumbnails at most, ten days at one every 5 seconds, weighing 256 MB at most, about twice what a day takes at one every 5 seconds, 480 wide. Making them after a play keeps each keyframe's thumbnail as a JPEG until the tiles are made, about what the tiles weigh, and 2 GB of images at most; during a play, each thumbnail goes into its tile as its keyframe is decoded. A version past one of these gets no thumbnails, as one without a length, and a local file then shows "Cannot be made: no video". The log tells why a version gets none, with the title, once a day for each version.
 
 ### Files of local folders
 
@@ -99,7 +99,7 @@ These limits apply to addons' links.
 - During a play, thumbnails follow **One thumbnail every (seconds, at least)**. After it, Polyfin keeps them and reads only later ones; if the interval grows, kept ones move to its nearest time.
 - A chapter image shows the keyframe nearest the chapter's start: its own read if requests allow one per thumbnail and chapter, else the nearest thumbnail read.
 - FFmpeg decodes each keyframe as it arrives, tied to its time whatever the read order, on the GPU if any, tone mapping HDR.
-- Thumbnails are packed into Jellyfin's 10x10 tile JPEGs. Chapter images are at most 640 pixels wide.
+- Thumbnails are packed into Jellyfin's 10x10 tile JPEGs. After a play, each is encoded as a JPEG when its keyframe is decoded, and again in its tile, both at the tiles' quality. Chapter images are at most 640 pixels wide.
 - Images are kept in the database.
 
 ### When a source misbehaves

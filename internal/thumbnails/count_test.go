@@ -174,46 +174,44 @@ func TestThumbnailsDuringAPlayStopAtTheMostAVersionHas(t *testing.T) {
 	}
 }
 
-// During a play, a pass keeps a budget of decoded keyframes: it stops at
-// the keyframe that passes it and keeps the thumbnails read so far, and
-// the next passes make the following ones, to the last.
-func TestAPassDuringAPlayKeepsABudgetOfKeyframes(t *testing.T) {
+// During a play, a pass keeps no decoded keyframe: each thumbnail goes
+// into its tile as its keyframe is decoded, so that whatever the budget
+// of the images kept after a play, one pass makes every thumbnail the
+// source cache holds.
+func TestAPassDuringAPlayKeepsItsTilesAlone(t *testing.T) {
 	t.Parallel()
 	ts, version, analysis := playedFile(t)
 	ctx := t.Context()
-	// A keyframe's thumbnail takes 86,400 bytes: each pass stops at its
-	// second.
+	// Less than any thumbnail weighs, decoded or encoded.
 	ts.mu.Lock()
-	ts.frameBytes = 86_400 + 1
+	ts.frameBytes = 1
 	ts.mu.Unlock()
-	for pass := 1; pass <= 2; pass++ {
-		if added, err := ts.extend(ctx, version, analysis, false); added != 2 || err != nil {
-			t.Fatalf("pass %d added %d thumbnails, %v: two keyframes kept, two thumbnails, expected", pass, added, err)
-		}
-		if info, found, err := ts.trickplaySet(ctx, version.ID, 240); !found || err != nil || info.ThumbnailCount != 2*pass {
-			t.Fatalf("after pass %d: %+v, %v", pass, info, err)
-		}
+	if added, err := ts.extend(ctx, version, analysis, false); added != 4 || err != nil {
+		t.Fatalf("one pass added %d thumbnails, %v: the 4 of the file expected", added, err)
+	}
+	if info, found, err := ts.trickplaySet(ctx, version.ID, 240); !found || err != nil || info.ThumbnailCount != 4 {
+		t.Fatalf("after one pass: %+v, %v", info, err)
 	}
 	if added, err := ts.extend(ctx, version, analysis, false); added != 0 || err != nil {
 		t.Fatalf("a set complete got %d thumbnails more, %v", added, err)
 	}
 }
 
-// After a play, the decoded keyframes kept for a set weigh no more than
-// a budget: the keyframe that passes it gives the set up, the version
-// keeps "cannot", "no video", and nothing of the set. Within the budget,
-// every thumbnail is made.
-func TestASetsKeyframesWeighNoMoreThanItsBudget(t *testing.T) {
+// After a play, a set keeps each keyframe's thumbnail encoded as a JPEG
+// until its tiles are made, not decoded: the 11 keyframes of forced.mkv
+// fit in less than what three of them weigh decoded, 240 by 240, 86,400
+// bytes each. The images kept still weigh no more than a budget: the
+// keyframe that passes it gives the set up, the version keeps "cannot",
+// "no video", and nothing of the set.
+func TestASetKeepsItsThumbnailsEncodedWithinItsBudget(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		budget int64
 		made   int
 	}{
-		// A thumbnail of forced.mkv, 240 by 240, takes 86,400 bytes, and
-		// its 15 thumbnails show 11 keyframes.
-		{"past the budget", 3*86_400 - 1, 0},
-		{"within the budget", 11 * 86_400, 15},
+		{"past the budget", 1, 0},
+		{"within the budget", 3*86_400 - 1, 15},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
