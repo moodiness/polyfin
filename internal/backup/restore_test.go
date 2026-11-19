@@ -204,10 +204,11 @@ func TestARestoreOfAnOlderBackupIsMigrated(t *testing.T) {
 	testdb.LockRestores(t)
 	r := newRestoring(t)
 	ctx := t.Context()
-	// The schema before the destinations: the newest migration undone.
+	// The schema before the destinations: their migrations undone, the
+	// one that added the host key offered included.
 	// 0239 is recorded as Polyfin 0.72.0 shipped it, since superseded.
 	if _, err := r.pool.Exec(ctx, `DROP TABLE backup_destinations, backup_restore;
-		DELETE FROM schema_migrations WHERE name = 'backup_destinations';
+		DELETE FROM schema_migrations WHERE name IN ('backup_destinations', 'backup_offered_key');
 		UPDATE schema_migrations SET checksum = '31eea78c9bad0c4fa99bd34e4b3b4a8a2119deb606af69b1bfff92fb8912054b' WHERE version = 239`); err != nil {
 		t.Fatal(err)
 	}
