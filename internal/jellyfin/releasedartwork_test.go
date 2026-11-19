@@ -9,6 +9,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -106,7 +107,8 @@ func TestAReleasedTitlesArtworkStaysConfined(t *testing.T) {
 	s.becomesMember(t, owner)
 	// The member lists their library: the title is their confined addon's.
 	id := s.libraryItems(t, s.signIn("owner", "tv"), "own library")["Mine"]
-	if response, _ := s.fetch(t, "/Items/"+id+"/Images/Backdrop"); response.StatusCode != http.StatusForbidden {
+	// Apps ask by the tag the title gave, without credentials.
+	if response, _ := s.fetch(t, "/Items/"+id+"/Images/Backdrop?tag="+library.ImageTag(meta.Background)); response.StatusCode != http.StatusForbidden {
 		t.Fatalf("the confined addon's backdrop: %d, want 403", response.StatusCode)
 	}
 

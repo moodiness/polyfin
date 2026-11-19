@@ -78,6 +78,7 @@ Polyfin relays pictures only: JPEG, PNG, GIF, WebP, BMP, ICO and AVIF. It tells 
 
 - **SVG is not shown:** an image an artwork server gives as SVG, such as some channel and addon logos, is answered as a missing image. The same goes for anything else that is no picture.
 - **Opened as a page:** a relayed image opened on its own in a browser runs and loads nothing.
+- **Titles of a user's own addon:** the images of a title only a user's own addon lists, and of its seasons and episodes, are served with the tag listings give them, or to a signed-in user who reaches the title. Image requests carry no user, and an item's identifier follows from the one its addon gives it. Asked without the tag by someone else, such an image answers as missing (`404`). The owner's apps get it, with its tag or with their sign-in.
 
 ### Downloads
 

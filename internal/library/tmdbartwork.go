@@ -315,7 +315,11 @@ func (s *Service) TMDBArtwork(ctx context.Context, id accounts.ID, imageType str
 		kept, _ = s.keptTitleArtwork(ctx, key)
 	}
 	if url := s.tmdbImage(kept.path(imageType)); url != "" {
-		return Artwork{URL: url}, true
+		found := Artwork{URL: url}
+		if strings.EqualFold(imageType, "Primary") {
+			found.Lookup = posterLookupKey(key)
+		}
+		return found, true
 	}
 	return Artwork{}, false
 }

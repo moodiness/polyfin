@@ -13,9 +13,10 @@ import (
 // A member's own addon gives them thumbnails and posters on a local
 // address, for a series of its own that it describes by another
 // identifier than the one asked, and for a series a server addon listed
-// that no server addon describes: none is ever downloaded, with or
-// without credentials. The description given by another identifier is
-// recorded by the one asked, so its episodes open as their series'.
+// that no server addon describes: none is ever downloaded, with
+// credentials or with the tag apps ask by without them. The description
+// given by another identifier is recorded by the one asked, so its
+// episodes open as their series'.
 func TestEpisodeAndSeasonImagesOfAMembersAddonAreConfined(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
@@ -39,8 +40,11 @@ func TestEpisodeAndSeasonImagesOfAMembersAddonAreConfined(t *testing.T) {
 	}), "series")
 
 	// browse lists each series, its seasons and its episodes, as the
-	// owner, and returns their identifiers by series.
-	type shown struct{ series, season, episode string }
+	// owner, and returns them by series.
+	type shown struct {
+		series          string
+		season, episode BaseItemDto
+	}
 	browse := func() (string, map[string]shown) {
 		t.Helper()
 		token := s.signIn("owner", "tv")
@@ -54,7 +58,7 @@ func TestEpisodeAndSeasonImagesOfAMembersAddonAreConfined(t *testing.T) {
 			if status := s.get(t, "/Shows/"+series+"/Episodes", token, &episodes); status != http.StatusOK || len(episodes.Items) != 1 {
 				t.Fatalf("the episodes of %s: %d %+v", name, status, episodes.Items)
 			}
-			found[name] = shown{series, seasons.Items[0].Id, episodes.Items[0].Id}
+			found[name] = shown{series, seasons.Items[0], episodes.Items[0]}
 		}
 		return token, found
 	}
@@ -64,15 +68,16 @@ func TestEpisodeAndSeasonImagesOfAMembersAddonAreConfined(t *testing.T) {
 	token, found := browse()
 
 	for name, items := range found {
-		for what, id := range map[string]string{"episode": items.episode, "season": items.season} {
-			for _, authorization := range []string{"", app("tv", token)} {
-				if status, _, _ := s.send(http.MethodGet, "/Items/"+id+"/Images/Primary", authorization, "", ""); status != http.StatusForbidden {
+		for what, item := range map[string]BaseItemDto{"episode": items.episode, "season": items.season} {
+			// Without credentials, apps ask by the tag the item gave.
+			for authorization, query := range map[string]string{"": "?tag=" + item.ImageTags["Primary"], app("tv", token): ""} {
+				if status, _, _ := s.send(http.MethodGet, "/Items/"+item.Id+"/Images/Primary"+query, authorization, "", ""); status != http.StatusForbidden {
 					t.Errorf("the %s's image of %s, with credentials %t: %d, want 403", what, name, authorization != "", status)
 				}
 			}
 		}
 		var episode BaseItemDto
-		if status := s.get(t, "/Items/"+items.episode, token, &episode); status != http.StatusOK || episode.SeriesId != items.series {
+		if status := s.get(t, "/Items/"+items.episode.Id, token, &episode); status != http.StatusOK || episode.SeriesId != items.series {
 			t.Errorf("the episode of %s: %d, of the series %q, want %q", name, status, episode.SeriesId, items.series)
 		}
 	}

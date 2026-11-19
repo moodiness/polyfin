@@ -796,7 +796,7 @@ func (h *Handler) Art(w http.ResponseWriter, r *http.Request, id accounts.ID, wi
 	image.SetPathValue("imageType", "Primary")
 	image.SetPathValue("imageIndex", "")
 	captured := &capturedImage{header: http.Header{}, status: http.StatusOK}
-	h.taggedArtwork(captured, image, "", false)
+	h.taggedArtwork(captured, image, "", false, true)
 	if captured.status != http.StatusOK || captured.body.Len() == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		return

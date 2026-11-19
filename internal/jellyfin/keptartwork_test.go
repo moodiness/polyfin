@@ -8,6 +8,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -35,7 +36,9 @@ func TestTheArtworkKeptIsNotAnsweredPastTheConfinement(t *testing.T) {
 	s.withLibrary(t, addons.Personal(admin.ID), libraryAddon(t, "trusted", "movie",
 		[]stremio.Meta{{ID: "trusted:1", Type: "movie", Name: "Trusted", Poster: local.URL + "/nas/cover.png"}}, nil), "movie")
 	trusted := s.libraryItems(t, s.signIn("admin", "tv"), "trusted library")["Trusted"]
-	if response, body := s.fetch(t, "/Items/"+trusted+"/Images/Primary"); response.StatusCode != http.StatusOK || !bytes.Equal(body, png) ||
+	// Apps ask by the tag the titles give, without credentials.
+	tagged := "/Images/Primary?tag=" + library.ImageTag(local.URL+"/nas/cover.png")
+	if response, body := s.fetch(t, "/Items/"+trusted+tagged); response.StatusCode != http.StatusOK || !bytes.Equal(body, png) ||
 		local.requests("/nas/cover.png") != 1 {
 		t.Fatalf("the administrator's poster: %d, %d bytes, asked %d times", response.StatusCode, len(body), local.requests("/nas/cover.png"))
 	}
@@ -47,10 +50,10 @@ func TestTheArtworkKeptIsNotAnsweredPastTheConfinement(t *testing.T) {
 	s.libraryItems(t, s.signIn("owner", "tv"), "own library")
 	s.becomesMember(t, owner)
 	mine := s.libraryItems(t, s.signIn("owner", "tv"), "own library")["Mine"]
-	if response, body := s.fetch(t, "/Items/"+mine+"/Images/Primary"); response.StatusCode != http.StatusForbidden {
+	if response, body := s.fetch(t, "/Items/"+mine+tagged); response.StatusCode != http.StatusForbidden {
 		t.Errorf("the confined title's poster, kept for another title: %d, %d bytes, want 403", response.StatusCode, len(body))
 	}
-	if response, body := s.fetch(t, "/Items/"+trusted+"/Images/Primary"); response.StatusCode != http.StatusOK || !bytes.Equal(body, png) {
+	if response, body := s.fetch(t, "/Items/"+trusted+tagged); response.StatusCode != http.StatusOK || !bytes.Equal(body, png) {
 		t.Errorf("the administrator's poster after the confined request: %d, %d bytes", response.StatusCode, len(body))
 	}
 	if n := local.requests("/nas/cover.png"); n != 1 {

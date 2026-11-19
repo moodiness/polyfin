@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -153,4 +154,63 @@ func (s *Service) sharedVideos(ctx context.Context, id accounts.ID) map[string]b
 		}
 	}
 	return videos
+}
+
+// OwnArtwork tells whether the artwork of the item recorded as id is a
+// user's own: that of an item one of their own addons holds, or of a
+// season or an episode of a series so held. holder is that item, the
+// series of a season or an episode. Item identifiers derive from what
+// addons call items (see itemID), so that anyone may compute one: such
+// artwork is shown to whoever reaches holder (see ReachesArtwork), and
+// to others only with its tag, which only its listings give. An item not
+// recorded is not one, nor one of the server's addons holds, nor one
+// whose addon was removed: no one holds it (see recordOwner).
+func (s *Service) OwnArtwork(ctx context.Context, id accounts.ID) (holder accounts.ID, own bool, err error) {
+	r, err := s.load(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return accounts.ID{}, false, nil
+	}
+	if err != nil {
+		return accounts.ID{}, false, err
+	}
+	if s.ownAddon(ctx, r.Addon) {
+		return r.ID, true, nil
+	}
+	if r.Kind != KindSeason && r.Kind != KindEpisode {
+		return accounts.ID{}, false, nil
+	}
+	series, err := s.load(ctx, r.seriesItemID())
+	if errors.Is(err, ErrNotFound) {
+		return accounts.ID{}, false, nil
+	}
+	if err != nil {
+		return accounts.ID{}, false, err
+	}
+	return series.ID, s.ownAddon(ctx, series.Addon), nil
+}
+
+// ownAddon tells whether addon is a user's own, as recordOwner does.
+func (s *Service) ownAddon(ctx context.Context, addon *accounts.ID) bool {
+	if addon == nil {
+		return false
+	}
+	_, owner, err := s.addons.FindOwner(ctx, *addon)
+	return err == nil && owner != accounts.ID{}
+}
+
+// ReachesArtwork tells whether user's view reaches the item recorded as
+// holder (see view.reaches), whose artwork OwnArtwork told a user's own.
+func (s *Service) ReachesArtwork(ctx context.Context, user accounts.User, holder accounts.ID) (bool, error) {
+	r, err := s.load(ctx, holder)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return false, err
+	}
+	return v.reaches(r), nil
 }

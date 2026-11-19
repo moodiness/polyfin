@@ -178,9 +178,14 @@ func (r *reachSetup) check(t *testing.T) {
 			t.Fatalf("the versions of %s: %+v %v", source.name, versions, err)
 		}
 		r.listed(t, r.admin, source.movie)
+		// The poster, without credentials, as apps load it: by the tag the
+		// title gave.
+		var title BaseItemDto
+		if status := r.get(t, "/Items/"+source.movie, r.token, &title); status != http.StatusOK {
+			t.Fatalf("the title of %s: %d", source.name, status)
+		}
 		before := source.files.reached()
-		// The poster, without credentials, as apps load it.
-		image, body := r.fetch(t, "/Items/"+source.movie+"/Images/Primary")
+		image, body := r.fetch(t, "/Items/"+source.movie+"/Images/Primary?tag="+title.ImageTags["Primary"])
 		// The video, relayed for an app that names its token in a header.
 		request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 			r.url+"/Videos/"+source.movie+"/stream?static=true&mediaSourceId="+versions[0].ID.String(), nil)

@@ -1016,13 +1016,16 @@ func resizable(contentType string) bool {
 // generatedArtwork).
 func (h *Handler) image(w http.ResponseWriter, r *http.Request) {
 	tag := query(r, "tag")
-	h.taggedArtwork(w, r, tag, tag != "")
+	h.taggedArtwork(w, r, tag, tag != "", false)
 }
 
 // taggedArtwork is image for the artwork whose tag is tag, if any (see
 // library.TaggedArtwork). immutable lets the client keep it for good: an
-// address that names the tag changes with the image.
-func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag string, immutable bool) {
+// address that names the tag changes with the image. reached tells that
+// the caller found the item through a user who may see it, so that the
+// artwork of a user's own item is served without its tag (see
+// ownArtworkShown).
+func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag string, immutable, reached bool) {
 	id, err := accounts.ParseID(r.PathValue("itemId"))
 	if err != nil {
 		processingError(w, http.StatusBadRequest)
@@ -1050,9 +1053,12 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 			found, err = h.Library.Artwork(r.Context(), id, imageType)
 		}
 	}
+	// subject is the item whose artwork is served.
+	subject := id
 	if errors.Is(err, library.ErrNotFound) {
 		// Apps show a version opened as an item with its title's artwork.
 		if owner, ok := h.Library.VersionOwner(id); ok {
+			subject = owner
 			found, err = h.Library.Artwork(r.Context(), owner, r.PathValue("imageType"))
 		}
 	}
@@ -1100,6 +1106,20 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	if !reached {
+		// The tag of the image found, or of what stood for TMDB's poster
+		// before it was looked up.
+		tagged := tag != "" && (tag == library.ImageTag(found.URL) || found.Lookup != "" && tag == library.ImageTag(found.Lookup))
+		shown, err := h.ownArtworkShown(r, subject, tagged)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		if !shown {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 	}
 	url = found.URL
 	if owner, ownerType, ok := library.Uploaded(url); ok {
@@ -1204,6 +1224,29 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		image = h.resized(r.Context(), source, image, width)
 	}
 	answerPicture(w, r, image)
+}
+
+// ownArtworkShown tells whether the artwork of the item id may be served
+// to the request r, tagged telling that r names the tag of the artwork
+// found. Image requests come without a user, and item identifiers can be
+// computed from what addons call items: the artwork of a user's own item
+// (see library.OwnArtwork) is served with its tag, which only the item's
+// listings give, or to a signed-in user who reaches the item, as apps
+// that ask for images without their tag send their sign-in. Any other
+// artwork is served to anyone.
+func (h *Handler) ownArtworkShown(r *http.Request, id accounts.ID, tagged bool) (bool, error) {
+	if tagged {
+		return true, nil
+	}
+	holder, own, err := h.Library.OwnArtwork(r.Context(), id)
+	if err != nil || !own {
+		return err == nil, err
+	}
+	c, ok, err := h.signedInCaller(r)
+	if err != nil || !ok {
+		return false, err
+	}
+	return h.Library.ReachesArtwork(r.Context(), c.User, holder)
 }
 
 // answerPicture writes a relayed picture as the answer, with the type its

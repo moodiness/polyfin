@@ -522,7 +522,8 @@ func TestAddonsCannotGiveGeneratedImages(t *testing.T) {
 		if item.Name == "Through the scheme" && item.ImageTags["Primary"] != "" {
 			t.Errorf("the poster in the scheme of generated images is listed: %v", item.ImageTags)
 		}
-		statuses[item.Name], _, _ = s.send(http.MethodGet, "/Items/"+item.Id+"/Images/Primary", "", "", "")
+		// Apps ask by the tag the title gave, without credentials.
+		statuses[item.Name], _, _ = s.send(http.MethodGet, "/Items/"+item.Id+"/Images/Primary?tag="+item.ImageTags["Primary"], "", "", "")
 	}
 	if statuses["Direct"] != http.StatusForbidden || directHits.Load() != 0 {
 		t.Errorf("the confined addon's local poster: %d, reached %d times", statuses["Direct"], directHits.Load())

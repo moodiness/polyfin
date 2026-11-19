@@ -501,7 +501,7 @@ func (h *Handler) shareImage(w http.ResponseWriter, r *http.Request) {
 	image.SetPathValue("itemId", item.ID.String())
 	image.SetPathValue("imageType", imageType)
 	image.SetPathValue("imageIndex", "")
-	h.taggedArtwork(w, image, tag, false)
+	h.taggedArtwork(w, image, tag, false, true)
 }
 
 // startGuest starts a guest's playback of the link's title, unless the

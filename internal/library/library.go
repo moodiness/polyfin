@@ -3414,7 +3414,9 @@ func (s *Service) Genres(ctx context.Context, user accounts.User, libraryID acco
 // Templated tells the poster address template gave URL (see
 // templatePoster), and Fallback is the addon's poster to download when
 // URL cannot be, confined when Confined. Photo tells a person's photo,
-// which PhotoFailed marks dead.
+// which PhotoFailed marks dead. Lookup is what stood for a poster TMDB
+// gives before it was looked up, whose tag listings gave meanwhile (see
+// Item.TMDBPoster).
 type Artwork struct {
 	URL       string
 	Confined  bool
@@ -3422,6 +3424,7 @@ type Artwork struct {
 	Templated bool
 	Fallback  string
 	Photo     bool
+	Lookup    string
 }
 
 // URLConfined reports whether downloading URL is confined to public
