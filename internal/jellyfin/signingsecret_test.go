@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -76,7 +77,9 @@ func TestWithAKeyTheStoredSecretAloneSignsNoGrant(t *testing.T) {
 				}
 			}
 
-			grant := playback.Grant{Version: version, User: p.user.ID}
+			// A grant tells when it was signed: one that does not is
+			// refused whoever signed it.
+			grant := playback.Grant{Version: version, User: p.user.ID, Signed: time.Now()}
 			signed := playback.NewSigner(stored).Sign(grant)
 			if got := fetch(stream + "&playSessionId=" + signed); got != test.stored {
 				t.Errorf("a grant signed with the stored secret: %d, want %d", got, test.stored)
