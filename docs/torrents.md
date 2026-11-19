@@ -18,7 +18,7 @@ Playing a torrent means joining its swarm:
 | **Route** | **Settings › Torrents** | **SOCKS5 proxy**, with no address | **Network interface**, **SOCKS5 proxy** or **WireGuard tunnel** (see [Routes](#routes)). |
 | **Download limit (Mbps, 0 = none)** | **Settings › Torrents** | 0 | Bounds the download, from 0 to 10000. |
 | **Upload limit (Mbps, 0 = no sharing)** | **Settings › Torrents** | 0 | Bounds the upload, from 0 to 10000. Sharing stops when the playback ends. |
-| **Torrents at once (0 = no limit)** | **Settings › Torrents** | 0 | Bounds the torrents running at once for the whole server, from 0 to 100 (see [Torrents at once](#torrents-at-once)). |
+| **Torrents at once (0 = no limit)** | **Settings › Torrents** | 10 | Bounds the torrents running at once for the whole server, from 0 to 100 (see [Torrents at once](#torrents-at-once)). A server set up before Polyfin 0.84.0 keeps its value, 0 unless it was changed. |
 | **Trackers added to every torrent** | **Settings › Torrents** | Empty | Announce URLs asked for every torrent, one a line, 30 at most (see [Trackers](#trackers)). Polyfin comes with no list. |
 | **Can play torrent streams** | The **Access** section of the user's page under **Users**, next to **Can download** | Off | Offers this user torrent versions (see [Playing torrent streams](user-limits.md#playing-torrent-streams)). |
 
@@ -238,14 +238,15 @@ While a torrent starts, the web player writes how it goes under jellyfin-web's s
 |---|---|
 | "Finding peers…", then "Finding peers: 12 found, 3 connected" | The torrent looks for peers and receives its info dictionary |
 | "Receiving the start: 2.4 MB from 3 peers" | Its pieces come, while ffprobe reads the file and the player reads its first segments. The bytes count from the torrent's start. |
-| "The torrent did not start:" and why | Every torrent the play tried did not start in time |
+| "The torrent did not start:" and why | Every torrent the play tried did not start in time, or could not start |
 
 The reasons the last line gives:
 
 - no peer found, or peers found that sent nothing;
 - trackers that did not answer, or no tracker named;
 - a route that carries no UDP, or a route that is down;
-- as many torrents playing as **Torrents at once** allows.
+- as many torrents playing as **Torrents at once** allows;
+- its list of files refused, as its info dictionary is (see [When torrents do not start](#when-torrents-do-not-start)).
 
 - With several torrent versions tried at once (see [How a torrent starts](#how-a-torrent-starts)), the line follows the one that got furthest.
 - Once PlaybackInfo answers, it follows the version chosen while the spinner still turns, up to 3 minutes.
@@ -341,6 +342,7 @@ What a torrent learned is kept in memory for 15 minutes once it stopped: the pee
 - The DHT lookups start near the torrent.
 - Its pieces are still removed at the stop.
 - A torrent that connected to no peer keeps what an earlier run of it learned, unchanged.
+- A torrent whose info dictionary was refused keeps why (see [When torrents do not start](#when-torrents-do-not-start)). Played again within that time, it does not start, and its play fails at once with the same reason.
 - At most 64 torrents, and 64 MiB of info dictionaries, are kept, those kept longest dropped first.
 
 A playback of another title ends the 30 seconds' wait at once. When a device reports that it plays another title, a torrent's or not, the torrents it played before stop then. So do the torrents its user played on another device that stopped since. Exceptions:
@@ -393,6 +395,11 @@ The time is the piece's at the swarm's speed. The playback shares that speed whi
 ## Torrents at once
 
 On a slow link, or a route that allows few connections, torrents running at once share the bandwidth and the peers. Each then starts more slowly. **Torrents at once (0 = no limit)**, under **Settings › Torrents**, bounds them for the whole server.
+
+It also bounds the memory torrents take. Each torrent running holds its info dictionary, and the pieces it is downloading until they are whole and checked (see [Torrent peers and pieces](torrent-peers.md)). All torrents together share 256 MiB of such pieces, but each may always download one piece, so that no torrent keeps another from playing: past that share, the memory grows with the torrents running.
+
+- **The default:** 10 on a new server. A play tries up to three torrent versions at once, each running until 30 seconds after its last read, so 10 lets three plays start together.
+- **Servers set up before Polyfin 0.84.0:** they keep their value, 0 (no limit) unless it was changed. Setting a limit is advised on a server whose users play torrents.
 
 There is no limit per user: **Playbacks at once**, on each user's page, counts their devices playing, not their torrents.
 
@@ -468,8 +475,30 @@ What to check:
 - **UDP:** through a proxy, it needs `UDP ASSOCIATE`, and the proxy must relay the datagrams back. Without UDP, only HTTP trackers find peers, many torrents list UDP trackers alone, and the peers that take uTP alone are not reached.
 - **The trackers' answers:** turn on **Detailed log (to diagnose a problem)** under **Settings › Diagnostics**, and play again. Then read `A tracker could not be reached` in **System › Logs**, with each tracker's own reason for a refusal.
 - **The swarm itself:** a torrent with no seeder does not start anywhere. Try another version.
-- **The torrent's files:** a torrent does not start when its info dictionary lists more than 50,000 files, names the torrent, a folder or a file with more than 765 bytes, gives a file a path of more than 4,096 bytes, or has pieces shorter than 16 KiB. A name on a disk is 255 bytes at most on Linux, and 255 UTF-16 units on Windows, which take 765 bytes at most. The programs that make torrents make pieces of 16 KiB or more. Its peers connect, and it still does not start. Try another version.
+- **The torrent's files:** a torrent cannot start when its info dictionary is refused (see [A refused info dictionary](#a-refused-info-dictionary)). Try another version.
 - **No tracker:** a torrent whose addon names no tracker is found through the DHT alone (see [Trackers](#trackers)). Trackers you trust, under **Trackers added to every torrent**, find it more peers.
+
+### A refused info dictionary
+
+A torrent's info dictionary, which its peers send, lists its files and pieces. Polyfin refuses one that:
+
+- lists more than 50,000 files;
+- names the torrent, a folder or a file with more than 765 bytes;
+- gives a file a path of more than 4,096 bytes;
+- has pieces shorter than 16 KiB, or longer than 64 MiB;
+- holds more than 800,000 values, or is malformed.
+
+A name on a disk is 255 bytes at most on Linux, and 255 UTF-16 units on Windows, which take 765 bytes at most. The programs that make torrents make pieces of 16 KiB or more.
+
+A dictionary that matches the torrent's info hash is the one every peer sends, so such a torrent can never start:
+
+- **At once:** it stops as soon as the dictionary came, and the play fails then, rather than after the start's 60 seconds.
+- **The play's error:** it tells why, such as `the torrent's info dictionary is refused: it lists more than 50000 files`. The web player's line under the spinner says the torrent's list of files is refused (see [Watching a torrent start](#watching-a-torrent-start)).
+- **The log:** it tells it at Info level, `A torrent did not start: its info dictionary is refused`, with the same reason.
+- **The version:** it is left out for 15 minutes, as a version that fails is (see [Sources that fail](reading-the-sources.md#sources-that-fail)), not as a torrent that did not start in time.
+- **Played again within 15 minutes:** the torrent does not start again, and the play fails at once with the same reason.
+
+A dictionary that does not match the torrent's info hash is its peer's alone: that peer is disconnected and not dialed again, and the others are asked (see [Torrent peers and pieces](torrent-peers.md)).
 
 ## Trackers
 

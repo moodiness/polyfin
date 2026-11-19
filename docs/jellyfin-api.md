@@ -823,7 +823,7 @@ Sources need no opening. A title's file download serves its first working versio
 
 ### Torrent start progress
 
-- `GET /Polyfin/Playback/Starting`, signed in, tells how the start of the play of the caller's own session goes: `Stage` (`""` when its play waits for no torrent, `peers`, `details`, `pieces`, or `failed`), `PeersFound`, `PeersConnected`, `Received` and `Waiting` (bytes: those received since the torrent started, and those the reads under way still wait for), and `Failure` for `failed` (`no_peers`, `silent`, `refused`, `no_trackers`, `no_udp`, `route` or `at_cap`). It tells the torrents the session's latest PlaybackInfo tries, then the one it chose for 3 minutes; never another user's or another session's.
+- `GET /Polyfin/Playback/Starting`, signed in, tells how the start of the play of the caller's own session goes: `Stage` (`""` when its play waits for no torrent, `peers`, `details`, `pieces`, or `failed`), `PeersFound`, `PeersConnected`, `Received` and `Waiting` (bytes: those received since the torrent started, and those the reads under way still wait for), and `Failure` for `failed` (`no_peers`, `silent`, `refused`, `no_trackers`, `no_udp`, `route`, `at_cap` or `info_refused`). It tells the torrents the session's latest PlaybackInfo tries, then the one it chose for 3 minutes; never another user's or another session's.
 
 ### Lower quality menu for apps
 

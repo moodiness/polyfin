@@ -5316,6 +5316,7 @@
       noPeers: 'no peer found',
       route: 'the route for torrents is down',
       atCap: 'as many torrents play as allowed',
+      infoRefused: 'its list of files is refused',
     },
     fr: {
       looking: 'Recherche de pairs…',
@@ -5330,6 +5331,7 @@
       noPeers: 'aucun pair trouvé',
       route: 'la route des torrents est coupée',
       atCap: 'autant de torrents sont lus que permis',
+      infoRefused: 'sa liste de fichiers est refusée',
     },
     de: {
       looking: 'Suche nach Peers…',
@@ -5344,6 +5346,7 @@
       noPeers: 'kein Peer gefunden',
       route: 'die Route für Torrents ist unterbrochen',
       atCap: 'es laufen so viele Torrents wie erlaubt',
+      infoRefused: 'seine Dateiliste wird abgelehnt',
     },
     es: {
       looking: 'Buscando pares…',
@@ -5358,6 +5361,7 @@
       noPeers: 'no se encontró ningún par',
       route: 'la ruta de los torrents está caída',
       atCap: 'se reproducen tantos torrents como se permite',
+      infoRefused: 'su lista de archivos es rechazada',
     },
     it: {
       looking: 'Ricerca dei peer…',
@@ -5372,6 +5376,7 @@
       noPeers: 'nessun peer trovato',
       route: 'il percorso dei torrent è interrotto',
       atCap: 'sono in riproduzione tanti torrent quanti consentiti',
+      infoRefused: 'il suo elenco di file è rifiutato',
     },
     pt: {
       looking: 'Procurando peers…',
@@ -5386,10 +5391,11 @@
       noPeers: 'nenhum peer encontrado',
       route: 'a rota dos torrents está fora do ar',
       atCap: 'há tantos torrents em reprodução quanto o permitido',
+      infoRefused: 'sua lista de arquivos é recusada',
     },
   }
   // The words of each failure Polyfin tells.
-  var failures = { silent: 'silent', no_udp: 'noUdp', refused: 'refused', no_trackers: 'noTrackers', no_peers: 'noPeers', route: 'route', at_cap: 'atCap' }
+  var failures = { silent: 'silent', no_udp: 'noUdp', refused: 'refused', no_trackers: 'noTrackers', no_peers: 'noPeers', route: 'route', at_cap: 'atCap', info_refused: 'infoRefused' }
   function language() {
     return /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
   }

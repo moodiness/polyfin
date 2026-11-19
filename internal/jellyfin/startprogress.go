@@ -102,7 +102,8 @@ func (s *playStart) trying(version library.Version) {
 
 // tried records why version, a torrent, could not start, when err tells it:
 // a start that timed out (see torrent.StartError.Why), a route that cannot
-// carry it ("route"), or as many torrents running as allowed ("at_cap").
+// carry it ("route"), as many torrents running as allowed ("at_cap"), or
+// an info dictionary refused ("info_refused", see torrent.ErrInfoRefused).
 func (s *playStart) tried(version library.Version, err error) {
 	if s == nil || version.Torrent == nil || err == nil {
 		return
@@ -116,6 +117,8 @@ func (s *playStart) tried(version library.Version, err error) {
 		why = "route"
 	case errors.Is(err, torrent.ErrAtCap):
 		why = "at_cap"
+	case errors.Is(err, torrent.ErrInfoRefused):
+		why = "info_refused"
 	default:
 		return
 	}

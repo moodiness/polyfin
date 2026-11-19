@@ -94,27 +94,44 @@ const minPieceLength = blockSize
 // fileBytes is what a File takes in memory beside its path.
 const fileBytes = 40
 
-// errInfo reports an info dictionary that does not describe a torrent.
-var errInfo = errors.New("the torrent's info dictionary is invalid")
+// ErrInfoRefused reports an info dictionary Polyfin does not read: past
+// one of the bounds above, or not a torrent's. The error that wraps it
+// tells which. One that matches its torrent's hash is the one every peer
+// sends: that torrent cannot start, and its reads fail with that error
+// (see torrent.refuse).
+var ErrInfoRefused = errors.New("the torrent's info dictionary is refused")
+
+// infoRefused is ErrInfoRefused, for the reason given.
+func infoRefused(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrInfoRefused, fmt.Sprintf(format, args...))
+}
 
 // parseInfo reads an info dictionary, whose hash it does not check.
 func parseInfo(data []byte) (Info, error) {
-	if len(data) > maxInfoSize || !valuesWithin(data, maxInfoValues) {
-		return Info{}, errInfo
+	if len(data) > maxInfoSize {
+		return Info{}, infoRefused("it is larger than %d bytes", maxInfoSize)
+	}
+	if !valuesWithin(data, maxInfoValues) {
+		return Info{}, infoRefused("it holds more than %d values, or is malformed", maxInfoValues)
 	}
 	d, rest, err := decodeDict(data)
 	if err != nil || len(rest) != 0 {
-		return Info{}, errInfo
+		return Info{}, infoRefused("it is malformed")
 	}
 	private, _ := num(d, "private")
 	info := Info{Name: str(d, "name"), Private: private == 1}
 	if len(info.Name) > maxFileName {
-		return Info{}, errInfo
+		return Info{}, infoRefused("its name is longer than %d bytes", maxFileName)
 	}
 	pieceLength, _ := num(d, "piece length")
 	pieces := str(d, "pieces")
-	if pieceLength < minPieceLength || pieceLength > maxPieceLength || len(pieces) == 0 || len(pieces)%20 != 0 {
-		return Info{}, errInfo
+	switch {
+	case pieceLength < minPieceLength:
+		return Info{}, infoRefused("its pieces are shorter than %d bytes", minPieceLength)
+	case pieceLength > maxPieceLength:
+		return Info{}, infoRefused("its pieces are longer than %d bytes", maxPieceLength)
+	case len(pieces) == 0 || len(pieces)%20 != 0:
+		return Info{}, infoRefused("its pieces' hashes are malformed")
 	}
 	info.PieceLength = pieceLength
 	info.Pieces = make([]Hash, len(pieces)/20)
@@ -127,47 +144,47 @@ func parseInfo(data []byte) (Info, error) {
 	room := int64(len(info.Pieces)) * pieceLength
 	if length, ok := num(d, "length"); ok {
 		if length < 0 || length > room {
-			return Info{}, errInfo
+			return Info{}, infoRefused("its length does not match its pieces")
 		}
 		info.Files = []File{{Path: info.Name, Length: length}}
 		info.Length = length
 	} else {
 		files := list(d, "files")
 		if len(files) > maxInfoFiles {
-			return Info{}, errInfo
+			return Info{}, infoRefused("it lists more than %d files", maxInfoFiles)
 		}
 		info.Files = make([]File, 0, len(files))
 		for _, entry := range files {
 			f, ok := entry.(map[string]any)
 			if !ok {
-				return Info{}, errInfo
+				return Info{}, infoRefused("a file is malformed")
 			}
 			length, ok := num(f, "length")
 			if !ok || length < 0 || length > room-info.Length {
-				return Info{}, errInfo
+				return Info{}, infoRefused("its files' lengths do not match its pieces")
 			}
 			parts := []string{info.Name}
 			for _, part := range list(f, "path") {
 				name, _ := part.(string)
 				if len(name) > maxFileName {
-					return Info{}, errInfo
+					return Info{}, infoRefused("a file or folder name is longer than %d bytes", maxFileName)
 				}
 				parts = append(parts, name)
 			}
 			joined := path.Join(parts...)
 			if len(joined) > maxFilePath {
-				return Info{}, errInfo
+				return Info{}, infoRefused("a path is longer than %d bytes", maxFilePath)
 			}
 			info.Files = append(info.Files, File{Path: joined, Offset: info.Length, Length: length,
 				Padding: strings.Contains(str(f, "attr"), "p")})
 			info.Length += length
 		}
 		if len(info.Files) == 0 {
-			return Info{}, errInfo
+			return Info{}, infoRefused("it lists no file")
 		}
 	}
 	if pieces := (info.Length + pieceLength - 1) / pieceLength; pieces != int64(len(info.Pieces)) {
-		return Info{}, errInfo
+		return Info{}, infoRefused("its length does not match its pieces")
 	}
 	return info, nil
 }

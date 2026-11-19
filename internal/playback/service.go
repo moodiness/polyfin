@@ -394,9 +394,10 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 			}
 			r, err := engine.Open(ctx, spec)
 			var unstarted *torrent.StartError
-			if errors.As(err, &unstarted) || errors.Is(err, torrent.ErrAtCap) {
+			if errors.As(err, &unstarted) || errors.Is(err, torrent.ErrAtCap) || errors.Is(err, torrent.ErrInfoRefused) {
 				// The swarm was waited for as long as a start may take, or the
-				// torrent may not start now: trying again would not help.
+				// torrent may not start now, or ever, as its info dictionary is
+				// refused: trying again would not help.
 				return nil, 0, source.Final(err)
 			}
 			if err != nil {

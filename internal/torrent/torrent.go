@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha1"
 	"encoding/binary"
@@ -124,6 +125,9 @@ type torrent struct {
 	dht      bool
 	info     *Info
 	infoData []byte
+	// refused is why the info dictionary the torrent's hash names was
+	// refused (see ErrInfoRefused): the torrent cannot start, and stops.
+	refused  error
 	have     []bool
 	inflight map[int]*inflightPiece
 	peers    map[netip.AddrPort]*peer
@@ -1901,7 +1905,7 @@ func (t *torrent) extended(p *peer, id byte, payload []byte) error {
 // announced: a peer whose copy has no room waits (see metadataRoom and
 // askWaiting). The lock is held.
 func (t *torrent) askMetadata(p *peer) {
-	if t.info != nil || p.metadataID == 0 || p.metadataSize == 0 || p.metadataOver {
+	if t.info != nil || t.refused != nil || p.metadataID == 0 || p.metadataSize == 0 || p.metadataOver {
 		return
 	}
 	if p.metadataWant != p.metadataSize {
@@ -1923,9 +1927,10 @@ func (t *torrent) askMetadata(p *peer) {
 // copy, allocated at its first piece, and reads the copy once whole. One
 // that does not match the torrent's hash is its peer's doing alone: the
 // peer is banned, and those that wait are asked. One that matches and is
-// refused is dropped, and its peer not asked again. The lock is held.
+// refused is the dictionary every peer sends: the torrent cannot start,
+// and stops (see refuse). The lock is held.
 func (t *torrent) receivedMetadata(p *peer, index int64, data []byte) {
-	if t.info != nil || index < 0 || index >= int64(len(p.metadataGot)) {
+	if t.info != nil || t.refused != nil || index < 0 || index >= int64(len(p.metadataGot)) {
 		return
 	}
 	piece := int(index)
@@ -1948,10 +1953,12 @@ func (t *torrent) receivedMetadata(p *peer, index int64, data []byte) {
 		wrong := sha1.Sum(p.metadata) != t.hash
 		p.dropMetadata()
 		p.metadataOver = true
-		if wrong {
-			t.engine.config.Logger.Debug("A torrent's peer is not dialed again: the info dictionary it sent did not match the torrent's hash")
-			t.ban(p.address.Addr())
+		if !wrong {
+			t.refuse(err)
+			return
 		}
+		t.engine.config.Logger.Debug("A torrent's peer is not dialed again: the info dictionary it sent did not match the torrent's hash")
+		t.ban(p.address.Addr())
 		t.askWaiting(now)
 		return
 	}
@@ -1982,6 +1989,19 @@ func (t *torrent) receivedMetadata(p *peer, index int64, data []byte) {
 		t.stopExtra()
 	}
 	t.signal()
+}
+
+// refuse stops the torrent, whose info dictionary, the one its hash names,
+// err refused: no peer sends another, so it cannot start. Its reads fail
+// at once with err, rather than once its start's time is out, and its
+// next run, while kept, does not start (see Engine.keepLocked). The lock
+// is held.
+func (t *torrent) refuse(err error) {
+	t.refused = err
+	t.signal()
+	t.engine.config.Logger.Info("A torrent did not start: its info dictionary is refused", "error", err)
+	// remove takes the engine's lock, then the torrent's.
+	go t.engine.remove(t, err)
 }
 
 // Reader reads a file of a torrent being played, as a source of the
@@ -2106,14 +2126,15 @@ func (r *Reader) Close() error {
 // connected, which sent the info or, when the torrent's last run kept it
 // (see seed), may send its pieces. Past the engine's StartTimeout
 // without them, the torrent did not start: a *StartError tells what came
-// of the search for its peers.
+// of the search for its peers. A torrent whose info dictionary was
+// refused fails at once, with why (see refuse).
 func (t *torrent) waitInfo(ctx context.Context) (*Info, error) {
 	started := time.Now()
 	deadline := time.NewTimer(t.engine.config.StartTimeout)
 	defer deadline.Stop()
 	for {
 		t.mu.Lock()
-		info, err, changed, reached := t.info, t.err, t.changed, len(t.reached) > 0
+		info, err, changed, reached := t.info, cmp.Or(t.err, t.refused), t.changed, len(t.reached) > 0
 		t.mu.Unlock()
 		if err != nil {
 			return nil, err

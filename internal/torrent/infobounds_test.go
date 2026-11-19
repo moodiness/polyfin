@@ -1,12 +1,13 @@
 package torrent
 
 import (
-	"context"
 	"crypto/sha1"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/torrent/torrenttest"
 )
@@ -84,36 +85,39 @@ func TestAnInfoDictionaryNamesWhatADiskHolds(t *testing.T) {
 		return []byte("d5:filesld6:lengthi1e4:pathl" + strings.Repeat("0:", n-15) + "1:feee4:name1:n12:piece lengthi16384e6:pieces20:" +
 			string(sum[:]) + "e")
 	}
+	// A dictionary refused tells why: refused is that reason.
 	for _, c := range []struct {
 		name    string
 		data    []byte
 		files   int
-		refused bool
+		refused string
 	}{
-		{"a name as long as a file's", infoOf(long(maxFileName), filesNamed(2)...), 2, false},
-		{"a longer name", infoOf(long(maxFileName+1), filesNamed(2)...), 0, true},
-		{"one file named as long as a file may be", oneFile(long(maxFileName)), 1, false},
-		{"one file of a longer name", oneFile(long(maxFileName + 1)), 0, true},
-		{"a folder named as long as a file may be", infoOf("n", []string{long(maxFileName), "f"}), 1, false},
-		{"a folder of a longer name", infoOf("n", []string{long(maxFileName + 1), "f"}), 0, true},
-		{"a path as long as a path may be", infoOf(long(maxFileName), deep(maxFilePath)), 1, false},
-		{"a longer path", infoOf(long(maxFileName), deep(maxFilePath+1)), 0, true},
-		{"as many files as a torrent lists", infoOf(long(maxFileName), filesNamed(maxInfoFiles)...), maxInfoFiles, false},
-		{"one file more", infoOf("n", filesNamed(maxInfoFiles+1)...), 0, true},
-		{"as many values as a dictionary holds", valued(maxInfoValues), 1, false},
-		{"one value more", valued(maxInfoValues + 1), 0, true},
-		{"a long name that many files would multiply", infoOf(long(64<<10), filesNamed(1000)...), 0, true},
-		{"pieces as long as a block", pieced(blockSize), 1, false},
-		{"pieces a byte shorter", pieced(blockSize - 1), 0, true},
-		{"pieces of one byte", pieced(1), 0, true},
+		{"a name as long as a file's", infoOf(long(maxFileName), filesNamed(2)...), 2, ""},
+		{"a longer name", infoOf(long(maxFileName+1), filesNamed(2)...), 0, "its name is longer than 765 bytes"},
+		{"one file named as long as a file may be", oneFile(long(maxFileName)), 1, ""},
+		{"one file of a longer name", oneFile(long(maxFileName + 1)), 0, "its name is longer than 765 bytes"},
+		{"a folder named as long as a file may be", infoOf("n", []string{long(maxFileName), "f"}), 1, ""},
+		{"a folder of a longer name", infoOf("n", []string{long(maxFileName + 1), "f"}), 0,
+			"a file or folder name is longer than 765 bytes"},
+		{"a path as long as a path may be", infoOf(long(maxFileName), deep(maxFilePath)), 1, ""},
+		{"a longer path", infoOf(long(maxFileName), deep(maxFilePath+1)), 0, "a path is longer than 4096 bytes"},
+		{"as many files as a torrent lists", infoOf(long(maxFileName), filesNamed(maxInfoFiles)...), maxInfoFiles, ""},
+		{"one file more", infoOf("n", filesNamed(maxInfoFiles+1)...), 0, "it lists more than 50000 files"},
+		{"as many values as a dictionary holds", valued(maxInfoValues), 1, ""},
+		{"one value more", valued(maxInfoValues + 1), 0, "it holds more than 800000 values, or is malformed"},
+		{"a long name that many files would multiply", infoOf(long(64<<10), filesNamed(1000)...), 0,
+			"its name is longer than 765 bytes"},
+		{"pieces as long as a block", pieced(blockSize), 1, ""},
+		{"pieces a byte shorter", pieced(blockSize - 1), 0, "its pieces are shorter than 16384 bytes"},
+		{"pieces of one byte", pieced(1), 0, "its pieces are shorter than 16384 bytes"},
 	} {
 		if len(c.data) > maxInfoSize {
 			t.Fatalf("%s: a dictionary of %d bytes", c.name, len(c.data))
 		}
 		info, err := parseInfo(c.data)
-		if c.refused {
-			if !errors.Is(err, errInfo) {
-				t.Errorf("%s: read as %d files, error %v", c.name, len(info.Files), err)
+		if c.refused != "" {
+			if want := "the torrent's info dictionary is refused: " + c.refused; !errors.Is(err, ErrInfoRefused) || err.Error() != want {
+				t.Errorf("%s: read as %d files, error %v, want %q", c.name, len(info.Files), err, want)
 			}
 			continue
 		}
@@ -157,7 +161,10 @@ func TestAnInfoDictionaryNamesWhatADiskHolds(t *testing.T) {
 
 // A peer's info dictionary that names more than a disk holds is not the
 // torrent's, whatever its hash: the torrent has no files to tell, plays
-// nothing, and keeps no info dictionary once it stopped.
+// nothing, and keeps no info dictionary once it stopped. As every peer
+// sends that dictionary, the torrent stops at once: its reads fail with
+// why, not as a start out of time, the log tells it, and the next run,
+// while what this one learned is kept, does not start.
 func TestAPeersInfoNamingTooMuchIsNotTaken(t *testing.T) {
 	t.Parallel()
 	const nameBytes, files = 32 << 10, 400
@@ -166,7 +173,13 @@ func TestAPeersInfoNamingTooMuchIsNotTaken(t *testing.T) {
 	seeder := torrenttest.Seed(t, tor, "127.0.0.1")
 	tracker := torrenttest.HTTPTracker(t, "127.0.0.1", seeder.Address())
 	proxy := torrenttest.StartProxy(t, false, "", "")
-	e := newEngine(t, proxied(proxy), 64<<20)
+	var log lockedBuffer
+	// The dictionary comes within moments; a read waiting for the start's
+	// whole time is the torrent taken for one that did not start.
+	e := newEngineWith(t, proxied(proxy), func(c *Config) {
+		c.StartTimeout = 20 * time.Second
+		c.Logger = slog.New(slog.NewTextHandler(&log, nil))
+	})
 	// As an addon lists it: an info hash and a tracker, nothing else.
 	spec, err := NewSpec(tor.HashHex(), nil, []string{"tracker:" + tracker.URL()})
 	if err != nil {
@@ -175,51 +188,37 @@ func TestAPeersInfoNamingTooMuchIsNotTaken(t *testing.T) {
 	stop := e.Play(spec)
 	defer stop()
 
-	// The dictionary came whole from the peer and was read: taken, or
-	// refused, its peer then not asked for it again.
-	var taken *Info
-	waitFor(t, "the peer's info dictionary", func() bool {
-		running := torrentOf(e, spec.Hash)
-		if running == nil {
-			return false
-		}
-		running.mu.Lock()
-		defer running.mu.Unlock()
-		taken = running.info
-		if taken != nil {
-			return true
-		}
-		for _, p := range running.peers {
-			if p.metadataOver {
-				return true
-			}
-		}
-		return false
-	})
-	if taken != nil {
-		kept := 0
-		for _, f := range taken.Files {
-			kept += len(f.Path)
-		}
-		t.Fatalf("a peer's %d bytes of info dictionary became %d files holding %d bytes of paths", len(data), len(taken.Files), kept)
-	}
-	ended, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, listed, err := e.Files(ended, spec); err == nil {
-		t.Fatalf("the torrent tells %d files", len(listed))
-	}
-	if _, err := e.Open(ended, spec); err == nil {
+	const why = "the torrent's info dictionary is refused: its name is longer than 765 bytes"
+	r, err := e.Open(t.Context(), spec)
+	if err == nil {
+		r.Close()
 		t.Fatal("the torrent's file opens")
 	}
-
-	stop()
-	e.End(spec.Hash)
+	if !errors.Is(err, ErrInfoRefused) || err.Error() != why {
+		t.Fatalf("the read failed with %v, want %q", err, why)
+	}
 	waitFor(t, "the torrent to stop", func() bool { return !e.Running(spec.Hash) })
+	if !strings.Contains(log.String(), `msg="A torrent did not start: its info dictionary is refused" error="`+why+`"`) {
+		t.Errorf("the log tells:\n%s", log.String())
+	}
 	e.mu.Lock()
 	run := e.kept[spec.Hash]
 	e.mu.Unlock()
 	if run.info != nil || run.infoData != nil || run.infoSize != 0 {
 		t.Fatalf("the stopped torrent kept an info dictionary of %d bytes", run.infoSize)
+	}
+
+	// Played again, it does not start, and its reads tell why at once.
+	again := e.Play(spec)
+	defer again()
+	if e.Running(spec.Hash) {
+		t.Error("the torrent runs again")
+	}
+	if _, listed, err := e.Files(t.Context(), spec); !errors.Is(err, ErrInfoRefused) || err.Error() != why {
+		t.Errorf("the torrent's files: %d, %v", len(listed), err)
+	}
+	if _, err := e.Open(t.Context(), spec); !errors.Is(err, ErrInfoRefused) || err.Error() != why {
+		t.Errorf("the torrent's file read again: %v", err)
 	}
 }
 

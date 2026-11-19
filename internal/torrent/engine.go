@@ -92,15 +92,18 @@ type Outage struct {
 // keptRun is what a stopped torrent learned, for its next run until
 // until: the peers it connected to, the latest first, its info
 // dictionary, nil when none came, with the bytes it takes in memory
-// (infoSize), and the DHT nodes nearest it that answered its last lookup.
-// order is the turn it was kept in, which the dropping follows: a clock
-// may tell the same time for torrents stopped one after the other.
+// (infoSize), and the DHT nodes nearest it that answered its last lookup;
+// or why its info dictionary was refused, refused, which its next run
+// meets without starting. order is the turn it was kept in, which the
+// dropping follows: a clock may tell the same time for torrents stopped
+// one after the other.
 type keptRun struct {
 	peers    []netip.AddrPort
 	info     *Info
 	infoData []byte
 	infoSize int
 	nodes    []string
+	refused  error
 	until    time.Time
 	order    uint64
 }
@@ -417,6 +420,11 @@ func (e *Engine) start(spec Spec) *torrent {
 		return nil
 	}
 	e.mu.Lock()
+	if e.refusedLocked(spec.Hash) != nil {
+		// Its reads fail at once with why (see playing).
+		e.mu.Unlock()
+		return nil
+	}
 	if e.fullLocked(spec.Hash, limit) {
 		e.mu.Unlock()
 		e.capped(limit)
@@ -505,18 +513,26 @@ func (e *Engine) keptLocked(hash Hash) (keptRun, bool) {
 	return kept, true
 }
 
+// refusedLocked returns why the info dictionary of the torrent of hash
+// was refused, while its last run is kept; nil otherwise. e.mu is held.
+func (e *Engine) refusedLocked(hash Hash) error {
+	kept, _ := e.keptLocked(hash)
+	return kept.refused
+}
+
 // keepLocked keeps, for keptFor, what a torrent that stops learned, for
 // its next run (see torrent.seed): the peers it connected to, its info
-// dictionary, and the DHT nodes nearest it. A run that connected to no
-// peer and got no info learned nothing new: what an earlier run kept
-// stays as it was. The kept torrents stay within maxKept and maxKeptInfo,
-// those kept longest dropped first. e's lock is held.
+// dictionary, and the DHT nodes nearest it, or why its info dictionary
+// was refused. A run that connected to no peer and got no info learned
+// nothing new: what an earlier run kept stays as it was. The kept
+// torrents stay within maxKept and maxKeptInfo, those kept longest
+// dropped first. e's lock is held.
 func (e *Engine) keepLocked(t *torrent) {
 	t.mu.Lock()
-	run := keptRun{peers: slices.Clone(t.reached), info: t.info, infoData: t.infoData, nodes: slices.Clone(t.closest)}
+	run := keptRun{peers: slices.Clone(t.reached), info: t.info, infoData: t.infoData, nodes: slices.Clone(t.closest), refused: t.refused}
 	private := t.private()
 	t.mu.Unlock()
-	if len(run.peers) == 0 && run.info == nil {
+	if len(run.peers) == 0 && run.info == nil && run.refused == nil {
 		return
 	}
 	slices.Reverse(run.peers)
@@ -751,7 +767,8 @@ func (e *Engine) remove(t *torrent, err error) {
 // torrent and its peers told what files it holds, waiting at most until
 // ctx is done or the config's StartTimeout passes, which is a
 // *StartError. A torrent no playback joined is ErrNotPlaying; one whose
-// route fails, why.
+// route fails, why; one whose info dictionary is refused, an error
+// wrapping ErrInfoRefused that tells why, at once.
 func (e *Engine) Open(ctx context.Context, spec Spec) (*Reader, error) {
 	t, err := e.playing(ctx, spec.Hash)
 	if err != nil {
@@ -789,10 +806,11 @@ func (e *Engine) ReadFile(ctx context.Context, spec Spec, index int, limit int64
 }
 
 // playing returns the torrent of hash: a torrent no playback joined is
-// ErrNotPlaying. One that runs over the route set is returned at once: it
-// watches its route itself, and plays on through an outage (see
-// torrent.guard). Otherwise the route is checked first, and its failure
-// returned.
+// ErrNotPlaying, and one whose info dictionary its last run refused, while
+// that is kept, why (see torrent.refuse). One that runs over the route set
+// is returned at once: it watches its route itself, and plays on through
+// an outage (see torrent.guard). Otherwise the route is checked first, and
+// its failure returned.
 func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	route, err := e.currentRoute()
 	if err != nil {
@@ -800,6 +818,12 @@ func (e *Engine) playing(ctx context.Context, hash Hash) (*torrent, error) {
 	}
 	if t := e.runningOver(hash, route); t != nil {
 		return t, nil
+	}
+	e.mu.Lock()
+	refused := e.refusedLocked(hash)
+	e.mu.Unlock()
+	if refused != nil {
+		return nil, refused
 	}
 	if err := route.Check(ctx); err != nil {
 		return nil, err
