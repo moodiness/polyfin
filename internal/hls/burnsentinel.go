@@ -91,14 +91,14 @@ func sentinelTime(duration time.Duration) time.Duration {
 
 // burnCopy is the copy, with a sentinel, of a subtitle file that the jobs
 // of an encoding burn in: made once at name, by the first job that needs
-// it, and removed with the encoding's folder. file is what FFmpeg reads
-// once made: the copy, the file itself when no copy could be made, or
-// nothing when the file is not to be burned in (see sentinelCopy).
+// it, and removed with the encoding's folder. file and sub are what FFmpeg
+// reads once made: the copy, else what sentinelCopy returns instead.
 type burnCopy struct {
 	name string
 	mu   sync.Mutex
 	made bool
 	file string
+	sub  string
 }
 
 // burnInput returns input reading the encoding's copy of the subtitle file
@@ -124,46 +124,65 @@ func (e *encoding) burnInput(ctx context.Context, input *Remux) *Remux {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.made {
-		file, ok := e.m.sentinelCopy(ctx, input, c.name)
+		file, sub, ok := e.m.sentinelCopy(ctx, input, c.name)
 		if !ok && ctx.Err() != nil {
 			return input
 		}
-		c.made, c.file = true, file
+		c.made, c.file, c.sub = true, file, sub
 	}
-	return burning(input, c.file)
+	return burning(input, c.file, c.sub)
 }
 
 // sentinelCopy writes a copy of the subtitle file r burns in, with a
 // sentinel, at name and the file's extension, and returns its path and
-// true; when it cannot, it logs why and returns the file r burns in and
-// false, or no file and false for a VobSub pair whose .idx file is past
-// maxIndexBytes: the conversion then burns nothing in.
-func (m *Manager) sentinelCopy(ctx context.Context, r *Remux, name string) (string, bool) {
+// true. When it cannot, it logs why and returns false with what FFmpeg
+// reads instead: a PGS file itself; of a VobSub pair, the copy of its .idx
+// file as read at name.idx and the address of its .sub file, which FFmpeg
+// reads itself, or no file when the .idx file could not be read within
+// maxIndexBytes or copied: the conversion then burns nothing in. FFmpeg
+// never opens a pair's .idx file itself, which may change once read and
+// which it holds whole, several times over.
+func (m *Manager) sentinelCopy(ctx context.Context, r *Remux, name string) (file, sub string, ok bool) {
 	original := r.Encode.BurnFile
-	file, err := writeBurnCopy(ctx, original, name, sentinelTime(max(r.Duration, r.Plan.duration)+r.Shift))
-	if err != nil {
-		if errors.Is(err, errIndexTooLarge) {
-			m.logger.Warn("A subtitle file is not burned in: its .idx file is larger than a movie's", "file", original, "limit", maxIndexBytes)
-			return "", false
-		}
+	file, sub, err := writeBurnCopy(ctx, original, name, sentinelTime(max(r.Duration, r.Plan.duration)+r.Shift))
+	switch {
+	case err == nil:
+		return file, "", true
+	case file == "" && errors.Is(err, errIndexTooLarge):
+		m.logger.Warn("A subtitle file is not burned in: its .idx file is larger than a movie's", "file", original, "limit", maxIndexBytes)
+		return "", "", false
+	case file == "" && vobSubIndex(original):
 		if ctx.Err() == nil {
-			m.logger.Info("A subtitle file is burned in as it is, without a sentinel: FFmpeg 9.0 may stop for good at its end", "file", original, "error", err)
+			m.logger.Warn("A subtitle file is not burned in: its .idx file could not be read or copied", "file", original, "error", err)
 		}
-		return original, false
+		return "", "", false
+	case file == "":
+		file = original
 	}
-	return file, true
+	if ctx.Err() == nil {
+		m.logger.Info("A subtitle file is burned in as it is, without a sentinel: FFmpeg 9.0 may stop for good at its end", "file", original, "error", err)
+	}
+	return file, sub, false
 }
 
-// burning returns a copy of r burning file in, r itself when it already
-// does: the Remux of a job is shared with the encoding's other jobs.
-func burning(r *Remux, file string) *Remux {
-	if r.Encode.BurnFile == file {
+// burning returns a copy of r burning file in, with the .sub file sub when
+// file is a copy of a VobSub pair's .idx file not beside it, r itself when
+// it already does: the Remux of a job is shared with the encoding's other
+// jobs.
+func burning(r *Remux, file, sub string) *Remux {
+	if r.Encode.BurnFile == file && r.Encode.BurnSub == sub {
 		return r
 	}
 	burned, encode := *r, *r.Encode
-	encode.BurnFile = file
+	encode.BurnFile, encode.BurnSub = file, sub
 	burned.Encode = &encode
 	return &burned
+}
+
+// vobSubIndex reports whether the subtitle file original, by path or http
+// URL, is a VobSub pair's .idx file.
+func vobSubIndex(original string) bool {
+	return len(original) >= 4 && original[len(original)-4] == '.' && strings.EqualFold(original[len(original)-3:], "idx")
 }
 
 // writeBurnCopy writes a copy of original, a PGS file or a VobSub pair's
@@ -172,10 +191,13 @@ func burning(r *Remux, file string) *Remux {
 // path: name.sup, or name.idx beside name.sub. A file whose format or
 // layout it does not know, or a PGS or .sub file past maxBurnBytes, is
 // errNoSentinel, and an .idx file past maxIndexBytes errIndexTooLarge;
-// nothing is left behind on an error.
-func writeBurnCopy(ctx context.Context, original, name string, at time.Duration) (string, error) {
+// nothing is left behind on an error, but for a pair whose .idx file was
+// read: when no sentinel can be added to it, the .idx file is written as
+// read to name.idx, and returned with the address of the pair's .sub file
+// and the error.
+func writeBurnCopy(ctx context.Context, original, name string, at time.Duration) (string, string, error) {
 	if len(original) < 4 || original[len(original)-4] != '.' {
-		return "", errNoSentinel
+		return "", "", errNoSentinel
 	}
 	switch strings.ToLower(original[len(original)-3:]) {
 	case "sup":
@@ -183,9 +205,9 @@ func writeBurnCopy(ctx context.Context, original, name string, at time.Duration)
 		if err := writeCopy(ctx, original, out, func(w io.Writer, r io.Reader) error {
 			return copyPGS(w, &bounded{r: r, left: maxBurnBytes, over: errNoSentinel}, at)
 		}); err != nil {
-			return "", err
+			return "", "", err
 		}
-		return out, nil
+		return out, "", nil
 	case "idx":
 		// FFmpeg reads the .sub file of the same name, the extension's
 		// last three letters replaced by SUB after IDX, else by sub.
@@ -198,35 +220,44 @@ func writeBurnCopy(ctx context.Context, original, name string, at time.Duration)
 			_, err := io.Copy(&read, &bounded{r: r, left: maxIndexBytes, over: errIndexTooLarge})
 			return err
 		}); err != nil {
-			return "", err
+			return "", "", err
 		}
-		idx := read.String()
+		out := name + ".idx"
+		var marked string
 		if err := writeCopy(ctx, sub, name+".sub", func(w io.Writer, r io.Reader) error {
 			size, err := io.Copy(w, &bounded{r: r, left: maxBurnBytes, over: errNoSentinel})
 			if err != nil {
 				return err
 			}
-			marked, packs, err := vobSubSentinel(idx, size, at)
+			idx, packs, err := vobSubSentinel(read.String(), size, at)
 			if err != nil {
 				return err
 			}
 			if _, err := w.Write(packs); err != nil {
 				return err
 			}
-			idx = marked
+			marked = idx
 			return nil
 		}); err != nil {
-			return "", err
+			if ctx.Err() != nil {
+				return "", "", err
+			}
+			// FFmpeg reads the .sub file itself, from the copy of the
+			// .idx file as read (see VideoEncoding.BurnSub).
+			if werr := os.WriteFile(out, []byte(read.String()), 0o600); werr != nil {
+				_ = os.Remove(out)
+				return "", "", errors.Join(err, werr)
+			}
+			return out, sub, err
 		}
-		out := name + ".idx"
-		if err := os.WriteFile(out, []byte(idx), 0o600); err != nil {
+		if err := os.WriteFile(out, []byte(marked), 0o600); err != nil {
 			_ = os.Remove(out)
 			_ = os.Remove(name + ".sub")
-			return "", err
+			return "", "", err
 		}
-		return out, nil
+		return out, "", nil
 	}
-	return "", errNoSentinel
+	return "", "", errNoSentinel
 }
 
 // writeCopy writes to the file out what write makes of the file original,

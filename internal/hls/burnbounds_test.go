@@ -133,9 +133,10 @@ func paddedIndex(idx string, n int) string {
 
 // A subtitle file larger than a movie's is neither read nor copied past
 // its bound: the share is left there, and nothing of the copy stays in
-// the folder. A PGS or .sub file past it is burned in as it is, which
-// FFmpeg reads as a stream; a VobSub pair whose .idx file is past its own
-// is not burned in, as FFmpeg would hold all of it.
+// the folder but the .idx file as read of a pair whose .sub file is past
+// its bound, which FFmpeg then reads itself as a stream, as it does a PGS
+// file past it; a VobSub pair whose .idx file is past its own is not
+// burned in, as FFmpeg would hold all of it.
 func TestBurnCopyStopsReadingAtItsBounds(t *testing.T) {
 	t.Parallel()
 	idx, sub := sentinelRectangle.VobSub()
@@ -151,13 +152,15 @@ func TestBurnCopyStopsReadingAtItsBounds(t *testing.T) {
 		bound   int64
 		unread  string
 		refused bool
+		// asRead is a pair whose .idx file is copied as read.
+		asRead bool
 	}{
 		{name: "an .idx file", original: "Movie.idx", read: "Movie.idx", bound: maxIndexBytes, unread: "Movie.sub", refused: true,
 			files: map[string]func(io.Writer) error{
 				"Movie.idx": repeated(idx, comments, maxIndexBytes+shareExcess-int64(len(idx))),
 				"Movie.sub": repeated(string(sub), nil, 0),
 			}},
-		{name: "a .sub file", original: "Movie.idx", read: "Movie.sub", bound: maxBurnBytes,
+		{name: "a .sub file", original: "Movie.idx", read: "Movie.sub", bound: maxBurnBytes, asRead: true,
 			files: map[string]func(io.Writer) error{
 				"Movie.idx": repeated(idx, nil, 0),
 				"Movie.sub": repeated(string(sub), zeros, maxBurnBytes+shareExcess-int64(len(sub))),
@@ -170,9 +173,19 @@ func TestBurnCopyStopsReadingAtItsBounds(t *testing.T) {
 			share := newSubtitleShare(t, c.files)
 			dir := t.TempDir()
 			original := share.URL + "/" + c.original
-			_, err := writeBurnCopy(t.Context(), original, filepath.Join(dir, "burn"), time.Hour)
+			file, sub, err := writeBurnCopy(t.Context(), original, filepath.Join(dir, "burn"), time.Hour)
 			if !errors.Is(err, errNoSentinel) || errors.Is(err, errIndexTooLarge) != c.refused {
 				t.Errorf("writeBurnCopy: %v, want errNoSentinel, and errIndexTooLarge: %v", err, c.refused)
+			}
+			if c.asRead {
+				if got, _ := os.ReadFile(file); file != filepath.Join(dir, "burn.idx") || string(got) != idx || sub != share.URL+"/Movie.sub" {
+					t.Errorf("FFmpeg reads %s with %s, want the .idx file as read and the .sub file itself", file, sub)
+				}
+				if err := os.Remove(file); err != nil {
+					t.Fatal(err)
+				}
+			} else if file != "" || sub != "" {
+				t.Errorf("FFmpeg reads %s with %s, want no file", file, sub)
 			}
 			gave := share.gave(c.read)
 			t.Logf("the share gave %d bytes of %s past its bound of %d", gave-c.bound, c.read, c.bound)
@@ -196,11 +209,11 @@ func TestBurnCopyStopsReadingAtItsBounds(t *testing.T) {
 			}
 			defer m.Close()
 			r := &Remux{Encode: &VideoEncoding{BurnFile: original}}
-			file, ok := m.sentinelCopy(t.Context(), r, filepath.Join(dir, "burn"))
+			file, _, ok := m.sentinelCopy(t.Context(), r, filepath.Join(dir, "burn"))
 			if ok || file != "" {
 				t.Errorf("FFmpeg is given %q, want no file", file)
 			}
-			if burning(r, file).Encode.Burns() {
+			if burning(r, file, "").Encode.Burns() {
 				t.Error("the conversion still burns a file in")
 			}
 			if entries, _ := os.ReadDir(dir); len(entries) > 0 {
@@ -248,7 +261,7 @@ func TestBurnCopyTakesFilesAtItsBounds(t *testing.T) {
 			"Movie.sub": repeated(string(sub), make([]byte, 64<<10), maxBurnBytes-int64(len(sub))),
 		})
 		dir := t.TempDir()
-		copied, err := writeBurnCopy(t.Context(), share.URL+"/Movie.idx", filepath.Join(dir, "burn"), at)
+		copied, _, err := writeBurnCopy(t.Context(), share.URL+"/Movie.idx", filepath.Join(dir, "burn"), at)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -271,7 +284,7 @@ func TestBurnCopyTakesFilesAtItsBounds(t *testing.T) {
 		t.Parallel()
 		share := newSubtitleShare(t, map[string]func(io.Writer) error{"Movie.sup": pgsOfSize(maxBurnBytes)})
 		dir := t.TempDir()
-		copied, err := writeBurnCopy(t.Context(), share.URL+"/Movie.sup", filepath.Join(dir, "burn"), at)
+		copied, _, err := writeBurnCopy(t.Context(), share.URL+"/Movie.sup", filepath.Join(dir, "burn"), at)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -294,7 +307,7 @@ func TestBurnCopyTakesFilesAtItsBounds(t *testing.T) {
 }
 
 // A copy the share cuts short leaves nothing in the folder, as before the
-// copies had a bound.
+// copies had a bound, but the .idx file as read of a whole .idx file.
 func TestBurnCopyCutShortLeavesNothingBehind(t *testing.T) {
 	t.Parallel()
 	idx, sub := sentinelRectangle.VobSub()
@@ -313,8 +326,17 @@ func TestBurnCopyCutShortLeavesNothingBehind(t *testing.T) {
 	defer share.Close()
 	for _, original := range []string{"Cut.sup", "Cut.idx", "Whole.idx"} {
 		dir := t.TempDir()
-		if copied, err := writeBurnCopy(t.Context(), share.URL+"/"+original, filepath.Join(dir, "burn"), time.Hour); err == nil {
+		copied, _, err := writeBurnCopy(t.Context(), share.URL+"/"+original, filepath.Join(dir, "burn"), time.Hour)
+		if err == nil {
 			t.Errorf("%s: copied to %s, want an error", original, copied)
+		}
+		if original == "Whole.idx" {
+			if got, _ := os.ReadFile(copied); copied != filepath.Join(dir, "burn.idx") || string(got) != idx {
+				t.Errorf("%s: copied to %s, want the .idx file as read", original, copied)
+			}
+			if err := os.Remove(copied); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if entries, _ := os.ReadDir(dir); len(entries) > 0 {
 			t.Errorf("%s: left %v behind", original, entries)

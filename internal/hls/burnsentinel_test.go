@@ -226,8 +226,8 @@ func TestVobSubSentinelRefusesMalformedFiles(t *testing.T) {
 }
 
 // writeBurnCopy reads the files over HTTP as by path, the .sub file named
-// as FFmpeg names it; a file it cannot add a sentinel to leaves nothing
-// behind, and a Manager then burns the file itself in.
+// as FFmpeg names it; a PGS file it cannot add a sentinel to leaves
+// nothing behind, and a Manager then burns the file itself in.
 func TestBurnCopy(t *testing.T) {
 	t.Parallel()
 	served := t.TempDir()
@@ -243,7 +243,7 @@ func TestBurnCopy(t *testing.T) {
 	for _, original := range []string{filepath.Join(served, "a.sup"), server.URL + "/a.sup", server.URL + "/b.IDX", filepath.Join(served, "c.idx")} {
 		dir := t.TempDir()
 		at := sentinelTime(30 * time.Second)
-		copied, err := writeBurnCopy(t.Context(), original, filepath.Join(dir, "burn"), at)
+		copied, _, err := writeBurnCopy(t.Context(), original, filepath.Join(dir, "burn"), at)
 		if err != nil {
 			t.Fatalf("%s: %v", original, err)
 		}
@@ -275,7 +275,7 @@ func TestBurnCopy(t *testing.T) {
 	for _, original := range []string{filepath.Join(served, "bad.sup"), server.URL + "/missing.sup", filepath.Join(served, "a.ass")} {
 		dir := t.TempDir()
 		r := &Remux{Encode: &VideoEncoding{BurnFile: original}}
-		if file, ok := m.sentinelCopy(t.Context(), r, filepath.Join(dir, "burn")); ok || file != original {
+		if file, sub, ok := m.sentinelCopy(t.Context(), r, filepath.Join(dir, "burn")); ok || file != original || sub != "" {
 			t.Errorf("%s: burned %s, want the file itself", original, file)
 		}
 		if entries, _ := os.ReadDir(dir); len(entries) > 0 {

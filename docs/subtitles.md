@@ -300,6 +300,7 @@ When an app cannot show picture subtitles, Polyfin burns them into the video. Th
 - Burning in is a video conversion, described in [Transcoding](transcoding.md).
 - It counts toward **Video conversions at once (0 = no limit)** (see [Transcoding](transcoding.md#video-conversions-at-once)).
 - A subtitle file burned in is read from its start.
+- A VobSub pair's `.idx` file is read once, up to 4 MiB, and FFmpeg reads Polyfin's copy of it, never the file itself; the `.sub` file is copied too when it can be, else FFmpeg reads it where it is. A pair whose `.idx` file cannot be read, or is larger, is not burned in: the video plays without it, and the log says why.
 - After a seek, a picture shown more than 10 seconds before the seek point and still on screen is not drawn until the next one.
 - With **Turn picture subtitles into text** on, a text copy of the track spares that conversion once it is ready.
 

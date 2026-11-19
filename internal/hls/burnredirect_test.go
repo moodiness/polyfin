@@ -38,7 +38,7 @@ func TestARedirectedSubtitleFileDoesNotTellTheAddressItComesFrom(t *testing.T) {
 	defer source.Close()
 	for _, name := range []string{"a.sup", "b.idx"} {
 		original := source.URL + "/key-1/subtitles/" + name
-		if _, err := writeBurnCopy(t.Context(), original, filepath.Join(t.TempDir(), "burn"), sentinelTime(30*time.Second)); err != nil {
+		if _, _, err := writeBurnCopy(t.Context(), original, filepath.Join(t.TempDir(), "burn"), sentinelTime(30*time.Second)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}

@@ -225,9 +225,12 @@ type VideoEncoding struct {
 	// Burn is the FFmpeg index of an image subtitle stream burned into the
 	// video, nil for none; BurnFile, the address of an image subtitle file
 	// burned in instead, a PGS file or a VobSub pair's .idx file, read
-	// beside the source (see burnGraph).
+	// beside the source (see burnGraph). BurnSub is the address of the
+	// pair's .sub file when BurnFile, Polyfin's copy of its .idx file, is
+	// not beside it (see sentinelCopy), empty otherwise.
 	Burn     *int
 	BurnFile string
+	BurnSub  string
 	// Colors are the source's, as its analysis states them, which video
 	// converted without tone mapping keeps (see tags).
 	Colors Colors
@@ -386,6 +389,19 @@ func (v *VideoEncoding) cpuCurve() string {
 // Burns reports whether subtitles are burned into the video.
 func (v *VideoEncoding) Burns() bool {
 	return v.Burn != nil || v.BurnFile != ""
+}
+
+// burnFileArgs is FFmpeg's second input, the subtitle file burned in,
+// with its options: the .sub file BurnSub names, which the VobSub
+// demuxer opens with the protocols allowed to the .idx file, a local
+// copy. A picture subtitle file is a local folder's, served on Polyfin's
+// loopback interface over plain HTTP (see localfiles' subtitles), so
+// file, http and tcp are all it needs.
+func (v *VideoEncoding) burnFileArgs() []string {
+	if v.BurnSub == "" {
+		return []string{"-i", v.BurnFile}
+	}
+	return []string{"-protocol_whitelist", "file,http,tcp", "-sub_name", v.BurnSub, "-i", v.BurnFile}
 }
 
 // burnLead is how long before a job's start the pictures of a subtitle
@@ -2424,7 +2440,7 @@ func (r Remux) args(n int, lookback time.Duration) []string {
 	video := "0:" + strconv.Itoa(r.Video)
 	if r.Encode != nil && r.Encode.Burns() {
 		if r.Encode.BurnFile != "" {
-			args = append(args, "-i", r.Encode.BurnFile)
+			args = append(args, r.Encode.burnFileArgs()...)
 		}
 		args = append(args, "-filter_complex", r.Encode.burnGraph(r.Video, from, r.Encode.skip(r.Plan, n, from)))
 		video = "[video]"
