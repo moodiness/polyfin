@@ -543,9 +543,10 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 ### Remote images for apps
 
+- Listing the providers and their images, and downloading one, are for administrators, as the rest of Edit images is: anyone else gets `403`.
 - `/Items/{id}/RemoteImages/Providers` lists `TMDB` and `Addons` with their `SupportedImages`: both for movies and series, `TMDB` alone (Primary) for seasons, episodes and people, none for other items or without a key.
 - `/Items/{id}/RemoteImages` answers a `RemoteImageResult` for `type` (every type when left out), `providerName`, `includeAllLanguages`, `startIndex` and `limit`. An addon's image has its addon's name as `ProviderName`. `Url` and `ThumbnailUrl` are Polyfin addresses, signed for the item, which apps load without credentials.
-- `POST /Items/{id}/RemoteImages/Download?type=&imageUrl=` is for administrators (403 otherwise). `imageUrl` must be a `Url` Polyfin listed for the item and type (400 otherwise); `providerName` is ignored.
+- `POST /Items/{id}/RemoteImages/Download?type=&imageUrl=` takes an `imageUrl` that is a `Url` Polyfin listed for the item and type (400 otherwise); `providerName` is ignored.
 
 ### Edit images and Identify for apps
 

@@ -27,7 +27,8 @@ import (
 // server's secret: images are relayed as all artwork is, so apps never
 // talk to TMDB or to an addon's artwork server, and Polyfin relays nothing
 // but what it listed, an addon's artwork under its addon's confinement.
-// Downloading one, for administrators, keeps it as an upload is (see
+// Listing and downloading are for administrators, as the rest of Edit
+// images is. Downloading one keeps it as an upload is (see
 // uploadItemImage), and refuses an address Polyfin did not list for the
 // item and image type.
 

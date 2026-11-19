@@ -61,8 +61,11 @@ func (h *Handler) metadataRoutes(rt *router) {
 	administrator(http.MethodGet, "/Items/{itemId}/MetadataEditor", h.metadataEditor)
 	administrator(http.MethodPost, "/Items/{itemId}", h.updateItem)
 	administrator(http.MethodGet, "/Items/{itemId}/ExternalIdInfos", h.externalIDInfos)
-	signedIn(http.MethodGet, "/Items/{itemId}/RemoteImages", h.remoteImages)
-	signedIn(http.MethodGet, "/Items/{itemId}/RemoteImages/Providers", h.remoteImageProviders)
+	// The candidates come from every server addon and from TMDB on the
+	// server's key: listing them is an administrator's, as the rest of
+	// Edit images is.
+	administrator(http.MethodGet, "/Items/{itemId}/RemoteImages", h.remoteImages)
+	administrator(http.MethodGet, "/Items/{itemId}/RemoteImages/Providers", h.remoteImageProviders)
 	administrator(http.MethodPost, "/Items/{itemId}/RemoteImages/Download", h.downloadRemoteImage)
 	// Apps load images without credentials: the addresses are signed.
 	rt.handle(http.MethodGet, "/Items/{itemId}/RemoteImages/Image", http.HandlerFunc(h.remoteImage))
