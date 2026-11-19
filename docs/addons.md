@@ -403,7 +403,8 @@ An addon that answers with an error was reached. The log and **System › Health
 | Answers `401`, `403` or another error but `404` and `429` | refused the request | `addon refused the request: HTTP 403`, with the addon's reason when it gives one: `addon refused the request: HTTP 403 (Unavailable)` |
 | Answers `429`, or `503` with `Retry-After` | asked to slow down (too many requests) | `addon asked to slow down: HTTP 429`, or `addon asked to wait: HTTP 503, retry after 30s` |
 | Answers `500` or another server error | answered with a server error | `addon failed: HTTP 502` |
-| Does not answer | could not be reached, or did not answer in time (30 seconds for streams, 15 for anything else) | `addon unreachable: ...` |
+| Cannot be reached | could not be reached | `addon unreachable: ...` |
+| Does not answer in time: 30 seconds for streams, 15 for anything else | did not answer in time | `addon did not answer within 30s`, or `within 15s` |
 
 The reason of a refusal is the `error` or `message` of the addon's JSON answer. A short plain-text answer is the reason too. Polyfin puts it on one line and cuts it at 120 characters. It replaces with `<redacted>` anything that looks like an address, a token or a key.
 

@@ -240,8 +240,11 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 // get downloads a resource of the addon manifestURL installs, within
 // timeout, and records how its answer went (see Health). The request is
 // one to the source itself: not confined, it reaches local addresses only.
+// A request timeout ended fails as the addon not answering within it (see
+// timedOut).
 func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool, timeout time.Duration) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(toSource(ctx), timeout)
+	parent := toSource(ctx)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
@@ -255,7 +258,7 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 		if !offNetwork(ctx, err) {
 			c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
 		}
-		return nil, err
+		return nil, limitEnded(parent, ctx, timeout, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -277,7 +280,7 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		c.health.record(ctx, manifestURL, target, started, failureOf(ctx, err))
-		return nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
+		return nil, limitEnded(parent, ctx, timeout, fmt.Errorf("%w: %w", ErrUnreachable, err))
 	}
 	if len(body) > maxResponseBytes {
 		c.health.record(ctx, manifestURL, target, started, FailureInvalidResponse)
@@ -285,6 +288,30 @@ func (c *Client) get(ctx context.Context, manifestURL, target string, confined b
 	}
 	c.health.record(ctx, manifestURL, target, started, "")
 	return body, nil
+}
+
+// timedOut is the error of a request the addon did not answer within the
+// time Polyfin gives it (see requestTimeout): its text names that limit,
+// as Health tells it, rather than the context's "deadline exceeded". It is
+// ErrUnreachable, as no resource came of it, context.DeadlineExceeded, and
+// the request's own error.
+type timedOut struct {
+	limit time.Duration
+	err   error
+}
+
+func (t timedOut) Error() string { return "addon did not answer within " + t.limit.String() }
+
+func (t timedOut) Unwrap() []error { return []error{ErrUnreachable, context.DeadlineExceeded, t.err} }
+
+// limitEnded returns err, the failure of a request on ctx, which get gave
+// limit within parent, as timedOut when that limit ended it. A request its
+// caller ended keeps its error, whatever ended the caller.
+func limitEnded(parent, ctx context.Context, limit time.Duration, err error) error {
+	if parent.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return timedOut{limit: limit, err: err}
+	}
+	return err
 }
 
 // httpStatus is the status of an answer that is not a success.
