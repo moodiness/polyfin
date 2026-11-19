@@ -2811,10 +2811,11 @@ func (s *Service) series(ctx context.Context, v view, id accounts.ID) (Item, str
 // seriesRecords is what the records of a series' seasons and episodes
 // keep of the description they are made from (see describedSeries).
 type seriesRecords struct {
-	// addon described the series: its owner decides whether the records
-	// replace the stored ones (see savedData), so that a user's own
-	// description never replaces the records of a series the server's
-	// addons describe.
+	// addon described the series, or completed the description of one of
+	// the server's IPTV sources when it is the user's own: its owner
+	// decides whether the records replace the stored ones (see
+	// savedData), so that a user's own description, or completion, never
+	// replaces the records of a series the server's addons describe.
 	addon accounts.ID
 	// confined tells whether the records are confined to public
 	// addresses (see record.Confined).
@@ -2842,7 +2843,11 @@ func (s *Service) describedSeries(ctx context.Context, v view, id accounts.ID) (
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
 	s.fromMeta(&item, shown, v.country)
 	item.Contents = contents(meta, nil, s.now())
-	return item, shown, meta, seriesRecords{addon: by.addon.ID, confined: r.Confined || by.confined || completedBy.confined}, nil
+	owner := by.addon.ID
+	if completedBy.addon.ID != (accounts.ID{}) && !completedBy.shared {
+		owner = completedBy.addon.ID
+	}
+	return item, shown, meta, seriesRecords{addon: owner, confined: r.Confined || by.confined || completedBy.confined}, nil
 }
 
 func seasonNumbers(meta stremio.Meta) []int {
