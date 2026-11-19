@@ -1002,6 +1002,12 @@ func splitJoined(joined string) []string {
 // same name beside it, in any letter case.
 const lyricsOf = `l.addon_id = t.addon_id AND lower(regexp_replace(l.path, '\.[^./]*$', '')) = lower(regexp_replace(t.path, '\.[^./]*$', ''))`
 
+// lyricsTag is the lyrics tag of a track t, empty past maxText, as a scan
+// leaves it out: a tag stored before tags were bounded may be larger, and
+// would be read whole at each request. octet_length reads the size the
+// database keeps of a text, not the text.
+var lyricsTag = `CASE WHEN octet_length(t.lyrics) <= ` + strconv.Itoa(maxText) + ` THEN t.lyrics ELSE '' END`
+
 // coverURL is the address an album's artwork or an artist's picture is
 // served at by the loopback interface (see Open), changing with it; empty
 // for none.
@@ -1026,8 +1032,8 @@ func (s *Service) coverURL(cover *accounts.ID, image, contentType string, modifi
 // tracksQuery lists a music folder's tracks with their artists and album
 // artists, one by one, whether they have lyrics (a lyrics file or tag),
 // their album's artwork, and their track gain tag and measured loudness.
-const tracksQuery = `SELECT t.id, t.title, t.artist, t.album, t.album_artist, t.artists, t.album_artists, t.album_id, t.track, t.disc, t.year,
-	t.genres, t.duration, t.container, t.lyrics <> '' OR EXISTS (SELECT FROM local_lyrics l WHERE ` + lyricsOf + ` AND l.text <> ''),
+var tracksQuery = `SELECT t.id, t.title, t.artist, t.album, t.album_artist, t.artists, t.album_artists, t.album_id, t.track, t.disc, t.year,
+	t.genres, t.duration, t.container, ` + lyricsTag + ` <> '' OR EXISTS (SELECT FROM local_lyrics l WHERE ` + lyricsOf + ` AND l.text <> ''),
 	c.id, coalesce(c.path, ''), coalesce(c.content_type, ''), c.modified, t.track_gain, t.loudness
 FROM local_tracks t LEFT JOIN local_covers c ON c.addon_id = t.addon_id AND c.item_id = t.album_id
 WHERE t.addon_id = $1 AND t.reason = '' `
@@ -1323,7 +1329,7 @@ func (s *Service) MusicLyrics(ctx context.Context, source accounts.ID, id string
 	}
 	var text string
 	err = s.db.QueryRow(ctx, `SELECT coalesce((SELECT l.text FROM local_lyrics l WHERE `+lyricsOf+` AND l.text <> '' ORDER BY l.path LIMIT 1),
-		t.lyrics) FROM local_tracks t WHERE t.addon_id = $1 AND t.id = $2`, source, track).Scan(&text)
+		`+lyricsTag+`) FROM local_tracks t WHERE t.addon_id = $1 AND t.id = $2`, source, track).Scan(&text)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", stremio.ErrNotFound
 	}

@@ -381,6 +381,37 @@ func TestLyricsTagsLargerThanALyricsFileAreLeftOut(t *testing.T) {
 	}
 }
 
+// A lyrics tag stored before tags were bounded, larger than a lyrics file
+// may be, is left out as a scan now leaves it out: its track has no
+// lyrics. One of the most text is read as it is.
+func TestStoredLyricsTagsLargerThanALyricsFileAreLeftOut(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	addon, _ := e.folder(KindMusic, nil)
+	album := nameID("al", "Ann", "Debut")
+	sizes := map[string]int{"Ann/Debut/01 Most.flac": maxText, "Ann/Debut/02 Over.flac": maxText + 1}
+	for rel, size := range sizes {
+		if _, err := e.pool.Exec(t.Context(), `INSERT INTO local_tracks (addon_id, path, size, modified, title, album, album_artist, album_id, lyrics)
+			VALUES ($1, $2, 1, now(), $3, 'Debut', 'Ann', $4, repeat('a', $5))`, addon.ID, rel, path.Base(rel), album, size); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tracks, err := e.service.tracks(t.Context(), addon.ID, "ORDER BY t.path")
+	if err != nil || len(tracks) != len(sizes) {
+		t.Fatalf("the tracks: %+v %v", tracks, err)
+	}
+	for i, track := range tracks {
+		kept := i == 0
+		text, err := e.service.MusicLyrics(t.Context(), addon.ID, track.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if track.Lyrics != kept || (len(text) == maxText) != kept || !kept && text != "" {
+			t.Errorf("%s: has lyrics %v, %d bytes of them, want them kept: %v", track.Title, track.Lyrics, len(text), kept)
+		}
+	}
+}
+
 // A playlist's lines name tracks by paths relative to its folder, or
 // absolute within the folder, as paths or file: addresses, with slashes
 // or backslashes; those leading out of it are left out. Its title is its
