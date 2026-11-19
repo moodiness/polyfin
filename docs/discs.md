@@ -153,7 +153,7 @@ Blu-ray discs, DVDs and disc images on a [network share](network-shares.md) are 
   - a Blu-ray disc's title is its playlist's clips, each from its in time to its out time, in order, as one MPEG-TS stream. These are the bytes FFmpeg's Blu-ray reader reads of a local disc;
   - a DVD's title is its cells, in order, from its title set's `.VOB` files, as one MPEG program stream.
 - **Video:** a Blu-ray disc's video is copied when the app takes it, cut on the keyframes its clips' information files list, read on the share. A DVD's is converted, as on a local folder.
-- **DVD details:** track languages and length come from the IFO files, as FFmpeg's DVD reader reads them on a local folder.
+- **DVD details:** track languages and length come from the IFO files, as FFmpeg's DVD reader reads them on a local folder. On a share, each IFO file is read whole, up to 4 MiB; discs' IFO files hold a few hundred KB. A larger one is read as an IFO file that cannot be read: a movie's DVD plays its largest title set, and a show's disc is left out.
 - **Seamless branching:** a play item that ends before its clip does ends on the clip's next keyframe, as libbluray reads it. A title whose play items replay parts of clips may show a few frames twice where they join.
 
 ## Shows on discs

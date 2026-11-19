@@ -1,6 +1,7 @@
 package localfiles
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/binary"
@@ -683,8 +684,9 @@ func (t *titleStream) Close() error {
 }
 
 // maxIFOSize bounds the IFO files read whole from a share: a few hundred
-// KB as a rule.
-const maxIFOSize = 16 << 20
+// KB as a rule, the largest, of discs of many titles, angles and menus,
+// about 1 MiB.
+const maxIFOSize = 4 << 20
 
 // readIFO reads the IFO file rel of a share through a walk's opener, its
 // name in upper case, else in lower case, as discs are copied in either.
@@ -704,7 +706,7 @@ func readIFO(ctx context.Context, list listing, rel string) (io.ReaderAt, error)
 	if err != nil {
 		return nil, err
 	}
-	return strings.NewReader(string(data)), nil
+	return bytes.NewReader(data), nil
 }
 
 // dvdLength is how long a DVD's title number, 0 for its first, plays, as
