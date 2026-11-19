@@ -176,6 +176,8 @@ func ParseManifest(data []byte) (Manifest, error) {
 		manifest.Logo = ""
 	}
 	manifest.Name = Cut(manifest.Name, MaxName)
+	manifest.Description = Cut(manifest.Description, MaxOverview)
+	manifest.Logo = address(manifest.Logo)
 	return manifest, nil
 }
 

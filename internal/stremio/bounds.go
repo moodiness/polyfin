@@ -142,7 +142,8 @@ type listedStream struct {
 }
 
 // decodeStream decodes a stream an addon lists, its own lists within the
-// bounds of the answer.
+// bounds of the answer, its texts and addresses bounded (see
+// Stream.bound).
 func decodeStream(decoder *json.Decoder, stream *Stream, within *room) error {
 	var listed listedStream
 	err := decoder.Decode(&listed)
@@ -154,6 +155,7 @@ func decodeStream(decoder *json.Decoder, stream *Stream, within *room) error {
 	stream.SevenZip = nested[json.RawMessage](listed.SevenZip, within, &err)
 	stream.TGZs = nested[json.RawMessage](listed.TGZs, within, &err)
 	stream.Tars = nested[json.RawMessage](listed.Tars, within, &err)
+	stream.bound()
 	return err
 }
 
@@ -166,9 +168,9 @@ func tells(s *Stream) bool {
 		s.YouTubeID != "" || s.Usenet != "" || s.Archive() || s.BehaviorHints.Filename != "" || s.BehaviorHints.VideoSize != 0
 }
 
-// downloadable reports a subtitle that can be downloaded: no other is
-// ever listed, so no other is kept.
-func downloadable(s *Subtitle) bool { return s.Valid() }
+// downloadable reports a subtitle that can be downloaded, at an address
+// within MaxURL: no other is ever listed, so no other is kept.
+func downloadable(s *Subtitle) bool { return len(s.URL) <= MaxURL && s.Valid() }
 
 // decodeVideo decodes a video of a description, its own streams within
 // the bounds of the answer.
