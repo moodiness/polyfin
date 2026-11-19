@@ -42,16 +42,30 @@ func (h *Handler) publicUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, visible)
 }
 
-// reserve counts an attempt of the client before it is checked (see
-// throttle.Failures.Reserve), or answers 429 when the client exhausted its
-// failed attempts, and then returns nil.
-func (h *Handler) reserve(w http.ResponseWriter, key string) *throttle.Attempt {
-	attempt, wait := h.SignIns.Reserve(key)
+// reserve counts an attempt of the client toward failures before it is
+// checked (see throttle.Failures.Reserve), or answers 429 when the client
+// exhausted its failed attempts, and then returns nil.
+func (h *Handler) reserve(w http.ResponseWriter, failures *throttle.Failures, key string) *throttle.Attempt {
+	attempt, wait := failures.Reserve(key)
 	if attempt == nil {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
 		processingError(w, http.StatusTooManyRequests)
 	}
 	return attempt
+}
+
+// signInFailures is the count the client's failed sign-ins and reset PINs
+// of r go to. A page of another site can have the visitor's browser send
+// them, as the API answers any origin for the apps served elsewhere: what
+// the browser tells came from another site counts in a count of its own,
+// so that such a page never refuses the visitor's own sign-ins, in apps
+// and in the admin app. The browser sets the header; a page cannot. The
+// block of an account after wrong passwords counts them all the same.
+func (h *Handler) signInFailures(r *http.Request) *throttle.Failures {
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return h.CrossSiteSignIns
+	}
+	return h.SignIns
 }
 
 func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +79,7 @@ func (h *Handler) authenticateByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := forwarded.Client(r)
-	attempt := h.reserve(w, key)
+	attempt := h.reserve(w, h.signInFailures(r), key)
 	if attempt == nil {
 		return
 	}

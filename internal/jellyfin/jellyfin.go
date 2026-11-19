@@ -58,6 +58,10 @@ type Options struct {
 	QuickConnect *quickconnect.Store
 	// SignIns throttles failed password sign-ins per client address.
 	SignIns *throttle.Failures
+	// CrossSiteSignIns throttles, per client address, the failed sign-ins
+	// and reset PINs that a page of another site had the browser send,
+	// apart from the sign-ins (see signInFailures).
+	CrossSiteSignIns *throttle.Failures
 	// ShareLinks throttles, per client address, the share links asked for
 	// that do not exist, apart from the sign-ins.
 	ShareLinks *throttle.Failures

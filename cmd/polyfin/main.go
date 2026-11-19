@@ -333,6 +333,10 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	// Share links asked for that do not exist are counted apart, with the
 	// same limits: they never refuse a sign-in, nor wrong passwords a link.
 	shareLinks := throttle.New(signInFailures, signInWindow)
+	// Failed sign-ins and reset PINs that a page of another site had the
+	// browser send to the Jellyfin API are counted apart too, with the
+	// same limits: such a page never refuses the visitor's own sign-ins.
+	crossSiteSignIns := throttle.New(signInFailures, signInWindow)
 	// The client of a request is read behind the known proxies, for every
 	// route; System › Health names the proxies missing from them. Their
 	// host names are resolved now, at each change of the settings, every
@@ -744,12 +748,13 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	tastes := taste.New(pool, store, userData, lib, logger)
 	registerTasteTask(registry, tastes)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
-		ServerID:     serverID,
-		Sent:         sent,
-		Accounts:     store,
-		QuickConnect: quickConnect,
-		SignIns:      signIns,
-		ShareLinks:   shareLinks,
+		ServerID:         serverID,
+		Sent:             sent,
+		Accounts:         store,
+		QuickConnect:     quickConnect,
+		SignIns:          signIns,
+		CrossSiteSignIns: crossSiteSignIns,
+		ShareLinks:       shareLinks,
 		// Blocked accounts and sign-ins on new devices are told through the
 		// notifications, made below.
 		AccountBlocked: func(user accounts.User, attempt accounts.DeviceInfo) { notifier.AccountBlocked(user, attempt) },

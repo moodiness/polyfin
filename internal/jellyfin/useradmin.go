@@ -348,7 +348,8 @@ const resetPINsKey = "password-reset-pins"
 // not match answers 404; unlike Jellyfin, wrong PINs count as failed
 // sign-ins, so that PINs are guessed no faster than passwords. No account
 // is named, so every client guesses at the same PINs: a wrong one counts
-// for its client and for the whole server, with the same limit.
+// for its client (see signInFailures) and for the whole server, with the
+// same limit, whichever site had the browser send it.
 func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 	errs := bindErrors{}
 	raw, ok := requestBody(w, r, "forgotPasswordPinRequest", errs)
@@ -365,12 +366,12 @@ func (h *Handler) redeemPasswordPin(w http.ResponseWriter, r *http.Request) {
 		validationProblem(w, errs)
 		return
 	}
-	attempt := h.reserve(w, forwarded.Client(r))
+	attempt := h.reserve(w, h.signInFailures(r), forwarded.Client(r))
 	if attempt == nil {
 		return
 	}
 	defer attempt.Cancel()
-	everyone := h.reserve(w, resetPINsKey)
+	everyone := h.reserve(w, h.SignIns, resetPINsKey)
 	if everyone == nil {
 		return
 	}

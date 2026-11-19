@@ -33,6 +33,7 @@ Apps sign in with a name and password, or with Quick Connect, as on Jellyfin. Th
 - The limit is the server's, so a policy an app posts does not change it, nor the count.
 - `POST /Users/AuthenticateByName` from a blocked address answers 401, as for a wrong password, unless its `DeviceId` is one the account signed in from before. `POST /Users/Password` then answers 403 to the right `CurrentPw` too, as `PUT /admin/api/account/password` does (`wrong_password`).
 - `PUT /admin/api/account/password` answers 429 `too_many_attempts` once the client, or the user from any client, sent too many wrong current passwords, as the sign-in does.
+- `POST /Users/AuthenticateByName` and `POST /Users/ForgotPassword/Pin` sent with `Sec-Fetch-Site: cross-site` count their failures toward a limit of the client address of their own, apart from its other sign-ins and from the admin app's: past it they answer 429 with `Retry-After`, and the other sign-ins of the address are not refused. They still count toward the block of the account and the server's wrong PINs (see [Failed attempts](sign-in-and-security.md#failed-attempts)).
 
 ### Identity provider sign-in for apps
 

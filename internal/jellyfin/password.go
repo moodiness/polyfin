@@ -86,7 +86,7 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	// Unlike Jellyfin, an administrator changing their own password must
 	// also give the current one, so that a token left on a shared device
 	// cannot take the account over.
-	attempt := h.reserve(w, forwarded.Client(r))
+	attempt := h.reserve(w, h.SignIns, forwarded.Client(r))
 	if attempt == nil {
 		return
 	}
