@@ -225,7 +225,7 @@ func (c *smbShare) watchIn(ctx context.Context, share *smb2.Share, alive context
 	// watch.
 	refresh := func() error {
 		listCtx, cancel := context.WithTimeout(held, listTimeout)
-		entries, err := listIn(share.WithContext(listCtx), c.path(""))
+		entries, err := listIn(share.WithContext(listCtx), c.path(""), c.bounds)
 		cancel()
 		if err != nil {
 			return err

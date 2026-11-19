@@ -29,40 +29,23 @@ func (e *shareBound) in(rel string) *shareBound {
 // walkBounds bound one walk of a share (see walkShare): depth, how deep
 // its folders go under the folder walked; folders, the folders it lists;
 // files, the files and side files it keeps; paths, the bytes of the
-// paths it keeps, of the folders to list, the files and the side files;
-// entries and name, the entries of one folder and the bytes of a name,
-// as listBounds, for the shares whose listings count neither.
+// paths it keeps, of the folders to list, the files and the side files.
+// A folder's listing is bounded as it is read (see listBounds).
 type walkBounds struct {
 	depth, folders, files int
 	paths                 int
-	entries, name         int
 }
 
 // shareWalk are the bounds of a share's walk: folders 32 deep, where a
 // library goes a few deep; 1,000,000 folders and 4,000,000 files and side
 // files, several times what the largest libraries hold; and 512 MiB of
 // paths, 128 bytes for each file of a walk at its bound.
-var shareWalk = walkBounds{depth: 32, folders: 1_000_000, files: 4_000_000, paths: 512 << 20,
-	entries: folderBounds.entries, name: folderBounds.name}
+var shareWalk = walkBounds{depth: 32, folders: 1_000_000, files: 4_000_000, paths: 512 << 20}
 
 // walkCount counts what one walk of a share found, within bounds.
 type walkCount struct {
 	bounds                walkBounds
 	folders, files, paths int
-}
-
-// listed checks the listing of the folder at rel against the bounds of
-// one folder.
-func (w *walkCount) listed(rel string, entries []remoteEntry) error {
-	if len(entries) > w.bounds.entries {
-		return (&shareBound{failure: errBoundListing, detail: fmt.Sprintf("more than %d entries in one folder", w.bounds.entries)}).in(rel)
-	}
-	for _, e := range entries {
-		if len(e.name) > w.bounds.name {
-			return (&shareBound{failure: errBoundListing, detail: fmt.Sprintf("a name of more than %d bytes", w.bounds.name)}).in(rel)
-		}
-	}
-	return nil
 }
 
 // folder counts a folder to list, at rel, depth folders under the folder

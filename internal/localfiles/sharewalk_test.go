@@ -75,7 +75,7 @@ func TestAShareNestedWithoutEndFailsItsWalk(t *testing.T) {
 	share := &grownShare{holds: func(string, int) []remoteEntry {
 		return []remoteEntry{{name: "a", folder: true}, {name: "Movie (2020).mkv", size: 1}}
 	}}
-	if want := (walkBounds{depth: 32, folders: 1_000_000, files: 4_000_000, paths: 512 << 20, entries: 500_000, name: 1024}); shareWalk != want {
+	if want := (walkBounds{depth: 32, folders: 1_000_000, files: 4_000_000, paths: 512 << 20}); shareWalk != want {
 		t.Fatalf("a walk is bounded by %+v, want %+v", shareWalk, want)
 	}
 	_, err := share.walked(t, shareWalk)
@@ -89,11 +89,10 @@ func TestAShareNestedWithoutEndFailsItsWalk(t *testing.T) {
 }
 
 // A share that holds more folders, more files, or longer paths than one
-// walk reads fails it once the bound is met, and one of its folders
-// listing more than is read of a folder does too, whatever lists it.
+// walk reads fails it once the bound is met.
 func TestAShareOfMoreThanAWalkReadsFailsIt(t *testing.T) {
 	t.Parallel()
-	small := walkBounds{depth: 32, folders: 1000, files: 1000, paths: 1 << 20, entries: 100, name: 64}
+	small := walkBounds{depth: 32, folders: 1000, files: 1000, paths: 1 << 20}
 	// wide holds fifty folders in each folder, three deep, and a movie
 	// beside them: 127,550 folders.
 	wide := func(rel string, depth int) []remoteEntry {
@@ -127,8 +126,6 @@ func TestAShareOfMoreThanAWalkReadsFailsIt(t *testing.T) {
 		{name: "folders", bounds: small, holds: wide, want: errBoundFolders, lists: 1000},
 		{name: "files", bounds: small, holds: full, want: errBoundFiles, lists: 12},
 		{name: "paths", bounds: with(func(b *walkBounds) { b.paths = 4096 }), holds: full, want: errBoundFiles, lists: 12},
-		{name: "the entries of one folder", bounds: with(func(b *walkBounds) { b.entries = 99 }), holds: full, want: errBoundListing, lists: 1},
-		{name: "a name", bounds: with(func(b *walkBounds) { b.name = len("Movie 01 (2020).mkv") - 1 }), holds: full, want: errBoundListing, lists: 1},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -184,7 +181,7 @@ func TestAShareAtTheBoundsOfAWalkIsWalkedWhole(t *testing.T) {
 				paths += folders * 10 * (under + len("Folder 0"))
 			}
 		}
-		exact := walkBounds{depth: 2, folders: 110, files: 999, paths: paths, entries: 19, name: len("Movie 0 (2020).mkv")}
+		exact := walkBounds{depth: 2, folders: 110, files: 999, paths: paths}
 		share := &grownShare{holds: holds}
 		list, err := share.walked(t, exact)
 		if err != nil || len(list.files) != 999 || len(list.prints) != 111 {
@@ -198,8 +195,6 @@ func TestAShareAtTheBoundsOfAWalkIsWalkedWhole(t *testing.T) {
 			"one folder more":         {func(b *walkBounds) { b.folders-- }, errBoundFolders},
 			"one file more":           {func(b *walkBounds) { b.files-- }, errBoundFiles},
 			"one byte more of paths":  {func(b *walkBounds) { b.paths-- }, errBoundFiles},
-			"one entry more":          {func(b *walkBounds) { b.entries-- }, errBoundListing},
-			"one byte more in a name": {func(b *walkBounds) { b.name-- }, errBoundListing},
 			"the bounds a scan walks": {func(b *walkBounds) { *b = shareWalk }, ""},
 		} {
 			bounds := exact

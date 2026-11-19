@@ -44,6 +44,9 @@ type smbShare struct {
 	addr, name, dir string
 	user, domain    string
 	password        string
+	// bounds bound what is kept of one folder's listing: its entries and
+	// their names.
+	bounds listBounds
 
 	mu      sync.Mutex
 	session *smb2.Session
@@ -65,7 +68,8 @@ func newSMB(u *url.URL, user, password string) *smbShare {
 	if !ok {
 		domain, account = "", user
 	}
-	return &smbShare{addr: net.JoinHostPort(u.Hostname(), port), name: name, dir: dir, user: account, domain: domain, password: password}
+	return &smbShare{addr: net.JoinHostPort(u.Hostname(), port), name: name, dir: dir, user: account, domain: domain, password: password,
+		bounds: folderBounds}
 }
 
 // path is a file's path in the share.
@@ -151,9 +155,10 @@ func (c *smbShare) do(ctx context.Context, op func(share *smb2.Share, alive cont
 }
 
 // brokenSession reports whether err tells of a session that no longer
-// works, rather than of a file or folder.
+// works, rather than of a file or folder, or of a listing's bound.
 func brokenSession(err error) bool {
-	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) || errors.Is(err, errIsFile) {
+	var bound *shareBound
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) || errors.Is(err, errIsFile) || errors.As(err, &bound) {
 		return false
 	}
 	var response *smb2.ResponseError
@@ -169,8 +174,9 @@ func brokenSession(err error) bool {
 
 // smbError classes what the server answered (see shareFailure).
 func smbError(err error) error {
-	if err == nil {
-		return nil
+	var bound *shareBound
+	if err == nil || errors.As(err, &bound) {
+		return err
 	}
 	var response *smb2.ResponseError
 	if errors.As(err, &response) {
@@ -192,14 +198,15 @@ func (c *smbShare) list(ctx context.Context, rel string) ([]remoteEntry, error) 
 	var entries []remoteEntry
 	err := c.do(ctx, func(share *smb2.Share, _ context.Context) error {
 		var err error
-		entries, err = listIn(share, c.path(rel))
+		entries, err = listIn(share, c.path(rel), c.bounds)
 		return err
 	})
 	return entries, err
 }
 
-// listIn lists the folder at path in share: errIsFile when it is a file.
-func listIn(share *smb2.Share, path string) ([]remoteEntry, error) {
+// listIn lists the folder at path in share, within bounds as it reads
+// it: errIsFile when it is a file.
+func listIn(share *smb2.Share, path string, bounds listBounds) ([]remoteEntry, error) {
 	dir, err := share.Open(path)
 	if err != nil {
 		return nil, err
@@ -210,20 +217,30 @@ func listIn(share *smb2.Share, path string) ([]remoteEntry, error) {
 	} else if !info.IsDir() {
 		return nil, errIsFile
 	}
-	var entries []remoteEntry
+	kept := folderList{bounds: bounds}
 	for {
 		infos, err := dir.Readdir(256)
 		for _, info := range infos {
+			if err := kept.another(); err != nil {
+				return nil, err
+			}
+			var entry remoteEntry
 			switch name := info.Name(); {
 			case name == "." || name == "..":
+				continue
 			case info.IsDir():
-				entries = append(entries, remoteEntry{name: name, folder: true})
+				entry = remoteEntry{name: name, folder: true}
 			case info.Mode().IsRegular():
-				entries = append(entries, remoteEntry{name: name, size: info.Size(), modified: info.ModTime()})
+				entry = remoteEntry{name: name, size: info.Size(), modified: info.ModTime()}
+			default:
+				continue
+			}
+			if err := kept.add(entry); err != nil {
+				return nil, err
 			}
 		}
 		if errors.Is(err, io.EOF) || err == nil && len(infos) == 0 {
-			return entries, nil
+			return kept.entries, nil
 		}
 		if err != nil {
 			return nil, err

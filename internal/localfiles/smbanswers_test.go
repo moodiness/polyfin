@@ -6,6 +6,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -31,14 +33,19 @@ const (
 	smbCreate         = 5
 	smbClose          = 6
 	smbCancel         = 12
+	smbQueryDirectory = 14
 	smbChangeNotify   = 15
+	smbQueryInfo      = 16
 )
 
 // smbServer is an SMB server a test serves: it signs anyone in as a
 // guest, whose answers are not signed, opens any folder, and answers the
 // watches of a folder with its answers, one each, then with nothing.
+// With list set, what it opens is a folder, whose listing it answers
+// with list's answers, one each.
 type smbServer struct {
 	address string
+	list    func() (status uint32, body []byte)
 
 	mu      sync.Mutex
 	answers [][]byte
@@ -47,11 +54,17 @@ type smbServer struct {
 // serveSMB serves an SMB server on the loopback until the test ends.
 func serveSMB(t *testing.T, answers ...[]byte) *smbServer {
 	t.Helper()
+	return serveSMBAs(t, &smbServer{answers: answers})
+}
+
+// serveSMBAs serves s on the loopback until the test ends.
+func serveSMBAs(t *testing.T, s *smbServer) *smbServer {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &smbServer{address: listener.Addr().String(), answers: answers}
+	s.address = listener.Addr().String()
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var conns []net.Conn
@@ -190,6 +203,21 @@ func (s *smbServer) answer(request []byte) (status uint32, body []byte, ok bool)
 		return 0, body, true
 	case smbCancel:
 		return 0, nil, false
+	case smbQueryInfo:
+		if s.list != nil {
+			// FileAllInformation: a folder.
+			info := make([]byte, 100)
+			binary.LittleEndian.PutUint32(info[32:], 0x10)
+			body := sized(9, 8)
+			binary.LittleEndian.PutUint16(body[2:], 64+8)
+			binary.LittleEndian.PutUint32(body[4:], uint32(len(info)))
+			return 0, append(body, info...), true
+		}
+	case smbQueryDirectory:
+		if s.list != nil {
+			status, body := s.list()
+			return status, body, true
+		}
 	}
 	// STATUS_NOT_SUPPORTED.
 	return 0xC00000BB, sized(9, 9), true
@@ -233,6 +261,29 @@ func notifyName(name string, size int) []byte {
 		binary.LittleEndian.PutUint16(encoded[2*i:], unit)
 	}
 	return encoded
+}
+
+// listAnswer is the body of an answer to a folder's listing, of files
+// under names.
+func listAnswer(names ...string) []byte {
+	var buffer []byte
+	for i, name := range names {
+		encoded := notifyName(name, 0)
+		entry := make([]byte, 104+len(encoded), (104+len(encoded)+7)/8*8)
+		binary.LittleEndian.PutUint32(entry[56:], 0x80)
+		binary.LittleEndian.PutUint32(entry[60:], uint32(len(encoded)))
+		copy(entry[104:], encoded)
+		if i < len(names)-1 {
+			entry = entry[:cap(entry)]
+			binary.LittleEndian.PutUint32(entry, uint32(len(entry)))
+		}
+		buffer = append(buffer, entry...)
+	}
+	body := make([]byte, 8, 8+len(buffer))
+	binary.LittleEndian.PutUint16(body, 9)
+	binary.LittleEndian.PutUint16(body[2:], 64+8)
+	binary.LittleEndian.PutUint32(body[4:], uint32(len(buffer)))
+	return append(body, buffer...)
 }
 
 // watchSMB watches the server's share until the watch ends, and returns
@@ -409,5 +460,83 @@ func TestAPanicBelowAnSMBWatchLeavesTheSharePolled(t *testing.T) {
 	}
 	if warned := logs.with("level=WARN", "cannot tell of changes for now", "the watch ended on a panic"); len(warned) != 1 {
 		t.Errorf("%d warnings of the second watch's end, want one", len(warned))
+	}
+}
+
+// An SMB folder's listing is read within the bounds of a listing as it
+// comes: a server that lists without end has it fail at the bound, sent
+// little more than the bound's entries. A folder at its bounds lists
+// whole. The server ends a listing far past the bound, so that a client
+// that reads on fails rather than waits.
+func TestAnSMBListingIsReadWithinItsBounds(t *testing.T) {
+	t.Parallel()
+	const (
+		page = 64
+		// ceiling is how many entries the server lists without end.
+		ceiling = 100_000
+		// noMoreFiles is STATUS_NO_MORE_FILES.
+		noMoreFiles = 0x80000006
+	)
+	name := func(i int) string { return fmt.Sprintf("Movie %06d (2020).mkv", i) }
+	size := len(name(0))
+	exact := folderBounds
+	exact.entries, exact.name, exact.names = 300, size, 300*size
+	with := func(change func(b *listBounds)) listBounds {
+		b := exact
+		change(&b)
+		return b
+	}
+	for _, c := range []struct {
+		name   string
+		bounds listBounds
+		// holds is how many entries the folder holds, the ceiling when
+		// it lists without end.
+		holds int
+		whole bool
+	}{
+		{name: "more entries than a folder holds", bounds: with(func(b *listBounds) { b.entries, b.names = 1000, 1<<30 }), holds: ceiling},
+		{name: "more bytes of names than a folder holds", bounds: with(func(b *listBounds) { b.entries, b.names = 1<<30, 1000*size }), holds: ceiling},
+		{name: "a folder at its bounds", bounds: exact, holds: 300, whole: true},
+		{name: "one entry more", bounds: with(func(b *listBounds) { b.entries-- }), holds: 300},
+		{name: "one byte more in a name", bounds: with(func(b *listBounds) { b.name-- }), holds: 300},
+		{name: "one byte more in the names", bounds: with(func(b *listBounds) { b.names-- }), holds: 300},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			var served atomic.Int64
+			server := serveSMBAs(t, &smbServer{list: func() (uint32, []byte) {
+				from := int(served.Load())
+				if from >= c.holds {
+					body := make([]byte, 9)
+					binary.LittleEndian.PutUint16(body, 9)
+					return noMoreFiles, body
+				}
+				names := make([]string, min(page, c.holds-from))
+				for i := range names {
+					names[i] = name(from + i)
+				}
+				served.Add(int64(len(names)))
+				return 0, listAnswer(names...)
+			}})
+			share := newSMB(server.url(), "reader", "pass phrase")
+			t.Cleanup(share.close)
+			if share.bounds != folderBounds {
+				t.Fatalf("an SMB folder is listed within %+v, want %+v", share.bounds, folderBounds)
+			}
+			share.bounds = c.bounds
+			entries, err := share.list(t.Context(), "")
+			// The entries read before the bound, those of the next
+			// answers that give the listing 256 at a time, and one more
+			// answer.
+			most := int64(1000 + 256 + 2*page)
+			switch sent := served.Load(); {
+			case c.whole && (err != nil || len(entries) != c.holds):
+				t.Fatalf("%d entries listed, %v; want %d", len(entries), err, c.holds)
+			case !c.whole && !boundMet(err):
+				t.Fatalf("%d entries listed of %d sent: %v; want the bound of a listing met", len(entries), sent, err)
+			case c.holds == ceiling && sent > most:
+				t.Fatalf("%d entries sent, want %d at most", sent, most)
+			}
+		})
 	}
 }

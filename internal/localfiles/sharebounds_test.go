@@ -2,14 +2,20 @@ package localfiles
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/pkg/sftp"
 )
 
 // readBodies counts the bytes a share reads of the answers to its
@@ -307,5 +313,187 @@ func TestABucketListingIsReadWithinItsBounds(t *testing.T) {
 				t.Fatalf("%d entries listed, %v; want the bound of a listing met", len(entries), err)
 			}
 		})
+	}
+}
+
+// listedInfo is an entry an SFTP server lists: a file, or a folder.
+type listedInfo struct {
+	name   string
+	folder bool
+}
+
+func (i listedInfo) Name() string       { return i.name }
+func (i listedInfo) Size() int64        { return 10 }
+func (i listedInfo) ModTime() time.Time { return time.Unix(1_000_000_000, 0) }
+func (i listedInfo) IsDir() bool        { return i.folder }
+func (i listedInfo) Sys() any           { return nil }
+
+func (i listedInfo) Mode() fs.FileMode {
+	if i.folder {
+		return fs.ModeDir | 0o755
+	}
+	return 0o644
+}
+
+// sftpListing is the folder an SFTP server serves at any path: it holds
+// files under the names name gives, and counts the entries it sent.
+type sftpListing struct {
+	holds int
+	name  func(i int) string
+	sent  atomic.Int64
+}
+
+func (f *sftpListing) Filelist(r *sftp.Request) (sftp.ListerAt, error) {
+	switch r.Method {
+	case "Stat":
+		return listerAt{listedInfo{name: "movies", folder: true}}, nil
+	case "List":
+		return f, nil
+	}
+	return nil, sftp.ErrSSHFxOpUnsupported
+}
+
+func (f *sftpListing) ListAt(entries []os.FileInfo, offset int64) (int, error) {
+	n := 0
+	for ; n < len(entries) && int(offset)+n < f.holds; n++ {
+		entries[n] = listedInfo{name: f.name(int(offset) + n)}
+	}
+	f.sent.Add(int64(n))
+	if n == 0 {
+		return 0, io.EOF
+	}
+	return n, nil
+}
+
+// listerAt lists its entries.
+type listerAt []os.FileInfo
+
+func (l listerAt) ListAt(entries []os.FileInfo, offset int64) (int, error) {
+	if offset >= int64(len(l)) {
+		return 0, io.EOF
+	}
+	return copy(entries, l[offset:]), nil
+}
+
+// An SFTP folder's listing is read within the bounds of a listing as it
+// comes: a server that lists without end has it fail at the bound, sent
+// at most one answer more than the bound's entries or bytes. A folder at
+// its bounds lists whole. The server ends a listing far past the bound,
+// so that a client that reads on fails rather than waits.
+func TestAnSFTPListingIsReadWithinItsBounds(t *testing.T) {
+	t.Parallel()
+	// ceiling is how many entries the server lists without end.
+	const ceiling = 100_000
+	name := func(i int) string { return fmt.Sprintf("Movie %06d (2020).mkv", i) }
+	size := len(name(0))
+	exact := folderBounds
+	exact.entries, exact.name, exact.names = 300, size, 300*size
+	with := func(change func(b *listBounds)) listBounds {
+		b := exact
+		change(&b)
+		return b
+	}
+	// An answer lists page entries, and an entry takes more than its
+	// name, its long name and its flags.
+	page := int64(sftp.MaxFilelist)
+	for _, c := range []struct {
+		name   string
+		bounds listBounds
+		// holds is how many entries the folder holds, the ceiling when
+		// it lists without end; most the entries sent at most, when set.
+		holds int
+		most  int64
+		whole bool
+	}{
+		{name: "more entries than a folder holds", bounds: with(func(b *listBounds) { b.entries, b.names = 1000, 1<<30 }),
+			holds: ceiling, most: 1000 + page},
+		{name: "more bytes of names than a folder holds", bounds: with(func(b *listBounds) { b.entries, b.names = 1<<30, 1000*size }),
+			holds: ceiling, most: 1000 + page},
+		{name: "an answer of more bytes than one holds", bounds: with(func(b *listBounds) { b.answer, b.entries, b.names = 64<<10, 1<<30, 1<<30 }),
+			holds: ceiling, most: 64<<10/int64(4+size+4+4) + page},
+		{name: "a folder at its bounds", bounds: exact, holds: 300, whole: true},
+		{name: "one entry more", bounds: with(func(b *listBounds) { b.entries-- }), holds: 300},
+		{name: "one byte more in a name", bounds: with(func(b *listBounds) { b.name-- }), holds: 300},
+		{name: "one byte more in the names", bounds: with(func(b *listBounds) { b.names-- }), holds: 300},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			folder := &sftpListing{holds: c.holds, name: name}
+			handlers := sftp.InMemHandler()
+			handlers.FileList = folder
+			server := serveFakeSFTP(t, &fakeSFTP{user: "reader", password: "pass phrase", handlers: &handlers})
+			r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, hostKeys{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(r.close)
+			share := r.(*sftpShare)
+			if share.bounds != folderBounds {
+				t.Fatalf("an SFTP folder is listed within %+v, want %+v", share.bounds, folderBounds)
+			}
+			share.bounds = c.bounds
+			entries, err := share.list(t.Context(), "")
+			switch sent := folder.sent.Load(); {
+			case c.whole && (err != nil || len(entries) != c.holds):
+				t.Fatalf("%d entries listed, %v; want %d", len(entries), err, c.holds)
+			case !c.whole && !boundMet(err):
+				t.Fatalf("%d entries listed of %d sent: %v; want the bound of a listing met", len(entries), sent, err)
+			case c.most > 0 && sent > c.most:
+				t.Fatalf("%d entries sent, want %d at most", sent, c.most)
+			}
+		})
+	}
+}
+
+// An SFTP server that opens no second session on a connection is listed
+// as before: through the session files are read over, each listing read
+// whole, then bounded. It is told once a connection, and asked for the
+// second session again only on the next connection.
+func TestAnSFTPServerOfOneSessionIsListedAsBefore(t *testing.T) {
+	t.Parallel()
+	const name = "Movie 000000 (2020).mkv"
+	folder := &sftpListing{holds: 300, name: func(i int) string { return fmt.Sprintf("Movie %06d (2020).mkv", i) }}
+	handlers := sftp.InMemHandler()
+	handlers.FileList = folder
+	server := serveFakeSFTP(t, &fakeSFTP{user: "reader", password: "pass phrase", handlers: &handlers, sessions: 1})
+	var told atomic.Int32
+	keys := hostKeys{single: func(host string) {
+		if host != server.addr {
+			t.Errorf("the server at %s was told as at %s", server.addr, host)
+		}
+		told.Add(1)
+	}}
+	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(r.close)
+	share := r.(*sftpShare)
+	entries, err := share.list(t.Context(), "")
+	if err != nil || len(entries) != 300 || entries[0].name != name {
+		t.Fatalf("%d entries listed, %v; want 300", len(entries), err)
+	}
+	// Read whole, then bounded, without asking for the second session
+	// again on the same connection.
+	share.bounds.entries = 100
+	for range 2 {
+		before := folder.sent.Load()
+		if _, err := share.list(t.Context(), ""); !boundMet(err) {
+			t.Fatalf("%v, want the bound of a listing met", err)
+		}
+		if sent := folder.sent.Load() - before; sent != 300 {
+			t.Fatalf("%d entries sent, want the 300 of the folder", sent)
+		}
+	}
+	if asked, told := server.asked.Load(), told.Load(); asked != 2 || told != 1 {
+		t.Fatalf("%d sessions asked for, the server told %d times; want 2, once", asked, told)
+	}
+	// A new connection asks again.
+	server.cut()
+	if _, err := share.list(t.Context(), ""); !boundMet(err) {
+		t.Fatalf("%v, want the bound of a listing met", err)
+	}
+	if asked, told := server.asked.Load(), told.Load(); asked != 4 || told != 2 {
+		t.Fatalf("%d sessions asked for, the server told %d times; want 4, twice", asked, told)
 	}
 }

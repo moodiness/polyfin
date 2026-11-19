@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -201,11 +202,16 @@ func (f *fakeS3) readRanges() []string {
 // fakeSFTP serves the test's disk over SFTP to user, signed in with
 // password or the key authorized, under a host key rekey changes. It
 // keeps the passwords it was sent by the fingerprint of the host key it
-// offered when it got them.
+// offered when it got them. With handlers set, it serves theirs instead.
+// With sessions set, it opens that many sessions on a connection at most,
+// and refuses the others; asked counts the sessions it was asked for.
 type fakeSFTP struct {
 	addr           string
 	user, password string
 	authorized     ssh.PublicKey
+	handlers       *sftp.Handlers
+	sessions       int
+	asked          atomic.Int32
 
 	mu       sync.Mutex
 	hostKey  ssh.Signer
@@ -247,11 +253,17 @@ func openSSHKey(t *testing.T, private ed25519.PrivateKey, passphrase string) str
 
 func serveSFTP(t *testing.T, user, password string, authorized ssh.PublicKey) *fakeSFTP {
 	t.Helper()
+	return serveFakeSFTP(t, &fakeSFTP{user: user, password: password, authorized: authorized})
+}
+
+// serveFakeSFTP serves f on the loopback until the test ends.
+func serveFakeSFTP(t *testing.T, f *fakeSFTP) *fakeSFTP {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeSFTP{addr: listener.Addr().String(), user: user, password: password, authorized: authorized, listener: listener}
+	f.addr, f.listener = listener.Addr().String(), listener
 	f.hostKey, _ = newSigner(t)
 	t.Cleanup(f.stop)
 	go func() {
@@ -299,9 +311,15 @@ func (f *fakeSFTP) serve(conn net.Conn, hostKey ssh.Signer) {
 		return
 	}
 	go ssh.DiscardRequests(requests)
+	opened := 0
 	for request := range channels {
 		if request.ChannelType() != "session" {
 			_ = request.Reject(ssh.UnknownChannelType, "")
+			continue
+		}
+		f.asked.Add(1)
+		if opened++; f.sessions > 0 && opened > f.sessions {
+			_ = request.Reject(ssh.Prohibited, "one session")
 			continue
 		}
 		channel, asked, err := request.Accept()
@@ -313,15 +331,26 @@ func (f *fakeSFTP) serve(conn net.Conn, hostKey ssh.Signer) {
 				ok := ask.Type == "subsystem" && len(ask.Payload) > 4 && string(ask.Payload[4:]) == "sftp"
 				_ = ask.Reply(ok, nil)
 				if ok {
-					server, err := sftp.NewServer(channel, sftp.ReadOnly())
-					if err == nil {
-						_ = server.Serve()
-						server.Close()
-					}
+					f.subsystem(channel)
 					return
 				}
 			}
 		}()
+	}
+}
+
+// subsystem serves SFTP over channel until it ends.
+func (f *fakeSFTP) subsystem(channel ssh.Channel) {
+	if f.handlers != nil {
+		server := sftp.NewRequestServer(channel, *f.handlers)
+		_ = server.Serve()
+		server.Close()
+		return
+	}
+	server, err := sftp.NewServer(channel, sftp.ReadOnly())
+	if err == nil {
+		_ = server.Serve()
+		server.Close()
 	}
 }
 

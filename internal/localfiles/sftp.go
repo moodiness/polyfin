@@ -31,6 +31,9 @@ type sftpShare struct {
 	folder string
 	config ssh.ClientConfig
 	keys   hostKeys
+	// bounds bound what is read and kept of one folder's listing, answer
+	// being the bytes of all the answers listing it.
+	bounds listBounds
 
 	mu sync.Mutex
 	// saved is the host key saved, client the connection open, nil
@@ -38,7 +41,19 @@ type sftpShare struct {
 	saved  string
 	conn   *ssh.Client
 	client *sftp.Client
+
+	// listing has one folder listed at a time, over lister, the channel
+	// of the connection for listings, nil until one is listed. single is
+	// the connection's client whose server opened no such channel: its
+	// listings are read by the client, until the next connection.
+	listing sync.Mutex
+	lister  *sftpLister
+	single  *sftp.Client
 }
+
+// errSingleSession is a connection whose server opens no channel for
+// listings (see sftpShare.listed).
+var errSingleSession = errors.New("the SFTP server opens no second session")
 
 func newSFTP(u *url.URL, access shareAccess, keys hostKeys) (*sftpShare, error) {
 	host := u.Host
@@ -49,7 +64,7 @@ func newSFTP(u *url.URL, access shareAccess, keys hostKeys) (*sftpShare, error) 
 	if folder == "" {
 		folder = "/"
 	}
-	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved}
+	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved, bounds: folderBounds}
 	var auth []ssh.AuthMethod
 	if access.privateKey != "" {
 		signer, err := parsePrivateKey(access.privateKey, access.passphrase)
@@ -224,10 +239,11 @@ func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) er
 		}
 		err = request(client)
 		var status *sftp.StatusError
+		var bound *shareBound
 		switch {
 		case err == nil:
 			return nil
-		case errors.Is(err, errIsFile):
+		case errors.Is(err, errIsFile), errors.As(err, &bound):
 			return err
 		case errors.Is(err, fs.ErrNotExist):
 			return fs.ErrNotExist
@@ -250,7 +266,7 @@ func (s *sftpShare) file(rel string) string {
 
 func (s *sftpShare) list(ctx context.Context, rel string) ([]remoteEntry, error) {
 	dir := s.file(rel)
-	var entries []remoteEntry
+	var kept folderList
 	err := s.do(ctx, func(client *sftp.Client) error {
 		// A listing out of time is the connection's failure: SFTP's
 		// requests have no deadline of their own.
@@ -267,38 +283,131 @@ func (s *sftpShare) list(ctx context.Context, rel string) ([]remoteEntry, error)
 		if !info.IsDir() {
 			return errIsFile
 		}
-		infos, err := client.ReadDir(dir)
-		if err != nil {
-			return err
-		}
-		entries = make([]remoteEntry, 0, len(infos))
-		for _, info := range infos {
-			if info.Mode()&fs.ModeSymlink != 0 {
+		kept = folderList{bounds: s.bounds}
+		each := func(entry sftpListEntry) error {
+			if err := kept.another(); err != nil {
+				return err
+			}
+			if entry.name == "" || entry.name == "." || entry.name == ".." {
+				return nil
+			}
+			folder := entry.kind == sftpTypeDir
+			switch entry.kind {
+			case sftpTypeLink:
 				// A link is what it leads to, on the server.
-				target, err := client.Stat(path.Join(dir, info.Name()))
+				target, err := client.Stat(path.Join(dir, entry.name))
 				if err != nil {
-					continue
+					return nil
 				}
-				if target.IsDir() && leadsBack(client, dir, info.Name()) {
+				if target.IsDir() && leadsBack(client, dir, entry.name) {
 					// Unless it leads to a folder that holds this one:
 					// its folders would be listed again under it.
-					continue
+					return nil
 				}
-				info = namedInfo{target, info.Name()}
+				switch {
+				case target.IsDir():
+					folder = true
+				case target.Mode().IsRegular():
+					entry.size, entry.modified = target.Size(), target.ModTime()
+				default:
+					return nil
+				}
+			case sftpTypeDir, sftpTypeFile, 0:
+			default:
+				return nil
 			}
-			switch {
-			case info.IsDir():
-				entries = append(entries, remoteEntry{name: info.Name(), folder: true})
-			case info.Mode().IsRegular():
-				entries = append(entries, remoteEntry{name: info.Name(), size: info.Size(), modified: info.ModTime()})
+			if folder {
+				return kept.add(remoteEntry{name: entry.name, folder: true})
 			}
+			return kept.add(remoteEntry{name: entry.name, size: entry.size, modified: entry.modified})
 		}
-		return nil
+		err = s.listed(ctx, client, dir, each)
+		if errors.Is(err, errSingleSession) {
+			// The server's answers are read whole, then bounded.
+			err = readDir(client, dir, each)
+		}
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return entries, nil
+	return kept.entries, nil
+}
+
+// listed lists the folder at dir over the connection client is on, as
+// each entry comes (see sftpLister): errSingleSession when its server
+// opens no channel for listings, which is tried once a connection.
+func (s *sftpShare) listed(ctx context.Context, client *sftp.Client, dir string, each func(entry sftpListEntry) error) error {
+	s.listing.Lock()
+	defer s.listing.Unlock()
+	if s.lister != nil && s.lister.client != client {
+		s.lister.close()
+		s.lister = nil
+	}
+	if s.lister == nil {
+		if s.single == client {
+			return errSingleSession
+		}
+		s.mu.Lock()
+		conn := s.conn
+		open := s.client == client
+		s.mu.Unlock()
+		if !open {
+			return errors.New("the connection closed")
+		}
+		lister, err := openSFTPLister(conn, client)
+		if err != nil {
+			// A server that still answers over the client's channel
+			// refused the one for listings, or ended it at once.
+			if _, alive := client.Getwd(); alive != nil || ctx.Err() != nil {
+				return err
+			}
+			s.single = client
+			if s.keys.single != nil {
+				s.keys.single(s.host)
+			}
+			return errSingleSession
+		}
+		s.lister = lister
+	}
+	lister := s.lister
+	// A listing whose context ends closes its channel, which ends the
+	// reads it waits on.
+	stop := context.AfterFunc(ctx, lister.close)
+	err := lister.list(dir, s.bounds, each)
+	var status *sftp.StatusError
+	if !stop() || err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrPermission) && !errors.As(err, &status) {
+		lister.close()
+		s.lister = nil
+	}
+	return err
+}
+
+// readDir lists the folder at dir through client, which reads all of its
+// entries before it gives any, and gives each entry to each in turn.
+func readDir(client *sftp.Client, dir string, each func(entry sftpListEntry) error) error {
+	infos, err := client.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, info := range infos {
+		entry := sftpListEntry{name: info.Name(), size: info.Size(), modified: info.ModTime()}
+		switch mode := info.Mode(); {
+		case mode.IsDir():
+			entry.kind = sftpTypeDir
+		case mode&fs.ModeSymlink != 0:
+			entry.kind = sftpTypeLink
+		case mode.IsRegular():
+			entry.kind = sftpTypeFile
+		default:
+			// Another type, which a listing leaves out.
+			entry.kind = sftpTypeMask
+		}
+		if err := each(entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // leadsBack tells whether a link of the folder dir leads to dir or to a
@@ -335,14 +444,6 @@ func leadsBack(client *sftp.Client, dir, name string) bool {
 	}
 	return holds(target)
 }
-
-// namedInfo is the target of a link, under the link's name.
-type namedInfo struct {
-	fs.FileInfo
-	name string
-}
-
-func (n namedInfo) Name() string { return n.name }
 
 func (s *sftpShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, time.Time, error) {
 	file, info, err := s.openFile(ctx, s.file(rel))

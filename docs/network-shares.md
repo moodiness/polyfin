@@ -111,7 +111,7 @@ A folder moved to another server forgets the former server's key.
 - **Connections:** they are kept between requests:
   - SMB: one session per share, signed in again when it ends, such as when the server restarts;
   - WebDAV, S3 and rclone: HTTP keep-alive;
-  - SFTP: one SSH connection per folder, made again when it drops.
+  - SFTP: one SSH connection per folder, made again when it drops. It opens two sessions in it, one to read files and one to list folders. A server that refuses the second session is listed over the first, each folder read whole and only then checked against the limits below; Polyfin's log tells it once per connection, at Info, with the server's host.
 - **Scans** list the share folder by folder. Network listings are slower than a disk's, but a scan reads only new or changed files, so only the first scan is long.
 - **Limits:** one scan reads folders up to 32 deep, 1,000,000 folders and 4,000,000 files, and of one folder 500,000 entries, each named by at most 1,024 bytes. A share that holds more fails its scan with the limit it met (see [Health](#health)): add parts of it as separate folders.
 - **Schedule:** shares follow the same schedule as local folders (see [Scanning](local-folders.md#scanning)), and are watched for changes (see [Watching for changes](local-folders.md#watching-for-changes)).
@@ -134,7 +134,7 @@ A share Polyfin cannot read is reported on its page and under **System › Healt
 | `too_deep` | The share's folders go more than 32 deep. A link on the server that leads back to a folder above it makes such folders. |
 | `too_many_folders` | The share holds more than 1,000,000 folders. |
 | `too_many_files` | The share holds more than 4,000,000 files, counting those beside the videos or the tracks, such as subtitles and images. |
-| `listing_too_large` | One folder of the share lists more than 500,000 entries, a name longer than 1,024 bytes, or an answer larger than Polyfin reads: 64 MiB from a WebDAV server or for a page of a bucket, 256 MiB from rclone. The server's log tells which, and in which folder. |
+| `listing_too_large` | One folder of the share lists more than 500,000 entries, a name longer than 1,024 bytes, or an answer larger than Polyfin reads: 64 MiB from a WebDAV or SFTP server or for a page of a bucket, 256 MiB from rclone. The server's log tells which, and in which folder. |
 
 An empty prefix of a bucket is an empty folder: S3 cannot tell it from a prefix that does not exist.
 

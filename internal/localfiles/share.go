@@ -355,11 +355,14 @@ type shareAccess struct {
 // hostKeys keeps an SFTP server's host key: saved is the one saved,
 // empty before the first connection, save saves the one the first
 // connection was offered, and offered tells the one a server offers in
-// place of the one saved, which an administrator may accept.
+// place of the one saved, which an administrator may accept. single
+// tells, once a connection, of a server at host that opens no session
+// for listings beside the one files are read over (see sftpShare.list).
 type hostKeys struct {
 	saved   string
 	save    func(key string)
 	offered func(key string)
+	single  func(host string)
 }
 
 // newRemote returns the reader of a share; it connects when first used.
@@ -478,6 +481,10 @@ func (s *Service) folderRemote(ctx context.Context, id accounts.ID, address, use
 		}
 		keys.save = func(key string) { s.saveHostKey(id, address, key) }
 		keys.offered = func(key string) { s.offerHostKey(id, address, key) }
+		keys.single = func(host string) {
+			s.logger.Info("An SFTP server opens no second session on a connection: the folder's listings are read whole, without their bounds while read",
+				"host", host, "address", address)
+		}
 	}
 	return s.remote(id, access, keys)
 }
@@ -558,9 +565,6 @@ func (b walkBounds) walk(ctx context.Context, r remote, root []remoteEntry, kind
 			if err != nil {
 				return listing{}, err
 			}
-		}
-		if err := count.listed(next.rel, entries); err != nil {
-			return listing{}, err
 		}
 		list.prints[next.rel] = folderPrint(kind, next.rel, entries)
 		for _, e := range entries {

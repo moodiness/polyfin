@@ -160,13 +160,31 @@ func (l *folderList) another() error {
 // read may be a part of a longer text of the answer, which it would
 // keep whole.
 func (l *folderList) keep(entry remoteEntry) error {
-	if len(entry.name) > l.bounds.name {
-		return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("a name of more than %d bytes", l.bounds.name)}
-	}
-	if l.names += len(entry.name); l.names > l.bounds.names {
-		return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("names of more than %d bytes together in one folder", l.bounds.names)}
+	if err := l.room(entry.name); err != nil {
+		return err
 	}
 	entry.name = strings.Clone(entry.name)
 	l.entries = append(l.entries, entry)
+	return nil
+}
+
+// add keeps an entry of the listing whose name is a string of its own,
+// as the client of a share decodes it.
+func (l *folderList) add(entry remoteEntry) error {
+	if err := l.room(entry.name); err != nil {
+		return err
+	}
+	l.entries = append(l.entries, entry)
+	return nil
+}
+
+// room counts the bytes of a name to keep.
+func (l *folderList) room(name string) error {
+	if len(name) > l.bounds.name {
+		return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("a name of more than %d bytes", l.bounds.name)}
+	}
+	if l.names += len(name); l.names > l.bounds.names {
+		return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("names of more than %d bytes together in one folder", l.bounds.names)}
+	}
 	return nil
 }
