@@ -93,7 +93,7 @@ func TestCredentialsNameTheVariablesThatHoldOne(t *testing.T) {
 		"POLYFIN_DATABASE_URL=postgresql://polyfin:s3cret-pw@db.internal:5432/media",
 		"POLYFIN_DATABASE=",
 		"POLYFIN_SECRET_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-		"POLYFIN_DATA_DIR=/var/lib/polyfin",
+		"POLYFIN_DATA_DIR=" + systemPath("/var/lib/polyfin"),
 		"POLYFIN_LISTEN=:8096",
 		"POLYFIN_FFMPEG=/usr/local/bin/ffmpeg",
 		"POLYFIN_DESKTOP=1",
