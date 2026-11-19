@@ -1113,12 +1113,12 @@ func toAny(values []string) []any {
 }
 
 func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
-	genres, _, _, ok := h.libraryGenres(w, r)
+	genres, user, _, ok := h.libraryGenres(w, r)
 	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"Genres":            h.namedPairs(genreNamed, genres),
+		"Genres":            h.namedPairs(user.ID, genreNamed, genres),
 		"Tags":              []string{},
 		"AudioLanguages":    []NameValuePair{},
 		"SubtitleLanguages": []NameValuePair{},
@@ -1126,12 +1126,12 @@ func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) genres(w http.ResponseWriter, r *http.Request) {
-	genres, _, _, ok := h.libraryGenres(w, r)
+	genres, user, _, ok := h.libraryGenres(w, r)
 	if !ok {
 		return
 	}
 	items := make([]BaseItemDto, 0, len(genres))
-	for _, genre := range h.namedPairs(genreNamed, genres) {
+	for _, genre := range h.namedPairs(user.ID, genreNamed, genres) {
 		items = append(items, BaseItemDto{
 			Name:              genre.Name,
 			ServerId:          h.ServerID,

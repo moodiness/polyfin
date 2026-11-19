@@ -404,6 +404,7 @@ A genre, studio or year page lists the titles of the catalogs that offer that na
   - **A title's genres:** those its catalog listed it with, those of its full description by one of the server's addons, and those an administrator set, which win over the addons'.
   - **Names:** letter case does not count, spelling does. "Drama" and "Drame" are two genres, as are "Sci-Fi" and "Science Fiction". With a PostgreSQL older than 17, or a database not in UTF-8, case counts for letters beyond A to Z: "COMÉDIE" then finds no "Comédie".
   - **Limits:** [parental control](user-limits.md#parental-control), [blocked genres](user-limits.md#blocked-genres), hidden titles and [movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release) apply, as on every list.
+  - **Opened by its link:** a genre a title links to opens for you, also after a restart, when one of your catalogs offers it or a title you reach has it. The genres of a title only another user's own addon lists open for no one else, and do not change how a genre's name is spelled for others.
 - A studio's page goes on after them: the titles you reach whose TMDB details name the studio, then TMDB's most popular titles of it that your addons describe (see [Studio pages](collections-people-and-ratings.md#studio-pages)).
 
 A page answers within about 1.5 seconds, even when its catalogs are slow to answer. A common genre can be offered by a hundred catalogs, and Polyfin asks an addon's server for 8 catalog pages at once:

@@ -97,11 +97,12 @@ func (n *namedItems) forget() {
 	n.mu.Lock()
 	n.byID, n.ring, n.next = nil, nil, 0
 	n.mu.Unlock()
-	for _, kept := range []*keptNames{&n.genres, &n.studios} {
-		kept.mu.Lock()
-		kept.byID, kept.read = nil, time.Time{}
-		kept.mu.Unlock()
-	}
+	n.genres.mu.Lock()
+	n.genres.byUser = nil
+	n.genres.mu.Unlock()
+	n.studios.mu.Lock()
+	n.studios.byID, n.studios.read = nil, time.Time{}
+	n.studios.mu.Unlock()
 }
 
 // A genre no catalog filters by lists the titles kept of it, whatever the

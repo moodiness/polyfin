@@ -139,7 +139,7 @@ func TestAGenrePageListsTheTitlesKeptOfIt(t *testing.T) {
 
 	// The genres kept, each once as most titles spell it, the most titles
 	// first, and those an administrator set.
-	genres, err := e.service.GenreNames(t.Context())
+	genres, err := e.service.GenreNames(t.Context(), e.admin)
 	if err != nil || !slices.Equal(genres, []string{"Drama", "Comedy", "Crime"}) {
 		t.Errorf("the genres kept: %q %v", genres, err)
 	}

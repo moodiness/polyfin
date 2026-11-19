@@ -541,7 +541,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.EnableMediaSourceDisplay = new(true)
 		dto.PlayAccess = "Full"
 		dto.RemoteTrailers = new(trailers(item.Trailers))
-		dto.GenreItems = new(h.namedPairs(genresOf(item.Kind), item.Genres))
+		dto.GenreItems = new(h.namedPairs(state.reader, genresOf(item.Kind), item.Genres))
 		dto.LocalTrailerCount = new(0)
 		dto.SpecialFeatureCount = new(0)
 		dto.DisplayPreferencesId = item.ID.String()
@@ -608,7 +608,7 @@ func (h *Handler) describeEdited(dto *BaseItemDto, item library.Item, fields fie
 		dto.Tags = new(nonNil(item.Tags))
 	}
 	if detail || fields.has("Studios") {
-		dto.Studios = new(h.namedPairs(studioNamed, item.Studios))
+		dto.Studios = new(h.namedPairs(accounts.ID{}, studioNamed, item.Studios))
 	}
 }
 

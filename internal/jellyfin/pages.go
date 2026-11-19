@@ -323,7 +323,7 @@ func (h *Handler) narrowedListing(w http.ResponseWriter, r *http.Request, user a
 	case len(f.genres) > 0 || len(f.genreIDs) > 0:
 		genres := slices.Clone(f.genres)
 		for _, id := range f.genreIDs {
-			if name, ok := h.genreByID(r.Context(), id); ok {
+			if name, ok := h.genreByID(r.Context(), user, id); ok {
 				genres = append(genres, name)
 			}
 		}

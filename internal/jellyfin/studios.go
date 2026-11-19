@@ -156,7 +156,7 @@ func (h *Handler) studios(w http.ResponseWriter, r *http.Request) {
 	})
 	ids := make([]accounts.ID, len(studios))
 	for i, studio := range studios {
-		ids[i], _ = accounts.ParseID(h.names.id(studioNamed, studio.Name))
+		ids[i], _ = accounts.ParseID(h.names.id(user.ID, studioNamed, studio.Name))
 	}
 	data, err := h.UserData.Get(r.Context(), user.ID, ids)
 	if err != nil {

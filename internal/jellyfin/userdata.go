@@ -49,7 +49,10 @@ func (h *Handler) userDataRoutes(rt *router) {
 // known of its songs' lyrics and of its songs' and albums' gains, and how
 // the app asking is told collection libraries.
 type userState struct {
-	data map[accounts.ID]userdata.Data
+	// reader is the user, to whom genres' names are given (see
+	// namedItems).
+	reader accounts.ID
+	data   map[accounts.ID]userdata.Data
 	// counts are the played and resumable episodes under series and
 	// seasons.
 	counts map[accounts.ID]userdata.Counts
@@ -132,7 +135,7 @@ func (h *Handler) userState(ctx context.Context, user accounts.User, items []lib
 		}
 		counts[item.ID] = c
 	}
-	state := userState{data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
+	state := userState{reader: user.ID, data: data, counts: counts, contents: map[accounts.ID]*library.Contents{}, lyrics: h.Lyrics.Known(ctx, songs),
 		gains: h.gains(ctx, items), collectionLibraries: h.collectionLibrariesByType(ctx), badges: h.posterBadges(ctx, items)}
 	var incomplete []accounts.ID
 	for _, item := range items {

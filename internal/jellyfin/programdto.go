@@ -39,7 +39,7 @@ func (h *Handler) writeLeanPrograms(w http.ResponseWriter, r *http.Request, page
 		if marks != nil {
 			m = marks[i]
 		}
-		s.buf = h.appendLeanProgram(s.buf, page[i], asked, m)
+		s.buf = h.appendLeanProgram(s.buf, page[i], asked, m, callerFrom(r.Context()).User.ID)
 		if !s.spill() {
 			return
 		}
@@ -101,7 +101,7 @@ func askedProgramFields(fields fieldSet) programFields {
 // Polyfin keeps its own value where Jellyfin's differs by origin: the
 // media type is Video, as the full description says, where Jellyfin says
 // the channel's with ChannelInfo and Unknown without.
-func (h *Handler) appendLeanProgram(b []byte, item library.Item, f programFields, marks timerMarks) []byte {
+func (h *Handler) appendLeanProgram(b []byte, item library.Item, f programFields, marks timerMarks, reader accounts.ID) []byte {
 	channel := item.Channel
 	b = append(b, '{')
 	b = appendJSONKey(b, "Name", true)
@@ -223,11 +223,11 @@ func (h *Handler) appendLeanProgram(b []byte, item library.Item, f programFields
 	}
 	if f.studios {
 		b = appendJSONKey(b, "Studios", false)
-		b = appendJSONValue(b, h.namedPairs(studioNamed, item.Studios))
+		b = appendJSONValue(b, h.namedPairs(reader, studioNamed, item.Studios))
 	}
 	if f.genres {
 		b = appendJSONKey(b, "GenreItems", false)
-		b = appendJSONValue(b, h.namedPairs(genresOf(item.Kind), item.Genres))
+		b = appendJSONValue(b, h.namedPairs(reader, genresOf(item.Kind), item.Genres))
 	}
 	if f.localTrailerCount {
 		b = appendJSONKey(b, "LocalTrailerCount", false)

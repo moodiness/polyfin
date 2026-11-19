@@ -90,19 +90,29 @@ func (s *Service) genreKept(ctx context.Context, v view, names []string, kinds [
 }
 
 // GenreNames returns the names of the genres of the movies and series
-// Polyfin keeps, and those an administrator set, each once whatever its
-// case as most of its titles spell it, those of the most titles first,
-// genreNamesMost at most. It reads every title.
-func (s *Service) GenreNames(ctx context.Context) ([]string, error) {
+// Polyfin keeps that the user reaches (see reachesTitle), and those an
+// administrator set on such titles, each once whatever its case as most
+// of those titles spell it, those of the most titles first,
+// genreNamesMost at most. It reads every title: another user's own
+// addon's titles name no genre for the user, nor spell one.
+func (s *Service) GenreNames(ctx context.Context, user accounts.User) ([]string, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	addonIDs, types, prefixes, others, err := v.reach()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(ctx, `SELECT genre FROM (
 			SELECT btrim(genre) AS genre, count(*) AS titles
-			FROM items, jsonb_array_elements_text(
-				CASE WHEN jsonb_typeof(data->'genres') = 'array' THEN data->'genres' ELSE '[]' END
-				|| CASE WHEN jsonb_typeof(data->'meta'->'genres') = 'array' THEN data->'meta'->'genres' ELSE '[]' END) AS genre
-			WHERE kind IN ('movie', 'series')
+			FROM items AS title, jsonb_array_elements_text(
+				CASE WHEN jsonb_typeof(title.data->'genres') = 'array' THEN title.data->'genres' ELSE '[]' END
+				|| CASE WHEN jsonb_typeof(title.data->'meta'->'genres') = 'array' THEN title.data->'meta'->'genres' ELSE '[]' END) AS genre
+			WHERE title.kind IN ('movie', 'series') AND `+reachesTitle("$2", "$3", "$4", "$5")+`
 			GROUP BY 1) AS kept
 		WHERE genre <> ''
-		ORDER BY titles DESC, genre COLLATE "C" LIMIT $1`, genreNamesMost)
+		ORDER BY titles DESC, genre COLLATE "C" LIMIT $1`, genreNamesMost, addonIDs, types, prefixes, others)
 	if err != nil {
 		return nil, err
 	}
@@ -121,9 +131,22 @@ func (s *Service) GenreNames(ctx context.Context) ([]string, error) {
 	for _, name := range kept {
 		add(name)
 	}
-	for _, o := range s.overridesNow().fields {
-		for _, genre := range o.Genres {
-			add(genre)
+	overrides := s.overridesNow().fields
+	var edited []accounts.ID
+	for id, o := range overrides {
+		if len(o.Genres) > 0 {
+			edited = append(edited, id)
+		}
+	}
+	titles, err := s.loadAll(ctx, edited)
+	if err != nil {
+		return nil, err
+	}
+	for _, title := range titles {
+		if title.Meta != nil && v.reaches(title) {
+			for _, genre := range overrides[title.ID].Genres {
+				add(genre)
+			}
 		}
 	}
 	return names, nil

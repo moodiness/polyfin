@@ -405,7 +405,7 @@ func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
 	for _, channel := range channels[from:to] {
 		dto := h.newItemDto(channel, fields, false, state)
 		if program, ok := airing[channel.ID]; ok {
-			dto.CurrentProgram = new(h.newItemDto(program, fields, false, userState{}))
+			dto.CurrentProgram = new(h.newItemDto(program, fields, false, userState{reader: user.ID}))
 		}
 		dtos = append(dtos, dto)
 	}
@@ -431,7 +431,7 @@ func (h *Handler) addCurrentPrograms(r *http.Request, user accounts.User, dtos [
 	for i := range dtos {
 		if id, ok := parseGUID(dtos[i].Id); ok && dtos[i].Type == "TvChannel" {
 			if program, ok := airing[id]; ok {
-				dtos[i].CurrentProgram = new(h.newItemDto(program, fields, false, userState{}))
+				dtos[i].CurrentProgram = new(h.newItemDto(program, fields, false, userState{reader: user.ID}))
 			}
 		}
 	}
@@ -476,7 +476,7 @@ func (h *Handler) liveChannel(w http.ResponseWriter, r *http.Request) {
 	h.addMediaSources(r, user, &dto, item, id, true)
 	if airing, err := h.airing(r, user, []accounts.ID{item.ID}); err == nil {
 		if program, ok := airing[item.ID]; ok {
-			dto.CurrentProgram = new(h.newItemDto(program, nil, true, userState{}))
+			dto.CurrentProgram = new(h.newItemDto(program, nil, true, userState{reader: user.ID}))
 		}
 	}
 	writeJSON(w, http.StatusOK, dto)

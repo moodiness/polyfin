@@ -687,7 +687,7 @@ func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []co
 	if err != nil {
 		return nil, err
 	}
-	state := userState{data: data, counts: map[accounts.ID]userdata.Counts{}}
+	state := userState{reader: user.ID, data: data, counts: map[accounts.ID]userdata.Counts{}}
 	result := make([]BaseItemDto, 0, len(lists))
 	for i, c := range lists {
 		item, played := collectionItem(c, titles[i], data, counts, h.Accounts.RatingCountry())
