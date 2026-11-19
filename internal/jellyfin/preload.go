@@ -119,15 +119,41 @@ func (h *Handler) episodesToPreload(ctx context.Context, user accounts.User, cut
 // preloadEpisode preloads the first version a play of episode would pick
 // for user, within limits: none when it is a torrent's file, or failed
 // lately. It returns the bytes fetched.
+//
+// A play lists the versions known, an expired list's included, while the
+// addons are asked again (see library.Service.VersionsToPlay), so the
+// preload reads the first of them, asking no addon: each pass would
+// otherwise ask them again for the same episodes, every preloadEvery all
+// night, their lists expiring between two passes. Known lists offering no
+// version leave nothing to preload. The addons are asked, waiting for
+// their answers, only when a list is not known, or when the version known
+// cannot be read, its link having expired.
 func (h *Handler) preloadEpisode(ctx context.Context, user accounts.User, episode library.Item, whole bool, limits source.Preloading) (int64, error) {
 	// Through Library.Item, as details, for parental control.
 	item, err := h.Library.Item(ctx, user, episode.ID)
 	if err != nil {
 		return 0, err
 	}
+	var fetched int64
+	if versions, known := h.Library.CachedVersions(ctx, user, item.ID); known {
+		p := playable{item: item}
+		h.offer(ctx, user, &p, versions)
+		if len(p.versions) == 0 {
+			return 0, nil
+		}
+		fetched, err = h.Playback.Preload(ctx, p.versions[0], whole, limits)
+		if err == nil || errors.Is(err, source.ErrPreloadHeld) || ctx.Err() != nil {
+			return fetched, err
+		}
+		h.Logger.Debug("A known version could not be preloaded: the addons are asked again", "user", user.Name, "error", err)
+		if limits.Budget -= fetched; limits.Budget <= 0 {
+			return fetched, source.ErrPreloadHeld
+		}
+	}
 	p, err := h.playable(ctx, user, item)
 	if len(p.versions) == 0 {
-		return 0, err
+		return fetched, err
 	}
-	return h.Playback.Preload(ctx, p.versions[0], whole, limits)
+	more, err := h.Playback.Preload(ctx, p.versions[0], whole, limits)
+	return fetched + more, err
 }
