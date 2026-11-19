@@ -575,7 +575,9 @@ function Database({ health }: { health: Health }) {
       items={[
         {
           label: text.databaseTitle,
-          value: health.database.reachable ? (
+          value: health.database.busy ? (
+            <StatusPill tone="warn">{text.busy}</StatusPill>
+          ) : health.database.reachable ? (
             <StatusPill tone="ok">{text.reachable}</StatusPill>
           ) : (
             <StatusPill tone="danger">{text.unreachable}</StatusPill>

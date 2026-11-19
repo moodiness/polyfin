@@ -565,9 +565,11 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
     to: { hash: 'database' },
     icon: DatabaseIcon,
     kind: text.databaseTitle,
-    state: health.database.reachable
-      ? { tone: 'ok', word: text.reachable }
-      : { tone: 'danger', word: text.unreachable },
+    state: health.database.busy
+      ? { tone: 'warn', word: text.busy }
+      : health.database.reachable
+        ? { tone: 'ok', word: text.reachable }
+        : { tone: 'danger', word: text.unreachable },
     title: health.database.size !== null ? formatBytes(health.database.size, language) : '–',
     body: words.databaseSize,
     foot: words.details,

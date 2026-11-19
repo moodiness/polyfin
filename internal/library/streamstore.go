@@ -22,7 +22,9 @@ import (
 // list's saving, reading back and dropping take its lock (see listLocks),
 // so that the copy saved ends as the list in memory: a list dropped while
 // it was being saved is not saved back, nor read back from a copy read
-// before it was dropped.
+// before it was dropped. A save that fails, the database being too busy
+// to answer in time, is tried again later (see savedRetries), with the
+// list as it stands then.
 
 const (
 	// savedTimeout bounds the reading and saving of a list.
@@ -33,6 +35,11 @@ const (
 	// sweepEvery is how often saved lists past keeping are deleted.
 	sweepEvery = time.Hour
 )
+
+// savedRetries are the waits before a stream list whose save failed is
+// saved again, one for each failure in a row; past the last, the list
+// stays in memory only.
+var savedRetries = []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 
 // savedList is how a stream list is saved. Identities are the identities
 // the streams carry from earlier answers (see carryIdentities), in order,
@@ -108,7 +115,27 @@ func (s *Service) savedStreams(ctx context.Context, key streamKey) (list[stremio
 // saveStreams saves the stream list kept in memory for key, and now and
 // then deletes the lists saved past keeping.
 func (s *Service) saveStreams(key streamKey) {
-	if s.db == nil || !s.writeStreams(key) {
+	s.saveStreamsAfter(key, 0)
+}
+
+// saveStreamsAfter saves the stream list kept for key after failures
+// failed saves in a row, and has it saved again later when it fails.
+func (s *Service) saveStreamsAfter(key streamKey, failures int) {
+	if s.db == nil || s.lifetime.Err() != nil {
+		return
+	}
+	saved, err := s.writeStreams(key)
+	if err != nil {
+		if failures == len(savedRetries) {
+			s.logger.Warn("Saving a stream list failed", "error", err)
+			return
+		}
+		wait := savedRetries[failures]
+		s.logger.Warn("Saving a stream list failed: it is saved again later", "error", err, "wait", wait)
+		s.saveLater(wait, func() { s.saveStreamsAfter(key, failures+1) })
+		return
+	}
+	if !saved {
 		return
 	}
 	tracked := s.tracked()
@@ -123,17 +150,18 @@ func (s *Service) saveStreams(key streamKey) {
 }
 
 // writeStreams writes the stream list kept in memory for key to the
-// database, reading it under the key's lock, and reports whether it did.
-func (s *Service) writeStreams(key streamKey) bool {
+// database, reading it under the key's lock, and reports whether it did,
+// or the database's error.
+func (s *Service) writeStreams(key streamKey) (bool, error) {
 	tracked := s.tracked()
 	defer tracked.saving.lock(key)()
 	l, ok := s.streamLists.Get(key)
 	if !ok || l.restored {
-		return false
+		return false, nil
 	}
 	data, err := json.Marshal(newSavedList(l.items))
 	if err != nil {
-		return false
+		return false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), savedTimeout)
 	defer cancel()
@@ -142,11 +170,10 @@ func (s *Service) writeStreams(key streamKey) bool {
 		ON CONFLICT (addon_id, content_type, stremio_id) DO UPDATE
 		SET streams = excluded.streams, answer = excluded.answer, fetched_at = excluded.fetched_at`,
 		key.addon, key.contentType, key.id, data, l.answer, l.at); err != nil {
-		s.logger.Warn("Saving a stream list failed", "error", err)
-		return false
+		return false, err
 	}
 	tracked.unsaved.Delete(key)
-	return true
+	return true, nil
 }
 
 // dropStreams drops the stream list kept for key, in memory and saved,

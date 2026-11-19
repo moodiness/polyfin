@@ -5205,7 +5205,8 @@ export type Health = {
     /** The last crash, as the start after it found it: null when none is kept. */
     lastCrash: { at: string; trace: string } | null
   }
-  database: { reachable: boolean; size: number | null }
+  /** `busy` when a check waited out its deadline for a connection, all in use: `size` is then null. */
+  database: { reachable: boolean; busy: boolean; size: number | null }
   /**
    * `torrents` is the part of `used` the pieces of torrents being played take; `kept` counts the
    * files the cache holds parts of, `hits` and `misses` the bytes read since the start that were read

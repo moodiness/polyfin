@@ -472,6 +472,7 @@ const system: typeof en = {
       transcodingOff: 'Die Konvertierung ist in den Einstellungen ausgeschaltet.',
       databaseTitle: 'Datenbank',
       reachable: 'Antwortet',
+      busy: 'Antwortet, ausgelastet',
       unreachable: 'Antwortet nicht',
       size: 'Größe',
       cacheTitle: 'Quellen-Cache',

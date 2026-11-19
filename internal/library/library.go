@@ -243,6 +243,9 @@ type Service struct {
 	// database, and pageReadHook, set by tests, runs in it (see pageRead).
 	pageReads    chan struct{}
 	pageReadHook func()
+	// saveLater runs a stream list's save again after a wait, once one
+	// failed (see saveStreamsAfter); tests run it when they choose.
+	saveLater func(time.Duration, func())
 	// plain holds the searches in plain words users made lately, which
 	// stand for smart lists (see plainsearch.go).
 	plain plainSearches
@@ -448,6 +451,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
 		pageReads:      make(chan struct{}, pageReadsAtOnce),
+		saveLater:      func(wait time.Duration, save func()) { time.AfterFunc(wait, save) },
 		hintSpacing:    hintSpacing,
 		personLookups:  personLookups{slots: make(chan struct{}, personLookupsAtOnce)},
 		programs:       newProgramIndex(),

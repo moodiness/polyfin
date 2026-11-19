@@ -448,6 +448,7 @@ const system = {
       transcodingOff: 'Conversion is turned off in the settings.',
       databaseTitle: 'Database',
       reachable: 'Answering',
+      busy: 'Answering, busy',
       unreachable: 'Not answering',
       size: 'Size',
       cacheTitle: 'Source cache',

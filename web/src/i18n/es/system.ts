@@ -468,6 +468,7 @@ const system: typeof en = {
       transcodingOff: 'La conversión está desactivada en los ajustes.',
       databaseTitle: 'Base de datos',
       reachable: 'Responde',
+      busy: 'Responde, ocupada',
       unreachable: 'No responde',
       size: 'Tamaño',
       cacheTitle: 'Caché de fuentes',

@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -413,6 +416,9 @@ type crashJSON struct {
 
 type databaseJSON struct {
 	Reachable bool `json:"reachable"`
+	// Busy is true when a check waited out its deadline for a connection,
+	// every one being in use: what it would tell is left out.
+	Busy bool `json:"busy"`
 	// Size is in bytes, null when it could not be read.
 	Size *int64 `json:"size"`
 }
@@ -673,6 +679,18 @@ type addonHealthJSON struct {
 // softwareEncoders are the CPU encoders conversions use.
 var softwareEncoders = []string{"libx264", "libx265", "aac", "libfdk_aac", "ac3", "eac3", "libopus", "flac"}
 
+// busy reports whether err is a database check's deadline passing while
+// every connection of the database's pool was in use: the database
+// answers others, too busy to answer the check in time.
+func (h *handler) busy(err error) bool {
+	pool, ok := h.Database.(interface{ Stat() *pgxpool.Stat })
+	if !ok || !errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	stat := pool.Stat()
+	return stat.AcquiredConns() >= stat.MaxConns()
+}
+
 // health describes how the server's parts fare, from what they record:
 // nothing is requested outside the server.
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
@@ -683,30 +701,55 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	result.Process = processJSON{Version: h.Version, GoVersion: runtime.Version(), StartedAt: h.Health.Started,
 		Memory: memory.Sys, Heap: memory.HeapAlloc, Goroutines: runtime.NumGoroutine()}
 
-	// The database's checks share a deadline; the torrent route's check,
-	// below, has its own, since a WireGuard tunnel whose server does not
-	// answer waits out the whole of it for a handshake.
-	ctx, cancel := context.WithTimeout(r.Context(), readyWait)
-	defer cancel()
-	result.Database.Reachable = h.Database.Ping(ctx) == nil
-	if result.Database.Reachable && h.Health.DatabaseSize != nil {
-		if size, err := h.Health.DatabaseSize(ctx); err == nil {
-			result.Database.Size = &size
+	// Each of the database's checks has its own deadline, as has the
+	// torrent route's, below, since a WireGuard tunnel whose server does
+	// not answer waits out the whole of it for a handshake. A check that
+	// waits out its deadline for a connection, every one of the pool being
+	// in use, finds the database busy: the checks after it are left out,
+	// and the answer says so rather than fail.
+	check := func(run func(context.Context) error) error {
+		ctx, cancel := context.WithTimeout(r.Context(), readyWait)
+		defer cancel()
+		err := run(ctx)
+		if h.busy(err) {
+			result.Database.Busy = true
 		}
+		return err
 	}
-	if result.Database.Reachable && h.Notifications != nil {
-		if crash, err := h.Notifications.LastCrash(ctx); err == nil && crash != nil {
-			result.Process.LastCrash = &crashJSON{At: crash.At.UTC().Truncate(time.Second), Trace: crash.Trace}
-		}
+	err := check(h.Database.Ping)
+	result.Database.Reachable = err == nil || result.Database.Busy
+	open := func() bool { return err == nil && !result.Database.Busy }
+	if open() && h.Health.DatabaseSize != nil {
+		_ = check(func(ctx context.Context) error {
+			size, err := h.Health.DatabaseSize(ctx)
+			if err == nil {
+				result.Database.Size = &size
+			}
+			return err
+		})
 	}
-	if result.Database.Reachable {
-		backup, err := h.backupStatus(ctx)
-		if err != nil {
-			h.internalError(w, r, err)
+	if open() && h.Notifications != nil {
+		_ = check(func(ctx context.Context) error {
+			crash, err := h.Notifications.LastCrash(ctx)
+			if err == nil && crash != nil {
+				result.Process.LastCrash = &crashJSON{At: crash.At.UTC().Truncate(time.Second), Trace: crash.Trace}
+			}
+			return err
+		})
+	}
+	if open() {
+		var backup *backupJSON
+		failed := check(func(ctx context.Context) (err error) {
+			backup, err = h.backupStatus(ctx)
+			return err
+		})
+		if failed != nil && !result.Database.Busy {
+			h.internalError(w, r, failed)
 			return
 		}
 		result.Backup = backup
-	} else if h.Backups.Available() {
+	}
+	if result.Backup == nil && h.Backups.Available() {
 		result.Backup = &backupJSON{Folder: h.Backups.Dir()}
 	}
 
@@ -827,8 +870,11 @@ func (h *handler) health(w http.ResponseWriter, r *http.Request) {
 	result.Secrets = h.secretsHealth(r.Context())
 	result.Ratings = h.ratingsHealth()
 	result.Artwork = h.artworkHealth()
-	if result.Database.Reachable {
-		result.People = h.peopleHealth(ctx)
+	if open() {
+		_ = check(func(ctx context.Context) error {
+			result.People = h.peopleHealth(ctx)
+			return ctx.Err()
+		})
 	}
 	if release, ok := h.Health.Updates.Available(); ok {
 		result.Update = &updateJSON{Version: release.Version, URL: release.URL}
