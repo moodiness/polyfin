@@ -222,7 +222,7 @@ func DefaultSettings() Settings {
 		TorrentWireGuard:     "",
 		TorrentDownloadMbps:  0,
 		TorrentUploadMbps:    0,
-		TorrentsAtOnce:       0,
+		TorrentsAtOnce:       DefaultTorrentsAtOnce,
 		TorrentTrackers:      []string{},
 
 		ConversionFolder: "",

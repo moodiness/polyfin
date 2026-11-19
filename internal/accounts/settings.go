@@ -2036,7 +2036,7 @@ type Settings struct {
 	// TorrentDownloadMbps bounds the download, 0 for no limit;
 	// TorrentUploadMbps the upload, 0 for no sharing. TorrentsAtOnce
 	// bounds the torrents running at once, server-wide, 0 for no limit
-	// (see torrent.ErrAtCap).
+	// (see torrent.ErrAtCap), DefaultTorrentsAtOnce on a new server.
 	TorrentStreams       bool
 	TorrentInterface     string
 	TorrentProxy         string
@@ -2174,6 +2174,14 @@ const (
 	MaxTorrentTrackers      = torrent.MaxTrackers
 	MaxTorrentTrackerBytes  = 500
 )
+
+// DefaultTorrentsAtOnce is Settings.TorrentsAtOnce on a new server. A
+// play tries up to three torrent versions at once, each running until 30
+// seconds after its last read: 10 lets three plays start together. Each
+// torrent running holds its info dictionary and, past the bytes in flight
+// all torrents share, one piece (see torrent.Engine's admit): the bound
+// keeps that a sum a server can hold.
+const DefaultTorrentsAtOnce = 10
 
 // ErrInvalidTorrentRoute reports torrent settings without a route while
 // torrents play, with more than one, with an interface name or a proxy
