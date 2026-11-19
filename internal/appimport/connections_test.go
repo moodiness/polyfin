@@ -301,9 +301,14 @@ func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 		c.NextImport.Sub(c.LastImport.At) != 6*time.Hour {
 		t.Fatalf("the connection: %+v %+v", c, c.LastImport)
 	}
+	// The sign-in is sealed: it keeps the secret and the profile's ID, not
+	// its name. The sealed text, random, is not searched for a short word,
+	// which it holds by chance once in a while.
 	stored, owned := h.stored(t, alice.ID)
-	if !secrets.Sealed(stored) || strings.Contains(stored, secret) || strings.Contains(stored, "Kids") || !owned {
-		t.Errorf("the sign-in is stored as %q", stored)
+	opened, err := h.open(stored, owned, false)
+	if !secrets.Sealed(stored) || strings.Contains(stored, secret) || !owned || err != nil || opened.Secret != secret ||
+		opened.Profile != "2" || strings.Contains(fmt.Sprintf("%+v", opened), "Kids") {
+		t.Errorf("the sign-in is stored as %q, opened as %+v: %v", stored, opened, err)
 	}
 	if signedOut := h.source.signedOutSecrets(); len(signedOut) != 0 {
 		t.Errorf("signed out: %v", signedOut)
@@ -372,11 +377,12 @@ func TestStayingConnectedKeepsTheSignInAndImportsAgain(t *testing.T) {
 		t.Errorf("signed out: %v", signedOut)
 	}
 
-	// Disconnecting signs out the session Polyfin opened, and forgets it.
+	// Disconnecting signs out, in the background, the session Polyfin
+	// opened, and forgets it.
 	if err := h.Disconnect(t.Context(), alice.ID, "stremio"); err != nil {
 		t.Fatal(err)
 	}
-	if signedOut := h.source.signedOutSecrets(); !slices.Equal(signedOut, []string{"renewed-secret-c", "signed-in-again"}) {
+	if signedOut := h.waitSignedOut(t, 2); !slices.Equal(signedOut, []string{"renewed-secret-c", "signed-in-again"}) {
 		t.Errorf("signed out: %v", signedOut)
 	}
 	if connections, err := h.Connections(t.Context(), alice); err != nil || len(connections) != 0 {
