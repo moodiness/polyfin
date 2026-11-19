@@ -24,6 +24,14 @@ const sftpDialTimeout = 30 * time.Second
 // saved at the first connection.
 var ErrHostKeyChanged = errors.New("the SFTP server's host key is not the one saved at the first connection")
 
+// ErrHostKeyNotAccepted reports an SFTP server whose destination forgot
+// its key: the key it offers is shown, to be accepted by its fingerprint.
+var ErrHostKeyNotAccepted = errors.New("the SFTP server's host key has not been accepted yet")
+
+// ErrOfferedKeyChanged is UpdateDestination's answer to the acceptance of
+// a host key whose fingerprint is not that of the key the server offered.
+var ErrOfferedKeyChanged = errors.New("the server does not offer the host key accepted")
+
 // sftpRemote is a folder of an SFTP server.
 type sftpRemote struct {
 	conn   *ssh.Client
@@ -33,10 +41,12 @@ type sftpRemote struct {
 }
 
 // dialSFTP signs in to the SFTP server of d with password or privateKey.
-// The server's host key must be d.HostKey; without one, any is accepted,
-// and seen is called with it, in the authorized_keys format. A server that
-// moves no byte for idle, while being asked or answering, fails what was
-// asked (see idleConn).
+// The server's host key must be d.HostKey. Without one, any is accepted at
+// a first connection, and seen is called with it; once d forgot its key,
+// none is. A key refused is given to seen too, before the password or the
+// private key is sent. Keys are in the authorized_keys format. A server
+// that moves no byte for idle, while being asked or answering, fails what
+// was asked (see idleConn).
 func dialSFTP(ctx context.Context, d Destination, password, privateKey string, idle time.Duration,
 	seen func(hostKey string)) (*sftpRemote, error) {
 	var auth []ssh.AuthMethod
@@ -57,6 +67,7 @@ func dialSFTP(ctx context.Context, d Destination, password, privateKey string, i
 		}))
 	}
 	var offered string
+	var refused error
 	config := &ssh.ClientConfig{
 		User: d.Username,
 		Auth: auth,
@@ -64,11 +75,17 @@ func dialSFTP(ctx context.Context, d Destination, password, privateKey string, i
 			line := string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))
 			if d.HostKey == "" {
 				offered = line
+				if d.HostKeyForgotten {
+					refused = fmt.Errorf("%w: it offers %s", ErrHostKeyNotAccepted, ssh.FingerprintSHA256(key))
+					return refused
+				}
 				return nil
 			}
 			saved, _, _, _, err := ssh.ParseAuthorizedKey([]byte(d.HostKey))
 			if err != nil || !bytes.Equal(saved.Marshal(), key.Marshal()) {
-				return fmt.Errorf("%w: it now offers %s", ErrHostKeyChanged, ssh.FingerprintSHA256(key))
+				offered = line
+				refused = fmt.Errorf("%w: it now offers %s", ErrHostKeyChanged, ssh.FingerprintSHA256(key))
+				return refused
 			}
 			return nil
 		},
@@ -87,6 +104,12 @@ func dialSFTP(ctx context.Context, d Destination, password, privateKey string, i
 	if err != nil {
 		stop()
 		raw.Close()
+		if refused != nil {
+			if seen != nil {
+				seen(offered)
+			}
+			return nil, refused
+		}
 		return nil, err
 	}
 	sshClient := ssh.NewClient(conn, channels, requests)

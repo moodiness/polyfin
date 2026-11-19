@@ -54,8 +54,13 @@ const backups: typeof en = {
       hostKeyNone: 'Salva na primeira conexão.',
       hostKeyForget: 'Esquecer',
       hostKeyForgetHelp:
-        'Esqueça a chave salva quando a chave do servidor tiver mudado de propósito: a chave que ele apresentar na próxima conexão será salva.',
-      hostKeyForgotten: 'A chave que o servidor apresentar na próxima conexão será salva.',
+        'Esqueça a chave salva quando a chave do servidor tiver mudado de propósito. A chave que ele apresentar então aparece aqui, para aceitar depois de compará-la com a do servidor.',
+      hostKeyForgotten:
+        'Esquecida. A chave que o servidor apresentar na próxima conexão aparecerá aqui, para aceitar. Teste o destino para vê-la.',
+      hostKeyOffered: (fingerprint: string) =>
+        `O servidor apresenta a chave do host ${fingerprint}, e o Polyfin a recusa. Aceite-a somente depois de compará-la com a impressão digital do próprio servidor.`,
+      acceptHostKey: 'Aceitar esta chave',
+      hostKeyAccepted: (name: string) => `A chave do host de ${name} foi aceita.`,
       create: 'Adicionar',
       creating: 'Adicionando…',
       save: 'Salvar',

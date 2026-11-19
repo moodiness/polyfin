@@ -54,8 +54,13 @@ const backups: typeof en = {
       hostKeyNone: 'Se guarda en la primera conexión.',
       hostKeyForget: 'Olvidar',
       hostKeyForgetHelp:
-        'Olvide la clave guardada si la clave del servidor ha cambiado intencionadamente: se guardará la que ofrezca en la próxima conexión.',
-      hostKeyForgotten: 'Se guardará la clave que ofrezca el servidor en la próxima conexión.',
+        'Olvide la clave guardada si la clave del servidor ha cambiado intencionadamente. La que ofrezca entonces se muestra aquí, para aceptarla tras compararla con la del servidor.',
+      hostKeyForgotten:
+        'Olvidada. La clave que ofrezca el servidor en la próxima conexión se mostrará aquí, para aceptarla. Pruebe el destino para verla.',
+      hostKeyOffered: (fingerprint: string) =>
+        `El servidor presenta la clave de host ${fingerprint}, y Polyfin la rechaza. Acéptela solo tras compararla con la huella del propio servidor.`,
+      acceptHostKey: 'Aceptar esta clave',
+      hostKeyAccepted: (name: string) => `Se ha aceptado la clave de host de ${name}.`,
       create: 'Añadir',
       creating: 'Añadiendo…',
       save: 'Guardar',

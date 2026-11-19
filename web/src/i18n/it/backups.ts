@@ -55,8 +55,13 @@ const backups: typeof en = {
       hostKeyNone: 'Salvata alla prima connessione.',
       hostKeyForget: 'Dimentica',
       hostKeyForgetHelp:
-        'Dimentica la chiave salvata quando la chiave del server è cambiata intenzionalmente: verrà salvata quella offerta alla connessione successiva.',
-      hostKeyForgotten: 'La chiave offerta dal server alla connessione successiva verrà salvata.',
+        'Dimentica la chiave salvata quando la chiave del server è cambiata intenzionalmente. Quella che offre allora viene mostrata qui, da accettare dopo averla confrontata con quella del server.',
+      hostKeyForgotten:
+        'Dimenticata. La chiave offerta dal server alla connessione successiva verrà mostrata qui, da accettare. Prova la destinazione per vederla.',
+      hostKeyOffered: (fingerprint: string) =>
+        `Il server presenta la chiave host ${fingerprint}, e Polyfin la rifiuta. Accettala solo dopo averla confrontata con l’impronta del server stesso.`,
+      acceptHostKey: 'Accetta questa chiave',
+      hostKeyAccepted: (name: string) => `La chiave host di ${name} è stata accettata.`,
       create: 'Aggiungi',
       creating: 'Aggiunta…',
       save: 'Salva',

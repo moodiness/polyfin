@@ -93,9 +93,16 @@ type Destination struct {
 	// SecretSet tells whether an S3 secret key or a password is set,
 	// PrivateKeySet whether an SFTP private key is.
 	SecretSet, PrivateKeySet bool
-	// HostKey is the SFTP server's key saved at the first connection, in
-	// the authorized_keys format, empty before it.
+	// HostKey is the SFTP server's key saved at the first connection, or
+	// accepted since, in the authorized_keys format, empty before it.
 	HostKey string
+	// OfferedHostKey is a key the server offered and that was refused: it
+	// is not HostKey, or HostKeyForgotten is set. It waits there for an
+	// administrator to accept it (see Draft.AcceptHostKey).
+	OfferedHostKey string
+	// HostKeyForgotten tells that the key was forgotten, or the server's
+	// host or port changed: no key is saved without being accepted.
+	HostKeyForgotten bool
 	// Kept is how many backups are kept there.
 	Kept      int
 	CreatedAt time.Time
@@ -143,7 +150,18 @@ func (d Destination) Problem(now time.Time, staleAfter time.Duration) string {
 // HostKeyFingerprint is the SHA-256 fingerprint of HostKey, as ssh-keygen
 // shows it, empty without one.
 func (d Destination) HostKeyFingerprint() string {
-	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(d.HostKey))
+	return fingerprint(d.HostKey)
+}
+
+// OfferedHostKeyFingerprint is that of OfferedHostKey, empty without one.
+func (d Destination) OfferedHostKeyFingerprint() string {
+	return fingerprint(d.OfferedHostKey)
+}
+
+// fingerprint is the SHA-256 fingerprint of a key in the authorized_keys
+// format, empty when there is none.
+func fingerprint(authorizedKey string) string {
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorizedKey))
 	if err != nil {
 		return ""
 	}
@@ -152,8 +170,10 @@ func (d Destination) HostKeyFingerprint() string {
 
 // Draft is what an administrator gives to add a destination or change one.
 // On a change, nil fields keep their values and Kind is ignored. HostKey
-// may only be emptied, to accept the key the server offers at the next
-// connection; changing an SFTP server's address or port empties it too.
+// may only be emptied, to forget the saved key; changing an SFTP server's
+// address or port forgets it too. Once forgotten, the key the server
+// offers is refused, and kept to be accepted: AcceptHostKey is the
+// fingerprint of OfferedHostKey, as HostKeyFingerprint gives it.
 type Draft struct {
 	Kind                   string
 	Address                *string
@@ -162,6 +182,7 @@ type Draft struct {
 	Username               *string
 	Secret, PrivateKey     *string
 	HostKey                *string
+	AcceptHostKey          string
 	Kept                   *int
 }
 
@@ -172,13 +193,13 @@ type stored struct {
 	secret, privateKey string
 }
 
-const destinationColumns = `id, kind, address, port, bucket, folder, region, username, secret, private_key, host_key, kept, created_at,
-	ran_at, error, newest_file, newest_at`
+const destinationColumns = `id, kind, address, port, bucket, folder, region, username, secret, private_key, host_key, offered_host_key,
+	host_key_forgotten, kept, created_at, ran_at, error, newest_file, newest_at`
 
 func scanDestination(row pgx.Row) (stored, error) {
 	var d stored
 	err := row.Scan(&d.ID, &d.Kind, &d.Address, &d.Port, &d.Bucket, &d.Folder, &d.Region, &d.Username, &d.secret, &d.privateKey,
-		&d.HostKey, &d.Kept, &d.CreatedAt, &d.RanAt, &d.Error, &d.NewestFile, &d.NewestAt)
+		&d.HostKey, &d.OfferedHostKey, &d.HostKeyForgotten, &d.Kept, &d.CreatedAt, &d.RanAt, &d.Error, &d.NewestFile, &d.NewestAt)
 	return d, err
 }
 
@@ -269,18 +290,44 @@ func (s *Service) CreateDestination(ctx context.Context, draft Draft) (Destinati
 	return s.describe(saved), nil
 }
 
-// UpdateDestination changes the destination id names.
+// UpdateDestination changes the destination id names. A host key is
+// accepted by the fingerprint the administrator was shown: when the server
+// has offered another key since, or none, nothing changes and it answers
+// ErrOfferedKeyChanged.
 func (s *Service) UpdateDestination(ctx context.Context, id accounts.ID, draft Draft) (Destination, error) {
 	d, err := s.loadDestination(ctx, id)
 	if err != nil {
 		return Destination{}, err
 	}
+	before := d.Destination
 	if err := s.apply(&d, draft); err != nil {
 		return Destination{}, err
 	}
+	// Forgetting, or another server, drops the key offered; so does its
+	// acceptance. Otherwise a key a connection offers meanwhile stays.
+	clearOffered := d.Kind == KindSFTP && (draft.HostKey != nil || d.Address != before.Address || d.Port != before.Port)
+	accepted := ""
+	if draft.AcceptHostKey != "" {
+		if d.OfferedHostKey == "" || fingerprint(d.OfferedHostKey) != draft.AcceptHostKey {
+			return Destination{}, ErrOfferedKeyChanged
+		}
+		accepted = d.OfferedHostKey
+		d.HostKey, d.OfferedHostKey, d.HostKeyForgotten, clearOffered = accepted, "", false, true
+	}
+	// The key accepted is the one read above: when a connection offered
+	// another since, nothing is saved.
 	saved, err := scanDestination(s.cfg.DB.QueryRow(ctx, `UPDATE backup_destinations SET address = $2, port = $3, bucket = $4, folder = $5,
-		region = $6, username = $7, secret = $8, private_key = $9, host_key = $10, kept = $11 WHERE id = $1 RETURNING `+destinationColumns,
-		id, d.Address, d.Port, d.Bucket, d.Folder, d.Region, d.Username, d.secret, d.privateKey, d.HostKey, d.Kept))
+		region = $6, username = $7, secret = $8, private_key = $9, host_key = $10, kept = $11, host_key_forgotten = $12,
+		offered_host_key = CASE WHEN $13 THEN '' ELSE offered_host_key END
+		WHERE id = $1 AND ($14 = '' OR offered_host_key = $14) RETURNING `+destinationColumns,
+		id, d.Address, d.Port, d.Bucket, d.Folder, d.Region, d.Username, d.secret, d.privateKey, d.HostKey, d.Kept, d.HostKeyForgotten,
+		clearOffered, accepted))
+	if errors.Is(err, pgx.ErrNoRows) && accepted != "" {
+		if _, err := s.loadDestination(ctx, id); err != nil {
+			return Destination{}, err
+		}
+		return Destination{}, ErrOfferedKeyChanged
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Destination{}, ErrDestinationNotFound
 	}
@@ -319,15 +366,18 @@ func (s *Service) apply(d *stored, draft Draft) error {
 	if draft.Port != nil {
 		port = *draft.Port
 	}
-	if d.Kind == KindSFTP && (address != d.Address || port != d.Port) {
-		// Another server: its key is saved at the next connection.
-		d.HostKey = ""
+	if d.Kind == KindSFTP && !d.CreatedAt.IsZero() && (address != d.Address || port != d.Port) {
+		// Another server: its key is shown at the next connection, to be
+		// accepted.
+		d.HostKey, d.OfferedHostKey, d.HostKeyForgotten = "", "", true
 	}
 	if draft.HostKey != nil {
 		if *draft.HostKey != "" {
 			return ErrInvalidDestinationAddress
 		}
-		d.HostKey = ""
+		if d.Kind == KindSFTP && !d.CreatedAt.IsZero() {
+			d.HostKey, d.OfferedHostKey, d.HostKeyForgotten = "", "", true
+		}
 	}
 	d.Address, d.Port = address, port
 	d.Bucket = trimmed(draft.Bucket, d.Bucket)
@@ -466,9 +516,17 @@ func (s *Service) open(ctx context.Context, d stored) (remote, error) {
 		return newWebDAVRemote(d.Destination, secret, s.idle)
 	}
 	return dialSFTP(ctx, d.Destination, secret, privateKey, s.idle, func(hostKey string) {
-		// Saved once: a key saved meanwhile is kept.
-		if _, err := s.cfg.DB.Exec(context.WithoutCancel(ctx), "UPDATE backup_destinations SET host_key = $2 WHERE id = $1 AND host_key = ''",
-			d.ID, hostKey); err != nil {
+		// A first key is saved once: a key saved meanwhile is kept. Any
+		// other is kept to be shown, while the destination still names
+		// the server and the state it was refused in.
+		query := `UPDATE backup_destinations SET offered_host_key = $2
+			WHERE id = $1 AND address = $3 AND port = $4 AND host_key = $5 AND host_key_forgotten = $6`
+		if d.HostKey == "" && !d.HostKeyForgotten {
+			query = `UPDATE backup_destinations SET host_key = $2
+				WHERE id = $1 AND address = $3 AND port = $4 AND host_key = $5 AND host_key_forgotten = $6`
+		}
+		if _, err := s.cfg.DB.Exec(context.WithoutCancel(ctx), query, d.ID, hostKey, d.Address, d.Port, d.HostKey,
+			d.HostKeyForgotten); err != nil {
 			s.cfg.Logger.Warn("Could not save an SFTP server's host key", "destination", d.Name(), "error", err)
 		}
 	})

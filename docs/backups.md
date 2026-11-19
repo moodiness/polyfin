@@ -104,10 +104,10 @@ In **Settings › Backups**, under **Destinations**, **Add a destination** offer
 | **WebDAV** | The **Folder address**, the address of an existing folder, such as Nextcloud's `https://cloud.example.org/remote.php/dav/files/sam/polyfin/`; the **User** and the **Password** |
 
 - **S3 addressing:** Polyfin addresses the bucket in the path of the endpoint's address, which every such storage answers.
-- **SFTP host key:** the server's host key is saved at the first connection, by **Test** or by the first upload. It is checked at every connection afterwards.
-  - A server offering another key is refused, and its last upload fails saying so.
-  - When the server's key changed on purpose, open the destination and press **Forget** next to **Host key**. The key it offers at the next connection is saved.
-  - Changing the host or the port forgets the key too.
+- **SFTP host key:** the server's host key is saved at the first connection, by **Test** or by the first upload. It is checked at every connection afterwards, before the password or the private key is sent.
+  - A server offering another key is refused, and its last upload fails saying so. Open the destination: under **Host key**, the fingerprint of the key it offers shows, with **Accept this key**.
+  - **Forget** next to **Host key**, or a change of the host or the port, forgets the saved key. The key the server then offers is not saved: it is refused, and its fingerprint shows under **Host key** after the next **Test** or upload, with **Accept this key**.
+  - Accept a key only after comparing the fingerprint shown with the server's own, such as the output of `ssh-keygen -lf` on the server's public host key. Polyfin saves the key of that fingerprint and no other. When the server has offered yet another key by then, nothing is accepted and the form shows the fingerprint now offered, to compare again.
 - **Test:** writes a small file to the destination, reads it back and deletes it.
 - **Passwords, secret keys and private keys:** they are encrypted with `POLYFIN_SECRET_KEY` when it is set, like the other stored keys, and never shown again. The form shows that one is saved, and offers to replace it.
 

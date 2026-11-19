@@ -54,9 +54,13 @@ const backups: typeof en = {
       hostKeyNone: 'Wird bei der ersten Verbindung gespeichert.',
       hostKeyForget: 'Vergessen',
       hostKeyForgetHelp:
-        'Vergiss den gespeicherten Schlüssel, wenn sich der Schlüssel des Servers absichtlich geändert hat: Der Schlüssel, den er bei der nächsten Verbindung anbietet, wird gespeichert.',
+        'Vergiss den gespeicherten Schlüssel, wenn sich der Schlüssel des Servers absichtlich geändert hat. Der Schlüssel, den er dann anbietet, wird hier angezeigt, um ihn nach dem Vergleich mit dem des Servers zu akzeptieren.',
       hostKeyForgotten:
-        'Der Schlüssel, den der Server bei der nächsten Verbindung anbietet, wird gespeichert.',
+        'Vergessen. Der Schlüssel, den der Server bei der nächsten Verbindung anbietet, wird hier angezeigt, um ihn zu akzeptieren. Teste das Ziel, um ihn zu sehen.',
+      hostKeyOffered: (fingerprint: string) =>
+        `Der Server bietet den Hostschlüssel ${fingerprint} an, und Polyfin lehnt ihn ab. Akzeptiere ihn erst, nachdem du ihn mit dem Fingerabdruck des Servers verglichen hast.`,
+      acceptHostKey: 'Diesen Schlüssel akzeptieren',
+      hostKeyAccepted: (name: string) => `Der Hostschlüssel von ${name} wurde akzeptiert.`,
       create: 'Hinzufügen',
       creating: 'Wird hinzugefügt…',
       save: 'Speichern',

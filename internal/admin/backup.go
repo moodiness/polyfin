@@ -55,31 +55,36 @@ type restoreJSON struct {
 // destinationJSON is a destination. Its password, secret key and private
 // key are never answered: SecretSet and PrivateKeySet tell whether they
 // are set. HostKey is the SHA-256 fingerprint of the SFTP server's key
-// saved at the first connection, empty before it. RanAt and Error are its
+// saved at the first connection or accepted since, empty before it.
+// OfferedHostKey is that of a key the server offered instead, to accept;
+// HostKeyForgotten tells that the key was forgotten, so that the next one
+// offered is shown rather than saved. RanAt and Error are its
 // last upload, NewestFile and NewestAt the newest backup there; Problem
 // is null, "failed" or "stale"; Unreadable tells that POLYFIN_SECRET_KEY
 // cannot decrypt its password or keys.
 type destinationJSON struct {
-	ID            string     `json:"id"`
-	Kind          string     `json:"kind"`
-	Name          string     `json:"name"`
-	Address       string     `json:"address"`
-	Port          int        `json:"port"`
-	Bucket        string     `json:"bucket"`
-	Folder        string     `json:"folder"`
-	Region        string     `json:"region"`
-	Username      string     `json:"username"`
-	SecretSet     bool       `json:"secretSet"`
-	PrivateKeySet bool       `json:"privateKeySet"`
-	HostKey       string     `json:"hostKey"`
-	Kept          int        `json:"kept"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	RanAt         *time.Time `json:"ranAt"`
-	Error         string     `json:"error"`
-	NewestFile    string     `json:"newestFile"`
-	NewestAt      *time.Time `json:"newestAt"`
-	Problem       *string    `json:"problem"`
-	Unreadable    bool       `json:"unreadable"`
+	ID               string     `json:"id"`
+	Kind             string     `json:"kind"`
+	Name             string     `json:"name"`
+	Address          string     `json:"address"`
+	Port             int        `json:"port"`
+	Bucket           string     `json:"bucket"`
+	Folder           string     `json:"folder"`
+	Region           string     `json:"region"`
+	Username         string     `json:"username"`
+	SecretSet        bool       `json:"secretSet"`
+	PrivateKeySet    bool       `json:"privateKeySet"`
+	HostKey          string     `json:"hostKey"`
+	OfferedHostKey   string     `json:"offeredHostKey"`
+	HostKeyForgotten bool       `json:"hostKeyForgotten"`
+	Kept             int        `json:"kept"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	RanAt            *time.Time `json:"ranAt"`
+	Error            string     `json:"error"`
+	NewestFile       string     `json:"newestFile"`
+	NewestAt         *time.Time `json:"newestAt"`
+	Problem          *string    `json:"problem"`
+	Unreadable       bool       `json:"unreadable"`
 }
 
 // backupSchedule is when the backup task runs next, nil without a timed
@@ -98,7 +103,8 @@ func (h *handler) backupSchedule() (*time.Time, time.Duration) {
 func (h *handler) newDestinationJSON(d backup.Destination, now time.Time) destinationJSON {
 	result := destinationJSON{ID: d.ID.String(), Kind: d.Kind, Name: d.Name(), Address: d.Address, Port: d.Port, Bucket: d.Bucket,
 		Folder: d.Folder, Region: d.Region, Username: d.Username, SecretSet: d.SecretSet, PrivateKeySet: d.PrivateKeySet,
-		HostKey: d.HostKeyFingerprint(), Kept: d.Kept, CreatedAt: d.CreatedAt.UTC().Truncate(time.Second), RanAt: utcSeconds(d.RanAt),
+		HostKey: d.HostKeyFingerprint(), OfferedHostKey: d.OfferedHostKeyFingerprint(), HostKeyForgotten: d.HostKeyForgotten,
+		Kept: d.Kept, CreatedAt: d.CreatedAt.UTC().Truncate(time.Second), RanAt: utcSeconds(d.RanAt),
 		Error: d.Error, NewestFile: d.NewestFile, NewestAt: d.NewestAt, Unreadable: d.Unreadable}
 	_, staleAfter := h.backupSchedule()
 	if problem := d.Problem(now, staleAfter); problem != "" {
@@ -189,6 +195,7 @@ func backupError(w http.ResponseWriter, err error) bool {
 		{backup.ErrWrongPassphrase, http.StatusBadRequest, "wrong_passphrase"},
 		{backup.ErrDamagedBackup, http.StatusBadRequest, "damaged_backup"},
 		{backup.ErrNotEncrypted, http.StatusBadRequest, "not_encrypted"},
+		{backup.ErrOfferedKeyChanged, http.StatusConflict, "offered_host_key_changed"},
 	} {
 		if errors.Is(err, known.err) {
 			writeError(w, known.status, known.code)
@@ -201,25 +208,28 @@ func backupError(w http.ResponseWriter, err error) bool {
 // destinationDraftJSON adds a destination, or changes one: on a change,
 // the fields left out keep their values, and kind is ignored. secret is
 // an S3 secret key or a password, privateKey an SFTP private key, both
-// emptied by "" and kept when left out; hostKey may only be "", to accept
-// the key the SFTP server offers at the next connection.
+// emptied by "" and kept when left out; hostKey may only be "", to forget
+// the saved key, after which the key the SFTP server offers is shown, not
+// saved. acceptHostKey is the fingerprint of offeredHostKey, to accept it.
 type destinationDraftJSON struct {
-	Kind       string  `json:"kind"`
-	Address    *string `json:"address"`
-	Port       *int    `json:"port"`
-	Bucket     *string `json:"bucket"`
-	Folder     *string `json:"folder"`
-	Region     *string `json:"region"`
-	Username   *string `json:"username"`
-	Secret     *string `json:"secret"`
-	PrivateKey *string `json:"privateKey"`
-	HostKey    *string `json:"hostKey"`
-	Kept       *int    `json:"kept"`
+	Kind          string  `json:"kind"`
+	Address       *string `json:"address"`
+	Port          *int    `json:"port"`
+	Bucket        *string `json:"bucket"`
+	Folder        *string `json:"folder"`
+	Region        *string `json:"region"`
+	Username      *string `json:"username"`
+	Secret        *string `json:"secret"`
+	PrivateKey    *string `json:"privateKey"`
+	HostKey       *string `json:"hostKey"`
+	AcceptHostKey string  `json:"acceptHostKey"`
+	Kept          *int    `json:"kept"`
 }
 
 func (d destinationDraftJSON) draft() backup.Draft {
 	return backup.Draft{Kind: d.Kind, Address: d.Address, Port: d.Port, Bucket: d.Bucket, Folder: d.Folder, Region: d.Region,
-		Username: d.Username, Secret: d.Secret, PrivateKey: d.PrivateKey, HostKey: d.HostKey, Kept: d.Kept}
+		Username: d.Username, Secret: d.Secret, PrivateKey: d.PrivateKey, HostKey: d.HostKey, AcceptHostKey: d.AcceptHostKey,
+		Kept: d.Kept}
 }
 
 // destinationsJSON lists the destinations, and the kinds they may be.

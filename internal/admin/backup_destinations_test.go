@@ -2,6 +2,8 @@ package admin
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/webdav"
 
 	"github.com/moodiness/polyfin/internal/backup"
@@ -135,6 +138,73 @@ func TestBackupDestinationRoutes(t *testing.T) {
 	if status, _, _ := administrator.call(http.MethodDelete, "/backup/destinations/"+id, nil); status != http.StatusNotFound {
 		t.Errorf("delete twice: %d", status)
 	}
+}
+
+// An SFTP destination's key is forgotten with "hostKey": "", and the key
+// its server then offers is shown and accepted by its fingerprint only.
+// The keys are written to the database: no server is reached.
+func TestABackupDestinationsHostKeyIsAcceptedByItsFingerprint(t *testing.T) {
+	t.Parallel()
+	api, deps, _ := backupAPI(t, t.TempDir(), nil)
+	administrator := api.signedIn("administrator", true)
+	status, body, _ := administrator.call(http.MethodPost, "/backup/destinations", map[string]any{"kind": "sftp", "address": "nas.lan",
+		"username": "polyfin", "secret": "sftp password"})
+	if status != http.StatusCreated || body["hostKey"] != "" || body["offeredHostKey"] != "" || body["hostKeyForgotten"] != false {
+		t.Fatalf("created: %d %v", status, body)
+	}
+	id := body["id"].(string)
+	saved, offered := authorizedKey(t), authorizedKey(t)
+	if _, err := deps.pool.Exec(t.Context(), "UPDATE backup_destinations SET host_key = $2 WHERE id = $1", id, saved); err != nil {
+		t.Fatal(err)
+	}
+
+	status, body, _ = administrator.call(http.MethodPatch, "/backup/destinations/"+id, map[string]any{"hostKey": ""})
+	if status != http.StatusOK || body["hostKey"] != "" || body["hostKeyForgotten"] != true {
+		t.Fatalf("forget: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPatch, "/backup/destinations/"+id,
+		map[string]any{"acceptHostKey": fingerprintOf(t, saved)}); status != http.StatusConflict || body["error"] != "offered_host_key_changed" {
+		t.Errorf("accepting with nothing offered: %d %v", status, body)
+	}
+	if _, err := deps.pool.Exec(t.Context(), "UPDATE backup_destinations SET offered_host_key = $2 WHERE id = $1", id, offered); err != nil {
+		t.Fatal(err)
+	}
+	status, body, _ = administrator.call(http.MethodGet, "/backup/destinations", nil)
+	if shown := body["destinations"].([]any)[0].(map[string]any); status != http.StatusOK || shown["offeredHostKey"] != fingerprintOf(t, offered) ||
+		shown["hostKey"] != "" {
+		t.Fatalf("list: %d %v", status, shown)
+	}
+	if status, body, _ := administrator.call(http.MethodPatch, "/backup/destinations/"+id,
+		map[string]any{"acceptHostKey": fingerprintOf(t, saved)}); status != http.StatusConflict || body["error"] != "offered_host_key_changed" {
+		t.Errorf("accepting another key: %d %v", status, body)
+	}
+	status, body, _ = administrator.call(http.MethodPatch, "/backup/destinations/"+id, map[string]any{"acceptHostKey": fingerprintOf(t, offered)})
+	if status != http.StatusOK || body["hostKey"] != fingerprintOf(t, offered) || body["offeredHostKey"] != "" || body["hostKeyForgotten"] != false {
+		t.Errorf("accepting the key shown: %d %v", status, body)
+	}
+}
+
+// authorizedKey is a new host key in the authorized_keys format.
+func authorizedKey(t *testing.T) string {
+	t.Helper()
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ssh.NewPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key)))
+}
+
+func fingerprintOf(t *testing.T, authorizedKey string) string {
+	t.Helper()
+	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(authorizedKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ssh.FingerprintSHA256(key)
 }
 
 func mustJSON(value any) []byte {

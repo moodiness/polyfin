@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/pkg/sftp"
@@ -67,11 +68,13 @@ func (w *testWebDAV) setDown(down bool) {
 }
 
 // testSFTP is an SFTP server for user and password, whose files are in
-// dir; key is its host key.
+// dir; key is its host key. passwords counts the passwords it was sent,
+// right or wrong.
 type testSFTP struct {
-	host string
-	port int
-	dir  string
+	host      string
+	port      int
+	dir       string
+	passwords atomic.Int32
 }
 
 func newHostKey(t *testing.T) ssh.Signer {
@@ -89,7 +92,9 @@ func newHostKey(t *testing.T) ssh.Signer {
 
 func newTestSFTP(t *testing.T, user, password string, key ssh.Signer, dir string) *testSFTP {
 	t.Helper()
+	server := &testSFTP{host: "127.0.0.1", dir: dir}
 	config := &ssh.ServerConfig{PasswordCallback: func(meta ssh.ConnMetadata, given []byte) (*ssh.Permissions, error) {
+		server.passwords.Add(1)
 		if meta.User() == user && string(given) == password {
 			return nil, nil
 		}
@@ -110,7 +115,8 @@ func newTestSFTP(t *testing.T, user, password string, key ssh.Signer, dir string
 			go serveSFTP(conn, config, dir)
 		}
 	}()
-	return &testSFTP{host: "127.0.0.1", port: listener.Addr().(*net.TCPAddr).Port, dir: dir}
+	server.port = listener.Addr().(*net.TCPAddr).Port
+	return server
 }
 
 func serveSFTP(conn net.Conn, config *ssh.ServerConfig, dir string) {

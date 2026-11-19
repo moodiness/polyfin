@@ -204,7 +204,8 @@ func TestAFailedUploadIsTriedAgainAtTheNextBackup(t *testing.T) {
 
 // Test writes a file, reads it back and deletes it: nothing is left. The
 // SFTP server's key is saved at the first connection; a server offering
-// another key afterwards is refused, until the saved key is forgotten.
+// another key afterwards is refused before any password is sent, and its
+// key is shown until it is accepted by its fingerprint.
 func TestDestinationTestAndHostKey(t *testing.T) {
 	t.Parallel()
 	h := withDestinations(t)
@@ -233,7 +234,8 @@ func TestDestinationTestAndHostKey(t *testing.T) {
 
 	// Another server answers at the address: the database is changed
 	// directly, as the admin API forgets the key with the address.
-	other := newTestSFTP(t, "polyfin", "sftp password", newHostKey(t), first.dir)
+	otherKey := newHostKey(t)
+	other := newTestSFTP(t, "polyfin", "sftp password", otherKey, first.dir)
 	if _, err := h.service.cfg.DB.Exec(t.Context(), "UPDATE backup_destinations SET port = $2 WHERE id = $1", sftpDestination.ID,
 		other.port); err != nil {
 		t.Fatal(err)
@@ -241,21 +243,22 @@ func TestDestinationTestAndHostKey(t *testing.T) {
 	if _, err := h.service.TestDestination(t.Context(), sftpDestination.ID); !errors.Is(err, ErrHostKeyChanged) {
 		t.Errorf("another host key: %v", err)
 	}
-	if after, _ := h.service.Destination(t.Context(), sftpDestination.ID); after.HostKey != saved.HostKey {
+	after, _ := h.service.Destination(t.Context(), sftpDestination.ID)
+	if after.HostKey != saved.HostKey {
 		t.Error("the saved key was replaced")
 	}
-	forgotten, err := h.service.UpdateDestination(t.Context(), sftpDestination.ID, Draft{HostKey: new("")})
-	if err != nil || forgotten.HostKey != "" {
-		t.Fatalf("forgetting the key: %+v %v", forgotten, err)
+	if want := ssh.FingerprintSHA256(otherKey.PublicKey()); after.OfferedHostKeyFingerprint() != want {
+		t.Errorf("offered key shown: %q, want %q", after.OfferedHostKeyFingerprint(), want)
 	}
-	tested, err := h.service.TestDestination(t.Context(), sftpDestination.ID)
-	if err != nil || tested.HostKey == "" || tested.HostKey == saved.HostKey {
-		t.Errorf("after forgetting the key: %+v %v", tested, err)
+	if n := other.passwords.Load(); n != 0 {
+		t.Errorf("%d passwords sent to a key not accepted", n)
 	}
-	// Another address forgets the key.
-	moved, err := h.service.UpdateDestination(t.Context(), sftpDestination.ID, Draft{Port: new(first.port)})
-	if err != nil || moved.HostKey != "" {
-		t.Errorf("another port: %+v %v", moved, err)
+	accepted, err := h.service.UpdateDestination(t.Context(), sftpDestination.ID, Draft{AcceptHostKey: after.OfferedHostKeyFingerprint()})
+	if err != nil || accepted.HostKeyFingerprint() != after.OfferedHostKeyFingerprint() || accepted.OfferedHostKey != "" {
+		t.Fatalf("accepting the key shown: %+v %v", accepted, err)
+	}
+	if _, err := h.service.TestDestination(t.Context(), sftpDestination.ID); err != nil {
+		t.Errorf("after accepting the key: %v", err)
 	}
 
 	// A wrong password fails the test, saying why.
@@ -264,6 +267,72 @@ func TestDestinationTestAndHostKey(t *testing.T) {
 	}
 	if _, err := h.service.TestDestination(t.Context(), davDestination.ID); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Errorf("a wrong password: %v", err)
+	}
+}
+
+// Once an SFTP destination's key is forgotten, or its port changed, the
+// key the server offers is refused before any password is sent, and shown;
+// only the key of the fingerprint accepted is saved.
+func TestAForgottenHostKeyIsAcceptedByTheFingerprintShown(t *testing.T) {
+	t.Parallel()
+	h := withDestinations(t)
+	firstKey, otherKey := newHostKey(t), newHostKey(t)
+	first := newTestSFTP(t, "polyfin", "sftp password", firstKey, t.TempDir())
+	other := newTestSFTP(t, "polyfin", "sftp password", otherKey, first.dir)
+	d := h.create(t, Draft{Kind: KindSFTP, Address: new(first.host), Port: new(first.port), Folder: new(first.dir),
+		Username: new("polyfin"), Secret: new("sftp password")})
+	if _, err := h.service.TestDestination(t.Context(), d.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Forget: the same server's key is shown, not saved.
+	forgotten, err := h.service.UpdateDestination(t.Context(), d.ID, Draft{HostKey: new("")})
+	if err != nil || forgotten.HostKey != "" || !forgotten.HostKeyForgotten {
+		t.Fatalf("forgetting the key: %+v %v", forgotten, err)
+	}
+	sent := first.passwords.Load()
+	if _, err := h.service.TestDestination(t.Context(), d.ID); !errors.Is(err, ErrHostKeyNotAccepted) {
+		t.Errorf("after forgetting the key: %v", err)
+	}
+	shown, _ := h.service.Destination(t.Context(), d.ID)
+	if shown.HostKey != "" || shown.OfferedHostKeyFingerprint() != ssh.FingerprintSHA256(firstKey.PublicKey()) {
+		t.Errorf("after forgetting the key: saved %q, shown %q", shown.HostKey, shown.OfferedHostKeyFingerprint())
+	}
+	if n := first.passwords.Load(); n != sent {
+		t.Errorf("%d passwords sent to a key not accepted", n-sent)
+	}
+
+	// Another port: the key shown is the new server's.
+	if _, err := h.service.UpdateDestination(t.Context(), d.ID, Draft{Port: new(other.port)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.service.TestDestination(t.Context(), d.ID); !errors.Is(err, ErrHostKeyNotAccepted) {
+		t.Errorf("another port: %v", err)
+	}
+	if n := other.passwords.Load(); n != 0 {
+		t.Errorf("%d passwords sent to a key not accepted", n)
+	}
+	moved, _ := h.service.Destination(t.Context(), d.ID)
+	want := ssh.FingerprintSHA256(otherKey.PublicKey())
+	if moved.OfferedHostKeyFingerprint() != want {
+		t.Fatalf("another port: shown %q, want %q", moved.OfferedHostKeyFingerprint(), want)
+	}
+
+	// The key accepted is the one shown, no other.
+	for _, wrong := range []string{ssh.FingerprintSHA256(firstKey.PublicKey()), "SHA256:x"} {
+		if _, err := h.service.UpdateDestination(t.Context(), d.ID, Draft{AcceptHostKey: wrong}); !errors.Is(err, ErrOfferedKeyChanged) {
+			t.Errorf("accepting %s: %v", wrong, err)
+		}
+	}
+	if still, _ := h.service.Destination(t.Context(), d.ID); still.HostKey != "" || still.OfferedHostKey != moved.OfferedHostKey {
+		t.Errorf("a key not shown changed the destination: %+v", still)
+	}
+	accepted, err := h.service.UpdateDestination(t.Context(), d.ID, Draft{AcceptHostKey: want})
+	if err != nil || accepted.HostKeyFingerprint() != want || accepted.OfferedHostKey != "" || accepted.HostKeyForgotten {
+		t.Fatalf("accepting the key shown: %+v %v", accepted, err)
+	}
+	if _, err := h.service.TestDestination(t.Context(), d.ID); err != nil || other.passwords.Load() == 0 {
+		t.Errorf("after accepting the key: %v", err)
 	}
 }
 

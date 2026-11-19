@@ -52,8 +52,13 @@ const backups = {
       hostKeyNone: 'Saved at the first connection.',
       hostKeyForget: 'Forget',
       hostKeyForgetHelp:
-        'Forget the saved key when the server’s key changed on purpose: the key it offers at the next connection is saved.',
-      hostKeyForgotten: 'The key the server offers at the next connection will be saved.',
+        'Forget the saved key when the server’s key changed on purpose. The key it then offers is shown here, to accept after comparing it with the server’s own.',
+      hostKeyForgotten:
+        'Forgotten. The key the server offers at the next connection will be shown here, to accept. Test the destination to see it.',
+      hostKeyOffered: (fingerprint: string) =>
+        `The server offers the host key ${fingerprint}, and Polyfin refuses it. Accept it only after comparing it with the server’s own fingerprint.`,
+      acceptHostKey: 'Accept this key',
+      hostKeyAccepted: (name: string) => `The host key of ${name} is accepted.`,
       create: 'Add',
       creating: 'Adding…',
       save: 'Save',

@@ -448,22 +448,11 @@ function DestinationModal({
               '/backups/polyfin',
             )}
             {destination !== null && (
-              <Field label={text.hostKey} help={text.hostKeyForgetHelp}>
-                <div className="flex flex-wrap items-center gap-3">
-                  <code className="font-mono text-small break-all text-ink-2">
-                    {destination.hostKey === '' || forgetHostKey
-                      ? forgetHostKey
-                        ? text.hostKeyForgotten
-                        : text.hostKeyNone
-                      : destination.hostKey}
-                  </code>
-                  {destination.hostKey !== '' && !forgetHostKey && (
-                    <Button variant="secondary" size="sm" onClick={() => setForgetHostKey(true)}>
-                      {text.hostKeyForget}
-                    </Button>
-                  )}
-                </div>
-              </Field>
+              <HostKey
+                destination={destination}
+                forgetting={forgetHostKey}
+                onForget={() => setForgetHostKey(true)}
+              />
             )}
           </>
         )}
@@ -498,5 +487,81 @@ function DestinationModal({
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
     </Modal>
+  )
+}
+
+/**
+ * An SFTP destination's saved host key, with Forget, and the key its server offers instead, to
+ * accept by the fingerprint shown. The destination is read from the list, so that what is shown
+ * follows it after an acceptance, or a refusal of one.
+ */
+function HostKey({
+  destination,
+  forgetting,
+  onForget,
+}: {
+  destination: BackupDestination
+  forgetting: boolean
+  onForget: () => void
+}) {
+  const { t } = useI18n()
+  const text = t.backups.destinations
+  const toast = useToast()
+  const listed = useQuery({
+    queryKey: queryKeys.backupDestinations,
+    queryFn: ({ signal }) => fetchBackupDestinations(signal),
+    select: (data) => data.destinations.find((current) => current.id === destination.id),
+  })
+  const current = listed.data ?? destination
+  const accept = useMutation({
+    // The key accepted is the one whose fingerprint shows, not one offered since.
+    mutationFn: () =>
+      updateBackupDestination(destination.id, { acceptHostKey: current.offeredHostKey }),
+    onSuccess: (saved) => {
+      store(saved)
+      toast(text.hostKeyAccepted(saved.name))
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.backupDestinations }),
+  })
+  const saved = forgetting ? '' : current.hostKey
+  const forgotten = forgetting || current.hostKeyForgotten
+  return (
+    <Field label={text.hostKey} help={text.hostKeyForgetHelp}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {saved !== '' ? (
+            <code className="font-mono text-small break-all text-ink-2">{saved}</code>
+          ) : (
+            <p className="text-small text-ink-2">
+              {forgotten ? text.hostKeyForgotten : text.hostKeyNone}
+            </p>
+          )}
+          {current.hostKey !== '' && !forgetting && (
+            <Button variant="secondary" size="sm" onClick={onForget}>
+              {text.hostKeyForget}
+            </Button>
+          )}
+        </div>
+        {current.offeredHostKey !== '' && !forgetting && (
+          <Notice tone="danger">
+            {/* The fingerprint is one long word: it wraps, so that it shows whole to compare. */}
+            <p className="[overflow-wrap:anywhere]">
+              {text.hostKeyOffered(current.offeredHostKey)}
+            </p>
+            <div className="mt-3">
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => accept.mutate()}
+                loading={accept.isPending}
+              >
+                {text.acceptHostKey}
+              </Button>
+            </div>
+            {accept.isError && <InlineError>{errorMessage(t, accept.error)}</InlineError>}
+          </Notice>
+        )}
+      </div>
+    </Field>
   )
 }

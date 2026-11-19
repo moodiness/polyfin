@@ -5613,8 +5613,11 @@ export type BackupDestinationKind = 's3' | 'sftp' | 'webdav'
  * A place backups are sent to. Its password, secret key and private key are never sent:
  * `secretSet` and `privateKeySet` tell whether they are set. `address` is an S3 endpoint, an SFTP
  * server's host or a WebDAV folder's address; `folder` an S3 prefix or an SFTP folder. `hostKey` is
- * the fingerprint of the SFTP server's key saved at the first connection. `ranAt` and `error` are
- * the last upload, `newestFile` and `newestAt` the newest backup there.
+ * the fingerprint of the SFTP server's key saved at the first connection or accepted since;
+ * `offeredHostKey` that of a key the server offered instead, refused until it is accepted;
+ * `hostKeyForgotten` tells that the key was forgotten, so that the next one offered is shown, not
+ * saved. `ranAt` and `error` are the last upload, `newestFile` and `newestAt` the newest backup
+ * there.
  */
 export type BackupDestination = {
   id: string
@@ -5629,6 +5632,8 @@ export type BackupDestination = {
   secretSet: boolean
   privateKeySet: boolean
   hostKey: string
+  offeredHostKey: string
+  hostKeyForgotten: boolean
   kept: number
   createdAt: string
   ranAt: string | null
@@ -5639,7 +5644,11 @@ export type BackupDestination = {
   unreadable: boolean
 }
 
-/** A destination to add, or the fields to change: those left out keep their values. */
+/**
+ * A destination to add, or the fields to change: those left out keep their values. `hostKey: ''`
+ * forgets the saved key; `acceptHostKey` is the destination's `offeredHostKey`, to accept it. When
+ * the server has offered another key by then, nothing is accepted.
+ */
 export type BackupDestinationDraft = {
   kind?: BackupDestinationKind
   address?: string
@@ -5651,6 +5660,7 @@ export type BackupDestinationDraft = {
   secret?: string
   privateKey?: string
   hostKey?: ''
+  acceptHostKey?: string
   kept?: number
 }
 
