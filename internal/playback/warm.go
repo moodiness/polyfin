@@ -159,11 +159,17 @@ func (s *Service) warmFrom(ctx context.Context, version library.Version, start t
 }
 
 // keyframeOffsets returns where a version's keyframes start: kept since its
-// index was read, or read again from its head and index.
+// index was read, or read again from its head and index, in a slot for
+// index reads (see indexSlot).
 func (s *Service) keyframeOffsets(ctx context.Context, version library.Version, src *source.Source, size int64) ([]container.Keyframe, error) {
 	if offsets, ok := s.offsets.Get(version.ID); ok {
 		return offsets, nil
 	}
+	release, err := s.indexSlot(ctx, version)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	offsets, err := container.KeyframeOffsets(ctx, src, size)
 	if err != nil {
 		return nil, err

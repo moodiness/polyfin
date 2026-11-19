@@ -68,6 +68,7 @@ Background reads wait for a free connection and yield theirs to playback: read-a
 - Torrent files are read ahead only during playback. When the last ends, connections close at once, except those serving a waiting read, so a stop leaves the swarm (see [Torrents](torrents.md#only-while-playing)).
 - When a stream redirects, as addon resolvers do, Polyfin reads from the final address: connections skip the resolver, and the file cannot change mid-play.
 - Apps still get the addon's address. A dead final address sends Polyfin back to the addon's, then to a renewed link.
+- Polyfin reads 4 keyframe indexes of Matroska and MP4 files at once at most, 2 from one host: a large index takes tens of MiB of memory while read. A play whose index is not read yet waits for its turn; indexes read before, kept in the database, never wait.
 - Once the keyframe index is known, Polyfin reads the first segment's bytes (64 MiB at most) before the app asks: from `PlaybackInfo`, and when details open with [Prepare playback in advance](#preparing-playback-in-advance) on.
 - For a resume, it reads the file's head, which FFmpeg probes, and the resume segment. A Matroska index is read during analysis.
 - Relayed files use the same cache: earlier reads cost no request; seeks fetch only what is missing.

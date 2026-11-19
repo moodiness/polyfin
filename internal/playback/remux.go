@@ -250,12 +250,13 @@ func unindexedFormat(analysis media.Analysis) bool {
 const keyframesTime = 3 * time.Minute
 
 // keyframes returns a version's keyframe times: remembered, saved, or read
-// from its container's index through the source cache, with where each
-// keyframe starts in the file, kept for Warm. A version whose index cannot
-// be read, for what its file holds, is not read again for a while; one
-// whose host failed is read again at the next play, and one whose host
-// held the reads back is not kept as failed. A read for a playback, ctx
-// not marked Background, reads the source as a playback.
+// from its container's index through the source cache, in a slot for index
+// reads (see indexSlot), with where each keyframe starts in the file, kept
+// for Warm. A version whose index cannot be read, for what its file
+// holds, is not read again for a while; one whose host failed is read
+// again at the next play, and one whose host held the reads back is not
+// kept as failed. A read for a playback, ctx not marked Background, reads
+// the source as a playback.
 func (s *Service) keyframes(ctx context.Context, version library.Version, analysis media.Analysis) ([]time.Duration, error) {
 	if times, ok := s.indexes.Get(version.ID); ok {
 		return times, nil
@@ -298,7 +299,11 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		}
 		var times []time.Duration
 		err := s.readSized(reading, version, analysis, src, func(size int64) error {
-			var err error
+			release, err := s.indexSlot(reading, version)
+			if err != nil {
+				return err
+			}
+			defer release()
 			if times, err = container.Keyframes(reading, src, size); err == nil {
 				// From the blocks just read: no request more.
 				if offsets, err := container.KeyframeOffsets(reading, src, size); err == nil {
@@ -336,6 +341,26 @@ func (s *Service) keyframes(ctx context.Context, version library.Version, analys
 		return nil, err
 	}
 	return result.([]time.Duration), nil
+}
+
+// indexSlot waits for a slot to read version's container index: one of
+// its host's, then one over every host, as a track read does (see
+// readTrack). release gives both back.
+func (s *Service) indexSlot(ctx context.Context, version library.Version) (release func(), err error) {
+	releaseHost, err := s.hostIndexReads.acquire(ctx, hostOf(version.URL))
+	if err != nil {
+		return nil, err
+	}
+	select {
+	case s.indexReads <- struct{}{}:
+		return func() {
+			<-s.indexReads
+			releaseHost()
+		}, nil
+	case <-ctx.Done():
+		releaseHost()
+		return nil, ctx.Err()
+	}
 }
 
 // savedKeyframes returns a version's saved keyframe times, then

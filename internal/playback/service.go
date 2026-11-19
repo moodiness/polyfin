@@ -95,11 +95,17 @@ type Service struct {
 	// indexes are keyframe times, unindexed the versions whose index
 	// cannot be read, unscanned those whose keyframes could not be read
 	// from the whole file (see scannedKeyframes), and offsets where the
-	// keyframes start in the file.
-	indexes   *cache.Cache[accounts.ID, []time.Duration]
-	unindexed *cache.Cache[accounts.ID, error]
-	unscanned *cache.Cache[accounts.ID, error]
-	offsets   *cache.Cache[accounts.ID, []container.Keyframe]
+	// keyframes start in the file. indexReads and hostIndexReads bound the
+	// container indexes read at once, over every host and from each, as
+	// for tracks: maxTrackReads and hostTrackReads. An index of as many
+	// keyframes as are read from one takes about 96 MiB while read, so
+	// the reads under way hold about 384 MiB at most.
+	indexes        *cache.Cache[accounts.ID, []time.Duration]
+	unindexed      *cache.Cache[accounts.ID, error]
+	unscanned      *cache.Cache[accounts.ID, error]
+	offsets        *cache.Cache[accounts.ID, []container.Keyframe]
+	indexReads     chan struct{}
+	hostIndexReads hostSlots
 	// playPlans are the plans the plays of files whose keyframes are read
 	// from the whole file started with, which they keep (see playPlan).
 	playPlansMu sync.Mutex
@@ -206,6 +212,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		unscanned:   cache.New[accounts.ID, error](2000, scanFailureTTL),
 		playPlans:   cache.New[playPlanKey, hls.Plan](2000, scanFailureTTL),
 		offsets:     cache.New[accounts.ID, []container.Keyframe](50, time.Hour).Sized(maxKeptOffsets, offsetBytes),
+		indexReads:  make(chan struct{}, maxTrackReads),
 		warming:     map[accounts.ID]*warmRun{},
 		warmed:      cache.New[accounts.ID, time.Duration](500, warmedFor),
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
