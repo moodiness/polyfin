@@ -192,6 +192,8 @@ const system = {
           `${name}: the SFTP server offers another host key than the one saved, and Polyfin refuses it until it is accepted.`,
         shareTooLarge: (name: string) =>
           `${name}: this network share holds more than Polyfin reads in one scan. Its page tells which limit it met.`,
+        shareTooSlow: (name: string) =>
+          `${name}: a scan of this network share lasted more than 12 hours and was stopped. The next scan goes on from there.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin cannot watch this local folder for changes: the system’s limit of watched folders is reached. It is still scanned on its schedule. Raise fs.inotify.max_user_watches on the host.`,
         folderInstanceLimit: (name: string) =>

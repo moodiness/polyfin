@@ -472,6 +472,8 @@ const sources = {
         'The share holds more than 4,000,000 files, more than Polyfin reads in one scan. Add parts of it as separate folders.',
       listing_too_large:
         'A folder of the share lists more than Polyfin reads of one folder: more than 500,000 entries, a name longer than 1,024 bytes, or an answer from the server too large. The server’s log tells which, and in which folder.',
+      too_slow:
+        'A scan of the share lasted more than 12 hours, and Polyfin stopped it. What it read stays, and the next scan goes on from there. If the share is this slow at every scan, check the server and the network, or add parts of it as separate folders.',
     } as Record<string, string>,
     keptNote: 'The files found before stay in the library until the folder can be read again.',
     unmatchedTitle: 'Unmatched files',

@@ -488,6 +488,8 @@ const sources: typeof en = {
         'Die Freigabe enthält mehr als 4.000.000 Dateien, mehr als Polyfin in einem Scan liest. Füge Teile davon als getrennte Ordner hinzu.',
       listing_too_large:
         'Ein Ordner der Freigabe listet mehr auf, als Polyfin von einem Ordner liest: mehr als 500.000 Einträge, einen Namen von mehr als 1.024 Bytes oder eine zu große Antwort des Servers. Das Serverprotokoll nennt, welches dieser Limits erreicht wurde und in welchem Ordner.',
+      too_slow:
+        'Ein Scan der Freigabe dauerte länger als 12 Stunden, und Polyfin hat ihn angehalten. Was er gelesen hat, bleibt, und der nächste Scan macht dort weiter. Ist die Freigabe bei jedem Scan so langsam, prüfe den Server und das Netzwerk, oder füge Teile davon als getrennte Ordner hinzu.',
     } as Record<string, string>,
     keptNote:
       'Die bisher gefundenen Dateien bleiben in der Bibliothek, bis der Ordner wieder gelesen werden kann.',

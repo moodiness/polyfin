@@ -30,3 +30,24 @@ func TestHealthTellsAShareThatHoldsMoreThanAScanReads(t *testing.T) {
 		}
 	}
 }
+
+// A share whose scan lasted longer than one scan may is told as such, in
+// every language, not as a share to check the address or the user of.
+func TestHealthTellsAShareScanStoppedOutOfTime(t *testing.T) {
+	t.Parallel()
+	want := map[string]string{
+		"en": "Movies: a scan of this network share lasted more than 12 hours and was stopped. The next scan goes on from there.",
+		"fr": "Movies\u202f: une analyse de ce partage réseau a duré plus de 12 heures et a été arrêtée. La prochaine analyse reprend à partir de là.",
+	}
+	p := healthProblemJSON{Code: problemFolder, Name: "Movies", Failure: "too_slow", Share: "smb"}
+	other := healthProblemJSON{Code: problemFolder, Name: "Movies", Failure: "missing", Share: "smb"}
+	for _, language := range i18n.Languages {
+		got := p.text(language)
+		if got == other.text(language) || !strings.HasPrefix(got, "Movies") {
+			t.Errorf("in %s: %s", language, got)
+		}
+		if told, ok := want[language]; ok && got != told {
+			t.Errorf("in %s:\n%s\nwant\n%s", language, got, told)
+		}
+	}
+}

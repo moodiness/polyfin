@@ -205,6 +205,8 @@ const system: typeof en = {
           `${name}\u202f: le serveur SFTP présente une autre clé d’hôte que celle enregistrée, et Polyfin la refuse tant qu’elle n’est pas acceptée.`,
         shareTooLarge: (name: string) =>
           `${name}\u202f: ce partage réseau contient plus que ce que Polyfin lit en une analyse. Sa page indique la limite atteinte.`,
+        shareTooSlow: (name: string) =>
+          `${name}\u202f: une analyse de ce partage réseau a duré plus de 12 heures et a été arrêtée. La prochaine analyse reprend à partir de là.`,
         folderWatchLimit: (name: string) =>
           `${name}\u202f: Polyfin ne peut pas surveiller les changements de ce dossier local\u202f: la limite de dossiers surveillés du système est atteinte. Il est toujours analysé selon sa planification. Augmentez fs.inotify.max_user_watches sur l’hôte.`,
         folderInstanceLimit: (name: string) =>

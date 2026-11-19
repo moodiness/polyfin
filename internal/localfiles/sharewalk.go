@@ -12,6 +12,10 @@ const (
 	errBoundFiles   = "too_many_files"
 )
 
+// errBoundTime is the failure of a share's scan that lasted longer than
+// one scan may (see shareScanTime).
+const errBoundTime = "too_slow"
+
 // metBound tells whether a scan's failure is a bound its walk met.
 func metBound(failure string) bool {
 	switch failure {

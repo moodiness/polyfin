@@ -492,6 +492,8 @@ const sources: typeof en = {
         'El recurso compartido contiene más de 4.000.000 de archivos, más de los que Polyfin lee en un escaneo. Añada partes de él como carpetas separadas.',
       listing_too_large:
         'Una carpeta del recurso compartido lista más de lo que Polyfin lee de una carpeta: más de 500.000 entradas, un nombre de más de 1.024 bytes o una respuesta del servidor demasiado grande. El registro del servidor indica cuál de estos límites, y en qué carpeta.',
+      too_slow:
+        'Un escaneo del recurso compartido duró más de 12 horas, y Polyfin lo detuvo. Lo que leyó se conserva, y el próximo escaneo continúa desde ahí. Si el recurso compartido es así de lento en cada escaneo, compruebe el servidor y la red, o añada partes de él como carpetas separadas.',
     } as Record<string, string>,
     keptNote:
       'Los archivos encontrados anteriormente permanecen en la biblioteca hasta que la carpeta se pueda volver a leer.',

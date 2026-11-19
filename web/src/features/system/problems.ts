@@ -205,6 +205,7 @@ export function problemText(t: Messages, language: string, problem: HealthProble
       if (problem.failure === 'refused') return text.shareRefused(problem.name)
       if (problem.failure === 'host_key_changed') return text.shareHostKey(problem.name)
       if (shareLimits.includes(problem.failure)) return text.shareTooLarge(problem.name)
+      if (problem.failure === 'too_slow') return text.shareTooSlow(problem.name)
       return problem.share !== undefined ? text.share(problem.name) : text.folder(problem.name)
     case 'folder_unwatched':
       if (problem.share !== undefined) {

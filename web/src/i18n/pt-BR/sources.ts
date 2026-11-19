@@ -490,6 +490,8 @@ const sources: typeof en = {
         'O compartilhamento contém mais de 4.000.000 de arquivos, mais do que o Polyfin lê em um rastreamento. Adicione partes dele como pastas separadas.',
       listing_too_large:
         'Uma pasta do compartilhamento lista mais do que o Polyfin lê de uma pasta: mais de 500.000 entradas, um nome de mais de 1.024 bytes ou uma resposta do servidor grande demais. O registro do servidor indica qual desses limites, e em qual pasta.',
+      too_slow:
+        'Um rastreamento do compartilhamento durou mais de 12 horas, e o Polyfin o interrompeu. O que ele leu permanece, e o próximo rastreamento continua a partir daí. Se o compartilhamento for tão lento a cada rastreamento, verifique o servidor e a rede, ou adicione partes dele como pastas separadas.',
     } as Record<string, string>,
     keptNote:
       'Os arquivos encontrados antes permanecem na biblioteca até que a pasta possa ser lida novamente.',

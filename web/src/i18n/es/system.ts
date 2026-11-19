@@ -203,6 +203,8 @@ const system: typeof en = {
           `${name}: el servidor SFTP presenta una clave de host distinta de la guardada, y Polyfin la rechaza hasta que se acepte.`,
         shareTooLarge: (name: string) =>
           `${name}: este recurso compartido de red contiene más de lo que Polyfin lee en un escaneo. Su página indica el límite alcanzado.`,
+        shareTooSlow: (name: string) =>
+          `${name}: un escaneo de este recurso compartido de red duró más de 12 horas y se detuvo. El próximo escaneo continúa desde ahí.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin no puede vigilar los cambios de esta carpeta local: se ha alcanzado el límite de carpetas vigiladas del sistema. Se sigue escaneando según su programación. Aumente fs.inotify.max_user_watches en el host.`,
         folderInstanceLimit: (name: string) =>

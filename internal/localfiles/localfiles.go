@@ -153,6 +153,9 @@ type Service struct {
 	toneMapping     bool
 	// workers bounds the units matched at once in a scan.
 	workers int
+	// shareScanTime bounds one scan of a share (see scan); tests lower
+	// it.
+	shareScanTime time.Duration
 	// serverWait waits d before a search an addon failed is tried again,
 	// or until ctx ends (see serverWaits); tests replace it.
 	serverWait func(ctx context.Context, d time.Duration) error
@@ -221,7 +224,8 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
-		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, serverWait: waitFor, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
+		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, shareScanTime: shareScanTime, serverWait: waitFor, ctx: ctx, cancel: cancel,
+		running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
 		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]uint64{},
 		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}}
@@ -366,9 +370,10 @@ type NewFolder struct {
 // (CheckedAt is the last attempt, ScannedAt the last scan that could read
 // the folder, Error the code of the last failure: "missing",
 // "unreadable", "not_folder", or for a share "unreachable", "refused",
-// "host_key_changed", or the bound a share that holds more than one scan
+// "host_key_changed", the bound a share that holds more than one scan
 // reads met, "too_deep", "too_many_folders", "too_many_files" or
-// "listing_too_large"),
+// "listing_too_large", or "too_slow" when its scan lasted longer than
+// one scan may),
 // whether a scan is under way, its files, those matched to a title, how,
 // and the others, the links made by hand, and the episodes given by hand
 // to the titles of shows' discs. Unwatched tells why a

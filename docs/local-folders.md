@@ -100,6 +100,8 @@ A scan reads only what changed:
 
 A few titles are looked up at once, so a large first scan takes a while. The folder's figures follow it.
 
+The folders due on the schedule, or under **Scan local folders**, are scanned in groups that run side by side: one for the local folders, and one for the network shares of each server. Within a group, one folder is scanned after the other. A slow share delays only the shares of its own server (see [Network shares](network-shares.md#performance)).
+
 Symbolic links to files of the folder are followed. Links leading out of the folder, and links to folders, are not.
 
 ### Watching for changes

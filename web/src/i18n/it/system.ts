@@ -204,6 +204,8 @@ const system: typeof en = {
           `${name}: il server SFTP presenta una chiave host diversa da quella salvata e Polyfin la rifiuta finché non viene accettata.`,
         shareTooLarge: (name: string) =>
           `${name}: questa condivisione di rete contiene più di quanto Polyfin legga in una scansione. La sua pagina indica il limite raggiunto.`,
+        shareTooSlow: (name: string) =>
+          `${name}: una scansione di questa condivisione di rete è durata più di 12 ore ed è stata interrotta. La prossima scansione riprende da lì.`,
         folderWatchLimit: (name: string) =>
           `${name}: Polyfin non riesce a monitorare le modifiche di questa cartella locale: è stato raggiunto il limite di cartelle monitorate del sistema. Viene comunque scansionata secondo la sua pianificazione. Aumenta fs.inotify.max_user_watches sull’host.`,
         folderInstanceLimit: (name: string) =>

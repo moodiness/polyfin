@@ -492,6 +492,8 @@ const sources: typeof en = {
         'La condivisione contiene più di 4.000.000 di file, più di quanti Polyfin ne legga in una scansione. Aggiungine alcune parti come cartelle separate.',
       listing_too_large:
         'Una cartella della condivisione elenca più di quanto Polyfin legga di una cartella: più di 500.000 voci, un nome di più di 1.024 byte o una risposta del server troppo grande. Il log del server indica quale di questi limiti, e in quale cartella.',
+      too_slow:
+        'Una scansione della condivisione è durata più di 12 ore, e Polyfin l’ha interrotta. Ciò che ha letto resta, e la prossima scansione riprende da lì. Se la condivisione è così lenta a ogni scansione, verifica il server e la rete, oppure aggiungine alcune parti come cartelle separate.',
     } as Record<string, string>,
     keptNote:
       'I file trovati in precedenza restano nella libreria finché la cartella non potrà essere letta di nuovo.',

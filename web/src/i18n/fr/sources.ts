@@ -496,6 +496,8 @@ const sources: typeof en = {
         'Le partage contient plus de 4 000 000 de fichiers, plus que Polyfin n’en lit en une analyse. Ajoutez-en des parties comme dossiers séparés.',
       listing_too_large:
         'Un dossier du partage liste plus que ce que Polyfin lit d’un dossier\u202f: plus de 500 000 entrées, un nom de plus de 1 024 octets, ou une réponse du serveur trop grande. Le journal du serveur indique laquelle de ces limites, et dans quel dossier.',
+      too_slow:
+        'Une analyse du partage a duré plus de 12 heures, et Polyfin l’a arrêtée. Ce qu’elle a lu reste, et la prochaine analyse reprend à partir de là. Si le partage est aussi lent à chaque analyse, vérifiez le serveur et le réseau, ou ajoutez-en des parties comme dossiers séparés.',
     } as Record<string, string>,
     keptNote:
       'Les fichiers trouvés auparavant restent dans la bibliothèque jusqu’à ce que le dossier soit à nouveau lisible.',

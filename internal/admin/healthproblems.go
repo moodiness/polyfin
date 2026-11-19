@@ -892,6 +892,13 @@ func (p healthProblemJSON) text(language string) string {
 				"%s: este recurso compartido de red contiene más de lo que Polyfin lee en un escaneo. Su página indica el límite alcanzado.",
 				"%s: questa condivisione di rete contiene più di quanto Polyfin legga in una scansione. La sua pagina indica il limite raggiunto.",
 				"%s: este compartilhamento de rede contém mais do que o Polyfin lê em um rastreamento. A página dele indica o limite atingido."}, name)
+		case p.Failure == "too_slow":
+			return say(i18n.Text{"%s: a scan of this network share lasted more than 12 hours and was stopped. The next scan goes on from there.",
+				"%s\u202f: une analyse de ce partage réseau a duré plus de 12 heures et a été arrêtée. La prochaine analyse reprend à partir de là.",
+				"%s: Ein Scan dieser Netzwerkfreigabe dauerte länger als 12 Stunden und wurde angehalten. Der nächste Scan macht dort weiter.",
+				"%s: un escaneo de este recurso compartido de red duró más de 12 horas y se detuvo. El próximo escaneo continúa desde ahí.",
+				"%s: una scansione di questa condivisione di rete è durata più di 12 ore ed è stata interrotta. La prossima scansione riprende da lì.",
+				"%s: um rastreamento deste compartilhamento de rede durou mais de 12 horas e foi interrompido. O próximo rastreamento continua a partir daí."}, name)
 		case p.Share != "":
 			return say(i18n.Text{"%s: Polyfin cannot read this network share. Check its address, and that its user may read it.",
 				"%s\u202f: Polyfin ne peut pas lire ce partage réseau. Vérifiez son adresse, et que son utilisateur peut le lire.", "%s: Polyfin kann diese Netzwerkfreigabe nicht lesen. Prüfe ihre Adresse und ob ihr Benutzer sie lesen darf.", "%s: Polyfin no puede leer este recurso compartido de red. Compruebe su dirección y que su usuario tiene permiso de lectura.", "%s: Polyfin non riesce a leggere questa condivisione di rete. Verifica il suo indirizzo e che il suo utente possa leggerla.", "%s: o Polyfin não consegue ler este compartilhamento de rede. Verifique o endereço dele e se o usuário dele tem permissão de leitura."}, name)

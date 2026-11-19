@@ -118,8 +118,8 @@ SFTP folders that had no saved key when Polyfin was updated to 0.84.0 are treate
   - SMB: one session per share, signed in again when it ends, such as when the server restarts;
   - WebDAV, S3 and rclone: HTTP keep-alive;
   - SFTP: one SSH connection per folder, made again when it drops. It opens two sessions in it, one to read files and one to list folders. A server that refuses the second session is listed over the first, each folder read whole and only then checked against the limits below; Polyfin's log tells it once per connection, at Info, with the server's host.
-- **Scans** list the share folder by folder. Network listings are slower than a disk's, but a scan reads only new or changed files, so only the first scan is long.
-- **Limits:** one scan reads folders up to 32 deep, 1,000,000 folders and 4,000,000 files, and of one folder 500,000 entries, each named by at most 1,024 bytes. A share that holds more fails its scan with the limit it met (see [Health](#health)): add parts of it as separate folders.
+- **Scans** list the share folder by folder. Network listings are slower than a disk's, but a scan reads only new or changed files, so only the first scan is long. The scheduled scans of the folders of one server run one after the other, and those of different servers side by side, so a slow server delays only its own folders.
+- **Limits:** one scan reads folders up to 32 deep, 1,000,000 folders and 4,000,000 files, and of one folder 500,000 entries, each named by at most 1,024 bytes. It lasts at most 12 hours. A share that holds more fails its scan with the limit it met (see [Health](#health)): add parts of it as separate folders.
 - **Schedule:** shares follow the same schedule as local folders (see [Scanning](local-folders.md#scanning)), and are watched for changes (see [Watching for changes](local-folders.md#watching-for-changes)).
 - **Network:** a video plays only as fast as the network carries it. A high bit rate movie needs a steady link to the server, which wired networks give more surely than Wi-Fi.
 
@@ -141,12 +141,13 @@ A share Polyfin cannot read is reported on its page and under **System › Healt
 | `too_many_folders` | The share holds more than 1,000,000 folders. |
 | `too_many_files` | The share holds more than 4,000,000 files, counting those beside the videos or the tracks, such as subtitles and images. |
 | `listing_too_large` | One folder of the share lists more than 500,000 entries, a name longer than 1,024 bytes, or an answer larger than Polyfin reads: 64 MiB from a WebDAV or SFTP server or for a page of a bucket, 256 MiB from rclone. The server's log tells which, and in which folder. |
+| `too_slow` | A scan of the share lasted more than 12 hours, and was stopped. What it read stays, and the next scan goes on from there. A share this slow at every scan points to a slow server or network. |
 
 An empty prefix of a bucket is an empty folder: S3 cannot tell it from a prefix that does not exist.
 
 As with a local folder, the files found before stay in the library while the share cannot be read. A NAS that is off for a while empties no library.
 
-A share that met one of the limits of a scan (`too_deep`, `too_many_folders`, `too_many_files` or `listing_too_large`) keeps its schedule, and can be scanned by hand. Each scan reads it up to the limit again, so the listings that watch a share for changes have it scanned once more, then no longer until a scan reads it whole. An SMB server that tells of its changes still has it scanned after them.
+A share that met one of the limits of a scan (`too_deep`, `too_many_folders`, `too_many_files`, `listing_too_large` or `too_slow`) keeps its schedule, and can be scanned by hand. Its next scan on schedule counts from the end of the one that stopped. Each scan reads it up to the limit again, so the listings that watch a share for changes have it scanned once more, then no longer until a scan reads it whole. An SMB server that tells of its changes still has it scanned after them.
 
 A share that was read but cannot be listed while watched is a warning under **System › Health**. The reason is `unreachable`, `refused` or `host_key_changed`. It keeps its schedule meanwhile, and is scanned again once it answers.
 

@@ -82,6 +82,11 @@ const (
 	connectTimeout = 15 * time.Second
 	// listTimeout bounds the listing of one folder of a share.
 	listTimeout = time.Minute
+	// shareScanTime bounds one scan of a share, its walk and the reading
+	// of what it found new or changed. A walk of 100,000 folders through
+	// a cloud remote, about a third of a second each, lasts about 9
+	// hours; a scan reading only changes, minutes.
+	shareScanTime = 12 * time.Hour
 	// maxPollMinutes bounds the time between the listings of a share.
 	maxPollMinutes = 1440
 )

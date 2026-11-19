@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -310,11 +311,14 @@ func (s *Service) Scan(ctx context.Context, id accounts.ID) error {
 	}
 }
 
-// ScanDue scans, one after the other, the enabled folders not scanned
-// since the server started, those whose last scan is LocalScanHours old,
-// and those whose titles' searches failed once their retry is due (see
-// searchRetry); all scans every folder. A folder that cannot be read is
-// no failure of the run: it is reported on the folder.
+// ScanDue scans the enabled folders not scanned since the server started,
+// those whose last scan is LocalScanHours old, and those whose titles'
+// searches failed once their retry is due (see searchRetry); all scans
+// every folder. The folders of one server are scanned one after the
+// other, and those in the container too, each group beside the others
+// (see scanGroup): a slow server holds the scans of its own shares only.
+// A folder that cannot be read is no failure of the run: it is reported
+// on the folder.
 func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	installed, err := s.addons.Addons(ctx, addons.Shared())
 	if err != nil {
@@ -332,6 +336,7 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 	maps.DeleteFunc(s.kept, func(id accounts.ID, _ int) bool { return !local[id] })
 	s.mu.Unlock()
 	hours := s.settings().LocalScanHours
+	due := map[string][]accounts.ID{}
 	for _, addon := range installed {
 		if !addon.Local() || !addon.Enabled && !all {
 			continue
@@ -355,14 +360,42 @@ func (s *Service) ScanDue(ctx context.Context, all bool) error {
 				continue
 			}
 		}
-		if err := s.Scan(ctx, addon.ID); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return err
-		}
+		group := scanGroup(addon.ManifestURL)
+		due[group] = append(due[group], addon.ID)
 	}
-	return nil
+	var (
+		wg     sync.WaitGroup
+		mu     sync.Mutex
+		failed []error
+	)
+	for group, ids := range due {
+		wg.Go(func() {
+			defer logPanic(s.logger, "The scans of a server's folders ended on a panic", "server", group)
+			for _, id := range ids {
+				if err := s.Scan(ctx, id); err != nil {
+					mu.Lock()
+					failed = append(failed, err)
+					mu.Unlock()
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return errors.Join(failed...)
+}
+
+// scanGroup is the group whose folders ScanDue scans one after the other:
+// a share's server, as serverOf names it, or the container for a folder
+// in it.
+func scanGroup(location string) string {
+	if shareKind(location) == "" {
+		return ""
+	}
+	return serverOf(location)
 }
 
 // searchesDone tells, once a scan matched a folder's units, how their
@@ -419,14 +452,45 @@ type stored struct {
 // beside the videos and the titles' artwork are stored as they are now
 // (see storeSubtitles and storeArtwork), and the videos new or changed
 // probed for how long they play (see storeDurations).
+//
+// A share's scan lasts at most shareScanTime: past it, the scan stops,
+// and the folder fails with errBoundTime. What it stored stays, and the
+// next scan goes on from there, reading only what is still new or
+// changed.
 func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	folder, err := s.Folder(ctx, id)
 	if err != nil {
 		return err
 	}
+	if folder.Share == "" {
+		return s.scanFolder(ctx, id, folder)
+	}
+	scanCtx, cancel := context.WithTimeout(ctx, s.shareScanTime)
+	defer cancel()
+	err = s.scanFolder(scanCtx, id, folder)
+	if err == nil || ctx.Err() != nil || !errors.Is(scanCtx.Err(), context.DeadlineExceeded) {
+		return err
+	}
+	s.logger.Warn("A network share's scan lasted longer than one scan may, and was stopped", "folder", folder.Addon.LogName(),
+		"address", folder.Addon.ManifestURL, "limit", s.shareScanTime)
+	// As after a walk that met a bound (see shareFiles), the polls ask
+	// for one more scan, then leave the share to its schedule, which
+	// counts from now.
+	s.mu.Lock()
+	delete(s.prints, id)
+	s.mu.Unlock()
+	_, err = s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, error = $3 WHERE addon_id = $1", id, s.now(), errBoundTime)
+	return err
+}
+
+// scanFolder scans the folder id, as scan tells.
+func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder) error {
 	root := folder.Addon.ManifestURL
 	at := s.now()
-	var list listing
+	var (
+		list listing
+		err  error
+	)
 	failure := ""
 	if folder.Share != "" {
 		var sealed string
