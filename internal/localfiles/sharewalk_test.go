@@ -328,7 +328,7 @@ func TestAnSFTPLinkLeadingBackIsNotEntered(t *testing.T) {
 		}
 	}
 	server := serveSFTP(t, "reader", "pass phrase", nil)
-	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + sftpPath(movies), user: "reader", password: "pass phrase"}, hostKeys{})
+	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + sftpPath(movies), user: "reader", password: "pass phrase"}, hostKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

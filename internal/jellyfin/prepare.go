@@ -2,7 +2,9 @@ package jellyfin
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -120,7 +122,7 @@ func (p *preparations) work() {
 		p.running[next.key] = true
 		p.mu.Unlock()
 		ctx, cancel := context.WithTimeout(library.Background(context.Background()), preparationTimeout)
-		done := next.work(ctx)
+		done := p.run(ctx, next)
 		cancel()
 		p.mu.Lock()
 		delete(p.running, next.key)
@@ -130,6 +132,30 @@ func (p *preparations) work() {
 			p.forget(now)
 		}
 		p.mu.Unlock()
+	}
+}
+
+// run runs a preparation, whose panic, of what reads a version, fails it
+// (see logPanic): the worker goes on with the next.
+func (p *preparations) run(ctx context.Context, next preparation) (done bool) {
+	defer logPanic(p.logger, "A preparation ended on a panic")
+	return next.work(ctx)
+}
+
+// logPanic, deferred at the top of a goroutine no request's handler stands
+// above, logs a panic of it (see logRecovered), and lets the goroutine
+// end: the server goes on.
+func logPanic(logger *slog.Logger, msg string, args ...any) {
+	if cause := recover(); cause != nil {
+		logRecovered(logger, msg, cause, args...)
+	}
+}
+
+// logRecovered logs a panic recovered, cause, as msg with args and its
+// stack, when logger is set.
+func logRecovered(logger *slog.Logger, msg string, cause any, args ...any) {
+	if logger != nil {
+		logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
 	}
 }
 
@@ -207,7 +233,10 @@ func (h *Handler) prepareVersions(ctx context.Context, key preparationKey, versi
 	h.prepare(key, func(ctx context.Context) bool {
 		var wg sync.WaitGroup
 		for _, version := range versions {
-			wg.Go(func() { h.analyzeAhead(ctx, version) })
+			wg.Go(func() {
+				defer logPanic(h.Logger, "Analyzing a version ahead ended on a panic", "addon", version.AddonLog)
+				h.analyzeAhead(ctx, version)
+			})
 		}
 		wg.Wait()
 		for _, version := range versions {
@@ -230,6 +259,7 @@ func (h *Handler) prepareListed(ctx context.Context, user accounts.User, item li
 		return
 	}
 	go func() {
+		defer logPanic(h.Logger, "Preparing a title's versions ended on a panic")
 		ctx, cancel := context.WithTimeout(library.Background(context.WithoutCancel(ctx)), preparationTimeout)
 		defer cancel()
 		if p, err := h.playable(ctx, user, item); err == nil {

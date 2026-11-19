@@ -82,7 +82,7 @@ func (f *fakeShares) rescan() {
 // davRemote reads a share served by serveWebDAV.
 func davRemote(t *testing.T, address, user, password string) remote {
 	t.Helper()
-	r, err := newRemote(shareAccess{address: address, user: user, password: password}, hostKeys{})
+	r, err := newRemote(shareAccess{address: address, user: user, password: password}, hostKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

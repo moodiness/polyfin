@@ -236,7 +236,18 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	start := func() {
 		n := started
 		started++
-		go func() { results <- try(n, true) }()
+		go func() {
+			// A try that panicked, in what reads the version, is one whose
+			// version cannot be read: the play goes on with the next.
+			result := tried{n: n, unreadable: true}
+			defer func() {
+				if cause := recover(); cause != nil {
+					logRecovered(h.Logger, "Trying a version ended on a panic", cause)
+				}
+				results <- result
+			}()
+			result = try(n, true)
+		}()
 	}
 	for started < min(attempted, parallelAttempts) {
 		start()
@@ -372,11 +383,17 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 	}
 	listed := make(chan []library.ExternalSubtitle, 1)
 	go func() {
+		var subtitles []library.ExternalSubtitle
+		defer func() {
+			if cause := recover(); cause != nil {
+				logRecovered(h.Logger, "Listing a title's subtitles ended on a panic", cause)
+			}
+			listed <- subtitles
+		}()
 		subtitles, err := h.Library.Subtitles(ctx, user, item.ID)
 		if err != nil {
 			subtitles = nil
 		}
-		listed <- subtitles
 	}()
 	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
 	// Before offered, which leaves the failed out of versions in place.

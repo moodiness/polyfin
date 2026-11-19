@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -539,9 +540,16 @@ func writeImage(dir, name string, image artwork) (int64, error) {
 	return int64(len(image.contentType) + 1 + len(image.body)), nil
 }
 
+// errImagePanicked reports the making of an image that ended on a panic.
+var errImagePanicked = errors.New("making the image ended on a panic")
+
 // fetch returns the image kept for key, else the one produce makes, once
 // for all the callers at once, on a context the callers giving up do not
 // cancel; each caller waits on its own ctx. What produce makes is kept.
+// produce runs in no request's handler, which would recover a panic of
+// it: such a panic, of what downloads or decodes the image, is the error
+// every caller gets instead, logged once with its stack, and the server
+// goes on.
 func (c *imageCache) fetch(ctx context.Context, key string, produce func(context.Context) (artwork, error)) (artwork, error) {
 	return c.fetchFor(ctx, key, false, produce)
 }
@@ -558,7 +566,14 @@ func (c *imageCache) fetchFor(ctx context.Context, key string, warming bool, pro
 		return image, nil
 	}
 	detached := context.WithoutCancel(ctx)
-	results := c.flight.DoChan(key, func() (any, error) {
+	results := c.flight.DoChan(key, func() (val any, err error) {
+		defer func() {
+			if cause := recover(); cause != nil {
+				c.logger.Error("Making an image ended on a panic", "image", key, "panic", fmt.Sprint(cause),
+					"stack", string(debug.Stack()))
+				val, err = artwork{}, fmt.Errorf("%w: %v", errImagePanicked, cause)
+			}
+		}()
 		image, err := produce(detached)
 		switch {
 		case err != nil:

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -1004,7 +1005,19 @@ func background(ctx context.Context) bool {
 // ctx, its lookups cut short would take it for one never made, and its
 // failure would be kept.
 func (s *Service) alone(ctx context.Context, analysis func(context.Context)) {
-	go analysis(context.WithoutCancel(ctx))
+	go func() {
+		defer s.logPanic("An analysis no one waits for ended on a panic")
+		analysis(context.WithoutCancel(ctx))
+	}()
+}
+
+// logPanic, deferred at the top of a goroutine no one waits for, logs a
+// panic of it, of what reads a file or its index, as msg with args and
+// its stack, and lets the goroutine end: the server goes on.
+func (s *Service) logPanic(msg string, args ...any) {
+	if cause := recover(); cause != nil {
+		s.logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
+	}
 }
 
 // shared runs fn once for the requests asking the same key at once, as
@@ -1013,11 +1026,32 @@ func (s *Service) alone(ctx context.Context, analysis func(context.Context)) {
 // for those still waiting and for the next play, within its own bound.
 func (s *Service) shared(ctx context.Context, key string, fn func() (any, error)) (any, error) {
 	select {
-	case result := <-s.flight.DoChan(key, fn):
+	case result := <-s.doShared(key, fn):
 		return result.Val, result.Err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// errSharedPanicked reports work shared by requests that ended on a panic.
+var errSharedPanicked = errors.New("the work ended on a panic")
+
+// doShared is the flight's DoChan for key, fn run once for those asking
+// at once. fn runs in no request's handler, which would recover a panic
+// of it: such a panic, of what reads a file or its index, is the error
+// every waiter gets instead, logged once with its stack, and the server
+// goes on. The next request runs fn again.
+func (s *Service) doShared(key string, fn func() (any, error)) <-chan singleflight.Result {
+	return s.flight.DoChan(key, func() (val any, err error) {
+		defer func() {
+			if cause := recover(); cause != nil {
+				s.logger.Error("Work shared by requests ended on a panic", "work", key, "panic", fmt.Sprint(cause),
+					"stack", string(debug.Stack()))
+				val, err = nil, fmt.Errorf("%w: %v", errSharedPanicked, cause)
+			}
+		}()
+		return fn()
+	})
 }
 
 // sharedRead is shared for a read of version's file that waits for its

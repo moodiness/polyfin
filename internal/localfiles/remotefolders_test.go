@@ -215,7 +215,7 @@ func TestBucketListingsArePaged(t *testing.T) {
 	write(t, filepath.Join(dir, "movies", "Shows", "Old", "The General (1926).mkv"), 10)
 	_, server := serveS3(t, dir, "media", "AKIDTEST", "secret")
 	r, err := newRemote(shareAccess{address: "s3://media/movies", endpoint: server.URL, region: "eu-test-1", user: "AKIDTEST",
-		password: "secret"}, hostKeys{})
+		password: "secret"}, hostKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestBucketListingsArePaged(t *testing.T) {
 		t.Errorf("a folder: %+v %v", entries, err)
 	}
 	other, err := newRemote(shareAccess{address: "s3://media/movies/Shows/Old/The General (1926).mkv", endpoint: server.URL,
-		region: "eu-test-1", user: "AKIDTEST", password: "secret"}, hostKeys{})
+		region: "eu-test-1", user: "AKIDTEST", password: "secret"}, hostKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestBucketListingsArePaged(t *testing.T) {
 		t.Errorf("an object as the folder: %v", err)
 	}
 	missing, err := newRemote(shareAccess{address: "s3://other/movies", endpoint: server.URL, region: "eu-test-1", user: "AKIDTEST",
-		password: "secret"}, hostKeys{})
+		password: "secret"}, hostKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +473,7 @@ func TestRemoteFoldersArePolled(t *testing.T) {
 	} {
 		kind := shareKind(access.address)
 		t.Run(kind, func(t *testing.T) {
-			r, err := newRemote(access, hostKeys{})
+			r, err := newRemote(access, hostKeys{}, slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
 			}

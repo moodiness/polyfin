@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/url"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +49,9 @@ type smbShare struct {
 	// bounds bound what is kept of one folder's listing: its entries and
 	// their names.
 	bounds listBounds
+	// logger logs a panic of the SMB client under do or mounted, which no
+	// request's handler or scan stands above to recover.
+	logger *slog.Logger
 
 	mu      sync.Mutex
 	session *smb2.Session
@@ -57,7 +62,7 @@ type smbShare struct {
 	end   context.CancelFunc
 }
 
-func newSMB(u *url.URL, user, password string) *smbShare {
+func newSMB(u *url.URL, user, password string, logger *slog.Logger) *smbShare {
 	port := u.Port()
 	if port == "" {
 		port = "445"
@@ -69,7 +74,7 @@ func newSMB(u *url.URL, user, password string) *smbShare {
 		domain, account = "", user
 	}
 	return &smbShare{addr: net.JoinHostPort(u.Hostname(), port), name: name, dir: dir, user: account, domain: domain, password: password,
-		bounds: folderBounds}
+		bounds: folderBounds, logger: logger}
 }
 
 // path is a file's path in the share.
@@ -84,8 +89,14 @@ func (c *smbShare) path(rel string) string {
 }
 
 // mounted returns the share and the session's context (see alive),
-// signing in to the server when no session is open.
-func (c *smbShare) mounted(ctx context.Context) (*smb2.Share, context.Context, error) {
+// signing in to the server when no session is open. A panic of the SMB
+// client while signing in fails the sign-in (see panicked).
+func (c *smbShare) mounted(ctx context.Context) (mounted *smb2.Share, alive context.Context, err error) {
+	defer func() {
+		if cause := recover(); cause != nil {
+			mounted, alive, err = nil, nil, c.panicked(cause)
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.share != nil {
@@ -139,10 +150,22 @@ func (c *smbShare) close() {
 
 // do runs op on the share, signing in again once when the session failed:
 // the server restarted, or ended it. op gets the share bound to ctx, and
-// the session's context.
-func (c *smbShare) do(ctx context.Context, op func(share *smb2.Share, alive context.Context) error) error {
+// the session's context. A panic of the SMB client under op fails the
+// request (see panicked), and ends the session, whose state is then not
+// known.
+func (c *smbShare) do(ctx context.Context, op func(share *smb2.Share, alive context.Context) error) (err error) {
+	var share *smb2.Share
+	defer func() {
+		if cause := recover(); cause != nil {
+			if share != nil {
+				c.drop(share)
+			}
+			err = c.panicked(cause)
+		}
+	}()
 	for attempt := 0; ; attempt++ {
-		share, alive, err := c.mounted(ctx)
+		var alive context.Context
+		share, alive, err = c.mounted(ctx)
 		if err != nil {
 			return err
 		}
@@ -152,6 +175,15 @@ func (c *smbShare) do(ctx context.Context, op func(share *smb2.Share, alive cont
 		}
 		c.drop(share)
 	}
+}
+
+// panicked logs a panic of the SMB client with its stack, and returns the
+// error of the request it ended: the server goes on, and the share is
+// asked again when next needed.
+func (c *smbShare) panicked(cause any) error {
+	c.logger.Error("A network share's request ended on a panic", "address", c.addr, "share", c.name,
+		"panic", fmt.Sprint(cause), "stack", string(debug.Stack()))
+	return fmt.Errorf("%w: the request ended on a panic: %v", errShareUnreachable, cause)
 }
 
 // brokenSession reports whether err tells of a session that no longer
@@ -266,7 +298,7 @@ func (c *smbShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, tim
 			}
 			return err
 		}
-		file, modified = &smbFile{file: f, size: info.Size()}, info.ModTime()
+		file, modified = &smbFile{share: c, file: f, size: info.Size()}, info.ModTime()
 		return nil
 	})
 	if err != nil {
@@ -279,8 +311,11 @@ func (c *smbShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, tim
 var readers = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, readAhead) }}
 
 // smbFile reads a file of an SMB share ahead, readAhead bytes per request
-// to the server.
+// to the server. Its reads run the SMB client outside do, in the reader's
+// goroutine, which no request's handler or scan may stand above: a panic
+// of the client fails the read or the close (see smbShare.panicked).
 type smbFile struct {
+	share  *smbShare
 	file   *smb2.File
 	size   int64
 	offset int64
@@ -288,16 +323,24 @@ type smbFile struct {
 	reader *bufio.Reader
 }
 
-func (f *smbFile) Read(p []byte) (int, error) {
+func (f *smbFile) Read(p []byte) (n int, err error) {
+	defer func() {
+		if cause := recover(); cause != nil {
+			// The buffer's state is not known: it is not given back.
+			f.reader = nil
+			n, err = 0, f.share.panicked(cause)
+		}
+	}()
 	if f.reader == nil {
 		f.reader = readers.Get().(*bufio.Reader)
 		f.reader.Reset(io.NewSectionReader(f.file, f.offset, max(f.size-f.offset, 0)))
 	}
-	n, err := f.reader.Read(p)
+	n, err = f.reader.Read(p)
 	f.offset += int64(n)
 	return n, err
 }
 
+// Seek only moves the offset: it asks the server nothing.
 func (f *smbFile) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	case io.SeekCurrent:
@@ -324,7 +367,12 @@ func (f *smbFile) release() {
 	}
 }
 
-func (f *smbFile) Close() error {
+func (f *smbFile) Close() (err error) {
+	defer func() {
+		if cause := recover(); cause != nil {
+			err = f.share.panicked(cause)
+		}
+	}()
 	f.release()
 	return f.file.Close()
 }

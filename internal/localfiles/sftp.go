@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net"
 	"net/url"
 	"path"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,9 @@ type sftpShare struct {
 	// bounds bound what is read and kept of one folder's listing, answer
 	// being the bytes of all the answers listing it.
 	bounds listBounds
+	// logger logs a panic of the SSH client waiting on the connection,
+	// which nothing stands above (see connect).
+	logger *slog.Logger
 
 	mu sync.Mutex
 	// saved is the host key saved, client the connection open, nil
@@ -55,7 +60,7 @@ type sftpShare struct {
 // listings (see sftpShare.listed).
 var errSingleSession = errors.New("the SFTP server opens no second session")
 
-func newSFTP(u *url.URL, access shareAccess, keys hostKeys) (*sftpShare, error) {
+func newSFTP(u *url.URL, access shareAccess, keys hostKeys, logger *slog.Logger) (*sftpShare, error) {
 	host := u.Host
 	if u.Port() == "" {
 		host = net.JoinHostPort(u.Hostname(), "22")
@@ -64,7 +69,7 @@ func newSFTP(u *url.URL, access shareAccess, keys hostKeys) (*sftpShare, error) 
 	if folder == "" {
 		folder = "/"
 	}
-	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved, bounds: folderBounds}
+	s := &sftpShare{host: host, folder: folder, keys: keys, saved: keys.saved, bounds: folderBounds, logger: logger}
 	var auth []ssh.AuthMethod
 	if access.privateKey != "" {
 		signer, err := parsePrivateKey(access.privateKey, access.passphrase)
@@ -202,9 +207,16 @@ func (s *sftpShare) connect(ctx context.Context) (*sftp.Client, error) {
 	s.conn, s.client = sshClient, client
 	go func() {
 		// A connection the server or the network closed is made again at
-		// the next request.
+		// the next request, as is one whose SSH client panicked: the panic
+		// is logged with its stack, and the server goes on.
+		defer s.drop(client)
+		defer func() {
+			if cause := recover(); cause != nil {
+				s.logger.Error("A network share's connection ended on a panic", "host", s.host, "panic", fmt.Sprint(cause),
+					"stack", string(debug.Stack()))
+			}
+		}()
 		_ = sshClient.Wait()
-		s.drop(client)
 	}()
 	return client, nil
 }
@@ -230,10 +242,25 @@ func (s *sftpShare) close() {
 
 // do runs a request over the connection, connecting first. A request the
 // connection failed under, as once the server restarted, is run again
-// once over a new connection.
-func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) error) error {
+// once over a new connection. The request reads the server's answers in
+// the caller's goroutine, a scan's or a request's: a panic of what reads
+// them, the SSH and SFTP clients or the listing's own reader (see
+// sftpLister), is logged with its stack and fails the request, and the
+// connection, whose state is then not known, is dropped.
+func (s *sftpShare) do(ctx context.Context, request func(client *sftp.Client) error) (err error) {
+	var client *sftp.Client
+	defer func() {
+		if cause := recover(); cause != nil {
+			if client != nil {
+				s.drop(client)
+			}
+			s.logger.Error("A network share's request ended on a panic", "host", s.host, "panic", fmt.Sprint(cause),
+				"stack", string(debug.Stack()))
+			err = fmt.Errorf("%w: the request ended on a panic: %v", errShareUnreachable, cause)
+		}
+	}()
 	for attempt := 0; ; attempt++ {
-		client, err := s.connect(ctx)
+		client, err = s.connect(ctx)
 		if err != nil {
 			return err
 		}

@@ -392,7 +392,7 @@ func (s *Service) SubtitleTrack(ctx context.Context, version library.Version, an
 	if !s.SubtitlesLocated(ctx, version, analysis)[stream] {
 		return Track{}, ErrNotLocated
 	}
-	results := s.flight.DoChan("track "+version.ID.String()+" "+strconv.Itoa(stream), func() (any, error) {
+	results := s.doShared("track "+version.ID.String()+" "+strconv.Itoa(stream), func() (any, error) {
 		// Read to the end even when the request that started it gives up:
 		// the app asks again, or the next one does.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), trackReadTime)
@@ -414,6 +414,9 @@ func (s *Service) SubtitleTrack(ctx context.Context, version library.Version, an
 // ready when the app asks for it.
 func (s *Service) PrefetchSubtitle(version library.Version, analysis media.Analysis, stream int) {
 	go func() {
+		// SubtitlesLocated reads the version's index before the shared
+		// read (see doShared).
+		defer s.logPanic("Reading a subtitle track ahead ended on a panic", "addon", version.AddonLog, "stream", stream)
 		_, _ = s.SubtitleTrack(context.Background(), version, analysis, stream)
 	}()
 }

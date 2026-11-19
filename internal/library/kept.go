@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -83,7 +85,7 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	results := s.flight.DoChan(key, func() (any, error) {
+	results := s.doShared(key, func() (any, error) {
 		detached, done := s.detached(ctx)
 		defer done()
 		return fetch(detached)
@@ -94,6 +96,28 @@ func (s *Service) shared(ctx context.Context, key string, fetch func(context.Con
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// errSharedPanicked reports a read shared by requests that ended on a
+// panic.
+var errSharedPanicked = errors.New("the read ended on a panic")
+
+// doShared is the flight's DoChan for key, fn run once for those asking
+// at once. fn runs in no request's handler, which would recover a panic
+// of it: such a panic, of what decodes an addon's or a provider's answer,
+// is the error every waiter gets instead, logged once with its stack, and
+// the server goes on. The next request runs fn again.
+func (s *Service) doShared(key string, fn func() (any, error)) <-chan singleflight.Result {
+	return s.flight.DoChan(key, func() (val any, err error) {
+		defer func() {
+			if cause := recover(); cause != nil {
+				s.logger.Error("A read shared by requests ended on a panic", "read", key, "panic", fmt.Sprint(cause),
+					"stack", string(debug.Stack()))
+				val, err = nil, fmt.Errorf("%w: %v", errSharedPanicked, cause)
+			}
+		}()
+		return fn()
+	})
 }
 
 // detached returns a context with ctx's values that ctx ending does not
@@ -125,7 +149,7 @@ func (s *Service) EndWith(ctx context.Context) { s.lifetime = ctx }
 // stopping does (see detached). Its requests to addons are paced (see
 // Background).
 func (s *Service) background(ctx context.Context, key string, due func() bool, fetch func(context.Context) error) {
-	s.flight.DoChan(key, func() (any, error) {
+	s.doShared(key, func() (any, error) {
 		detached, done := s.detached(ctx)
 		defer done()
 		if !due() {
@@ -330,7 +354,7 @@ func (s *Service) fetchPageLater(ctx context.Context, src source, key pageKey) {
 	if _, waiting := s.catalogWaitLeft(stremio.HostOf(src.addon.addon.ManifestURL)); waiting {
 		return
 	}
-	s.flight.DoChan(pageFlight(key), func() (any, error) {
+	s.doShared(pageFlight(key), func() (any, error) {
 		detached, done := s.detached(ctx)
 		defer done()
 		metas, err := s.keptOrFetchedPage(detached, src, key)

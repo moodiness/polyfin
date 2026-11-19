@@ -225,7 +225,7 @@ func (s *Service) indexAhead(version library.Version) {
 	if s.idleTorrent(Background(context.Background()), version) {
 		return
 	}
-	s.flight.DoChan("index ahead "+version.ID.String(), func() (any, error) {
+	s.doShared("index ahead "+version.ID.String(), func() (any, error) {
 		ctx, cancel := context.WithTimeout(Background(context.Background()), indexAheadTime)
 		defer cancel()
 		src := s.open(version)

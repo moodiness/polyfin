@@ -1190,7 +1190,7 @@ func shared[T any](ctx context.Context, s *Service, key string, fetch func(conte
 		var zero T
 		return zero, err
 	}
-	answer := s.flight.DoChan(key, func() (any, error) {
+	answer := s.doShared(key, func() (any, error) {
 		detached, done := s.detached(ctx)
 		defer done()
 		return fetch(detached)

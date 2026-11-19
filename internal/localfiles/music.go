@@ -473,7 +473,7 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 			continue
 		}
 		group.Go(func() error {
-			info, err := s.probeTrack(groupCtx, target(rel))
+			info, err := guarded(s.logger, "reading an audio file's tags", rel, func() (trackInfo, error) { return s.probeTrack(groupCtx, target(rel)) })
 			if err != nil {
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()

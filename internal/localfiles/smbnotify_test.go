@@ -3,6 +3,7 @@ package localfiles
 import (
 	"context"
 	"crypto/rand"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -80,7 +81,7 @@ func TestSMBShareTellsOfChanges(t *testing.T) {
 	network, address := newRelay(t, server)
 	u.Host = address
 	u.Path = "/" + path.Join(name, scratch)
-	watched := newSMB(u, user, password)
+	watched := newSMB(u, user, password, slog.New(slog.DiscardHandler))
 	defer watched.close()
 
 	// watch watches the test's folder until it fails, and returns the

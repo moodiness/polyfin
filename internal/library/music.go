@@ -556,7 +556,7 @@ func remember[V any](ctx context.Context, s *Service, c musicCache[V], key music
 	}
 	if kept, ok := c.answers.Get(key); ok {
 		if s.now().Sub(kept.at) > c.life() {
-			s.flight.DoChan(flightKey, func() (any, error) {
+			s.doShared(flightKey, func() (any, error) {
 				// A refresh that ended between the read above and this one
 				// already asked the addon.
 				if newer, ok := c.answers.Get(key); ok && newer.at.After(kept.at) {

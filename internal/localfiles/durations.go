@@ -61,7 +61,7 @@ func (s *Service) storeDurations(ctx context.Context, id accounts.ID, list listi
 	group.SetLimit(s.workers)
 	for _, rel := range wanted {
 		group.Go(func() error {
-			seconds, err := s.probeDuration(groupCtx, target(rel))
+			seconds, err := guarded(s.logger, "probing a video's length", rel, func() (float64, error) { return s.probeDuration(groupCtx, target(rel)) })
 			if err != nil {
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()

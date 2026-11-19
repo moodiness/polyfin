@@ -291,7 +291,7 @@ func listAnswer(names ...string) []byte {
 // what the server answers, never from here while a request is being sent.
 func watchSMB(t *testing.T, server *smbServer, changed func(paths []string)) error {
 	t.Helper()
-	share := newSMB(server.url(), "reader", "pass phrase")
+	share := newSMB(server.url(), "reader", "pass phrase", slog.New(slog.DiscardHandler))
 	defer share.close()
 	ctx, stop := context.WithTimeout(t.Context(), 30*time.Second)
 	defer stop()
@@ -423,7 +423,7 @@ func TestAPanicBelowAnSMBWatchLeavesTheSharePolled(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "movies", "Nosferatu (1922)", "Nosferatu (1922).mkv"), 10)
 	id := testID(1)
-	share := newSMB(serveSMB(t).url(), "reader", "pass phrase")
+	share := newSMB(serveSMB(t).url(), "reader", "pass phrase", slog.New(slog.DiscardHandler))
 	t.Cleanup(share.close)
 	wt, shares, _ := newShareWatchTest(t, dir, func(string) func(context.Context) ([]watchFolder, error) { return one(id, testSMB) })
 	watched := &panickingSMB{remote: shares.r, smb: share, ended: make(chan error, 8)}
@@ -518,7 +518,7 @@ func TestAnSMBListingIsReadWithinItsBounds(t *testing.T) {
 				served.Add(int64(len(names)))
 				return 0, listAnswer(names...)
 			}})
-			share := newSMB(server.url(), "reader", "pass phrase")
+			share := newSMB(server.url(), "reader", "pass phrase", slog.New(slog.DiscardHandler))
 			t.Cleanup(share.close)
 			if share.bounds != folderBounds {
 				t.Fatalf("an SMB folder is listed within %+v, want %+v", share.bounds, folderBounds)

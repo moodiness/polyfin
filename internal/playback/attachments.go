@@ -93,7 +93,7 @@ func (s *Service) attachedFiles(ctx context.Context, version library.Version, an
 	if files, ok := s.attached.Get(version.ID); ok {
 		return files, nil
 	}
-	results := s.flight.DoChan("attached "+version.ID.String(), func() (any, error) {
+	results := s.doShared("attached "+version.ID.String(), func() (any, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), attachedTime)
 		defer cancel()
 		src := s.open(version)

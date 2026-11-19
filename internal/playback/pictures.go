@@ -426,7 +426,10 @@ func (s *Service) QueueTextCopies(ctx context.Context, version library.Version, 
 		return
 	}
 	files = slices.Clone(files)
-	go s.queueTracks(context.WithoutCancel(ctx), version, analysis, files, chosen)
+	go func() {
+		defer s.logPanic("Queueing a version's picture subtitles ended on a panic", "addon", version.AddonLog)
+		s.queueTracks(context.WithoutCancel(ctx), version, analysis, files, chosen)
+	}()
 }
 
 // queueTracks queues the reading of a version's picture subtitles, the one

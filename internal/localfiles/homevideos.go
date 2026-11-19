@@ -379,7 +379,7 @@ func (s *Service) scanHomeVideos(ctx context.Context, id accounts.ID, root strin
 			continue
 		}
 		group.Go(func() error {
-			print, err := readFingerprint(groupCtx, list, rel, f.size)
+			print, err := guarded(s.logger, "fingerprinting a home video", rel, func() ([]byte, error) { return readFingerprint(groupCtx, list, rel, f.size) })
 			if err != nil {
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()
@@ -426,7 +426,7 @@ func (s *Service) scanHomeVideos(ctx context.Context, id accounts.ID, root strin
 			probe := old.probe
 			if !probed {
 				var err error
-				if probe, err = s.probeVideo(groupCtx, target(rel)); err != nil {
+				if probe, err = guarded(s.logger, "probing a home video", rel, func() (videoProbe, error) { return s.probeVideo(groupCtx, target(rel)) }); err != nil {
 					if groupCtx.Err() != nil {
 						return groupCtx.Err()
 					}
@@ -669,7 +669,9 @@ func (s *Service) storeFrames(ctx context.Context, id accounts.ID, target probeT
 	group.SetLimit(s.workers)
 	for _, p := range wanted {
 		group.Go(func() error {
-			frame, err := s.homeFrame(groupCtx, target(p.rel), p.duration, p.hdr)
+			frame, err := guarded(s.logger, "making a home video's frame", p.rel, func() ([]byte, error) {
+				return s.homeFrame(groupCtx, target(p.rel), p.duration, p.hdr)
+			})
 			if err != nil {
 				if groupCtx.Err() != nil {
 					return groupCtx.Err()

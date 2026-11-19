@@ -202,7 +202,7 @@ func (s *Service) releasesLater(ctx context.Context, keys []releaseKey, limit in
 		answered := make(chan error, 1)
 		// The request ending does not stop a lookup, the server stopping
 		// does (see detached).
-		results := s.flight.DoChan(fmt.Sprintf("release %s %s", key.provider, key.id), func() (any, error) {
+		results := s.doShared(fmt.Sprintf("release %s %s", key.provider, key.id), func() (any, error) {
 			detached, done := s.detached(ctx)
 			defer done()
 			lookup, cancel := context.WithTimeout(detached, releaseLookupTime)

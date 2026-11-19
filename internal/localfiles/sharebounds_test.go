@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -295,7 +296,7 @@ func TestABucketListingIsReadWithinItsBounds(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			r, err := newRemote(shareAccess{address: "s3://media/movies", endpoint: server.URL, region: "eu-test-1", user: "AKIDTEST",
-				password: "secret"}, hostKeys{})
+				password: "secret"}, hostKeys{}, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -422,7 +423,8 @@ func TestAnSFTPListingIsReadWithinItsBounds(t *testing.T) {
 			handlers := sftp.InMemHandler()
 			handlers.FileList = folder
 			server := serveFakeSFTP(t, &fakeSFTP{user: "reader", password: "pass phrase", handlers: &handlers})
-			r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, hostKeys{})
+			r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, hostKeys{},
+				slog.New(slog.DiscardHandler))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -463,7 +465,8 @@ func TestAnSFTPServerOfOneSessionIsListedAsBefore(t *testing.T) {
 		}
 		told.Add(1)
 	}}
-	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, keys)
+	r, err := newRemote(shareAccess{address: "sftp://" + server.addr + "/movies", user: "reader", password: "pass phrase"}, keys,
+		slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

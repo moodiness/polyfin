@@ -3,12 +3,15 @@ package localfiles
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -270,6 +273,7 @@ func (s *Service) StartScan(id accounts.ID) {
 	s.wg.Go(func() {
 		defer release()
 		defer finished()
+		defer logPanic(s.logger, "A local folder's scan ended on a panic", "folder", id)
 		// Neither a stopped scan nor one the service's end cut short fails.
 		if err := s.scan(scanCtx, id); err != nil && scanCtx.Err() == nil {
 			s.logger.Warn("A local folder could not be scanned", "folder", id, "error", err)
@@ -599,7 +603,14 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 				m = match{reason: reasonLoneExtra}
 			case !ok || renewed[unit]:
 				var err error
-				if m, err = s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches, exact[unit]); err != nil {
+				if m, err = guarded(s.logger, "matching", entries[0].path, func() (match, error) {
+					return s.unitMatch(groupCtx, folder.Kind, entries[0], links[unit], searches, exact[unit])
+				}); errors.Is(err, errStepPanicked) {
+					// Matched again at the next scan, as a unit whose search
+					// failed is.
+					m, err = match{reason: reasonSearchFailed}, nil
+				}
+				if err != nil {
 					return err
 				}
 				if err = s.noteLink(groupCtx, id, unit, links[unit], m); err != nil {
@@ -985,4 +996,33 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 	// The show's other files may move with these: in an absolute
 	// numbering, or after the catalog's episodes of their season.
 	return s.renumber(ctx, id, m.stremioID, catalog)
+}
+
+// errStepPanicked reports a step of a scan that ended on a panic.
+var errStepPanicked = errors.New("the step ended on a panic")
+
+// guarded runs fn, a scan's step for the file at rel, in a worker that no
+// request's handler stands above: a panic of it, of what reads the file,
+// is logged with its stack and becomes the step's error, errStepPanicked,
+// which fails that file's step as an unreadable file does; the scan goes
+// on.
+func guarded[T any](logger *slog.Logger, step, rel string, fn func() (T, error)) (value T, err error) {
+	defer func() {
+		if cause := recover(); cause != nil {
+			logger.Error("A step of a scan ended on a panic", "step", step, "path", rel, "panic", fmt.Sprint(cause),
+				"stack", string(debug.Stack()))
+			var zero T
+			value, err = zero, fmt.Errorf("%w: %v", errStepPanicked, cause)
+		}
+	}()
+	return fn()
+}
+
+// logPanic, deferred at the top of a goroutine no one waits for, logs a
+// panic of it as msg with args and its stack, and lets the goroutine end:
+// the server goes on.
+func logPanic(logger *slog.Logger, msg string, args ...any) {
+	if cause := recover(); cause != nil {
+		logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
+	}
 }

@@ -45,6 +45,7 @@ func (s *Service) measureMusic(id accounts.ID) {
 	s.mu.Unlock()
 	s.wg.Go(func() {
 		defer s.measures.Done()
+		defer logPanic(s.logger, "Measuring a music folder's loudness ended on a panic", "folder", id)
 		defer func() {
 			s.mu.Lock()
 			delete(s.measuring, id)
@@ -85,7 +86,9 @@ func (s *Service) measureTracks(ctx context.Context, id accounts.ID) error {
 		}
 		group.Go(func() error {
 			address := s.files + track.id.String() + strings.ToLower(path.Ext(track.rel))
-			l, err := s.meter.Measure(groupCtx, address, media.Opens(address, media.File)...)
+			l, err := guarded(s.logger, "measuring a track's loudness", track.rel, func() (float64, error) {
+				return s.meter.Measure(groupCtx, address, media.Opens(address, media.File)...)
+			})
 			if groupCtx.Err() != nil {
 				return groupCtx.Err()
 			}

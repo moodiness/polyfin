@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/url"
 	"path"
 	"strconv"
@@ -366,18 +367,20 @@ type hostKeys struct {
 }
 
 // newRemote returns the reader of a share; it connects when first used.
-func newRemote(access shareAccess, keys hostKeys) (remote, error) {
+// logger logs what no request's handler or scan stands above to log (see
+// smbShare.panicked).
+func newRemote(access shareAccess, keys hostKeys, logger *slog.Logger) (remote, error) {
 	u, err := url.Parse(access.address)
 	if err != nil {
 		return nil, err
 	}
 	switch shareKind(access.address) {
 	case ShareSMB:
-		return newSMB(u, access.user, access.password), nil
+		return newSMB(u, access.user, access.password, logger), nil
 	case ShareS3:
 		return newS3(u, access)
 	case ShareSFTP:
-		return newSFTP(u, access, keys)
+		return newSFTP(u, access, keys, logger)
 	case ShareRclone:
 		return newRclone(u, access), nil
 	}
@@ -424,7 +427,7 @@ func (s *Service) remote(id accounts.ID, access shareAccess, keys hostKeys) (rem
 		p.remote.close()
 		delete(s.shares, id)
 	}
-	r, err := newRemote(access, keys)
+	r, err := newRemote(access, keys, s.logger)
 	if err != nil {
 		return nil, err
 	}

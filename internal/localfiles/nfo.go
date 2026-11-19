@@ -286,7 +286,7 @@ func (s *Service) readNFOs(ctx context.Context, id accounts.ID, list listing, pl
 			n := storedNFO{file: f}
 			file, err := list.open(readCtx, rel)
 			if err == nil {
-				n.info, err = readNFO(file)
+				n.info, err = guarded(s.logger, "reading an NFO file", rel, func() (nfoInfo, error) { return readNFO(file) })
 				file.Close()
 			}
 			if err != nil {

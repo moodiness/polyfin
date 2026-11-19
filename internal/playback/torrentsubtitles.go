@@ -448,6 +448,7 @@ func (s *Service) keptTorrentSubtitle(ctx context.Context, at *library.TorrentSu
 // TorrentSubtitle), so that it is ready when the app asks for it.
 func (s *Service) PrefetchTorrentSubtitle(file library.ExternalSubtitle) {
 	go func() {
+		defer s.logPanic("Fetching a subtitle file of a torrent ended on a panic", "addon", file.Addon)
 		if _, err := s.TorrentSubtitle(context.Background(), file); err != nil {
 			s.logger.Info("A subtitle file of a torrent could not be fetched", "addon", file.Addon, "error", err)
 		}

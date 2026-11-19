@@ -235,6 +235,7 @@ func (h *Handler) findInAudio(ctx context.Context, user accounts.User, item libr
 		return
 	}
 	go func() {
+		defer logPanic(h.Logger, "Finding an episode's segments in its audio ended on a panic")
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), audioLookup)
 		defer cancel()
 		// The title's own identifier stands for the version its first
