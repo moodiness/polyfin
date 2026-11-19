@@ -260,7 +260,9 @@ func TestAnAnswerBeingSentKeepsItsDevicesPlace(t *testing.T) {
 	file := func(device accounts.ID) int {
 		t.Helper()
 		signer := s.handler.Playback.Signer()
-		grant, target := signer.Sign(playback.Grant{Version: other.ID, User: member.ID, Device: device, Relay: true}), s.url+"/System/Ping"
+		// Signed as the handler signs, with its time: a grant that tells
+		// none is refused.
+		grant, target := s.handler.grant(playback.Grant{Version: other.ID, User: member.ID, Device: device, Relay: true}), s.url+"/System/Ping"
 		status, _ := s.call(http.MethodGet, "/Videos/"+s.remote+"/live/file.ts?"+url.Values{grantParameter: {grant},
 			"target": {base64.RawURLEncoding.EncodeToString([]byte(target))}, "sign": {signer.Link(grant, target)}}.Encode(), "", nil)
 		return status
