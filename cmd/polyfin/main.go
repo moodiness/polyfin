@@ -495,7 +495,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	}
 	activityLog := activity.New(pool, store.Settings, logger)
 	registry := tasks.New(logger)
-	registerTasks(registry, store, activityLog, lib, channels, logger)
+	registerTasks(registry, store, activityLog, lib, channels, addonStore, logger)
 	registry.Register(emptySourceCacheTask(sources, logger))
 	registry.Register(timeGraphicsCardTask(segments))
 	segments.UseOtherWork(registry.HeavyRunning)
@@ -1084,7 +1084,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 // registerTasks registers Polyfin's own periodic jobs, which Jellyfin apps
 // show as scheduled tasks.
 func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog *activity.Store, lib *library.Service, channels *iptv.Service,
-	logger *slog.Logger) {
+	addonStore *addons.Store, logger *slog.Logger) {
 	registry.Register(tasks.Task{
 		Key:      "SignOutInactiveDevices",
 		Category: tasks.CategoryMaintenance,
@@ -1175,6 +1175,7 @@ func registerTasks(registry *tasks.Registry, store *accounts.Store, activityLog 
 		Limits: tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: 12 * time.Hour},
 		Run:    lib.ReadCollections,
 	})
+	registry.Register(refreshSourcesTask(addonStore, store, logger))
 	// Asking for ratings costs requests to addons: this runs only when an
 	// administrator starts it.
 	registry.Register(tasks.Task{
@@ -1526,6 +1527,43 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 		Run: func(ctx context.Context) error {
 			forgotten, err := lib.ForgetVersionLists(ctx)
 			logger.Info("Version lists forgotten", "lists", forgotten)
+			return err
+		},
+	}
+}
+
+// refreshSourcesTime is when the sources are refreshed by default: at
+// night, between the thumbnails at 3:00 and the backup at 4:00, and clear
+// of the hours daylight saving time skips or repeats.
+const refreshSourcesTime = 3*time.Hour + 30*time.Minute
+
+// refreshSourcesTask downloads again the manifest of every addon, the
+// server's and users' own, as their Refresh button does, and logs how many
+// it refreshed, held, could not read and skipped (see
+// addons.Store.RefreshSources): every day at refreshSourcesTime by
+// default. A server upgraded gets it too, as no task_triggers row names
+// the task until an administrator changes its triggers.
+func refreshSourcesTask(sources *addons.Store, users *accounts.Store, logger *slog.Logger) tasks.Task {
+	return tasks.Task{
+		Key:      "RefreshSources",
+		Category: tasks.CategoryLibrary,
+		Text: map[string]tasks.Text{
+			"en":    {Name: "Refresh the sources", Description: "Downloads again the manifest of every Stremio or Eclipse addon, the server's and users' own, as its Refresh button does, so that the catalogs an addon added or renamed show without waiting for that button. An addon that cannot be read is left as it is. A library whose catalog an addon no longer lists is removed only once a run at least 30 minutes later finds it missing too. Users' own addons are skipped while they are off for them."},
+			"fr":    {Name: "Actualiser les sources", Description: "Télécharge à nouveau le manifeste de chaque addon Stremio ou Eclipse, ceux du serveur comme les addons personnels des utilisateurs, comme le fait son bouton Actualiser, pour que les catalogues qu’un addon a ajoutés ou renommés apparaissent sans attendre ce bouton. Un addon qui ne peut pas être lu reste tel quel. Une médiathèque dont un addon ne liste plus le catalogue n’est supprimée qu’une fois qu’une exécution au moins 30 minutes plus tard le trouve absent elle aussi. Les addons personnels des utilisateurs sont ignorés tant qu’ils leur sont désactivés."},
+			"de":    {Name: "Quellen aktualisieren", Description: "Lädt das Manifest jedes Stremio- oder Eclipse-Add-ons erneut herunter, die des Servers und die eigenen Add-ons der Benutzer, wie es seine Schaltfläche „Aktualisieren“ tut, damit die Kataloge, die ein Add-on hinzugefügt oder umbenannt hat, erscheinen, ohne auf diese Schaltfläche zu warten. Ein Add-on, das sich nicht lesen lässt, bleibt, wie es ist. Eine Bibliothek, deren Katalog ein Add-on nicht mehr listet, wird erst entfernt, wenn ein mindestens 30 Minuten späterer Lauf ihn ebenfalls nicht findet. Die eigenen Add-ons der Benutzer werden übersprungen, solange sie für sie ausgeschaltet sind."},
+			"es":    {Name: "Actualizar las fuentes", Description: "Vuelve a descargar el manifiesto de cada extensión de Stremio o Eclipse, las del servidor y las extensiones propias de los usuarios, como lo hace su botón Actualizar, para que los catálogos que una extensión ha añadido o renombrado aparezcan sin esperar a ese botón. Una extensión que no se puede leer se queda como está. Una biblioteca cuyo catálogo una extensión ya no indica solo se elimina cuando una ejecución al menos 30 minutos posterior tampoco lo encuentra. Las extensiones propias de los usuarios se omiten mientras estén desactivadas para ellos."},
+			"it":    {Name: "Aggiorna le origini", Description: "Scarica di nuovo il manifest di ogni add-on Stremio o Eclipse, quelli del server e gli add-on personali degli utenti, come fa il suo pulsante Aggiorna, così i cataloghi che un add-on ha aggiunto o rinominato compaiono senza attendere quel pulsante. Un add-on che non si riesce a leggere resta com’è. Una libreria il cui catalogo un add-on non elenca più viene rimossa solo quando un’esecuzione almeno 30 minuti dopo non lo trova a sua volta. Gli add-on personali degli utenti vengono saltati finché sono disattivati per loro."},
+			"pt-BR": {Name: "Atualizar as fontes", Description: "Baixa de novo o manifesto de cada complemento Stremio ou Eclipse, os do servidor e os complementos próprios dos usuários, como faz o seu botão Atualizar, para que os catálogos que um complemento adicionou ou renomeou apareçam sem esperar por esse botão. Um complemento que não pode ser lido fica como está. Uma biblioteca cujo catálogo um complemento não lista mais só é removida quando uma execução pelo menos 30 minutos depois também não o encontra. Os complementos próprios dos usuários são ignorados enquanto estiverem desativados para eles."},
+		},
+		Triggers: []tasks.Trigger{tasks.Daily(refreshSourcesTime)},
+		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
+		Run: func(ctx context.Context) error {
+			all, err := users.Users(ctx)
+			if err != nil {
+				return err
+			}
+			done, err := sources.RefreshSources(ctx, all, users.Settings(), logger)
+			logger.Info("Sources refreshed", "refreshed", done.Refreshed, "held", done.Held, "failed", done.Failed, "skipped", done.Skipped)
 			return err
 		},
 	}

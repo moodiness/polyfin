@@ -1367,7 +1367,7 @@ func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL
 	if f.kind != addon.Kind {
 		return Addon{}, CatalogChanges{}, ErrKindChanged
 	}
-	return s.store(ctx, scope, id, f)
+	return s.store(ctx, scope, id, f, 0)
 }
 
 // Refresh downloads an addon's manifest again, and tells which libraries
@@ -1375,6 +1375,13 @@ func (s *Store) Replace(ctx context.Context, scope Scope, id accounts.ID, rawURL
 // Where the addon is is told again: one that no longer answers on the
 // network it was on is read from the other (see Locate).
 func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confined bool) (Addon, CatalogChanges, error) {
+	return s.refresh(ctx, scope, id, confined, 0)
+}
+
+// refresh is Refresh, but for confirmAfter: unless zero, the manifest is
+// held while it would remove a library whose catalog was first found
+// missing less than confirmAfter ago (see holdRemovals).
+func (s *Store) refresh(ctx context.Context, scope Scope, id accounts.ID, confined bool, confirmAfter time.Duration) (Addon, CatalogChanges, error) {
 	addon, err := s.addon(ctx, s.db, scope, id)
 	if err != nil {
 		return Addon{}, CatalogChanges{}, err
@@ -1389,18 +1396,24 @@ func (s *Store) Refresh(ctx context.Context, scope Scope, id accounts.ID, confin
 	if f.kind != addon.Kind {
 		return Addon{}, CatalogChanges{}, ErrKindChanged
 	}
-	return s.store(ctx, scope, id, f)
+	return s.store(ctx, scope, id, f, confirmAfter)
 }
 
 // store saves a manifest downloaded again: a new address, or a refresh.
 // The library of a catalog renamed follows its new identifier, keeping its
 // own, and what names the catalog follows it too (see SetCarry); the
-// library of a catalog gone is removed.
-func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched) (Addon, CatalogChanges, error) {
-	defer s.changed()
+// library of a catalog gone is removed, unless confirmAfter holds the
+// manifest (see refresh). Once stored, no catalog of the addon is missing.
+func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetched, confirmAfter time.Duration) (Addon, CatalogChanges, error) {
+	var changes CatalogChanges
+	// A manifest held stores nothing apps see.
+	defer func() {
+		if len(changes.Held) == 0 {
+			s.changed()
+		}
+	}()
 	manifestURL, encoded, manifest := f.url, f.encoded, f.manifest
 	var addon Addon
-	var changes CatalogChanges
 	var after func()
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		old, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
@@ -1409,6 +1422,16 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 			return err
 		}
 		renames := matchRenames(old.Manifest, manifest)
+		if confirmAfter > 0 {
+			held, err := holdRemovals(ctx, tx, old, manifest, renames, confirmAfter)
+			if err != nil {
+				return err
+			}
+			if len(held) > 0 {
+				addon, changes = old, CatalogChanges{Held: held}
+				return nil
+			}
+		}
 		moved := make(map[CatalogKey]CatalogKey, len(renames))
 		for _, r := range renames {
 			moved[CatalogKey{Type: r.CatalogType, ID: r.To}] = CatalogKey{Type: r.CatalogType, ID: r.From}
@@ -1427,6 +1450,9 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 			return err
 		}
 		if changes, err = followLibraries(ctx, tx, scope, old, manifest, renames); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM missing_catalogs WHERE addon_id = $1", id); err != nil {
 			return err
 		}
 		// What was kept of the addon follows where it is now.

@@ -305,6 +305,7 @@ Other tools read parts of an addon again:
 | **Refresh descriptions** | The menu of a server movie, series or collection library, in **Content › Libraries** | Reads every kept title's description again now, one title every 2 seconds, with progress on the row. A collection library's collections come first (see [Library description refresh](addons-and-libraries.md#library-description-refresh)). |
 | **Replace the address** | The source's more-actions menu, or **Once configured** after **Configure** | Downloads the manifest from a new address, with libraries kept, followed and removed as at a refresh, and forgets that addon's version lists (see [Manifest addresses](#manifest-addresses)). |
 | "Forget the version lists" | **System › Schedule** | Forgets every addon's version lists (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)). |
+| "Refresh the sources" | **System › Schedule** | Downloads every addon's manifest again, daily at 3:30 by default (see [Refreshing every addon on a schedule](#refreshing-every-addon-on-a-schedule)). |
 | **Refresh catalogs after (minutes)** | **Settings › Catalogs** | Sets how old a catalog page may get before Polyfin reads it again (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)). |
 
 Removing the addon and adding it again is never needed to refresh it, and costs more:
@@ -312,6 +313,20 @@ Removing the addon and adding it again is never needed to refresh it, and costs 
 - It loses what [Removing a source](#removing-a-source) lists: libraries with their names, images and settings, home rows, hidden libraries and scheduled recordings.
 - Everything is read again cold: libraries and collections wait for the addon, and many users browsing at once send it many requests together.
 - The new addon turns on its default catalogs, as any install does.
+
+### Refreshing every addon on a schedule
+
+Catalog pages are read again on their own, as **Refresh catalogs after (minutes)** says. An addon's manifest is not: a catalog its configuration adds, renames or removes shows only once the manifest is downloaded again. The scheduled task "Refresh the sources", under **Library** in **System › Schedule**, does that for every Stremio and Eclipse addon, daily at 3:30 by default, on new servers and on those upgraded alike. **Triggers** may change when it runs: every day or week at other times, or at an interval of 1 hour at least (see [Triggers](administration.md#triggers)).
+
+Each run does for each addon what **Refresh** on its page does, one addon at a time:
+
+- **Whose addons:** the server's, then each user's own under **My sources**. A user's own addons are skipped while **Allow users' own addons** or the user's **Can add their own addons** is off, or while parental control or blocked genres apply to the user, as their own **Refresh** would be refused (see [Users' own addons](sign-in-and-security.md#users-own-addons)).
+- **What each may reach:** as its owner's own **Refresh** would. A member's own addon is read from public addresses only (see [What an addon may reach](#what-an-addon-may-reach)).
+- **Catalogs added and renamed:** new catalogs wait under **Content › Libraries** to be turned on, and a library whose catalog took a new identifier follows it, as at a refresh.
+- **Catalogs gone:** an addon having trouble for a moment may answer a manifest that lacks some catalogs, so one run never removes a library. A run that finds the catalog of a library missing keeps that manifest aside, the addon and its libraries as they were, new catalogs included. A later run, at least 30 minutes after the first that found it missing, removes the library if the catalog is still missing: with the default trigger, the next night's. A catalog back in between starts over. **Refresh** on the addon's page still removes such a library at once.
+- **Addons that fail:** an addon that does not answer, answers an error, or answers as another kind of addon is left as it is, and the run goes on with the next.
+
+The log tells what each run did. `Sources refreshed` gives how many addons were refreshed (`refreshed`), kept aside for a catalog missing (`held`), left after a failure (`failed`) and skipped as their owner's own addons are off (`skipped`). Each failure is logged once, with its addon and error, and each addon kept aside with the libraries whose catalog is missing.
 
 ### A catalog with a new identifier
 

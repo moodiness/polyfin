@@ -260,6 +260,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Refresh Live TV guides | Polyfin looks every 5 minutes for the IPTV lists and guides due under **Settings › Live TV**. Started by hand, it fetches every list and guide. |
 | Read the libraries' first pages | For the libraries older than **Refresh catalogs after (minutes)** |
 | Read every collection | Never. Give it a daily trigger to read every collection of the server's collection libraries, then its smart lists, each day (see [Catalog limits and refresh](addons-and-libraries.md#catalog-limits-and-refresh)) |
+| Refresh the sources | Every day at 3:30: downloads every addon's manifest again, as **Refresh** on its page does, so that catalogs added or renamed show without it (see [Refreshing every addon on a schedule](addons.md#refreshing-every-addon-on-a-schedule)) |
 | Refresh ratings | Only when started: it asks the addons again |
 | Forget the version lists | Only when started: every title asks its addons again for its versions (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)) |
 | Clean up removed sources | Every hour: deletes what removed sources and dropped catalogs left behind (see [Removing a source](addons.md#removing-a-source)) |
@@ -306,7 +307,7 @@ Each task allows some types, and a shortest interval:
 |---|---|---|
 | Record ended accounts, Record expired share links | interval, startup | 10 minutes |
 | Read the libraries' first pages, Add the episodes of watchlist series, Build taste profiles, Clean up removed sources | all four | 15 minutes |
-| Look for versions of watchlist titles, Make thumbnails, Time the graphics card | daily, weekly, interval | 1 hour |
+| Look for versions of watchlist titles, Make thumbnails, Time the graphics card, Refresh the sources | daily, weekly, interval | 1 hour |
 | Clean the activity log, Clean the playback history, Delete old recordings, Find commercials in recordings | all four | 1 hour |
 | Read every collection | daily, weekly, interval | 12 hours |
 | Refresh ratings | daily, weekly, interval | 24 hours |

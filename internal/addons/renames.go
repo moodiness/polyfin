@@ -52,9 +52,13 @@ type Rename struct {
 // CatalogChanges tells what a manifest downloaded again did to an addon's
 // libraries: those that followed their catalog's new identifier, and those
 // removed with their catalog, each in the order of the scope's libraries.
+// Held are the libraries of catalogs the manifest no longer lists that a
+// refresh by RefreshSources kept, storing nothing of the manifest, until a
+// later one finds them missing too: Followed and Removed are then empty.
 type CatalogChanges struct {
 	Followed []ChangedLibrary
 	Removed  []ChangedLibrary
+	Held     []ChangedLibrary
 }
 
 // ChangedLibrary is a library of a catalog renamed or gone: its name in
@@ -207,21 +211,19 @@ func settleKeys(keys []KeptKey, manifest stremio.Manifest, moved map[CatalogKey]
 	return settled
 }
 
-// followLibraries has, in tx, the libraries of addon's catalogs that
-// manifest renames follow their new identifier, and removes those of its
-// catalogs gone, and tells which did which. addon is as it was before
-// manifest.
-func followLibraries(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon, manifest stremio.Manifest, renames []Rename) (CatalogChanges, error) {
-	var changes CatalogChanges
+// goneLibraries returns the libraries of addon's catalogs that manifest no
+// longer lists, in the order of the scope's libraries, renamed ones
+// included. addon is as it was before manifest.
+func goneLibraries(ctx context.Context, tx pgx.Tx, addon Addon, manifest stremio.Manifest) ([]ChangedLibrary, error) {
 	rows, err := tx.Query(ctx, "SELECT catalog_type, catalog_id, name FROM libraries WHERE addon_id = $1 ORDER BY position, catalog_type, catalog_id",
 		addon.ID)
 	if err != nil {
-		return changes, err
+		return nil, err
 	}
 	var gone []ChangedLibrary
 	var catalogType, catalogID string
 	var name *string
-	if _, err := pgx.ForEachRow(rows, []any{&catalogType, &catalogID, &name}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&catalogType, &catalogID, &name}, func() error {
 		if _, ok := manifest.Catalog(catalogType, catalogID); ok {
 			return nil
 		}
@@ -234,7 +236,18 @@ func followLibraries(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon, m
 		library.Name = cmp.Or(library.Name, catalogID)
 		gone = append(gone, library)
 		return nil
-	}); err != nil {
+	})
+	return gone, err
+}
+
+// followLibraries has, in tx, the libraries of addon's catalogs that
+// manifest renames follow their new identifier, and removes those of its
+// catalogs gone, and tells which did which. addon is as it was before
+// manifest.
+func followLibraries(ctx context.Context, tx pgx.Tx, scope Scope, addon Addon, manifest stremio.Manifest, renames []Rename) (CatalogChanges, error) {
+	var changes CatalogChanges
+	gone, err := goneLibraries(ctx, tx, addon, manifest)
+	if err != nil {
 		return changes, err
 	}
 	if len(gone) > 0 && len(renames) > 0 {
