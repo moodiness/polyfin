@@ -62,16 +62,19 @@ func (s *Service) ownedOutside(ctx context.Context, v view, r record) bool {
 // movedAway tells which of records, about to be saved, would give an
 // episode, or a folder's video, to another series or folder than the one
 // it is stored with, while one of the server's addons holds that one
-// (see savedData): nil when none would. A video's identifier is what its
-// description calls it, so the description of one title can name the
-// videos of another, whose users then no longer find them: the episode
-// is found through the series its record names. Such a record is left
-// out, the item staying as it is, unless one of the server's addons
-// describes the new series with that video: between the server's own
-// descriptions the one listed last has the video, as before, and a
-// user's own addon, describing its own series or one of the server's,
-// moves no episode the server's users play. A season is never moved: its
-// key holds its series.
+// (see savedData), or while the record is a user's own addon's and none
+// of that user's own addons holds it: nil when none would. A video's
+// identifier is what its description calls it, so the description of one
+// title can name the videos of another, whose users then no longer find
+// them: the episode is found through the series its record names. Such a
+// record is left out, the item staying as it is, unless one of the
+// server's addons describes the new series with that video: between the
+// server's own descriptions the one listed last has the video, as
+// before, and one of the server's addons takes it from a series no one
+// holds, or a user's own addon holds. A user's own addon moves only the
+// episodes of its owner's series: not those the server's users play, nor
+// those of a series no addon of the server lists yet, nor another user's.
+// A season is never moved: its key holds its series.
 func (s *Service) movedAway(ctx context.Context, records []*record) ([]bool, error) {
 	var ids []accounts.ID
 	var series []string
@@ -83,21 +86,39 @@ func (s *Service) movedAway(ctx context.Context, records []*record) ([]bool, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	// The stored series, or folder, is found by its key (see titleKey).
-	rows, err := s.db.Query(ctx, `SELECT moved.id FROM unnest($1::uuid[], $2::text[]) AS moved(id, series)
+	// The stored series, or folder, is found by its key (see titleKey),
+	// with whose addon holds it, if any (see recordOwner).
+	rows, err := s.db.Query(ctx, `SELECT moved.id, `+recordOwner("held.data")+` FROM unnest($1::uuid[], $2::text[]) AS moved(id, series)
 		JOIN items ON items.id = moved.id AND items.data->>'seriesId' <> moved.series
-		JOIN items held ON held.key = CASE WHEN items.kind = $3 THEN $3 ELSE $4 END || '|' || (items.data->>'seriesId')
-		WHERE `+recordOwner("held.data")+` = `+serverOwner, ids, series, string(KindVideo), string(KindSeries))
+		LEFT JOIN items held ON held.key = CASE WHEN items.kind = $3 THEN $3 ELSE $4 END || '|' || (items.data->>'seriesId')`,
+		ids, series, string(KindVideo), string(KindSeries))
 	if err != nil {
 		return nil, err
 	}
-	moved := map[accounts.ID]bool{}
+	holders := map[accounts.ID]*accounts.ID{}
 	var id accounts.ID
-	if _, err := pgx.ForEachRow(rows, []any{&id}, func() error {
-		moved[id] = true
+	var holder *accounts.ID
+	if _, err := pgx.ForEachRow(rows, []any{&id, &holder}, func() error {
+		holders[id] = nil
+		if holder != nil {
+			holders[id] = new(*holder)
+		}
 		return nil
-	}); err != nil || len(moved) == 0 {
+	}); err != nil || len(holders) == 0 {
 		return nil, err
+	}
+	moved := map[accounts.ID]bool{}
+	for _, r := range records {
+		holder, found := holders[r.ID]
+		switch {
+		case !found:
+		case holder != nil && *holder == accounts.ID{}:
+			moved[r.ID] = true
+		case r.Addon != nil:
+			// A user's own addon, but for its owner's series.
+			_, owner, err := s.addons.FindOwner(ctx, *r.Addon)
+			moved[r.ID] = err == nil && owner != accounts.ID{} && (holder == nil || *holder != owner)
+		}
 	}
 	// The videos the server's addons describe each new series with, read
 	// once per series.
