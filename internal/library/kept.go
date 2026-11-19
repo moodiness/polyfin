@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"reflect"
 	"runtime/debug"
 	"strconv"
 	"sync"
@@ -65,6 +66,41 @@ const (
 	// addons, take no place.
 	pageReadsAtOnce = 6
 )
+
+// catalogRef is a catalog as its pages are kept: an addon's catalog, of a
+// genre or none.
+type catalogRef struct {
+	addon       accounts.ID
+	catalogType string
+	catalogID   string
+	genre       string
+}
+
+// catalogVersions counts, for each catalog, the changes of its pages: a
+// page an addon answered other than the one kept in memory, or with none
+// kept there. The titles kept for smart lists hold the versions of their
+// catalogs they were read at (see smartCandidates).
+type catalogVersions struct {
+	mu     sync.Mutex
+	counts map[catalogRef]uint64
+}
+
+// of returns the version of the catalog of src.
+func (c *catalogVersions) of(src source) uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.counts[catalogRef{src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre}]
+}
+
+// changed counts a change of the pages of ref.
+func (c *catalogVersions) changed(ref catalogRef) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.counts == nil {
+		c.counts = map[catalogRef]uint64{}
+	}
+	c.counts[ref]++
+}
 
 // fetched is what an addon gave, at the time it gave it.
 type fetched[T any] struct {
@@ -474,6 +510,11 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	}
 	s.checkMetas(metas, src.catalog.Type, true)
 	kept := fetched[[]stremio.Meta]{metas, asked}
+	if key.kept() {
+		if before, ok := s.pages.Get(key); !ok || !reflect.DeepEqual(before.value, metas) {
+			s.catalogVersions.changed(catalogRef{key.addon, key.catalogType, key.catalogID, key.genre})
+		}
+	}
 	s.pagesOf(key).Put(key, kept)
 	s.generated.kept.Add(1)
 	// A search catalog that answers is no longer late (see lateSearch).

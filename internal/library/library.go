@@ -230,14 +230,15 @@ type Service struct {
 	// ratings.go); nil, they show their addons'.
 	ratings *ratings.Service
 	// smart holds the smart lists; smartCache keeps the titles read for
-	// each list, by the catalogs that read them and within smartBytes,
-	// smartFetches holds a place for each description read for them, and
-	// smartWait bounds how long a listing waits for their catalogs (see
-	// smartlists.go).
-	smart        *smartlists.Store
-	smartCache   *cache.Cache[smartKey, []smartTitle]
-	smartFetches chan struct{}
-	smartWait    time.Duration
+	// each list, by the catalogs that read them, at their versions (see
+	// catalogVersions) and within smartBytes, smartFetches holds a place
+	// for each description read for them, and smartWait bounds how long a
+	// listing waits for their catalogs (see smartlists.go).
+	smart           *smartlists.Store
+	smartCache      *cache.Cache[smartKey, smartEntry]
+	smartFetches    chan struct{}
+	smartWait       time.Duration
+	catalogVersions catalogVersions
 	// pageReads holds a place for each catalog page read from the
 	// database, and pageReadHook, set by tests, runs in it (see pageRead).
 	pageReads    chan struct{}
@@ -444,7 +445,6 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		watchlist:      watchlist.New(db),
 		smart:          smartlists.New(db),
 		userData:       userdata.New(db),
-		smartCache:     cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize),
 		smartFetches:   make(chan struct{}, smartFetches),
 		smartWait:      smartWait,
 		pageReads:      make(chan struct{}, pageReadsAtOnce),
@@ -455,6 +455,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	}
 	clock := func() time.Time { return s.now() }
 	s.pages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](4000, s.keptCatalogLife, clock).Sized(keptBytes, fetchedSize[[]stremio.Meta])
+	s.smartCache = s.newSmartCache(smartBytes)
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
 		Sized(searchBytes, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)

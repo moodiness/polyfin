@@ -9,7 +9,6 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -48,13 +47,11 @@ const (
 	smartWait = 3 * time.Second
 	// smartReadTime bounds a background read of a catalog for a list.
 	smartReadTime = 5 * time.Minute
-	// smartLife is how long the titles read for a list serve its next
-	// listings: apps read a list page after page. smartBytes bounds what
-	// they take, as the catalog pages kept are bounded: the titles of a
+	// smartBytes bounds what the titles kept for lists take (see
+	// smartEntry), as the catalog pages kept are bounded: the titles of a
 	// list larger than that on their own are read again from the pages at
 	// each listing.
-	smartLife  = 30 * time.Second
-	smartBytes = 64 << 20
+	smartBytes = 128 << 20
 	// smartLookups bounds the descriptions one listing of a list asks
 	// for, and smartFetches the descriptions asked for at once, across
 	// lists.
@@ -220,26 +217,6 @@ func (q ratingQuery) signature() string {
 	return fmt.Sprintf("%s %s %t %s %q", score(q.min), score(q.max), q.unratedOnly, has, q.officials)
 }
 
-// smartTitleSize estimates what a title read for a list takes in memory
-// besides its listing's description: its item's own copies (its people,
-// its identifiers) and the structures holding them.
-const smartTitleSize = 512
-
-// smartTitlesSize is the size the smart list cache counts for the titles
-// read for a list (see cache.Sized): for each, its listing's description,
-// which its item and record share, twice what the page caches count for
-// it, plus smartTitleSize.
-func smartTitlesSize(titles []smartTitle) int {
-	size := 0
-	for _, t := range titles {
-		size += smartTitleSize
-		if t.record.Meta != nil {
-			size += 2 * cache.JSONSize(*t.record.Meta)
-		}
-	}
-	return size
-}
-
 // smartResult is a list as it stands for a user: the titles it lists, in
 // order and within its maximum, how many matched before the maximum, how
 // many may match once their description is read, and whether every
@@ -337,42 +314,103 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 	return result, nil
 }
 
+// smartEntry is what a list's catalogs gave, kept for its next listings
+// (see smartCandidates): each catalog's titles as read, at which version
+// of its pages (see catalogVersions), and whether pages it lacked left it
+// short; at is when every catalog was last read. The titles are merged
+// from them again at each listing, which takes a fraction of reading
+// them, and keeps an administrator's edits current.
+type smartEntry struct {
+	lists    [][]stremio.Meta
+	versions []uint64
+	missing  []bool
+	at       time.Time
+}
+
+// smartEntrySize is the memory entry holds, a size for the cache's bound
+// (see cache.MemorySize), its strings included: they outlive the pages
+// they were read from.
+func smartEntrySize(entry smartEntry) int {
+	size := 0
+	for _, metas := range entry.lists {
+		size += cache.MemorySize(metas)
+	}
+	return size
+}
+
+// newSmartCache returns the cache of the titles read for lists, bounded
+// to maxBytes. Its entries last as long as the pages kept: what reads
+// them again is a change of their catalogs (see smartCandidates).
+func (s *Service) newSmartCache(maxBytes int) *cache.Cache[smartKey, smartEntry] {
+	return cache.NewLasting[smartKey, smartEntry](200, s.keptCatalogLife, func() time.Time { return s.now() }).Sized(maxBytes, smartEntrySize)
+}
+
 // smartCandidates returns the titles a list's catalogs list, one of each
 // catalog in turn, each once, with what is known of them, the titles the
 // user hid included: they are left out at each listing (see smartMatches),
-// so that a title hidden or shown again changes the list at once. Those
-// read for a saved list whole serve its listings for smartLife, for every
-// user who reads its catalogs the same way (see smartKey); the
-// descriptions of those not described then are looked for again at each
-// listing, as they come in the background.
+// so that a title hidden or shown again changes the list at once.
+//
+// Those read for a saved list serve its next listings, for every user who
+// reads its catalogs the same way (see smartKey), as long as its catalogs'
+// pages stay as they were read (see catalogVersions), at most until they
+// are past their refresh age: the list's rules edited, or a catalog
+// added, removed or read to another maximum, make another key. A catalog
+// whose pages changed since, or which lacked pages, is read again alone,
+// and the titles merged again. Past the refresh age, every catalog is
+// read again, which refreshes their pages in the background. A list whose
+// catalogs lacked pages is not complete. A read that takes kept pages
+// only (see withKeptOnly) takes the titles kept whatever their age, and
+// keeps none; one that refreshes neither takes nor keeps any. The
+// descriptions of the titles not described then are looked for again at
+// each listing, as they come in the background.
 func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.List) ([]smartTitle, bool, error) {
 	sources := s.smartSources(v, list)
 	key := smartKey{list.ID, list.UpdatedAt, smartReader(v, sources)}
-	cacheable := list.ID != (accounts.ID{}) && !keptOnly(ctx) && !refreshing(ctx)
-	if cacheable {
-		if kept, ok := s.smartCache.Get(key); ok {
-			titles := slices.Clone(kept)
-			return titles, true, s.smartDescribed(ctx, v, list, titles)
-		}
+	saved := list.ID != (accounts.ID{}) && !refreshing(ctx)
+	var kept smartEntry
+	found := false
+	if saved {
+		kept, found = s.smartCache.Get(key)
+	}
+	if found && keptOnly(ctx) {
+		titles := s.smartFacts(sources, kept.lists, v.country)
+		return titles, !slices.Contains(kept.missing, true), s.smartDescribed(ctx, v, list, titles)
+	}
+	read := make([]bool, len(sources))
+	whole := !found || s.now().Sub(kept.at) >= s.catalogLife()
+	for i, src := range sources {
+		read[i] = whole || kept.missing[i] || kept.versions[i] != s.catalogVersions.of(src)
+	}
+	if found && !slices.Contains(read, true) {
+		titles := s.smartFacts(sources, kept.lists, v.country)
+		return titles, true, s.smartDescribed(ctx, v, list, titles)
 	}
 	reader := v
 	reader.hidden = nil
 	// Movies waiting for their digital release are read too: each listing
 	// tells whether the list keeps them (see smartMatches).
 	reader.upcoming = true
-	lists, complete := s.smartRead(ctx, reader, sources)
+	lists, versions, missing := s.smartRead(ctx, reader, sources, read)
 	if ctx.Err() != nil {
 		return nil, false, ctx.Err()
+	}
+	at := s.now()
+	if !whole {
+		at = kept.at
+		for i := range sources {
+			if !read[i] {
+				lists[i], versions[i] = kept.lists[i], kept.versions[i]
+			}
+		}
 	}
 	titles := s.smartFacts(sources, lists, v.country)
 	if err := s.smartDescribed(ctx, v, list, titles); err != nil {
 		return nil, false, err
 	}
-	if cacheable && complete {
-		// The listing completes its own copy (see smartElsewhere).
-		s.smartCache.Put(key, slices.Clone(titles))
+	if saved && !keptOnly(ctx) {
+		s.smartCache.Put(key, smartEntry{lists: lists, versions: versions, missing: missing, at: at})
 	}
-	return titles, complete, nil
+	return titles, !slices.Contains(missing, true), nil
 }
 
 // smartSources returns the catalogs a list draws from that the user of v
@@ -418,23 +456,29 @@ func smartCatalog(catalog stremio.Catalog) bool {
 	return !LiveCatalog(catalog.Type) && catalog.Type != "collection" && catalog.Browsable()
 }
 
-// smartRead reads each source up to its maximum, a few at a time. A
-// listing waits smartWait at most, then takes the pages kept of the
-// catalogs that did not answer in time, and reads them on in the
-// background; complete is then false. A read that refreshes (see
+// smartRead reads each source that read marks up to its maximum, a few at
+// a time, and tells the version of its catalog once read (see
+// catalogVersions): a page its read fetched counts in it, and one that
+// changes later has the next listing read it again. The others' lists
+// stay nil. A listing waits smartWait at most, then takes the pages kept
+// of the catalogs that did not answer in time, and reads them on in the
+// background: missing marks them. A read that refreshes (see
 // ReadCollections) waits for every page.
-func (s *Service) smartRead(ctx context.Context, v view, sources []source) (lists [][]stremio.Meta, complete bool) {
+func (s *Service) smartRead(ctx context.Context, v view, sources []source, read []bool) (lists [][]stremio.Meta, versions []uint64, missing []bool) {
 	lists = make([][]stremio.Meta, len(sources))
+	versions = make([]uint64, len(sources))
+	missing = make([]bool, len(sources))
 	waiting, cancel := ctx, context.CancelFunc(func() {})
 	if !keptOnly(ctx) && !refreshing(ctx) {
 		waiting, cancel = context.WithTimeout(ctx, s.smartWait)
 	}
 	defer cancel()
-	var mu sync.Mutex
-	complete = true
 	var group errgroup.Group
 	group.SetLimit(catalogFetches)
 	for i, src := range sources {
+		if !read[i] {
+			continue
+		}
 		group.Go(func() error {
 			limit := v.limit(src)
 			metas, _, err := s.window(waiting, v, src, 0, limit)
@@ -446,17 +490,15 @@ func (s *Service) smartRead(ctx context.Context, v view, sources []source) (list
 					s.logger.Debug("A catalog of a smart list could not be read", "catalog", src.catalog.ID, "error", err)
 				}
 				metas, _, _ = s.window(withKeptOnly(ctx), v, src, 0, limit)
-				mu.Lock()
-				complete = false
-				mu.Unlock()
+				missing[i] = true
 				s.smartReadLater(ctx, v, src)
 			}
-			lists[i] = metas
+			lists[i], versions[i] = metas, s.catalogVersions.of(src)
 			return nil
 		})
 	}
 	_ = group.Wait()
-	return lists, complete
+	return lists, versions, missing
 }
 
 // smartReadLater reads a catalog of a list up to its maximum in the

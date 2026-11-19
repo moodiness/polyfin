@@ -8,7 +8,6 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -300,7 +299,7 @@ func TestUsersSharingASmartListKeepTheirOwnHiddenTitles(t *testing.T) {
 	}
 	// The entry read for the admin is dropped: the member, who hid Heat,
 	// reads the list first.
-	e.service.smartCache = cache.New[smartKey, []smartTitle](200, smartLife).Sized(smartBytes, smartTitlesSize)
+	e.service.smartCache = e.service.newSmartCache(smartBytes)
 	if err := e.service.userData.Hide(t.Context(), e.member.ID, ids["Heat"], time.Now()); err != nil {
 		t.Fatal(err)
 	}

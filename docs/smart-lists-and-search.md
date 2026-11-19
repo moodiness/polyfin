@@ -78,6 +78,8 @@ The list's page shows a preview of its titles as they stand now, before you save
 - That maximum is the library's own, when the catalog is one of the user's libraries with a maximum. Otherwise it is **Titles read per movie and series catalog**.
 - When the rules require a genre the catalog offers in its genre filter, Polyfin asks the catalog for that genre's titles, as for a library's genre. It does not read it whole. A place in that catalog is then a place among that genre's titles.
 - A listing waits for the addons 3 seconds at most. Past that, it lists the titles of the pages already kept, and reads the others in the background.
+- **Kept between listings:** the titles read for a list serve its next listings, for every user who reads its catalogs the same way, as long as their catalog pages stay as they were. A page an addon changes when it is read again has only its catalog read again. Editing the list, or changing **Titles read per movie and series catalog** or a library's maximum, has it read again whole, and so does a listing past **Refresh catalogs after (minutes)**. The titles of all lists kept take 128 MB of memory at most; a list larger than that is read again at each listing.
+- **A catalog that does not answer:** a list whose addon did not answer in time, or asks to wait, lists the titles of the other catalogs. Its next listings read again only that catalog, until its addon answers.
 
 **Applying the rules:**
 

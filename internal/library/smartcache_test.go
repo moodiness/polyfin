@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
-	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -80,25 +80,21 @@ func TestTheTitlesKeptForSmartListsStayWithinTheirBound(t *testing.T) {
 	if kept.Len() != len(lists) || kept.Bytes() == 0 || kept.Bytes() > smartBytes {
 		t.Fatalf("kept: %d entries, %d bytes", kept.Len(), kept.Bytes())
 	}
-	// Each title counts at least what its description takes in the page
-	// caches: every list keeps the titles of both its catalogs, its rules
-	// being applied at each listing.
-	if each := kept.Bytes() / (3 * 2 * count); each < smartTitleSize+2*cache.JSONSize(titles("movie", 1, "Drama")[0]) {
+	// Each title counts at least its description's structure: every list
+	// keeps the titles of both its catalogs, its rules being applied at
+	// each listing.
+	if each := kept.Bytes() / (3 * 2 * count); each < int(unsafe.Sizeof(stremio.Meta{})) {
 		t.Errorf("%d bytes counted for each title", each)
 	}
 
 	// A bound that holds the titles of two lists keeps two, the least
 	// recently listed going; one smaller than a list's titles keeps none.
 	// Every list answers as before.
-	read, _, err := e.service.smartCandidates(t.Context(), e.mustView(e.member), lists[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	one := smartTitlesSize(read)
+	one := smartEntrySize(e.keptEntry(e.member, lists[1]))
 	for _, c := range []struct {
 		limit, entries int
 	}{{2*one + one/2, 2}, {one - 1, 0}} {
-		e.service.smartCache = cache.New[smartKey, []smartTitle](200, smartLife).Sized(c.limit, smartTitlesSize)
+		e.service.smartCache = e.service.newSmartCache(c.limit)
 		listAll()
 		if bounded := e.service.smartCache; bounded.Bytes() > c.limit || bounded.Len() != c.entries {
 			t.Errorf("bounded to %d bytes: %d entries, %d bytes", c.limit, bounded.Len(), bounded.Bytes())
