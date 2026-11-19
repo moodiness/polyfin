@@ -363,7 +363,7 @@ func (s *Service) scanHomeVideos(ctx context.Context, id accounts.ID, root strin
 	target := probeTarget(func(rel string) string { return filepath.Join(list.root, filepath.FromSlash(rel)) })
 	if list.root == "" {
 		var stop func()
-		if target, stop, err = probeServer(list); err != nil {
+		if target, stop, err = probeServer(list, s.logger); err != nil {
 			return err
 		}
 		defer stop()

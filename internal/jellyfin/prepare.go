@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
@@ -156,6 +157,21 @@ func logPanic(logger *slog.Logger, msg string, args ...any) {
 func logRecovered(logger *slog.Logger, msg string, cause any, args ...any) {
 	if logger != nil {
 		logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
+	}
+}
+
+// errWorkPanicked reports a request's work, run in a goroutine of its
+// own, that ended on a panic.
+var errWorkPanicked = errors.New("the work ended on a panic")
+
+// recoverInto, deferred at the top of a goroutine of a request's work
+// whose waiter takes its error, logs a panic of it as msg with args and
+// its stack, and has err report it (errWorkPanicked): the waiter fails as
+// on a read that failed, and the server goes on.
+func recoverInto(logger *slog.Logger, err *error, msg string, args ...any) {
+	if cause := recover(); cause != nil {
+		logRecovered(logger, msg, cause, args...)
+		*err = fmt.Errorf("%w: %v", errWorkPanicked, cause)
 	}
 }
 

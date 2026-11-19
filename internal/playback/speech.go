@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -180,10 +181,25 @@ func (s *Service) findQueuedSpeech() {
 		version := s.speech.jobs[0]
 		s.speech.jobs = s.speech.jobs[1:]
 		s.speech.mu.Unlock()
-		ctx, cancel := context.WithTimeout(Background(context.Background()), speechTime)
-		s.findSpeech(ctx, version)
-		cancel()
+		s.findQueued(version)
 	}
+}
+
+// findQueued finds the speech of a version queued. A panic of it, of what
+// reads the version's file, is logged with its stack, and the version is
+// not tried again for a while, as one whose speech could not be found;
+// the queue goes on.
+func (s *Service) findQueued(version library.Version) {
+	ctx, cancel := context.WithTimeout(Background(context.Background()), speechTime)
+	defer cancel()
+	defer func() {
+		if cause := recover(); cause != nil {
+			s.logger.Error("Finding the speech of a version ended on a panic", "addon", version.AddonLog, "panic", fmt.Sprint(cause),
+				"stack", string(debug.Stack()))
+			s.speech.failed.Put(version.ID, fmt.Errorf("%w: %v", errSharedPanicked, cause))
+		}
+	}()
+	s.findSpeech(ctx, version)
 }
 
 // findSpeech finds and keeps when a version has speech, unless it was

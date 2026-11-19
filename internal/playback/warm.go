@@ -108,22 +108,30 @@ func (s *Service) warm(version library.Version, start time.Duration, replace, ur
 	run := &warmRun{start: start, started: time.Now(), urgent: urgent, cancel: cancel}
 	s.warming[version.ID] = run
 	s.warmMu.Unlock()
-	go func() {
-		defer cancel()
-		started := time.Now()
-		err := s.warmFrom(ctx, version, start)
-		s.warmMu.Lock()
-		if s.warming[version.ID] == run {
-			delete(s.warming, version.ID)
-		}
-		s.warmMu.Unlock()
-		if err != nil {
-			s.logger.Debug("A version's first bytes could not be read ahead", "addon", version.AddonLog, "error", err)
-			return
-		}
-		s.warmed.Put(version.ID, start)
-		s.logger.Debug("Read a version's first bytes ahead", "addon", version.AddonLog, "from", start, "duration", time.Since(started))
+	go s.runWarm(ctx, cancel, version, start, run)
+}
+
+// runWarm runs a warm of version from start, run, until ctx ends, then
+// forgets it. A panic of it, of what reads the version's source, is
+// logged with its stack and fails that warm only.
+func (s *Service) runWarm(ctx context.Context, cancel func(), version library.Version, start time.Duration, run *warmRun) {
+	defer cancel()
+	started := time.Now()
+	err := func() (err error) {
+		defer s.panicked(&err, "Reading a version's first bytes ahead ended on a panic", "addon", version.AddonLog)
+		return s.warmFrom(ctx, version, start)
 	}()
+	s.warmMu.Lock()
+	if s.warming[version.ID] == run {
+		delete(s.warming, version.ID)
+	}
+	s.warmMu.Unlock()
+	if err != nil {
+		s.logger.Debug("A version's first bytes could not be read ahead", "addon", version.AddonLog, "error", err)
+		return
+	}
+	s.warmed.Put(version.ID, start)
+	s.logger.Debug("Read a version's first bytes ahead", "addon", version.AddonLog, "from", start, "duration", time.Since(started))
 }
 
 // warmFrom reads what a play of version from start reads first, as a

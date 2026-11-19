@@ -743,3 +743,40 @@ func (f *fakeWatcher) watched() []string {
 func (f *fakeWatcher) Events() <-chan fsnotify.Event { return f.events }
 func (f *fakeWatcher) Errors() <-chan error          { return f.errors }
 func (f *fakeWatcher) Close() error                  { return nil }
+
+// A panic listing the folders to watch is logged, and the watch goes on:
+// the next check lists them again.
+func TestAPanicOfTheWatchLeavesItWatching(t *testing.T) {
+	t.Parallel()
+	listed := make(chan struct{})
+	var calls atomic.Int32
+	wt := newWatchTest(t, func(context.Context) ([]watchFolder, error) {
+		if calls.Add(1) == 1 {
+			panic("a listing that cannot be read")
+		}
+		close(listed)
+		return nil, nil
+	}, func() (fileWatcher, error) { return nil, errors.New("no watcher in this test") })
+	wt.wg.Go(wt.w.run)
+	wt.w.kick()
+	<-listed
+}
+
+// A panic of a watched folder's scan is logged, and its end is told all
+// the same: the folder is scanned again on its next change.
+func TestAPanicOfAWatchedScanEndsIt(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	w := newWatcher(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), one(testID(1), t.TempDir()),
+		func(context.Context, accounts.ID) { panic("a file that cannot be read") },
+		func() (fileWatcher, error) { return nil, errors.New("no watcher in this test") }, noShares{}, wg.Go)
+	w.startScan(testID(1))
+	if got := <-w.done; got != testID(1) {
+		t.Fatalf("scan of %v ended, want %v", got, testID(1))
+	}
+}

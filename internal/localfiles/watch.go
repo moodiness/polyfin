@@ -191,8 +191,16 @@ func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.C
 
 // run watches the folders until the watch ends.
 func (w *watcher) run() {
-	w.reconcile()
+	w.guard(w.reconcile)
 	w.loop()
+}
+
+// guard runs a step of the watch, of what reads the folders and the
+// shares: a panic of it is logged with its stack, and the watch goes on
+// with its next event, check, round or scan.
+func (w *watcher) guard(step func()) {
+	defer logPanic(w.logger, "A step of the folders' watch ended on a panic")
+	step()
 }
 
 // loop handles the events, the scans due and the checks until the watch
@@ -211,34 +219,34 @@ func (w *watcher) loop() {
 		case <-w.ctx.Done():
 			return
 		case <-ticker.C:
-			w.reconcile()
+			w.guard(w.reconcile)
 		case <-w.kicks:
-			w.reconcile()
+			w.guard(w.reconcile)
 		case event, ok := <-events:
 			if !ok {
 				w.close()
 				continue
 			}
-			w.event(event)
+			w.guard(func() { w.event(event) })
 		case id := <-w.notified:
 			if w.polls[id] != nil {
-				w.change(id)
+				w.guard(func() { w.change(id) })
 			}
 		case err, ok := <-failures:
 			if !ok {
 				w.close()
 				continue
 			}
-			w.failure(err)
+			w.guard(func() { w.failure(err) })
 		case id := <-w.due:
-			w.settle(id)
+			w.guard(func() { w.settle(id) })
 		case poll := <-w.polled:
-			w.polledShare(poll)
+			w.guard(func() { w.polledShare(poll) })
 		case id := <-w.done:
 			delete(w.scanning, id)
 			if w.again[id] {
 				delete(w.again, id)
-				w.startScan(id)
+				w.guard(func() { w.startScan(id) })
 			}
 		}
 	}
@@ -548,7 +556,9 @@ func (w *watcher) startScan(id accounts.ID) {
 	w.rewatchCreatedIn(id)
 	w.scanning[id] = true
 	w.spawn(func() {
-		w.scan(w.ctx, id)
+		// A panic of the scan is logged; its end is told all the same, and
+		// the folder is scanned again on its next change.
+		w.guard(func() { w.scan(w.ctx, id) })
 		select {
 		case w.done <- id:
 		case <-w.ctx.Done():

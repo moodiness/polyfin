@@ -38,6 +38,7 @@ func (h *Handler) keepWithin(ctx context.Context, user accounts.User, items []li
 	limit := make(chan struct{}, 8)
 	for i, item := range items {
 		wg.Go(func() {
+			defer logPanic(h.Logger, "Placing a title in a folder ended on a panic")
 			limit <- struct{}{}
 			defer func() { <-limit }()
 			inside[i] = h.within(ctx, user, of(item), parent)
@@ -397,6 +398,7 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 		limiter := make(chan struct{}, 6)
 		for i, candidate := range candidates {
 			wg.Go(func() {
+				defer logPanic(h.Logger, "Placing a series in a folder ended on a panic")
 				limiter <- struct{}{}
 				defer func() { <-limiter }()
 				series, err := h.Library.Item(ctx, user, candidate.series)
@@ -427,6 +429,7 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 	read := make(chan struct{})
 	go func() {
 		defer close(read)
+		defer recoverInto(h.Logger, &dataErr, "Reading the user's data of series ended on a panic")
 		var entries []userdata.Entry
 		if entries, dataErr = h.UserData.SeriesEpisodes(ctx, user.ID, series); dataErr == nil {
 			data = make(map[accounts.ID]userdata.Data, len(entries))
@@ -570,6 +573,7 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		wg.Go(func() {
+			defer logPanic(h.Logger, "Listing a series' upcoming episodes ended on a panic")
 			limiter <- struct{}{}
 			defer func() { <-limiter }()
 			if hasParent {

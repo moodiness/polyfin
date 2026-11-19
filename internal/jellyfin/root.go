@@ -86,7 +86,8 @@ func (h *Handler) firstPages(ctx context.Context, user accounts.User) ([]library
 	var g errgroup.Group
 	g.SetLimit(4)
 	for i, l := range libraries {
-		g.Go(func() error {
+		g.Go(func() (err error) {
+			defer recoverInto(h.Logger, &err, "A library's first page ended on a panic", "library", l.ID.String())
 			page, err := h.Library.Children(ctx, user, l.ID, 0, defaultPageSize, "")
 			if err != nil {
 				h.Logger.Debug("A library could not be read", "library", l.ID.String(), "error", err)

@@ -66,7 +66,8 @@ func (h *Handler) movieRecommendations(w http.ResponseWriter, r *http.Request) {
 	var group errgroup.Group
 	group.SetLimit(recommendationLookups)
 	for i, movie := range baselines {
-		group.Go(func() error {
+		group.Go(func() (err error) {
+			defer recoverInto(h.Logger, &err, "A recommendation row ended on a panic")
 			// Twice the limit leaves room for the played titles left out.
 			found, err := h.similarTitles(r.Context(), user, movie.ID, 2*itemLimit)
 			if err == nil {

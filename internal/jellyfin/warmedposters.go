@@ -140,7 +140,8 @@ func (h *Handler) warmImages(ctx context.Context, posters []warmedPoster) int {
 		if ctx.Err() != nil || !h.images.roomToWarm() {
 			break
 		}
-		group.Go(func() error {
+		group.Go(func() (err error) {
+			defer recoverInto(h.Logger, &err, "Warming a poster ended on a panic")
 			if keys, ok := h.warmImage(ctx, poster); ok {
 				mu.Lock()
 				warmed[poster.url] = keys

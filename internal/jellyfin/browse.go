@@ -484,9 +484,15 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		var musicErr, liveErr error
 		var searches sync.WaitGroup
 		if kinds := musicSearchKinds(keep); len(kinds) > 0 {
-			searches.Go(func() { music, musicErr = h.Library.SearchMusic(r.Context(), user, term, kinds, max(start, 0)+limit) })
+			searches.Go(func() {
+				defer recoverInto(h.Logger, &musicErr, "A music search ended on a panic")
+				music, musicErr = h.Library.SearchMusic(r.Context(), user, term, kinds, max(start, 0)+limit)
+			})
 		}
-		searches.Go(func() { live, liveErr = h.searchLiveTv(r, user, term, keep, categories, max(start, 0)+limit) })
+		searches.Go(func() {
+			defer recoverInto(h.Logger, &liveErr, "A Live TV search ended on a panic")
+			live, liveErr = h.searchLiveTv(r, user, term, keep, categories, max(start, 0)+limit)
+		})
 		found, err := h.Library.Search(r.Context(), user, term, searchKinds(keep), max(start, 0)+limit)
 		searches.Wait()
 		if err == nil {

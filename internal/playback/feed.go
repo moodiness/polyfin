@@ -925,7 +925,7 @@ func (s *Service) sniff(ctx context.Context, version library.Version, times live
 		body.Close()
 		return nil, nil, err
 	}
-	head, rest, err := readHead(body, max(times.body, times.answer-time.Since(asked)))
+	head, rest, err := s.readHead(body, max(times.body, times.answer-time.Since(asked)))
 	if err != nil {
 		body.Close()
 		return nil, nil, err
@@ -995,8 +995,9 @@ func statusFailure(response *http.Response) error {
 // readHead reads the first sniffSize bytes of a body, waiting wait at
 // most: fewer is a short body when the body ended, a timeout when fewer
 // than sniffLeast came. It returns the body to read on, which first gives
-// what a read under way when the time ran out brings.
-func readHead(body io.ReadCloser, wait time.Duration) ([]byte, io.ReadCloser, error) {
+// what a read under way when the time ran out brings. A panic of a read
+// is logged and ends the body as a failed read does.
+func (s *Service) readHead(body io.ReadCloser, wait time.Duration) ([]byte, io.ReadCloser, error) {
 	head := make([]byte, sniffSize)
 	results := make(chan readResult, 1)
 	got := 0
@@ -1004,8 +1005,10 @@ func readHead(body io.ReadCloser, wait time.Duration) ([]byte, io.ReadCloser, er
 	defer timeout.Stop()
 	for got < sniffSize {
 		go func(at int) {
-			n, err := body.Read(head[at:])
-			results <- readResult{n, err}
+			var r readResult
+			defer func() { results <- r }()
+			defer s.panicked(&r.err, "Reading the first bytes of a feed ended on a panic")
+			r.n, r.err = body.Read(head[at:])
 		}(got)
 		select {
 		case r := <-results:

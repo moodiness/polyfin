@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -199,5 +200,42 @@ func TestAPanicReadingAnSFTPFileIsItsError(t *testing.T) {
 	}
 	if _, err := share.list(t.Context(), ""); err != nil {
 		t.Fatalf("the next listing: %v", err)
+	}
+}
+
+// panicSeeker is a file of a share whose reads panic.
+type panicSeeker struct{ panicReader }
+
+func (panicSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekEnd {
+		return 100, nil
+	}
+	return offset, nil
+}
+
+// A panic serving a file of a share to ffprobe ends that request, which
+// is cut short, logged with its stack; the server goes on serving.
+func TestAPanicServingAShareFileIsLogged(t *testing.T) {
+	t.Parallel()
+	var logs syncBuffer
+	list := listing{files: map[string]found{"clip.mkv": {size: 100}},
+		open: func(context.Context, string) (io.ReadCloser, error) { return panicSeeker{}, nil }}
+	target, stop, err := probeServer(list, slog.New(slog.NewTextHandler(&logs, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	for range 2 {
+		response, err := http.Get(target("clip.mkv"))
+		if err == nil {
+			_, err = io.ReadAll(response.Body)
+			response.Body.Close()
+		}
+		if err == nil {
+			t.Fatal("the file that panicked was served whole")
+		}
+	}
+	if out := logs.String(); strings.Count(out, "Serving a file of a share to ffprobe ended on a panic") != 2 || !strings.Contains(out, "stack=") {
+		t.Fatalf("the panics were not logged with their stack: %s", out)
 	}
 }

@@ -112,8 +112,10 @@ func (s *Service) Unbounded(ctx context.Context, version library.Version) (bool,
 	head := make([]byte, 16)
 	read := make(chan result, 1)
 	go func() {
-		n, err := src.ReadAt(reading, head, 0)
-		read <- result{n, err}
+		var r result
+		defer func() { read <- r }()
+		defer s.panicked(&r.err, "Reading the first bytes of a source ended on a panic", "addon", version.AddonLog)
+		r.n, r.err = src.ReadAt(reading, head, 0)
 	}()
 	var r result
 	select {
@@ -161,9 +163,10 @@ func (s *Service) AnalyzeLive(ctx context.Context, version library.Version) (med
 	if failure, failed := s.failures.Get(version.ID); failed {
 		return media.Analysis{}, failure.err
 	}
-	result, err, _ := s.flight.Do("live "+version.ID.String(), func() (any, error) {
+	shared := <-s.doShared("live "+version.ID.String(), func() (any, error) {
 		return s.probeLive(context.WithoutCancel(ctx), version)
 	})
+	result, err := shared.Val, shared.Err
 	if err != nil {
 		return media.Analysis{}, err
 	}
@@ -313,10 +316,10 @@ func (s *Service) refreshShape(ctx context.Context, version library.Version) {
 		return
 	}
 	go func() {
-		if _, err, _ := s.flight.Do("live "+version.ID.String(), func() (any, error) {
+		if shared := <-s.doShared("live "+version.ID.String(), func() (any, error) {
 			return s.probeLive(context.WithoutCancel(ctx), version)
-		}); err != nil {
-			s.logger.Debug("A channel's stream could not be analyzed again", "error", err)
+		}); shared.Err != nil {
+			s.logger.Debug("A channel's stream could not be analyzed again", "error", shared.Err)
 		}
 	}()
 }

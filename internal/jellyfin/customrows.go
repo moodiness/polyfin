@@ -642,8 +642,8 @@ func (h *Handler) firstCustomRowTitles(ctx context.Context, user accounts.User, 
 	var group errgroup.Group
 	group.SetLimit(customRowLookups)
 	for i, row := range rows {
-		group.Go(func() error {
-			var err error
+		group.Go(func() (err error) {
+			defer recoverInto(h.Logger, &err, "A home row ended on a panic", "row", row.name)
 			pages[i], err = h.customRowTitles(ctx, user, row, 0, limit, true)
 			// A row that cannot be read is left out; the others show.
 			if err != nil && ctx.Err() == nil {

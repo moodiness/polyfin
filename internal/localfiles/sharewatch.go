@@ -88,7 +88,7 @@ func (w *watcher) pollShares(shares map[accounts.ID]watchFolder) {
 		}
 		ctx, cancel := context.WithCancel(w.ctx)
 		w.polls[id] = &polling{address: folder.root, every: folder.every, cancel: cancel}
-		w.spawn(func() { w.poll(ctx, id, folder.root, folder.every) })
+		w.spawn(func() { w.guard(func() { w.poll(ctx, id, folder.root, folder.every) }) })
 	}
 }
 
@@ -133,7 +133,7 @@ func (w *watcher) poll(ctx context.Context, id accounts.ID, address string, ever
 	switch kind := shareKind(address); kind {
 	case ShareSMB:
 		w.setShareWatch(ctx, id, SharePolled, "")
-		w.spawn(func() { w.notify(ctx, p) })
+		w.spawn(func() { w.guard(func() { w.notify(ctx, p) }) })
 	case ShareWebDAV:
 		w.setShareWatch(ctx, id, SharePolled, polledWebDAV)
 	default:
@@ -151,7 +151,8 @@ func (w *watcher) poll(ctx context.Context, id accounts.ID, address string, ever
 			// A round past due comes at once.
 			timer.Reset(time.Until(last.Add(w.interval(p))))
 		case <-timer.C:
-			w.round(ctx, p)
+			// A round ending on a panic is logged; the next one comes.
+			w.guard(func() { w.round(ctx, p) })
 			last = time.Now()
 			timer.Reset(w.interval(p))
 		}

@@ -480,6 +480,15 @@ func (s *Service) torrentPatience(ctx context.Context, version library.Version) 
 	}
 	started, most := time.Now(), s.TorrentPlayMost()
 	go func() {
+		// A panic of the watch, of what reads the torrent's state, ends
+		// the wait at once with it, logged with its stack.
+		var err error
+		defer func() {
+			if err != nil {
+				cancel(err)
+			}
+		}()
+		defer s.panicked(&err, "Watching a torrent's wait ended on a panic", "addon", version.AddonLog)
 		timer := time.NewTimer(min(s.torrentGrace(), most))
 		defer timer.Stop()
 		for {
@@ -796,6 +805,7 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		probing, stop := context.WithCancel(ctx)
 		failed := src.Failed()
 		go func() {
+			defer s.logPanic("Watching a source's failure ended on a panic")
 			select {
 			case <-failed:
 				stop()
@@ -1025,6 +1035,17 @@ func (s *Service) alone(ctx context.Context, analysis func(context.Context)) {
 func (s *Service) logPanic(msg string, args ...any) {
 	if cause := recover(); cause != nil {
 		s.logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
+	}
+}
+
+// panicked, deferred at the top of a goroutine whose waiter takes its
+// error, logs a panic of it, of what reads a source, as msg with args and
+// its stack, and has err report it (errSharedPanicked): the waiter fails
+// as on a read that failed, and the server goes on.
+func (s *Service) panicked(err *error, msg string, args ...any) {
+	if cause := recover(); cause != nil {
+		s.logger.Error(msg, append(args, "panic", fmt.Sprint(cause), "stack", string(debug.Stack()))...)
+		*err = fmt.Errorf("%w: %v", errSharedPanicked, cause)
 	}
 }
 

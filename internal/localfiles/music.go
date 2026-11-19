@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"maps"
 	"net"
 	"net/http"
@@ -310,8 +311,10 @@ type probeTarget func(rel string) string
 
 // probeServer serves the files of a share's listing on the loopback
 // interface for ffprobe and FFmpeg, with byte ranges, each at most
-// probeBudget bytes over every request for it. stop ends it.
-func probeServer(list listing) (probeTarget, func(), error) {
+// probeBudget bytes over every request for it. stop ends it. A panic of
+// a request, of what reads the share, is logged with its stack and ends
+// that request, which its reader sees cut short.
+func probeServer(list listing, logger *slog.Logger) (probeTarget, func(), error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, nil, err
@@ -320,6 +323,7 @@ func probeServer(list listing) (probeTarget, func(), error) {
 	paths := map[string]string{}
 	served := map[string]*int64{}
 	server := &http.Server{ReadHeaderTimeout: probeTimeout, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer logPanic(logger, "Serving a file of a share to ffprobe ended on a panic")
 		mu.Lock()
 		rel, ok := paths[strings.TrimPrefix(r.URL.Path, "/")]
 		count := served[rel]
@@ -341,7 +345,10 @@ func probeServer(list listing) (probeTarget, func(), error) {
 		}
 		http.ServeContent(w, r, path.Base(rel), time.Time{}, &budgeted{ReadSeeker: seeker, mu: &mu, served: count})
 	})}
-	go func() { _ = server.Serve(listener) }()
+	go func() {
+		defer logPanic(logger, "The loopback server of a share's files ended on a panic")
+		_ = server.Serve(listener)
+	}()
 	base := "http://" + listener.Addr().String() + "/"
 	target := func(rel string) string {
 		mu.Lock()
@@ -459,7 +466,7 @@ func (s *Service) scanMusic(ctx context.Context, id accounts.ID, list listing, r
 	target := probeTarget(func(rel string) string { return filepath.Join(list.root, filepath.FromSlash(rel)) })
 	if list.root == "" {
 		var stop func()
-		if target, stop, err = probeServer(list); err != nil {
+		if target, stop, err = probeServer(list, s.logger); err != nil {
 			return err
 		}
 		defer stop()

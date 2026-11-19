@@ -119,7 +119,8 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 		group.SetLimit(generatedFetches)
 		for i := range bodies {
 			poster := g.Posters[i]
-			group.Go(func() error {
+			group.Go(func() (err error) {
+				defer recoverInto(h.Logger, &err, "A poster of a generated image ended on a panic")
 				relayed, err := h.fetchArtwork(ctx, poster, confined, h.iptvHost(ctx, poster))
 				if err != nil {
 					if failed, ok := errors.AsType[downloadError](err); !ok || failed.status != http.StatusNotFound && failed.status != http.StatusForbidden {
@@ -133,7 +134,11 @@ func (h *Handler) generatedArtwork(ctx context.Context, target string, g library
 				return nil
 			})
 		}
-		_ = group.Wait()
+		// A poster whose fetch ended on a panic is missing, as one that
+		// failed is.
+		if group.Wait() != nil {
+			missing = true
+		}
 		h.images.resizes <- struct{}{}
 		defer func() { <-h.images.resizes }()
 		var out bytes.Buffer
