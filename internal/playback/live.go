@@ -566,8 +566,11 @@ func playlist(response *http.Response, body *bufio.Reader) bool {
 		return true
 	}
 	start, _ := body.Peek(10)
-	return bytes.HasPrefix(bytes.TrimPrefix(start, []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
+	return bytes.HasPrefix(bytes.TrimPrefix(start, byteOrderMark), []byte("#EXTM3U"))
 }
+
+// byteOrderMark is UTF-8's, which some sources write before a playlist.
+var byteOrderMark = []byte("\xef\xbb\xbf")
 
 // ErrUnsafePlaylist reports a playlist naming an address Polyfin cannot
 // relay, which FFmpeg would otherwise fetch itself, past the confinement.
@@ -585,7 +588,8 @@ var ErrUnsafePlaylist = errors.New("the playlist names an address that cannot be
 // would fetch it itself. So does a playlist past maxPlaylistAddresses or
 // maxPlaylistWritten, as soon as it passes one: nothing more is built.
 // The playlist is written whole before any of it is sent, so that a
-// refusal is still an answer of its own.
+// refusal is still an answer of its own. A byte order mark before it,
+// which playlist accepts, is dropped, so that its first line is a tag.
 func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) string) ([]byte, error) {
 	addresses, linked := 0, 0
 	rewrite := func(ref string, segment bool) (string, error) {
@@ -614,6 +618,7 @@ func rewritePlaylist(data []byte, base *url.URL, link func(target, name string) 
 	var out bytes.Buffer
 	out.Grow(len(data))
 	variant := false
+	data = bytes.TrimPrefix(data, byteOrderMark)
 	// The lines are read in data, one at a time, not held as a list.
 	for read := range bytes.FieldsFuncSeq(data, func(r rune) bool { return r == '\r' || r == '\n' || r == 0 }) {
 		line := string(read)

@@ -70,6 +70,7 @@ The files of an HLS stream reach FFmpeg, and relayed apps, through Polyfin. Poly
 |---|---|
 | Segments named oddly, such as `1234.png`, `1234.jpg`, `seg.php?n=1234`, or `1234` without an extension | Names them as video segments, adding `.ts`. FFmpeg 7.0.3, 7.1.1 and later refuse a segment whose name does not fit what it holds, with "Invalid data found when processing input". |
 | A picture (PNG, JPEG, GIF or WebP) in front of a segment's MPEG-TS | Skips the picture, as other players do, when the MPEG-TS starts within the segment's first 64 kB. FFmpeg would read the picture instead. |
+| A byte order mark before the playlist's `#EXTM3U` | Drops the mark, so that the playlist relayed starts with its `#EXTM3U` tag. |
 
 FFmpeg still checks what each segment holds: a picture or a web page is not read as video.
 

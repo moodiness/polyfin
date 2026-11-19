@@ -142,6 +142,22 @@ func TestOrdinaryPlaylistsAreRewrittenAsBefore(t *testing.T) {
 	}
 }
 
+// A playlist that starts with a byte order mark is relayed as one without
+// it: its first line stays the #EXTM3U tag, not an address made a link.
+func TestAPlaylistStartingWithAByteOrderMarkIsRewrittenWithoutIt(t *testing.T) {
+	t.Parallel()
+	base, _ := url.Parse("https://tv.example/live/channel.m3u8")
+	link := func(target, name string) string { return "LINK(" + target + " as " + name + ")" }
+	got, err := rewritePlaylist([]byte("\xef\xbb\xbf#EXTM3U\r\n#EXTINF:2,\r\nseg1.ts\r\n"), base, link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "#EXTM3U\n#EXTINF:2,\nLINK(https://tv.example/live/seg1.ts as " + segmentName("seg1.ts") + ")\n"
+	if string(got) != want {
+		t.Errorf("rewritten:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // A relayed channel whose playlist passes a bound is answered as one
 // naming an address that cannot be relayed: a 502 with the same headers
 // and text, nothing of the playlist, and the error returned for the log.
