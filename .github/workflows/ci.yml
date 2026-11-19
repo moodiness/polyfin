@@ -335,13 +335,15 @@ jobs:
         # (docs/development.md). Only the lines the pull request changes are
         # checked, so a new test must run in parallel or say why, while a
         # change to an older test's body asks nothing of the rest of its
-        # file; a test calling t.Setenv or t.Chdir passes.
+        # file; a test calling t.Setenv or t.Chdir passes. The libraries
+        # under third_party are modules of their own, which golangci-lint
+        # cannot load from the main module: their tests are left out.
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$BASE"
-          mapfile -t packages < <(git diff --name-only --diff-filter=d "$BASE" HEAD -- '*_test.go' |
+          mapfile -t packages < <(git diff --name-only --diff-filter=d "$BASE" HEAD -- '*_test.go' ':!third_party/**' |
             xargs -r -n 1 dirname | sort -u | sed 's|^|./|')
           if [ "${#packages[@]}" -eq 0 ]; then echo "No test file changed"; exit 0; fi
           go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run \
