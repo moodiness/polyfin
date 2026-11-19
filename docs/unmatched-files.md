@@ -133,7 +133,7 @@ Within a scan, Polyfin retries a failed search:
 
 | The addon's search | Polyfin, during the scan |
 |---|---|
-| Fails with a server error (5xx) | Tries again after 1 s, then 3 s |
+| Fails with a server error (5xx) | Tries again after 1 s, then 3 s. An addon that failed all three tries of a search is asked only once by each later search of the same scan, without waiting, until it answers one. It then gets its tries back, as it does at the next scan. |
 | Asks to slow down | Waits as its `Retry-After` asks, else 1, 2, then 4 s, then tries again, 3 times at most. A `Retry-After` longer than 1 minute fails the search at once. |
 | Refuses (any other error, "not found" included) | Does not try again |
 

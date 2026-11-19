@@ -586,7 +586,7 @@ func (s *Service) scan(ctx context.Context, id accounts.ID) error {
 	}
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(s.workers)
-	searches := newSearches()
+	searches := newSearches(s.serverWait)
 	var failedFiles atomic.Int64
 	for unit, entries := range units {
 		group.Go(func() error {

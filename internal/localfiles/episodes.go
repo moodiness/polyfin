@@ -576,7 +576,7 @@ func (s *Service) SetEpisodes(ctx context.Context, id accounts.ID, changes []Epi
 		// episodes is matched as a scan matches it.
 		m, ok := matched[unit]
 		if !ok {
-			if m, err = s.unitMatch(ctx, folder.Kind, entries[0], links[unit], newSearches(), exact[unit]); err != nil {
+			if m, err = s.unitMatch(ctx, folder.Kind, entries[0], links[unit], newSearches(s.serverWait), exact[unit]); err != nil {
 				return err
 			}
 		}

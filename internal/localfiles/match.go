@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -119,7 +120,11 @@ type match struct {
 // asks, at most maxRateWait, or rateWait doubled at each try when it does
 // not say, and is tried again, rateTries times at most. A search an addon
 // failed (HTTP 5xx) is tried again after each of serverWaits, as such
-// failures are often brief; another refusal (HTTP 4xx) is not.
+// failures are often brief; another refusal (HTTP 4xx) is not. An addon
+// whose server errors used up a search's tries is down: the scan's later
+// searches ask it once, without waiting for it, until it answers one, so
+// that an addon out of order costs a scan one request a search rather
+// than its waits.
 type searches struct {
 	mu      sync.Mutex
 	results map[string]*search
@@ -134,6 +139,12 @@ type searches struct {
 	// searchable tells, by kind, whether a server's addon searches
 	// titles of the kind, asked once per scan.
 	searchable map[library.Kind]bool
+	// down are the addons that are down, by the name their failures
+	// give (see library.SearchFailure).
+	down map[string]bool
+	// pause waits before a failed search is tried again (see
+	// Service.serverWait).
+	pause func(ctx context.Context, d time.Duration) error
 }
 
 type search struct {
@@ -153,8 +164,20 @@ const (
 // again, within the scan (see searches).
 var serverWaits = [...]time.Duration{time.Second, 3 * time.Second}
 
-func newSearches() *searches {
-	return &searches{results: map[string]*search{}, searchable: map[library.Kind]bool{}}
+func newSearches(pause func(ctx context.Context, d time.Duration) error) *searches {
+	return &searches{results: map[string]*search{}, searchable: map[library.Kind]bool{}, down: map[string]bool{}, pause: pause}
+}
+
+// waitFor waits d, or until ctx ends.
+func waitFor(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // canSearch reports whether a server's addon searches titles of kind, once
@@ -222,19 +245,24 @@ func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind,
 		wait, limited := rateLimited(err)
 		c.mu.Lock()
 		c.wait = max(c.wait, wait)
-		c.mu.Unlock()
-		if !limited && serverFailed(err) && failures < len(serverWaits) {
-			timer := time.NewTimer(serverWaits[failures])
-			failures++
-			select {
-			case <-timer.C:
-				// A failure is no rate limit's try.
-				try--
-				continue
-			case <-ctx.Done():
-				timer.Stop()
-				return nil, ctx.Err()
+		failed := c.note(err)
+		retry := !limited && failures < len(serverWaits) && slices.ContainsFunc(failed, func(addon string) bool { return !c.down[addon] })
+		if !limited && !retry {
+			// The tries are used up, unless every addon that failed
+			// was down already.
+			for _, addon := range failed {
+				c.down[addon] = true
 			}
+		}
+		c.mu.Unlock()
+		if retry {
+			if err := c.pause(ctx, serverWaits[failures]); err != nil {
+				return nil, err
+			}
+			failures++
+			// A failure is no rate limit's try.
+			try--
+			continue
 		}
 		if !limited || try == rateTries || wait > maxRateWait {
 			return results, err
@@ -250,10 +278,28 @@ func (c *searches) search(ctx context.Context, titles Titles, kind library.Kind,
 	}
 }
 
-// serverFailed reports whether an addon failed a search (HTTP 5xx).
-func serverFailed(err error) bool {
-	failed, ok := errors.AsType[*library.SearchError](err)
-	return ok && slices.ContainsFunc(failed.Failures, func(f library.SearchFailure) bool { return f.Failure == stremio.FailureServerError })
+// note notes, under c.mu, what a search that ended with err tells of the
+// addons: an addon down that is not among its failures answered it, and
+// is down no more. It returns the addons that failed the search with a
+// server error (HTTP 5xx). An error that is no search's tells nothing.
+func (c *searches) note(err error) (failed []string) {
+	if err == nil {
+		clear(c.down)
+		return nil
+	}
+	searchErr, ok := errors.AsType[*library.SearchError](err)
+	if !ok {
+		return nil
+	}
+	maps.DeleteFunc(c.down, func(addon string, _ bool) bool {
+		return !slices.ContainsFunc(searchErr.Failures, func(f library.SearchFailure) bool { return f.Addon == addon })
+	})
+	for _, f := range searchErr.Failures {
+		if f.Failure == stremio.FailureServerError {
+			failed = append(failed, f.Addon)
+		}
+	}
+	return failed
 }
 
 // rateLimited reports whether an addon answered a search "too many
@@ -855,7 +901,7 @@ func (s *Service) matchUnit(ctx context.Context, folder Folder, unit, link strin
 		unit).Scan(&exact); err != nil {
 		return err
 	}
-	m, err := s.unitMatch(ctx, folder.Kind, entries[0], link, newSearches(), exact)
+	m, err := s.unitMatch(ctx, folder.Kind, entries[0], link, newSearches(s.serverWait), exact)
 	if err != nil {
 		return err
 	}

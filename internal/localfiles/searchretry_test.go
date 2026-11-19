@@ -1,12 +1,17 @@
 package localfiles
 
 import (
+	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -79,5 +84,103 @@ func TestSearchesTriedAgainAtMostTwice(t *testing.T) {
 		if got := searches.Load(); got != tc.want {
 			t.Errorf("HTTP %d: searches %d, want %d", tc.status, got, tc.want)
 		}
+	}
+}
+
+// recordedWaits records the waits of a scan's searches before a failed
+// search is tried again (see Service.serverWait), without waiting.
+type recordedWaits struct {
+	mu    sync.Mutex
+	waits []time.Duration
+}
+
+func (r *recordedWaits) wait(ctx context.Context, d time.Duration) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.waits = append(r.waits, d)
+	return ctx.Err()
+}
+
+func (r *recordedWaits) all() []time.Duration {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.waits)
+}
+
+// oneAtATime is the environment of addons, whose service records its
+// waits and matches one unit at a time, so that the searches come in
+// order.
+func oneAtATime(t *testing.T, addons ...*searchAddon) (env, *recordedWaits) {
+	t.Helper()
+	manifests := make([]string, len(addons))
+	for i, addon := range addons {
+		manifests[i] = addon.start(t)
+	}
+	e := newEnvWith(t, manifests...)
+	waits := &recordedWaits{}
+	e.service.serverWait = waits.wait
+	e.service.workers = 1
+	return e, waits
+}
+
+// Within a scan, an addon that failed a search through all its tries is
+// asked once by each search after, which waits for it no more: a scan of
+// many files waits once, not for each file. The files another addon
+// finds are matched, and the others left as failed searches, as before.
+func TestAnAddonFailingThroughItsTriesIsAskedOnce(t *testing.T) {
+	t.Parallel()
+	broken := &searchAddon{name: "Broken", extra: []stremio.Extra{{Name: "search", IsRequired: true}}, answer: failing(http.StatusInternalServerError)}
+	e, waits := oneAtATime(t, broken, &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search", IsRequired: true}}})
+	folder, _ := e.folder(KindMovies, map[string]int{"The General (1926).mkv": 1, "Nosferatu (1922).mkv": 1,
+		"The Gold Rush (1925).mkv": 1, "Lost Reel (1931).mkv": 1, "Harbor Lights (2011).mkv": 1, "Quay Street (1999).mkv": 1})
+	want := map[string]string{"The General (1926).mkv": "tt0017925", "Nosferatu (1922).mkv": "tt0013442",
+		"The Gold Rush (1925).mkv": "tt0015864", "Lost Reel (1931).mkv": "unmatched: search_failed",
+		"Harbor Lights (2011).mkv": "unmatched: search_failed", "Quay Street (1999).mkv": "unmatched: search_failed"}
+	if got := e.files(folder.ID); !maps.Equal(got, want) {
+		t.Errorf("files: %v", got)
+	}
+	// The first search waits 1 then 3 seconds, the five after it none.
+	if got := waits.all(); !slices.Equal(got, serverWaits[:]) {
+		t.Errorf("waits: %v", got)
+	}
+	if got, want := len(broken.asked()), 1+len(serverWaits)+5; got != want {
+		t.Errorf("the failing addon was asked %d searches, want %d", got, want)
+	}
+	if f, err := e.service.Folder(t.Context(), folder.ID); err != nil || f.SearchFailed != 3 || f.SearchRetryAt == nil {
+		t.Errorf("the folder: %d failed, retry at %v, %v", f.SearchFailed, f.SearchRetryAt, err)
+	}
+}
+
+// An addon that answers a search of the scan again gets its tries back:
+// the next search it fails is tried again, as the first was.
+func TestAnAddonAnsweringAgainGetsItsTriesBack(t *testing.T) {
+	t.Parallel()
+	// The addon fails the first search's tries, answers the second
+	// search, and fails every request after.
+	broken := &searchAddon{name: "Broken", extra: []stremio.Extra{{Name: "search", IsRequired: true}},
+		answer: func(w http.ResponseWriter, n int, _ map[string]string) bool {
+			if n == 1+len(serverWaits)+1 {
+				return false
+			}
+			w.WriteHeader(http.StatusBadGateway)
+			return true
+		}}
+	e, waits := oneAtATime(t, broken, &searchAddon{name: "Meta", extra: []stremio.Extra{{Name: "search", IsRequired: true}}})
+	folder, _ := e.folder(KindMovies, map[string]int{"Lost Reel (1931).mkv": 1, "Harbor Lights (2011).mkv": 1,
+		"Quay Street (1999).mkv": 1, "Tidewater (2015).mkv": 1})
+	// The first search tries three times, the second asks once and is
+	// answered, the third tries three times again, the fourth asks once.
+	if got, want := waits.all(), slices.Concat(serverWaits[:], serverWaits[:]); !slices.Equal(got, want) {
+		t.Errorf("waits: %v, want %v", got, want)
+	}
+	if got, want := len(broken.asked()), 2*(1+len(serverWaits))+2; got != want {
+		t.Errorf("the failing addon was asked %d searches, want %d", got, want)
+	}
+	reasons := map[string]int{}
+	for _, got := range e.files(folder.ID) {
+		reasons[got]++
+	}
+	if want := map[string]int{"unmatched: search_failed": 3, "unmatched: not_found": 1}; !maps.Equal(reasons, want) {
+		t.Errorf("files: %v", reasons)
 	}
 }

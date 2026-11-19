@@ -153,6 +153,9 @@ type Service struct {
 	toneMapping     bool
 	// workers bounds the units matched at once in a scan.
 	workers int
+	// serverWait waits d before a search an addon failed is tried again,
+	// or until ctx ends (see serverWaits); tests replace it.
+	serverWait func(ctx context.Context, d time.Duration) error
 	// meter measures the loudness of music folders' tracks without a
 	// gain, nil until UseMeter: none is measured.
 	meter *loudness.Meter
@@ -218,7 +221,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 	box *secrets.Box) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{db: db, addons: store, titles: titles, logger: logger, settings: settings, box: box, now: time.Now,
-		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
+		ffprobe: "ffprobe", ffmpeg: "ffmpeg", workers: matchWorkers, serverWait: waitFor, ctx: ctx, cancel: cancel, running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
 		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]uint64{},
 		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}}
