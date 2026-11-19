@@ -93,6 +93,8 @@ type Outage struct {
 // until: the peers it connected to, the latest first, its info
 // dictionary, nil when none came, with the bytes it takes in memory
 // (infoSize), and the DHT nodes nearest it that answered its last lookup.
+// order is the turn it was kept in, which the dropping follows: a clock
+// may tell the same time for torrents stopped one after the other.
 type keptRun struct {
 	peers    []netip.AddrPort
 	info     *Info
@@ -100,6 +102,7 @@ type keptRun struct {
 	infoSize int
 	nodes    []string
 	until    time.Time
+	order    uint64
 }
 
 // RouteOf returns the route settings describe, ErrNoRoute for none;
@@ -222,8 +225,10 @@ type Engine struct {
 	// removed is closed, and replaced, as a torrent stops (see
 	// AdmitsWithin).
 	removed chan struct{}
-	// kept is what stopped torrents learned, by info hash (see keepLocked).
-	kept map[Hash]keptRun
+	// kept is what stopped torrents learned, by info hash, keptOrder the
+	// turn of the last one kept (see keepLocked).
+	kept      map[Hash]keptRun
+	keptOrder uint64
 }
 
 // New returns an engine keeping pieces in config.Dir.
@@ -534,6 +539,8 @@ func (e *Engine) keepLocked(t *torrent) {
 	if run.info != nil {
 		run.infoSize = len(run.infoData) + run.info.size()
 	}
+	e.keptOrder++
+	run.order = e.keptOrder
 	e.kept[t.hash] = run
 	size := 0
 	for hash, kept := range e.kept {
@@ -547,7 +554,7 @@ func (e *Engine) keepLocked(t *torrent) {
 		var oldest Hash
 		first := true
 		for hash, kept := range e.kept {
-			if first || kept.until.Before(e.kept[oldest].until) {
+			if first || kept.order < e.kept[oldest].order {
 				oldest, first = hash, false
 			}
 		}
