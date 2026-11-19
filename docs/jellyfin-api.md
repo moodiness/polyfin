@@ -141,6 +141,8 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 ### Profile pictures for apps
 
 - `/UserImage`, and the older `/Users/{id}/Images/{type}`.
+- The picture of a user on the sign-in screen loads without credentials, by identifier alone, as in Jellyfin.
+- The picture of a user left out of `GET /Users` for others (see [Other users for apps](#other-users-for-apps)) loads with its `tag`, the user's `PrimaryImageTag` or a session's `UserPrimaryImageTag`, or with the credentials of the user themselves or of an administrator. Without either, it answers 404, as for a user without a picture.
 
 ### Other users for apps
 
@@ -149,10 +151,13 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 - A user hidden from the sign-in screen, a disabled one and one whose account ended are left out of that list. `GET /Users/{id}` answers 404 for them, as for a user who does not exist. `isHidden` and `isDisabled` filter what is left.
 - `GET /Users/Public`, the sign-in screen's list, describes its users the same way.
 - `GET /Users/Me` and the sign-in answers are the caller's own, in full.
+- `GET /LiveTv/Info` names in `EnabledUsers`, to anyone but an administrator, the caller alone, when Live TV is enabled for them.
+- Sharing a playlist, `POST /Playlists/{id}/Users/{userId}`, with a user left out of that list answers 404 `"User not found"`, as for a user who does not exist. An administrator's playlist is shared with any user.
 
 **Compared with Jellyfin**
 
 - Jellyfin answers every user in full to any user signed in, and the users of the sign-in screen in full to anyone ([`UserController.cs`, lines 91 to 142](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/UserController.cs#L91-L142)). Outside its dashboard, which administrators alone open, jellyfin-web shows only their names and pictures.
+- Jellyfin names every user Live TV is enabled for in `EnabledUsers`, to any user signed in ([`LiveTvManager.cs`, lines 1212 to 1215](https://github.com/jellyfin/jellyfin/blob/v12.4/src/Jellyfin.LiveTv/LiveTvManager.cs#L1212-L1215)), and serves every user's picture to anyone.
 
 ### Metadata language for apps
 

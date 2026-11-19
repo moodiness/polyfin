@@ -77,12 +77,17 @@ type LiveTvInfo struct {
 
 // liveTvInfo describes the live TV service: the users' addons, enabled for
 // the users who have live TV catalogs, as Jellyfin enables users once it
-// has a tuner.
+// has a tuner. An administrator reads every such user; anyone else, only
+// themselves.
 func (h *Handler) liveTvInfo(w http.ResponseWriter, r *http.Request) {
-	users, err := h.Accounts.Users(r.Context())
-	if err != nil {
-		h.internalError(w, r, err)
-		return
+	caller := callerFrom(r.Context()).User
+	users := []accounts.User{caller}
+	if caller.IsAdministrator {
+		var err error
+		if users, err = h.Accounts.Users(r.Context()); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
 	}
 	enabled := []string{}
 	for _, user := range users {

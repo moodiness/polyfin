@@ -61,7 +61,12 @@ func bindImageRoute(r *http.Request, b bindErrors) {
 }
 
 // userImage serves a user's picture: the userId one, else the caller's.
-// Like Jellyfin, anyone may load it.
+// Like Jellyfin, anyone may load the picture of a user shown on the
+// sign-in screen, without credentials. Apps load a picture by the tag
+// they were given with the user (PrimaryImageTag, UserPrimaryImageTag),
+// and only those told of the user get it: the picture of a user shownTo
+// keeps from others is served for its current tag, or to a caller told of
+// them, and is answered otherwise as a picture that does not exist.
 func (h *Handler) userImage(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id, set := b.userID(r)
@@ -84,6 +89,9 @@ func (h *Handler) userImage(w http.ResponseWriter, r *http.Request) {
 		id = caller.User.ID
 	}
 	picture, err := h.Accounts.Image(r.Context(), id)
+	if err == nil && set && query(r, "tag") != picture.Tag {
+		err = h.userImageShown(r, id)
+	}
 	if errors.Is(err, accounts.ErrNotFound) {
 		notFoundProblem(w)
 		return
@@ -111,6 +119,24 @@ func (h *Handler) userImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(picture.Data)
 	}
+}
+
+// userImageShown answers whether the picture of the user id may be served
+// to a request that does not name its tag: nil when the caller, signed in
+// or not, is told of the user (see shownTo), accounts.ErrNotFound when not.
+func (h *Handler) userImageShown(r *http.Request, id accounts.ID) error {
+	user, err := h.Accounts.User(r.Context(), id)
+	if err != nil {
+		return err
+	}
+	caller, _, err := h.signedInCaller(r)
+	if err != nil {
+		return err
+	}
+	if !h.shownTo(caller.User, user) {
+		return accounts.ErrNotFound
+	}
+	return nil
 }
 
 // imageOwner resolves the user whose picture a request changes and checks

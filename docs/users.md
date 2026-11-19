@@ -46,8 +46,9 @@ Other ways to bring users and their history in, listed under **Imports and downl
 Jellyfin apps list the server's users in a few places, such as the sign-in screen and the pictures of a SyncPlay group's members.
 
 - An administrator's apps read every user in full: role, limits, hours and last activity.
-- A member's apps read the member's own user in full. Of the others, they get the name and the profile picture of the users with **Show on the sign-in screen** on. They get nothing of the users without it, of disabled users, or of users whose account ended.
+- A member's apps read the member's own user in full. Of the others, they get the name and the profile picture of the users with **Show on the sign-in screen** on. They get nothing of the users without it, of disabled users, or of users whose account ended: not their identifier either, in Live TV's information or when sharing a playlist, which answers as for a user who does not exist.
 - The sign-in screen gets the same names and pictures, without signing in.
+- The profile picture of a user a member gets nothing of loads only for those whose apps were given it with the user: the user themselves, administrators, and those who see the user's sessions.
 
 So a member's app cannot tell who is an administrator, what another user's limits and hours are, or when they last used the server. In the web player's SyncPlay menu, a group shows the pictures of its members who are on the sign-in screen.
 

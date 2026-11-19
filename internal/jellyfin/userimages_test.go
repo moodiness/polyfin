@@ -161,3 +161,59 @@ func TestUsersChangeTheirOwnPicturesAndAdministratorsAnyones(t *testing.T) {
 		t.Error("PrimaryImageTag is sent without a picture, which Jellyfin leaves out")
 	}
 }
+
+// The picture of a user kept off the sign-in screen, or of a disabled one,
+// goes only to those told of them: for its tag, which comes with the
+// user, or to the user themselves and administrators. Anyone else gets
+// the answer of a picture that does not exist. A shown user's picture
+// loads by identifier alone, as in Jellyfin.
+func TestAHiddenUsersPictureGoesOnlyToThoseToldOfThem(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	hidden := s.user("hidden", nil)
+	shown := s.user("shown", func(c *accounts.UserChanges) { c.IsHidden = new(false) })
+	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	hiddenToken, shownToken, adminToken := s.signIn("hidden", "tv"), s.signIn("shown", "tv"), s.signIn("admin", "tv")
+	tags := map[accounts.ID]string{}
+	for id, token := range map[accounts.ID]string{hidden.ID: hiddenToken, shown.ID: shownToken} {
+		// Each its own picture, so that each has its own tag.
+		photo := base64.StdEncoding.EncodeToString(picture(t, 40, 30+len(tags), 255))
+		if status, _, body := s.send(http.MethodPost, "/UserImage", app("tv", token), "image/png", photo); status != http.StatusNoContent {
+			t.Fatalf("upload: %d %s", status, body)
+		}
+		var me UserDto
+		s.get(t, "/Users/Me", token, &me)
+		tags[id] = me.PrimaryImageTag
+	}
+	// problem reads a problem answer.
+	problem := func(body []byte) problemDetails {
+		var answer problemDetails
+		_ = json.Unmarshal(body, &answer)
+		return answer
+	}
+	_, _, unknownBody := s.send(http.MethodGet, "/UserImage?userId="+strings.Repeat("ab", 16), "", "", "")
+	unknown := problem(unknownBody)
+	// load asks for id's picture by each route, with query added, as
+	// authorization, and checks the status.
+	load := func(name string, id accounts.ID, query, authorization string, want int) {
+		t.Helper()
+		for _, path := range []string{"/UserImage?userId=" + id.String() + "&", "/Users/" + id.String() + "/Images/Primary?", "/Users/" + id.String() + "/Images/Primary/0?"} {
+			status, _, body := s.send(http.MethodGet, path+query, authorization, "", "")
+			if got := problem(body); status != want || want == http.StatusNotFound && (got.Type != unknown.Type || got.Title != unknown.Title) {
+				t.Errorf("%s, %s%s: %d %s, want %d", name, path, query, status, body, want)
+			}
+		}
+	}
+	load("a hidden user's picture, anonymous", hidden.ID, "", "", http.StatusNotFound)
+	load("a hidden user's picture, to another member", hidden.ID, "", app("tv", shownToken), http.StatusNotFound)
+	load("a hidden user's picture, by another tag", hidden.ID, "tag="+tags[shown.ID], "", http.StatusNotFound)
+	load("a hidden user's picture, by its tag", hidden.ID, "tag="+tags[hidden.ID], "", http.StatusOK)
+	load("a hidden user's picture, to themselves", hidden.ID, "", app("tv", hiddenToken), http.StatusOK)
+	load("a hidden user's picture, to an administrator", hidden.ID, "", app("tv", adminToken), http.StatusOK)
+	load("a shown user's picture, anonymous", shown.ID, "", "", http.StatusOK)
+	if _, err := s.store.UpdateUser(t.Context(), shown.ID, accounts.UserChanges{IsDisabled: new(true)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	load("a disabled user's picture, anonymous", shown.ID, "", "", http.StatusNotFound)
+	load("a disabled user's picture, by its tag", shown.ID, "tag="+tags[shown.ID], "", http.StatusOK)
+}

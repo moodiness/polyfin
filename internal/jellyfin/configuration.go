@@ -99,17 +99,26 @@ func (h *Handler) userDto(ctx context.Context, user accounts.User) (UserDto, err
 
 // userDtoFor describes user to caller. The user themselves and an
 // administrator, which an API key is, read the whole of it. Anyone else
-// reads what otherUserDto tells, and is not shown (false) a user kept off
-// the sign-in screen, nor one who is refused, as apps see a disabled one.
+// reads what otherUserDto tells, and is not shown (false) the users
+// shownTo keeps from them.
 func (h *Handler) userDtoFor(ctx context.Context, caller, user accounts.User) (UserDto, bool, error) {
 	if caller.IsAdministrator || user.ID == caller.ID {
 		dto, err := h.userDto(ctx, user)
 		return dto, err == nil, err
 	}
-	if user.IsHidden || user.Refused(h.now()) {
+	if !h.shownTo(caller, user) {
 		return UserDto{}, false, nil
 	}
 	return otherUserDto(user, h.ServerID), true, nil
+}
+
+// shownTo reports whether caller may be told of user at all, their
+// identifier and picture included. The user themselves and an
+// administrator always are. Anyone else, and anyone without credentials
+// (a zero caller), is not told of a user kept off the sign-in screen, nor
+// of one who is refused, as apps see a disabled one.
+func (h *Handler) shownTo(caller, user accounts.User) bool {
+	return caller.IsAdministrator || user.ID == caller.ID || !user.IsHidden && !user.Refused(h.now())
 }
 
 // updateUserConfiguration replaces the configuration of the caller, or of

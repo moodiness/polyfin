@@ -98,7 +98,7 @@ func TestAProfilePictureThatWouldTakeTooMuchMemoryIsRefusedAsAnInvalidOne(t *tes
 		return status, string(body)
 	}
 	kept := func() int {
-		status, _, _ := s.send(http.MethodGet, "/UserImage?userId="+member.ID.String(), "", "", "")
+		status, _, _ := s.send(http.MethodGet, "/UserImage?userId="+member.ID.String(), authorization, "", "")
 		return status
 	}
 

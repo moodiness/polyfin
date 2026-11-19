@@ -284,7 +284,7 @@ func TestTheWatchlistIsNamedAndSharedAsAnyPlaylist(t *testing.T) {
 	if _, err := s.addons.SetLanguage(t.Context(), addons.Shared(), french.ID, "fr"); err != nil {
 		t.Fatal(err)
 	}
-	guest := s.user("guest", func(c *accounts.UserChanges) { c.MetadataLanguage = new("fr") })
+	guest := s.user("guest", func(c *accounts.UserChanges) { c.MetadataLanguage, c.IsHidden = new("fr"), new(false) })
 	guestToken := s.signIn("guest", "phone")
 	third := s.user("third", nil)
 	thirdToken := s.signIn("third", "laptop")

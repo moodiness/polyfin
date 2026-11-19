@@ -89,6 +89,34 @@ func tuned(t *testing.T, addon *tvAddon) (testServer, string, accounts.User) {
 	return s, s.signIn("member", "tv"), user
 }
 
+// Of the users Live TV is enabled for, a member's apps are told of the
+// member alone, of no other user, shown or hidden; an administrator's,
+// of every one.
+func TestLiveTvInfoNamesOnlyTheMemberToAMember(t *testing.T) {
+	t.Parallel()
+	s, token, member := tuned(t, newTVAddon(t, false, ""))
+	hidden := s.user("hidden", nil)
+	shown := s.user("shown", func(c *accounts.UserChanges) { c.IsHidden = new(false) })
+	admin := s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	enabled := func(token string) []string {
+		t.Helper()
+		var info LiveTvInfo
+		if status := s.get(t, "/LiveTv/Info", token, &info); status != http.StatusOK {
+			t.Fatalf("Live TV info: %d", status)
+		}
+		slices.Sort(info.EnabledUsers)
+		return info.EnabledUsers
+	}
+	if got := enabled(token); !slices.Equal(got, []string{member.ID.String()}) {
+		t.Errorf("enabled users told to a member: %v", got)
+	}
+	everyone := []string{member.ID.String(), hidden.ID.String(), shown.ID.String(), admin.ID.String()}
+	slices.Sort(everyone)
+	if got := enabled(s.signIn("admin", "dashboard")); !slices.Equal(got, everyone) {
+		t.Errorf("enabled users told to an administrator: %v, want %v", got, everyone)
+	}
+}
+
 var liveShapes = shapeRules{
 	dynamic: []string{"ImageTags", "ImageBlurHashes", "ProviderIds", "RequiredHttpHeaders"},
 	absent: map[string][]string{

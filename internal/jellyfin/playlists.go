@@ -931,7 +931,8 @@ func (h *Handler) playlistUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // sharePlaylist shares a playlist with a user, or changes whether they may
-// edit it. Only the owner shares.
+// edit it. Only the owner shares, and only with a user they are told of
+// (see shownTo): another is answered as one who does not exist.
 func (h *Handler) sharePlaylist(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "playlistId")
@@ -957,12 +958,13 @@ func (h *Handler) sharePlaylist(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	if _, err := h.Accounts.User(r.Context(), target); err != nil {
-		if errors.Is(err, accounts.ErrNotFound) {
-			writeJSON(w, http.StatusNotFound, "User not found")
-		} else {
-			h.internalError(w, r, err)
-		}
+	shared, err := h.Accounts.User(r.Context(), target)
+	if err != nil && !errors.Is(err, accounts.ErrNotFound) {
+		h.internalError(w, r, err)
+		return
+	}
+	if err != nil || !h.shownTo(user, shared) {
+		writeJSON(w, http.StatusNotFound, "User not found")
 		return
 	}
 	share := playlists.Share{User: target, CanEdit: request.CanEdit != nil && *request.CanEdit}

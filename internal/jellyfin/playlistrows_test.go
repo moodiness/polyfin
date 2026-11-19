@@ -46,7 +46,7 @@ func rowOf(t *testing.T, rows []CustomRowDto, name string) CustomRowDto {
 func TestWatchlistAndPlaylistRowsListTheirPlaylists(t *testing.T) {
 	t.Parallel()
 	s, member, _, watchlist, watchlistName, titles := playlistRowsServer(t)
-	guest := s.user("guest", nil)
+	guest := s.user("guest", func(c *accounts.UserChanges) { c.IsHidden = new(false) })
 	guestToken := s.signIn("guest", "phone")
 	s.user("outsider", nil)
 	outsiderToken := s.signIn("outsider", "laptop")
