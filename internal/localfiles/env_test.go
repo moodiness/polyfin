@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -151,18 +150,21 @@ func (e env) folder(kind string, files map[string]int) (addons.Addon, string) {
 	return addon, dir
 }
 
-// idle waits for the scan of a folder under way to end.
+// idle waits for the scans of a folder under way to end, however long
+// they take: a search an addon fails is tried again seconds later (see
+// serverWaits), and the tests running beside a scan slow it further. A
+// scan that never ends is left to the test binary's timeout, whose
+// report shows where it stands.
 func (e env) idle(id accounts.ID) {
-	e.t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	for {
 		e.service.mu.Lock()
-		_, busy := e.service.running[id]
+		current, busy := e.service.running[id]
 		e.service.mu.Unlock()
 		if !busy {
 			return
 		}
+		<-current.done
 	}
-	e.t.Fatal("the scan did not end")
 }
 
 // files reads a folder's files: by path, the title matched or the reason.
