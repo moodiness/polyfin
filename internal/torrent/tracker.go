@@ -117,8 +117,20 @@ func announceHTTP(ctx context.Context, route Route, u *url.URL, a announce) (tra
 
 // maxTrackerAnswer bounds what an HTTP tracker's answer is read of: 50
 // peers take 300 bytes compact and a few kilobytes as dictionaries, and a
-// longer answer is cut, then refused as malformed bencode.
-const maxTrackerAnswer = 1 << 20
+// longer answer is cut, then refused as malformed bencode. Every
+// dictionary of an answer is decoded before its peers are counted, at
+// some 18 times its bytes: 64 KiB leave room for several hundred peers
+// listed that way, and take about 1 MiB to decode.
+const maxTrackerAnswer = 64 << 10
+
+// maxAnswerPeers is how many peers one answer of a tracker or of a DHT
+// node adds, as the announces ask for (numwant), and maxLookupPeers how
+// many one lookup on the DHT does: a torrent connects to 30, and what one
+// answer lists past that keeps the peers the others tell waiting.
+const (
+	maxAnswerPeers = 50
+	maxLookupPeers = 200
+)
 
 // maxTrackerInterval bounds the interval a tracker asks for, in seconds,
 // before it is a time.Duration, which a larger one would overflow; the
@@ -143,6 +155,9 @@ func parseHTTPAnswer(body []byte) (trackerAnswer, error) {
 		answer.peers = compactPeers([]byte(peers), 4)
 	case []any:
 		for _, entry := range peers {
+			if len(answer.peers) >= maxAnswerPeers {
+				break
+			}
 			p, _ := entry.(map[string]any)
 			ip, err := netip.ParseAddr(str(p, "ip"))
 			port, _ := num(p, "port")
@@ -151,15 +166,34 @@ func parseHTTPAnswer(body []byte) (trackerAnswer, error) {
 			}
 		}
 	}
-	answer.peers = append(answer.peers, compactPeers([]byte(str(d, "peers6")), 16)...)
+	answer.peers = inTurn(answer.peers, compactPeers([]byte(str(d, "peers6")), 16))
 	return answer, nil
 }
 
+// inTurn takes the peers of a and b in turn, maxAnswerPeers at most: an
+// answer's peers in IPv4 and in IPv6, neither kept out by the other.
+func inTurn(a, b []netip.AddrPort) []netip.AddrPort {
+	if len(a)+len(b) <= maxAnswerPeers {
+		return append(a, b...)
+	}
+	peers := make([]netip.AddrPort, 0, maxAnswerPeers)
+	for i := 0; len(peers) < maxAnswerPeers; i++ {
+		if i < len(a) {
+			peers = append(peers, a[i])
+		}
+		if i < len(b) && len(peers) < maxAnswerPeers {
+			peers = append(peers, b[i])
+		}
+	}
+	return peers
+}
+
 // compactPeers reads peers as trackers and DHT nodes list them: an
-// address of size bytes, then a port.
+// address of size bytes, then a port; the first maxAnswerPeers of them,
+// as many as an announce asks for, however many the answer holds.
 func compactPeers(data []byte, size int) []netip.AddrPort {
 	var peers []netip.AddrPort
-	for len(data) >= size+2 {
+	for len(data) >= size+2 && len(peers) < maxAnswerPeers {
 		ip, _ := netip.AddrFromSlice(data[:size])
 		port := binary.BigEndian.Uint16(data[size:])
 		if port != 0 {

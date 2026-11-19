@@ -137,7 +137,9 @@ func lookupPeers(ctx context.Context, conn PacketConn, hash Hash, starts []strin
 		for _, value := range list(reply, "values") {
 			if raw, ok := value.(string); ok {
 				for _, peer := range compactPeers([]byte(raw), 4) {
-					if !seen[peer] {
+					// An answer adds maxAnswerPeers peers at most, and
+					// the lookup maxLookupPeers.
+					if !seen[peer] && len(peers) < maxAnswerPeers && len(seen) < maxLookupPeers {
 						seen[peer] = true
 						peers = append(peers, peer)
 					}
