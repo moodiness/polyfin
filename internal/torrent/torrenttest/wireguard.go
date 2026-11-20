@@ -50,7 +50,8 @@ var (
 // Public reach the same port on 127.0.0.1, where the test's peers,
 // trackers and DHT nodes listen; DNS queries to TunnelDNS are answered from
 // the names it was given, and anything else is dropped. It records what it
-// forwards and the names it is asked.
+// forwards, where its connections to 127.0.0.1 came from, and the names it
+// is asked.
 type WireGuardServer struct {
 	privateKey, publicKey [32]byte
 	clientKey             [32]byte
@@ -61,6 +62,9 @@ type WireGuardServer struct {
 	mu      sync.Mutex
 	closed  bool
 	targets []string
+	// sources are, by the address on 127.0.0.1 the server connected to,
+	// the addresses its connections there came from.
+	sources map[string][]string
 	queries []string
 	conns   []io.Closer
 }
@@ -69,7 +73,7 @@ type WireGuardServer struct {
 // lower case names to IPv4 addresses. It stops when the test ends.
 func StartWireGuardServer(tb testing.TB, names map[string]netip.Addr) *WireGuardServer {
 	tb.Helper()
-	s := &WireGuardServer{names: names, privateKey: newKey(), clientKey: newKey()}
+	s := &WireGuardServer{names: names, privateKey: newKey(), clientKey: newKey(), sources: map[string][]string{}}
 	s.publicKey = publicKey(s.privateKey)
 	nic := channel.New(1024, 1420, "")
 	ip := stack.New(stack.Options{NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol},
@@ -176,6 +180,16 @@ func (s *WireGuardServer) Targets() []string {
 	return slices.Clone(s.targets)
 }
 
+// Sources lists the addresses the server's TCP connections to local, on
+// 127.0.0.1, came from, as local saw them: one for each connection it
+// forwarded there. They tell local's connections through the tunnel from
+// those of another test, which can reach local at its port too.
+func (s *WireGuardServer) Sources(local netip.AddrPort) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.sources[local.String()])
+}
+
 // Queries lists the names its DNS server was asked, with their type, as
 // "A tracker.test".
 func (s *WireGuardServer) Queries() []string {
@@ -237,6 +251,9 @@ func (s *WireGuardServer) forwardTCP(r *tcp.ForwarderRequest) {
 		r.Complete(true)
 		return
 	}
+	s.mu.Lock()
+	s.sources[outside] = append(s.sources[outside], there.LocalAddr().String())
+	s.mu.Unlock()
 	var queue waiter.Queue
 	endpoint, tcpErr := r.CreateEndpoint(&queue)
 	if tcpErr != nil {

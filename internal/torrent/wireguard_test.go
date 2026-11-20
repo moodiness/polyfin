@@ -112,6 +112,25 @@ func port(raw string) string {
 	return p
 }
 
+// fromTunnel counts the seeder's connections that the server forwarded,
+// told by the address each came from; each of the server's connections
+// counts once. Another test's engine can connect to the seeder too: the
+// OS can give the seeder a port that was that engine's peer's, which the
+// engine dials again. Leaving those out hides nothing of this test's
+// engine: it knows the seeder only at Public, which the tunnel alone
+// reaches.
+func fromTunnel(server *torrenttest.WireGuardServer, seeder *torrenttest.Peer) int {
+	remotes := seeder.Remotes()
+	n := 0
+	for _, source := range server.Sources(seeder.Address()) {
+		if i := slices.Index(remotes, source); i >= 0 {
+			remotes = slices.Delete(remotes, i, i+1)
+			n++
+		}
+	}
+	return n
+}
+
 func TestWireGuardKillSwitch(t *testing.T) {
 	t.Parallel()
 	tor, _, _ := twoFiles()
@@ -153,17 +172,17 @@ func TestWireGuardKillSwitch(t *testing.T) {
 	if !errors.As(status.RouteError, &routeErr) || routeErr.Kind != WireGuardHandshake || status.Failure == nil || status.Playing != 0 {
 		t.Fatalf("Health does not tell the tunnel is down: %+v", status)
 	}
-	if got, forwarded := len(seeder.Remotes()), countPrefix(server.Targets(), "tcp "+torrenttest.Through(seeder.Address()).String()); got != forwarded {
-		t.Fatalf("the seeder saw %d connections, the tunnel forwarded %d", got, forwarded)
+	if got, forwarded := fromTunnel(server, seeder), countPrefix(server.Targets(), "tcp "+torrenttest.Through(seeder.Address()).String()); got != forwarded {
+		t.Fatalf("the seeder saw %d connections from the tunnel, which forwarded %d", got, forwarded)
 	}
 	// A playback with the tunnel down starts nothing.
-	before := len(seeder.Remotes())
+	before := fromTunnel(server, seeder)
 	e.Play(spec)()
 	if _, err := e.Open(ctx, spec); err == nil {
 		t.Fatal("the torrent opened with the tunnel down")
 	}
-	if got := len(seeder.Remotes()); got != before {
-		t.Fatalf("the seeder saw %d new connections with the tunnel down", got-before)
+	if got := fromTunnel(server, seeder); got != before {
+		t.Fatalf("the seeder saw %d new connections from the tunnel with the tunnel down", got-before)
 	}
 	if announces := len(tracker.Announces()); announces == 0 {
 		t.Fatal("the tracker was never reached")
