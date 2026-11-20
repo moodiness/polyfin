@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -29,6 +30,15 @@ const remuxDBAnswer = `[
    "tracks": [{"kind": "video", "idx": 0, "codec": "hevc", "width": 1920, "height": 1036}]}
 ]`
 
+// describing returns the service describing versions for a server whose
+// options are o: its item details wait for every answer, however long a
+// busy machine takes (see remuxdb.Service.SetWaitEnd).
+func describing(o *Options) *remuxdb.Service {
+	described := remuxdb.New(testServerID, "test", slog.New(slog.DiscardHandler), o.Accounts.Settings)
+	described.SetWaitEnd(func(time.Duration) <-chan time.Time { return nil })
+	return described
+}
+
 func TestItemDetailsDescribeVersionsFromRemuxDB(t *testing.T) {
 	t.Parallel()
 	var asked atomic.Int32
@@ -42,7 +52,7 @@ func TestItemDetailsDescribeVersionsFromRemuxDB(t *testing.T) {
 	}))
 	t.Cleanup(remux.Close)
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
-		o.RemuxDB = remuxdb.New(testServerID, "test", slog.New(slog.DiscardHandler), o.Accounts.Settings)
+		o.RemuxDB = describing(o)
 	})
 	settings := s.store.Settings()
 	settings.RemuxDB, settings.RemuxDBURL = true, remux.URL

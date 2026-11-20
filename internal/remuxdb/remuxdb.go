@@ -71,8 +71,11 @@ type Service struct {
 	clientID string
 	logger   *slog.Logger
 	now      func() time.Time
-	// wait is how long Describe waits for RemuxDB (see describeWait).
-	wait time.Duration
+	// wait is how long Describe waits for RemuxDB (see describeWait), and
+	// waitEnd gives what ends that wait, wait given: time.After, which
+	// tests replace (see SetWaitEnd).
+	wait    time.Duration
+	waitEnd func(wait time.Duration) <-chan time.Time
 	// descriptions holds what RemuxDB said lately of each version.
 	descriptions *cache.Cache[accounts.ID, description]
 
@@ -116,6 +119,7 @@ func New(serverID, version string, logger *slog.Logger, settings func() accounts
 		logger:       logger,
 		now:          time.Now,
 		wait:         describeWait,
+		waitEnd:      time.After,
 		descriptions: cache.New[accounts.ID, description](keptDescriptions, describedFor).Sized(keptBytes, cache.JSONSize[description]),
 		asking:       map[string]*lookup{},
 	}
@@ -166,18 +170,24 @@ func (s *Service) Describe(ctx context.Context, versions []library.Version) {
 		answered = append(answered, l.done)
 	}
 	s.mu.Unlock()
-	timer := time.NewTimer(s.wait)
-	defer timer.Stop()
+	end := s.waitEnd(s.wait)
 	for _, done := range answered {
 		select {
 		case <-done:
-		case <-timer.C:
+		case <-end:
 			return
 		case <-ctx.Done():
 			return
 		}
 	}
 }
+
+// SetWaitEnd replaces, before the service is used, what ends Describe's
+// wait for the answers, describeWait given: time.After, which the server
+// keeps. A test that lists what the answers describe gives one that never
+// ends, so that item details wait for them however long a busy machine
+// takes.
+func (s *Service) SetWaitEnd(end func(wait time.Duration) <-chan time.Time) { s.waitEnd = end }
 
 // Described returns RemuxDB's description of a version, as Describe got
 // it: an analysis of its file without its chapters, attachments nor what

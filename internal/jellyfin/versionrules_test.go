@@ -3,7 +3,6 @@ package jellyfin
 import (
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,7 +19,6 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
-	"github.com/moodiness/polyfin/internal/remuxdb"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -219,7 +217,7 @@ func TestVersionRulesReadRemuxDB(t *testing.T) {
 	}))
 	t.Cleanup(remux.Close)
 	s := newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
-		o.RemuxDB = remuxdb.New(testServerID, "test", slog.New(slog.DiscardHandler), o.Accounts.Settings)
+		o.RemuxDB = describing(o)
 	})
 	s.setting(t, func(settings *accounts.Settings) {
 		settings.RemuxDB, settings.RemuxDBURL = true, remux.URL
