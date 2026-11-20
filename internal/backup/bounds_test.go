@@ -302,6 +302,11 @@ func TestS3ListingEnds(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The pages are asked with the server's client, which no clock
+		// bounds: how long a loaded machine takes to dial or answer is
+		// not what this test is about (TestAStalledDestinationFailsAlone
+		// is).
+		r.client = server.Client()
 		files, err := r.list(t.Context())
 		server.Close()
 		if name == "the same token" {
