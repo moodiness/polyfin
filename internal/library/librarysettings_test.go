@@ -371,9 +371,11 @@ func TestAWholeListingOpenedAgainWaitsOnlyAMoment(t *testing.T) {
 
 // A collection first opened while its addon is slow, past wholeWait before
 // anything of it was read, lists the first page of each of its catalogs,
-// waited for as long as the addon takes, rather than nothing. The addon
-// answers a second after the listing first asks it, so that it is slower
-// than wholeWait however long the listing took before.
+// waited for as long as the addon takes, rather than nothing. wholeWait is
+// over before the listing asks for any page: no page can be read before
+// the listing looks for what was kept, however long that look takes on a
+// busy machine, and the addon, which answers a second after it is first
+// asked, is slower than wholeWait.
 func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
@@ -394,7 +396,7 @@ func TestASlowFirstOpeningListsTheCollectionsTitles(t *testing.T) {
 				t.Fatalf("the collections: %v", names(collections.Items))
 			}
 			answerCatalogsLate(t, addon, time.Second)
-			e.service.wholeWait = 50 * time.Millisecond
+			e.service.wholeWait = 0
 			page, err := e.service.Whole(t.Context(), e.member, collections.Items[0].ID, 0, 4, "")
 			if err != nil || !slices.Equal(names(page.Items), tc.want) || !page.More {
 				t.Errorf("listed %v, more %v, %v; want %v and more", names(page.Items), page.More, err, tc.want)
