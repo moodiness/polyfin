@@ -63,8 +63,10 @@ type Client struct {
 	local     *http.Client
 	health    healthRecords
 	// timeout and streamTimeout are requestTimeout and StreamTimeout but
-	// in tests (see SetTimeouts).
+	// in tests (see SetTimeouts), and bound bounds a request by them,
+	// context.WithTimeout but in tests (see SetTimeoutBound).
 	timeout, streamTimeout time.Duration
+	bound                  func(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc)
 }
 
 // NewClient returns a client identifying itself with the Polyfin version.
@@ -77,6 +79,7 @@ func NewClient(version string) *Client {
 		health:        healthRecords{byAddon: map[string]*Health{}},
 		timeout:       requestTimeout,
 		streamTimeout: StreamTimeout,
+		bound:         context.WithTimeout,
 	}
 }
 
@@ -85,6 +88,15 @@ func NewClient(version string) *Client {
 // requestTimeout and StreamTimeout.
 func (c *Client) SetTimeouts(request, streams time.Duration) {
 	c.timeout, c.streamTimeout = request, streams
+}
+
+// SetTimeoutBound replaces, before the client is used, what bounds each
+// request by its timeout: context.WithTimeout, which the server keeps. A
+// test of an addon that does not answer, then does, gives one that bounds
+// no request once it answers, so that its answers are waited for however
+// long a busy machine takes.
+func (c *Client) SetTimeoutBound(bound func(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc)) {
+	c.bound = bound
 }
 
 // idleConnsPerHost is how many idle connections are kept to each host:
@@ -244,7 +256,7 @@ func (c *Client) do(request *http.Request, confined bool) (*http.Response, error
 // timedOut).
 func (c *Client) get(ctx context.Context, manifestURL, target string, confined bool, timeout time.Duration) ([]byte, error) {
 	parent := toSource(ctx)
-	ctx, cancel := context.WithTimeout(parent, timeout)
+	ctx, cancel := c.bound(parent, timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
@@ -554,7 +566,7 @@ const maxImageBytes = 15 << 20
 // answers 429, or 503, with a Retry-After asks to wait that long, which
 // RetryAfter reads from the error.
 func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	ctx, cancel := c.bound(ctx, c.timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {

@@ -1,6 +1,7 @@
 package library
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -105,17 +106,25 @@ func (d *deadAddon) reply(w http.ResponseWriter, r *http.Request, resource strin
 }
 
 // newDeadEnv is a paceEnv whose one addon is dead, its stream requests
-// given 2 s, room for an answer on a loaded machine, its log kept in log.
+// given 2 s while it is, its log kept in log. Once it answers again, its
+// requests have no time limit: their answers are waited for however long
+// a loaded machine takes.
 func newDeadEnv(t *testing.T, titleCount int) (paceEnv, *deadAddon, *lockedBuffer) {
 	t.Helper()
 	e := newEnv(t)
+	dead := &deadAddon{}
 	e.service.client.SetTimeouts(time.Second, 2*time.Second)
+	e.service.client.SetTimeoutBound(func(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+		if dead.answering.Load() {
+			return context.WithCancel(ctx)
+		}
+		return context.WithTimeout(ctx, timeout)
+	})
 	log := &lockedBuffer{}
 	e.service.logger = slog.New(slog.NewTextHandler(log, nil))
 	clock := newPaceClock()
 	e.service.now = clock.Now
 	e.service.pace.after = clock.after
-	dead := &deadAddon{}
 	movies := titles("movie", titleCount)
 	metas := map[string]stremio.Meta{}
 	for _, m := range movies {
