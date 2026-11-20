@@ -239,6 +239,13 @@ func local(id stack.TransportEndpointID) (inside netip.AddrPort, outside string,
 	return inside, net.JoinHostPort("127.0.0.1", strconv.Itoa(int(id.LocalPort))), addr == Public
 }
 
+// loopback dials what the server forwards, on 127.0.0.1, with a resolver
+// of its own rather than net.DefaultResolver, which a net.Dialer without
+// one reads even for an address. A test that replaces net.DefaultResolver
+// (TestWireGuardNamesNeverReachTheSystem) restores it as it ends, while a
+// forward may still dial: Close does not wait for the forwards under way.
+var loopback = net.Dialer{Timeout: 10 * time.Second, Resolver: &net.Resolver{}}
+
 func (s *WireGuardServer) forwardTCP(r *tcp.ForwarderRequest) {
 	inside, outside, ok := local(r.ID())
 	if !ok {
@@ -246,7 +253,7 @@ func (s *WireGuardServer) forwardTCP(r *tcp.ForwarderRequest) {
 		return
 	}
 	s.record("tcp " + inside.String())
-	there, err := net.DialTimeout("tcp", outside, 10*time.Second)
+	there, err := loopback.Dial("tcp", outside)
 	if err != nil {
 		r.Complete(true)
 		return
@@ -301,7 +308,7 @@ func (s *WireGuardServer) forwardUDP(r *udp.ForwarderRequest) {
 		return
 	}
 	s.record("udp " + inside.String())
-	there, dialErr := net.Dial("udp", outside)
+	there, dialErr := loopback.Dial("udp", outside)
 	if dialErr != nil || !s.track(here, there) {
 		here.Close()
 		if there != nil {
