@@ -1034,6 +1034,12 @@ func TestRefusingTargetsAreMarkedFailing(t *testing.T) {
 func TestSecretsAreSealedNeverShownNorLogged(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
+	// The clock stands still: the message answered 429 is tried again
+	// however long its first try took on a loaded machine, rather than
+	// given up once a second passed (TestDeliveryRetriesWaitsAndGivesUp
+	// tells when a message is given up).
+	now := time.Now()
+	h.now = func() time.Time { return now }
 	discordPath := "/api/webhooks/123/very-secret-webhook-token"
 	h.add(t, nil, Draft{Kind: Discord, Name: new("Channel"), Address: new(h.targets.url + discordPath), Events: []string{RecordingFinished}})
 	h.add(t, &h.admin, Draft{Kind: Ntfy, Name: new("Phone"), Address: new(h.targets.url + "/ntfy"), Topic: new("topic"),
