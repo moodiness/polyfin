@@ -75,6 +75,37 @@ type testServer struct {
 	warnings *warnings
 }
 
+// waitForEveryLookup has the server's listings wait for every rating and
+// genre they look up, however long a busy machine takes, rather than hide
+// the titles whose lookups are late (see library.Service.SetRatingWaitEnd).
+func (s testServer) waitForEveryLookup() {
+	s.library.SetRatingWaitEnd(func(time.Duration) <-chan time.Time { return nil })
+}
+
+// waitForWholeListings has the server's whole listings, those of an app
+// that asks for no limit, wait for every page, however long a busy machine
+// takes (see library.Service.SetWholeWaitBound).
+func (s testServer) waitForWholeListings() {
+	s.library.SetWholeWaitBound(func(ctx context.Context, _ time.Duration) (context.Context, context.CancelFunc) {
+		return context.WithCancel(ctx)
+	})
+}
+
+// waitForEveryCatalog has the server's pages of a genre, studio or year
+// wait for every catalog they read, however long a busy machine takes (see
+// library.Service.SetNarrowedWaitEnd).
+func (s testServer) waitForEveryCatalog() {
+	s.library.SetNarrowedWaitEnd(func(time.Duration) <-chan time.Time { return nil })
+}
+
+// waitForCredits has the server's title pages wait for their credits,
+// however long a busy machine takes (see library.Service.SetCreditsWaitBound).
+func (s testServer) waitForCredits() {
+	s.library.SetCreditsWaitBound(func(ctx context.Context, _ time.Duration) (context.Context, context.CancelFunc) {
+		return context.WithCancel(ctx)
+	})
+}
+
 // warnings keeps the messages of the records at WARN or above that a
 // logger handles, with their attributes, discarding the others; all of
 // them once all is set.

@@ -42,6 +42,7 @@ func (s contentServer) changeGroup(t *testing.T, group accounts.Group, changes a
 func TestGroupLimitsApplyToTheMembersApps(t *testing.T) {
 	t.Parallel()
 	s := newContentServer(t)
+	s.waitForEveryLookup()
 	var clock atomic.Pointer[time.Time]
 	now := time.Date(2026, time.October, 7, 12, 0, 0, 0, time.Local)
 	clock.Store(&now)

@@ -186,12 +186,23 @@ func TestParentalControlHidesTitlesAboveTheLimit(t *testing.T) {
 	}
 }
 
+// everyLookup ends no wait for lookups (see SetRatingWaitEnd): a listing
+// waits for every rating it looks up, however long a busy machine takes.
+func everyLookup(time.Duration) <-chan time.Time { return nil }
+
 func TestRatingsAreLookedUpOnce(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
 	addon := ratedAddon()
 	e.install(addons.Shared(), addon)
 	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13), BlockUnrated: []string{"Movie"}})
+	// Each server's listings wait for the lookups they start: the first
+	// one's are all asked and kept, and a later one's would be counted.
+	e.service.SetRatingWaitEnd(everyLookup)
+	restart := func() {
+		e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
+		e.service.SetRatingWaitEnd(everyLookup)
+	}
 
 	e.children(child, "Top", 0, 100)
 	if got := addon.metaRequests(); got != 6 {
@@ -199,18 +210,21 @@ func TestRatingsAreLookedUpOnce(t *testing.T) {
 	}
 	// Ratings, and the absence of one, are kept: a server started afresh,
 	// whose description cache is empty, does not ask again.
-	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
+	restart()
 	if got := names(e.children(child, "Top", 0, 100).Items); !slices.Equal(got, []string{"Family", "Teen", "Local"}) || addon.metaRequests() != 6 {
 		t.Errorf("listing after a restart: %v, %d meta requests", got, addon.metaRequests())
 	}
 	// Listing the catalog again does not forget them.
 	e.children(e.member, "Top", 0, 100)
-	e.service = New(e.service.db, e.addons, stremio.NewClient("test"), slog.New(slog.NewTextHandler(io.Discard, nil)), e.users.Settings)
+	restart()
 	if e.children(child, "Top", 0, 100); addon.metaRequests() != 6 {
 		t.Errorf("ratings lost when the catalog was listed again: %d meta requests", addon.metaRequests())
 	}
 }
 
+// A listing hides the titles whose ratings are not known when its wait
+// ends. The descriptions answer only once that listing answered: the next
+// listing, which waits for its lookups, knows the ratings.
 func TestSlowRatingsAreHiddenUntilKnown(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
@@ -220,23 +234,13 @@ func TestSlowRatingsAreHiddenUntilKnown(t *testing.T) {
 	e.service.ratingWait = 50 * time.Millisecond
 	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13)})
 
-	started := time.Now()
-	page := e.children(child, "Top", 0, 100)
-	if len(page.Items) != 0 || time.Since(started) > 5*time.Second {
-		t.Fatalf("listing while descriptions are slow: %v after %v", names(page.Items), time.Since(started))
+	if page := e.children(child, "Top", 0, 100); len(page.Items) != 0 {
+		t.Fatalf("listing while descriptions are slow: %v", names(page.Items))
 	}
-	// The lookups went on: the next listing knows the ratings.
 	close(addon.metaGate)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		got := names(e.children(child, "Top", 0, 100).Items)
-		if slices.Equal(got, []string{"Family", "Homemade", "Teen", "Local"}) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("listing once descriptions answered: %v", got)
-		}
-		time.Sleep(20 * time.Millisecond)
+	e.service.SetRatingWaitEnd(everyLookup)
+	if got := names(e.children(child, "Top", 0, 100).Items); !slices.Equal(got, []string{"Family", "Homemade", "Teen", "Local"}) {
+		t.Errorf("listing once descriptions answered: %v", got)
 	}
 }
 

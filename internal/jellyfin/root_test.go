@@ -91,6 +91,7 @@ const emptySearchSuggestions = "/Items?sortBy=IsFavoriteOrLiked&sortBy=Random&in
 func TestEmptySearchSuggestionsListTheTitlesTheUserSees(t *testing.T) {
 	t.Parallel()
 	e := newEdited(t)
+	e.waitForEveryLookup()
 	e.user("calm", func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"crime"} })
 	suggested := func(token string) []string {
 		t.Helper()

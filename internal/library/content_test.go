@@ -132,6 +132,10 @@ func TestBlockedGenresHideTitles(t *testing.T) {
 	}
 }
 
+// A listing hides the titles whose genres are not known when its wait
+// ends, telling more may follow. The descriptions answer only once that
+// listing answered: the next listing, which waits for its lookups, knows
+// the genres.
 func TestUnknownGenresAreHiddenUntilKnown(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
@@ -141,22 +145,13 @@ func TestUnknownGenresAreHiddenUntilKnown(t *testing.T) {
 	e.service.ratingWait = 50 * time.Millisecond
 	kid := e.blocking("kid", "Horror")
 
-	started := time.Now()
-	page := e.children(kid, "Top", 0, 100)
-	if len(page.Items) != 0 || !page.More || time.Since(started) > 5*time.Second {
-		t.Fatalf("listing while descriptions are slow: %v more=%v after %v", names(page.Items), page.More, time.Since(started))
+	if page := e.children(kid, "Top", 0, 100); len(page.Items) != 0 || !page.More {
+		t.Fatalf("listing while descriptions are slow: %v more=%v", names(page.Items), page.More)
 	}
 	close(addon.metaGate)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		got := names(e.children(kid, "Top", 0, 100).Items)
-		if slices.Equal(got, []string{"Family", "Teen", "Adult", "Local"}) {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("listing once descriptions answered: %v", got)
-		}
-		time.Sleep(20 * time.Millisecond)
+	e.service.SetRatingWaitEnd(everyLookup)
+	if got := names(e.children(kid, "Top", 0, 100).Items); !slices.Equal(got, []string{"Family", "Teen", "Adult", "Local"}) {
+		t.Errorf("listing once descriptions answered: %v", got)
 	}
 }
 

@@ -150,6 +150,7 @@ const titlesOf = "/Items?recursive=true&includeItemTypes=Movie,Series&"
 func TestGenreStudioAndYearPages(t *testing.T) {
 	t.Parallel()
 	s, token, user, views := pagesServer(t)
+	s.waitForEveryCatalog()
 
 	// The genre a title carries, and the one /Genres lists, open the same
 	// page.

@@ -139,6 +139,7 @@ func TestHiddenLibrariesLeaveTheUsersViews(t *testing.T) {
 func TestBlockedGenresHideTitlesFromApps(t *testing.T) {
 	t.Parallel()
 	s := newContentServer(t)
+	s.waitForEveryLookup()
 	kid := s.user("kid", func(c *accounts.UserChanges) { c.BlockedGenres = &[]string{"crime"} })
 	kidToken := s.signIn("kid", "phone")
 	// Jellyfin's tags are not genres: the policy blocks none.

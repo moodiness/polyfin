@@ -512,8 +512,10 @@ func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 	if !s.lookups.Enabled() {
 		return false
 	}
-	deadline := time.Now().Add(s.creditsWait)
-	ids, corrected := s.awaitMoviedbCheck(ctx, item, s.creditsWait)
+	// Both waits end with waiting, which creditsBound ends.
+	waiting, cancel := s.creditsBound(ctx, s.creditsWait)
+	defer cancel()
+	ids, corrected := s.awaitMoviedbCheck(waiting, item, math.MaxInt64)
 	key, ok := titleCreditsKey(item.Kind, ids)
 	if !ok {
 		return corrected
@@ -524,10 +526,19 @@ func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 	}
 	lookup := s.creditsLookup(key, item.ID)
 	s.lookups.Add([]tmdb.Lookup{lookup}, true)
-	s.lookups.Wait(ctx, []string{lookup.Key}, time.Until(deadline))
+	s.lookups.Wait(waiting, []string{lookup.Key}, math.MaxInt64)
 	after, ok, err := s.keptOne(ctx, key)
 	shown := func(k keptCredits) bool { return k.shows(item.ID) || k.describes(item.ID) }
 	return corrected || err == nil && ok && shown(after) && !(kept && after.asked.Equal(k.asked) && shown(k))
+}
+
+// SetCreditsWaitBound replaces, before the service is used, what bounds a
+// title page's wait for its credits, creditsWait given (see
+// AwaitTitleCredits): context.WithTimeout, which the server keeps. A test
+// that reads what a page shows of TMDB gives one that does not end it, so
+// that the page waits for the credits however long a busy machine takes.
+func (s *Service) SetCreditsWaitBound(bound func(ctx context.Context, wait time.Duration) (context.Context, context.CancelFunc)) {
+	s.creditsBound = bound
 }
 
 // refreshTitleCredits has the TMDB credits of a movie or series refreshed

@@ -12,6 +12,7 @@ import (
 func TestAMoviesPageShowsTMDBsStudiosAndTagline(t *testing.T) {
 	t.Parallel()
 	e := newPosterlessEnv(t, "k3y")
+	e.waitForCredits()
 	e.tmdb.mu.Lock()
 	details := e.tmdb.details["/3/movie/9301"]
 	details["production_companies"] = []any{map[string]any{"name": "North Pictures"}, map[string]any{"name": "South Films"}}

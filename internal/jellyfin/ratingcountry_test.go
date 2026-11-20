@@ -110,6 +110,7 @@ func italianAddon(t *testing.T) string {
 func TestParentalControlFollowsTheRatingCountry(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
+	s.waitForEveryLookup()
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	s.user("child", func(c *accounts.UserChanges) { c.Parental = &accounts.ParentalControl{MaxRating: new(13)} })
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), italianAddon(t), false); err != nil {

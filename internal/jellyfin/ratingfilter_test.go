@@ -36,6 +36,7 @@ func (e edited) filtered(t *testing.T, token, path string) ([]string, int) {
 func TestItemsFilterByRating(t *testing.T) {
 	t.Parallel()
 	e := newEdited(t)
+	e.waitForEveryLookup()
 	top := "/Items?ParentId=" + e.ids["Top"] + "&"
 	for _, c := range []struct {
 		query string
@@ -116,6 +117,7 @@ func TestItemsFilterEpisodesByTheirSeriesRating(t *testing.T) {
 func TestItemsFilterByCustomRating(t *testing.T) {
 	t.Parallel()
 	e := newEdited(t)
+	e.waitForEveryLookup()
 	allowed := e.ids["Allowed"]
 	edit := editorBody(allowed, map[string]any{"Name": "Allowed", "OfficialRating": "PG", "CustomRating": "R"})
 	if status, body := e.call(http.MethodPost, "/Items/"+allowed, app("dashboard", e.admin), edit); status != http.StatusNoContent {
@@ -165,6 +167,7 @@ func italianRatings(t *testing.T) string {
 func TestItemsFilterByRatingUnderTheRatingCountry(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
+	s.waitForEveryLookup()
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), italianRatings(t), false); err != nil {
 		t.Fatal(err)
@@ -203,6 +206,7 @@ func (e edited) officialRatings(t *testing.T, token, query string) []string {
 func TestItemsFiltersListOfficialRatings(t *testing.T) {
 	t.Parallel()
 	e := newEdited(t)
+	e.waitForEveryLookup()
 	top := "ParentId=" + e.ids["Top"]
 	if got := e.officialRatings(t, e.member, top); len(got) != 0 {
 		t.Errorf("before any rating is known: %v", got)
@@ -236,6 +240,7 @@ func TestItemsFiltersListOfficialRatings(t *testing.T) {
 func TestItemsFiltersListOfficialRatingsUnderTheRatingCountry(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
+	s.waitForEveryLookup()
 	s.user("admin", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), italianRatings(t), false); err != nil {
 		t.Fatal(err)

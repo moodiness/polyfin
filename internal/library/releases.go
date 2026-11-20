@@ -287,13 +287,12 @@ func (s *Service) held(ctx context.Context, v view, records []record) (held map[
 	waits := s.releasesLater(ctx, unknown, started)
 	s.releasesLater(ctx, stale, smartLookups)
 	if len(waits) > 0 && !v.deadline.IsZero() {
-		deadline := time.NewTimer(time.Until(v.deadline))
-		defer deadline.Stop()
+		deadline := s.ratingEnd(time.Until(v.deadline))
 	wait:
 		for _, answered := range waits {
 			select {
 			case <-answered:
-			case <-deadline.C:
+			case <-deadline:
 				break wait
 			case <-ctx.Done():
 				return nil, false, ctx.Err()

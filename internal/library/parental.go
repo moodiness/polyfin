@@ -523,13 +523,12 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 	if started == 0 || v.deadline.IsZero() {
 		return found, pending
 	}
-	wait := time.NewTimer(time.Until(v.deadline))
-	defer wait.Stop()
+	wait := s.ratingEnd(time.Until(v.deadline))
 	for range started {
 		select {
 		case r := <-done:
 			found[r.at], pending[r.at] = r.traits, false
-		case <-wait.C:
+		case <-wait:
 			return found, pending
 		case <-ctx.Done():
 			return found, pending
@@ -537,6 +536,13 @@ func (s *Service) lookUpTraits(ctx context.Context, v view, titles []record, ind
 	}
 	return found, pending
 }
+
+// SetRatingWaitEnd replaces, before the service is used, what ends a
+// request's wait for the ratings, genres and releases it looks up, the
+// time left given: time.After, which the server keeps. A test that lists
+// what the lookups tell gives one that never ends, so that its listings
+// wait for every lookup however long a busy machine takes.
+func (s *Service) SetRatingWaitEnd(end func(left time.Duration) <-chan time.Time) { s.ratingEnd = end }
 
 // refreshBatch bounds the titles one RefreshRatings asks about.
 const refreshBatch = 500

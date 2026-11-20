@@ -80,6 +80,7 @@ func TestParentalControlJudgesByTheRatingCountry(t *testing.T) {
 	e := newEnv(t)
 	e.install(addons.Shared(), italianAddon())
 	child := e.restrict("child", accounts.ParentalControl{MaxRating: new(13), BlockUnrated: []string{"Movie"}})
+	e.service.SetRatingWaitEnd(everyLookup)
 
 	// In the US, the teen movie is allowed and the other is unrated.
 	if got := names(e.children(child, "Top", 0, 10).Items); !slices.Equal(got, []string{"Strong"}) {

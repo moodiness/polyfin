@@ -169,6 +169,7 @@ func (p skipLocalSetup) listed(t *testing.T, token, view string, start, limit in
 func TestLibrarySkipsWhatLocalFoldersHold(t *testing.T) {
 	t.Parallel()
 	p := skipLocalOn(t)
+	p.waitForWholeListings()
 	all := []string{"Show 1", "Show 2", "Show 3", "Show 4", "Show 5"}
 	got, before := p.listed(t, p.token, "Top", 0, 0)
 	if !slices.Equal(got, all) {

@@ -46,6 +46,14 @@ func atOnce(ctx context.Context) bool {
 // it; the server keeps narrowedWait.
 func (s *Service) SetNarrowedWait(wait time.Duration) { s.narrowedWait = wait }
 
+// SetNarrowedWaitEnd replaces, before the service is used, what ends that
+// wait, the time left given: time.After, which the server keeps. A test
+// that counts what every catalog lists gives one that never ends, so that
+// the page waits for every catalog however long a busy machine takes.
+func (s *Service) SetNarrowedWaitEnd(end func(left time.Duration) <-chan time.Time) {
+	s.narrowedEnd = end
+}
+
 // Narrowed lists the titles of the given kinds that the user's catalogs
 // list for a genre option: each catalog of titles the user reaches (see
 // titleCatalogs) whose genre extra offers an option that matches is

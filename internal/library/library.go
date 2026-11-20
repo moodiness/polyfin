@@ -154,13 +154,19 @@ type Service struct {
 	// saves stream lists (see versionTracking).
 	tracking versionTracking
 	// ratingLookups holds a place for each rating looked up (see visible);
-	// ratingWait bounds how long a request waits for them.
+	// ratingWait bounds how long a request waits for them, and ratingEnd
+	// gives what ends that wait, the time left given: time.After, which
+	// tests replace (see SetRatingWaitEnd).
 	ratingLookups chan struct{}
 	ratingWait    time.Duration
+	ratingEnd     func(left time.Duration) <-chan time.Time
 	// wholeWait bounds how long a whole listing waits for addons, and
-	// keptWait how long one does when what was kept fills it (see Whole).
-	wholeWait time.Duration
-	keptWait  time.Duration
+	// keptWait how long one does when what was kept fills it (see Whole):
+	// wholeBound bounds the listing by either, context.WithTimeout, which
+	// tests replace (see SetWholeWaitBound).
+	wholeWait  time.Duration
+	keptWait   time.Duration
+	wholeBound func(ctx context.Context, wait time.Duration) (context.Context, context.CancelFunc)
 	// narrowedWait bounds how long a genre's, studio's or year's page
 	// waits for its catalogs (see Narrowed), and narrowedEnd gives what
 	// ends that wait, the time left given: time.After, which tests
@@ -171,8 +177,10 @@ type Service struct {
 	// more end with it (see EndWith).
 	lifetime context.Context
 	// creditsWait bounds how long a title's page waits for its credits
-	// (see AwaitTitleCredits).
-	creditsWait time.Duration
+	// (see AwaitTitleCredits): creditsBound bounds the page by it,
+	// context.WithTimeout, which tests replace (see SetCreditsWaitBound).
+	creditsWait  time.Duration
+	creditsBound func(ctx context.Context, wait time.Duration) (context.Context, context.CancelFunc)
 	// searchGrace and searchBound bound how long a search waits for its
 	// title searches, and lateSearches are the search catalogs it leaves
 	// out, as they were late (see searchdeadline.go).
@@ -436,12 +444,15 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 		playGrace:      defaultPlayGrace,
 		ratingLookups:  make(chan struct{}, ratingFetches),
 		ratingWait:     ratingWait,
+		ratingEnd:      time.After,
 		wholeWait:      wholeListingWait,
 		keptWait:       keptListingWait,
+		wholeBound:     context.WithTimeout,
 		narrowedWait:   narrowedWait,
 		narrowedEnd:    time.After,
 		lifetime:       context.Background(),
 		creditsWait:    titleCreditsWait,
+		creditsBound:   context.WithTimeout,
 		searchGrace:    searchGrace,
 		searchBound:    searchBound,
 		music:          eclipse.NewClient(client),
@@ -1945,6 +1956,15 @@ const (
 	keptListingWait  = time.Second
 )
 
+// SetWholeWaitBound replaces, before the service is used, what bounds a
+// whole listing's wait for addons, wholeListingWait or keptListingWait
+// given (see upTo): context.WithTimeout, which the server keeps. A test
+// that lists a library whole gives one that does not end it, so that the
+// listing waits for every page however long a busy machine takes.
+func (s *Service) SetWholeWaitBound(bound func(ctx context.Context, wait time.Duration) (context.Context, context.CancelFunc)) {
+	s.wholeBound = bound
+}
+
 // wholeKey marks the context of a whole listing, which reads no page
 // ahead: apps ask for no next page.
 type wholeKey struct{}
@@ -2064,7 +2084,7 @@ func (s *Service) upTo(ctx context.Context, user accounts.User, parent accounts.
 	if err == nil && len(known.Items) >= count {
 		wait = s.keptWait
 	}
-	waiting, cancel := context.WithTimeout(context.WithValue(ctx, wholeKey{}, true), wait)
+	waiting, cancel := s.wholeBound(context.WithValue(ctx, wholeKey{}, true), wait)
 	page, err := s.Children(waiting, user, parent, start, most, genre)
 	late := waiting.Err() != nil
 	cancel()
