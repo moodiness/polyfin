@@ -20,6 +20,13 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
+// waitForEveryVersion has the server's plays wait for every version they
+// read before they pass one over, however long a busy machine takes to
+// read it (see Handler.patienceEnd).
+func (s testServer) waitForEveryVersion() {
+	s.handler.patienceEnd = func(time.Duration) <-chan time.Time { return nil }
+}
+
 // manyVersionsAddon serves one movie, without a runtime, with n streams
 // named Version 1 to Version n, whose files are not media. With subtitles
 // held, it lists one subtitle file of the movie once subtitles is closed.

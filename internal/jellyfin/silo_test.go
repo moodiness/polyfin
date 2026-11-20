@@ -916,6 +916,7 @@ func TestSiloAppsPlayAMovieAsItIs(t *testing.T) {
 func TestSiloAppsPlayRepackagedOrConverted(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
+	p.waitForEveryVersion()
 	p.remuxable(t)
 	allowSilo(t, p.testServer)
 	a := servingSilo(t, p.testServer)

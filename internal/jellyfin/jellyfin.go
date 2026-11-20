@@ -227,6 +227,10 @@ type Handler struct {
 	// now tells the time users' allowed hours and the home rows' schedules
 	// are checked against.
 	now func() time.Time
+	// patienceEnd gives what ends a play's wait for the versions before
+	// the one it could play, versionPatience given: time.After, which
+	// tests replace to wait for every version (see choose).
+	patienceEnd func(patience time.Duration) <-chan time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
 	// listing shows them.
 	newKeys newKeys
@@ -303,6 +307,7 @@ func New(options Options) *Handler {
 		preparations:   newPreparations(options.Logger),
 		watched:        newWatchedPages(),
 		now:            time.Now,
+		patienceEnd:    time.After,
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),

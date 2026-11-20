@@ -67,6 +67,7 @@ func (a playbackAnswer) refused() bool {
 func TestConversionOffPlaysTheVersionsThatNeedNone(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
+	p.waitForEveryVersion()
 	p.remuxable(t)
 	minimal, chrome := p.profile(t, "minimal"), p.profile(t, "jellyfin-web-chrome")
 	converted := p.ask(t, p.token, p.movie, minimal, nil)

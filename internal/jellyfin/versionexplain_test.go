@@ -18,6 +18,7 @@ import (
 func TestAPinnedVersionComesFirst(t *testing.T) {
 	t.Parallel()
 	p := versionRulesOn(t, newTestServer(t, 10))
+	p.waitForEveryVersion()
 	movie, _ := accounts.ParseID(p.movie)
 	french := p.versions[3]
 	if err := p.handler.PinVersion(t.Context(), p.user, p.user, movie, french.ID); err != nil {

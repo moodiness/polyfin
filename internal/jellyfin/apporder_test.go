@@ -165,6 +165,7 @@ func TestAVersionPickedFromTheMenuPlays(t *testing.T) {
 func TestLocalFilesFirstBeatsPreferDirectPlay(t *testing.T) {
 	t.Parallel()
 	p := versionSourcesOn(t)
+	p.waitForEveryVersion()
 	shelf, stream := p.versions[4], p.versions[0]
 	local, localToken := p.another(t, "local", "")
 	local, err := p.store.UpdateUser(t.Context(), local.ID, accounts.UserChanges{LocalFirst: new(true)}, nil)

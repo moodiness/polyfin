@@ -291,9 +291,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 				start()
 			}
 			if t.plays && patience == nil {
-				timer := time.NewTimer(versionPatience)
-				defer timer.Stop()
-				patience = timer.C
+				patience = h.patienceEnd(versionPatience)
 			}
 		case <-patience:
 			patient = false
