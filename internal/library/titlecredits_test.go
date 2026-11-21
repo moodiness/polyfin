@@ -617,3 +617,25 @@ func TestKeptCreditsAreRemembered(t *testing.T) {
 		t.Errorf("Harbor Lights' actors, its credits not read yet: %v", got)
 	}
 }
+
+// A TMDB identifier TMDB no longer knows is found again by the title's
+// IMDb identifier, and the credits read through it.
+func TestADeadTMDBIdentifierIsFoundAgainByIMDb(t *testing.T) {
+	t.Parallel()
+	e := newCreditsEnv(t, "k3y", time.Hour)
+	e.service.UseTitleCredits(e.queue)
+	pier := e.addon.metas["movie/tt0882002"]
+	pier.TmdbID = "9002"
+	e.addon.metas["movie/tt0882002"] = pier
+	var named []string
+	for _, p := range e.open(e.admin, "Quiet Pier").People {
+		named = append(named, p.Name)
+	}
+	if !slices.Equal(named, []string{"Ana Actor", "Ben Actor"}) {
+		t.Errorf("people: %v", named)
+	}
+	if asked := e.tmdb.requests("/3/"); len(asked) != 3 || !strings.HasPrefix(asked[0], "/3/movie/9002?") ||
+		!strings.HasPrefix(asked[1], "/3/find/tt0882002?") || !strings.HasPrefix(asked[2], "/3/movie/1002?") {
+		t.Errorf("TMDB was asked %v", asked)
+	}
+}

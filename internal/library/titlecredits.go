@@ -613,7 +613,7 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 		return err
 	}
 	if !kept || k.stale(s.now(), language) {
-		if k, err = s.askCredits(ctx, key, language); err != nil {
+		if k, err = s.askCredits(ctx, key, title, language); err != nil {
 			return err
 		}
 	}
@@ -643,8 +643,10 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 }
 
 // askCredits asks TMDB for a title's credits, through its TMDB identifier,
-// found by its IMDb one when that is the key, and keeps the answer.
-func (s *Service) askCredits(ctx context.Context, key creditsKey, language string) (keptCredits, error) {
+// found by its IMDb one when that is the key, and keeps the answer. A
+// TMDB identifier TMDB no longer knows, as when it merged two entries, is
+// found again by the IMDb identifier of the item title, when it has one.
+func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts.ID, language string) (keptCredits, error) {
 	id := key.id
 	var err error
 	if key.provider == "imdb" {
@@ -655,6 +657,13 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, language strin
 	var details tmdb.TitleDetails
 	if err == nil {
 		details, err = s.tmdb.TitleDetails(ctx, key.kind, id, language)
+	}
+	if errors.Is(err, tmdb.ErrNotFound) && key.provider == "tmdb" {
+		if imdb := s.listedIMDb(ctx, title); imdb != "" {
+			if id, err = s.tmdb.FindByIMDb(ctx, key.kind, imdb); err == nil {
+				details, err = s.tmdb.TitleDetails(ctx, key.kind, id, language)
+			}
+		}
 	}
 	found := err == nil
 	if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
@@ -711,6 +720,16 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, language strin
 	remembered.found, remembered.asked = tmdbID != nil, now.Truncate(time.Microsecond)
 	s.rememberCredits(key, remembered)
 	return kept, nil
+}
+
+// listedIMDb returns the IMDb identifier of the item title, as its listing
+// gives it, empty when it has none or is gone.
+func (s *Service) listedIMDb(ctx context.Context, title accounts.ID) string {
+	r, err := s.load(ctx, title)
+	if err != nil || r.Meta == nil {
+		return ""
+	}
+	return s.providerIDs(title, *r.Meta)["Imdb"]
 }
 
 // learntTMDB is the TMDB identifier box sets or credits learnt for a title

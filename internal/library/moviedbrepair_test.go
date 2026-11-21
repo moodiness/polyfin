@@ -236,6 +236,9 @@ func TestTheDailyPassChecksTheStoredMoviedbIdentifiers(t *testing.T) {
 	t.Parallel()
 	e := newCreditsEnv(t, "k3y", time.Hour)
 	repairFound(e, repairIT, repairITTMDB)
+	// TMDB knows The Last of Us by its right identifier: its credits come
+	// without finding it again by its IMDb identifier.
+	e.tmdb.answers[fmt.Sprintf("/tv/%d", repairLastOfUsTMDB)] = map[string]any{"id": repairLastOfUsTMDB}
 	savedTitles(t, e.env,
 		stremio.Meta{ID: repairIT, Type: "series", Name: "IT", ImdbID: repairIT, ReleaseInfo: "1990", TmdbID: stremio.Text(fmt.Sprint(repairITMoviedb)),
 			TmdbFromMoviedb: true},
