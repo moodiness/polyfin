@@ -533,17 +533,20 @@ A torrent version is read through the source cache, as a link is. FFmpeg, ffprob
 
 ### The file played
 
-The file played is `fileIdx`. When the addon gives none, as some do for a season's pack:
+The file played is `fileIdx`. When the addon gives none, as some do for a season's pack or a pack of several movies:
 
 1. It is the file whose name is the stream's `behaviorHints.filename`.
 2. Else, for an episode, it is the largest video whose name tells that episode (see [Naming files](naming-and-matching.md#naming-files)).
-3. Else it is the largest file.
+3. Else, for a movie, it is the largest video whose name holds the movie's title followed by its year, a year off either way included, then the largest video whose name holds its title.
+4. Else it is the largest file.
 
 An episode's name may tell it as:
 
 - `S01E02`, `s1e2`, `S01E01-E02` or `1x02`;
 - `E02` and `Episode 2` in a season's folder: `Season 01`, `S01`, `Specials`, or the pack's own folder, as `Show.S01.1080p`;
 - a year or a resolution glued to the episode, as in `S01E01-2022` or `S09E14-1080p`, ending no range.
+
+A movie's name holds its title when the title's words come one after another in the file's name, letters and digits compared without case. A number right after them that is not a year tells another movie, as `Harbor 2` for `Harbor`, and does not count. So in a pack holding `Harbor (1990).mkv`, `Harbor 2 (1994).mkv` and a larger `The Lighthouse Keeper (1996).mkv`, the movie `Harbor` of 1990 plays `Harbor (1990).mkv`. A torrent of one file plays it whatever its name.
 
 The version stays the same version whichever file it finds: its identity, its analysis and the version rules do not depend on it.
 

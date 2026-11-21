@@ -18,12 +18,15 @@ var ErrInvalidSpec = errors.New("invalid torrent stream")
 // sources, and whether to look the torrent up on the DHT. Without an
 // index, Name, the file's name the addon gives, and Season and Episode,
 // the episode played (Episode 0 for another title), tell the file (see
-// Info.File).
+// Info.File). For a movie, Title and Year, 0 when unknown, are the
+// movie's own: in a pack of several movies, they tell which one plays.
 type Spec struct {
 	Hash            Hash
 	File            int
 	Name            string
 	Season, Episode int
+	Title           string
+	Year            int
 	Trackers        []string
 	Nodes           []string
 	DHT             bool

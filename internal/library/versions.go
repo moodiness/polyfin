@@ -116,12 +116,15 @@ func (v Version) RequestHeaders() map[string]string {
 // its trackers and DHT nodes. Season and Episode are the episode it was
 // listed for, Episode 0 for another title: without an index, the file
 // whose name tells that episode plays, after the one the stream's
-// filename names (see torrent.Info.File).
+// filename names (see torrent.Info.File). Title and Year are a movie's,
+// which tell it in a pack of several movies.
 type Torrent struct {
 	InfoHash        string
 	FileIdx         *int
 	Sources         []string
 	Season, Episode int
+	Title           string
+	Year            int
 }
 
 // torrentEpisode is the episode a torrent version was listed for, which
@@ -843,8 +846,9 @@ func (s *Service) renewedFromAnswer(t target, entry installed, key streamKey, ol
 }
 
 // renewed finds the version old among streams, and remembers it with the
-// link they give. It keeps what old's labels told, read knowing the
-// title's name, which a renewal does not load.
+// link they give. It keeps what old's labels told, and the movie a
+// torrent's file was listed for, read knowing the title's name, which a
+// renewal does not load.
 func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, old Version) (Version, bool) {
 	for _, stream := range streams {
 		// The stream's identity tells it before its labels are read.
@@ -853,6 +857,9 @@ func (s *Service) renewed(t target, entry installed, streams []stremio.Stream, o
 		}
 		version := newVersion(t, streamSource{entry, t.metaType, t.id}, stream)
 		version.Labels = old.Labels
+		if version.Torrent != nil && old.Torrent != nil {
+			version.Torrent.Title, version.Torrent.Year = old.Torrent.Title, old.Torrent.Year
+		}
 		version, kept := s.keepMirrors(version)
 		s.versions.Put(version.ID, kept)
 		return version, true
@@ -901,6 +908,9 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 		version.URL = torrentLink(stream)
 		version.Torrent = &Torrent{InfoHash: strings.ToLower(stream.InfoHash), FileIdx: stream.FileIdx, Sources: slices.Clone(stream.Sources),
 			Season: t.season, Episode: t.episode}
+		if t.kind == KindMovie {
+			version.Torrent.Title, version.Torrent.Year = t.name, t.year
+		}
 	}
 	version.identity = streamIdentity(stream)
 	version.ID = versionID(t.item, version.identity)

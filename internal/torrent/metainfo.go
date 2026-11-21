@@ -248,7 +248,10 @@ func checkInfo(hash Hash, data []byte) (Info, error) {
 // File returns the file of the torrent spec plays: the one at its index;
 // without one, the file of the name the addon gives, else, for an
 // episode, the largest video whose name tells that episode (see
-// episodename.Of), as in a season's pack, else the largest.
+// episodename.Of), as in a season's pack, else, for a movie, the largest
+// video whose name holds the movie's title right before its year, then
+// the largest whose name holds its title (see titleIn), as in a pack of
+// several movies, else the largest.
 func (info Info) File(spec Spec) (File, error) {
 	if index := spec.File; index >= 0 {
 		if index >= len(info.Files) || info.Files[index].Padding {
@@ -257,7 +260,8 @@ func (info Info) File(spec Spec) (File, error) {
 		return info.Files[index], nil
 	}
 	name := path.Base(strings.ReplaceAll(spec.Name, `\`, "/"))
-	named, episode, largest := -1, -1, -1
+	title := nameWords(spec.Title)
+	named, episode, dated, titled, largest := -1, -1, -1, -1, -1
 	larger := func(i, than int) bool { return than < 0 || info.Files[i].Length > info.Files[than].Length }
 	for i, f := range info.Files {
 		if f.Padding {
@@ -271,11 +275,23 @@ func (info Info) File(spec Spec) (File, error) {
 				episode = i
 			}
 		}
+		if spec.Episode == 0 && len(title) > 0 && episodename.Video(f.Path) {
+			switch titleIn(f.Path, title, spec.Year) {
+			case titleDated:
+				if larger(i, dated) {
+					dated = i
+				}
+			case titleNamed:
+				if larger(i, titled) {
+					titled = i
+				}
+			}
+		}
 		if larger(i, largest) {
 			largest = i
 		}
 	}
-	for _, i := range []int{named, episode, largest} {
+	for _, i := range []int{named, episode, dated, titled, largest} {
 		if i >= 0 {
 			return info.Files[i], nil
 		}

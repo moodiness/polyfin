@@ -412,11 +412,12 @@ func (s *Service) torrentLocation(version library.Version) source.Location {
 }
 
 // torrentSpec names the file of a torrent a version plays. Without the
-// file's index, the stream's filename and the episode tell the file (see
-// torrent.Info.File).
+// file's index, the stream's filename, the episode, and a movie's title
+// and year tell the file (see torrent.Info.File).
 func torrentSpec(version library.Version) (torrent.Spec, error) {
 	spec, err := torrent.NewSpec(version.Torrent.InfoHash, version.Torrent.FileIdx, version.Torrent.Sources)
 	spec.Name, spec.Season, spec.Episode = version.Filename, version.Torrent.Season, version.Torrent.Episode
+	spec.Title, spec.Year = version.Torrent.Title, version.Torrent.Year
 	return spec, err
 }
 
