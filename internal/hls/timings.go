@@ -66,6 +66,28 @@ func (t *chainTimings) set(chain string, d time.Duration, err error) {
 	t.Speeds[chain] = speedOf(d, err)
 }
 
+// gpuTimed reports whether a chain of the GPU's converted the sample in
+// t: the processor's tone mapping and the chains that failed do not
+// count.
+func (t chainTimings) gpuTimed() bool {
+	for chain, speed := range t.Speeds {
+		if chain != chainProcessor && speed > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// keptGPUTiming reports whether a timing of hw's conversion chains in
+// which one converted is kept from the last 7 days (see UseTimings).
+func (m *Manager) keptGPUTiming(hw *Hardware) bool {
+	if !m.timings.on() {
+		return false
+	}
+	best, _ := m.timings.best(m.logger, m.timingKey(hw), m.retime.now())
+	return best.gpuTimed()
+}
+
 // below lists the chains t timed under busyShare of their best in best,
 // as "hdr_gpu 0.4x (best 1.3x)", failures included: none when the timing
 // does not tell a busy server.
@@ -235,9 +257,11 @@ func (s *timingStore) best(logger *slog.Logger, key timingKey, now time.Time) (c
 
 // add keeps found, a timing for key that ended at now, and writes the
 // file again without the timings past timingWindow, through a file
-// renamed in its place. A timing that timed nothing is not kept.
+// renamed in its place. A timing of the GPU's chains in which none
+// converted is not kept, so that it never stands for a good one (see
+// gpuTimed); the processor's is, failed or not.
 func (s *timingStore) add(logger *slog.Logger, key timingKey, found chainTimings, now time.Time) {
-	if len(found.Speeds) == 0 && found.Deinterlacers == nil {
+	if _, processor := found.Speeds[chainProcessor]; !processor && !found.gpuTimed() {
 		return
 	}
 	s.mu.Lock()
