@@ -161,3 +161,33 @@ func TestTaglineTellsWhyATitleIsForTheUser(t *testing.T) {
 		t.Errorf("with taglines off: %q", got)
 	}
 }
+
+// A user who finished three thrillers and one comedy is told why a thriller
+// is for them, and nothing on a comedy's page: one comedy finished is no
+// taste for comedies.
+func TestTaglineNamesOnlyAGenreTheUserLikes(t *testing.T) {
+	t.Parallel()
+	s, tastes, user, token, ids := tasteServer(t)
+	for _, name := range []string{"Thriller A", "Thriller B", "Thriller C", "Comedy A"} {
+		if status, _ := s.call(http.MethodPost, "/UserPlayedItems/"+ids[name], app("tv", token), nil); status != http.StatusOK {
+			t.Fatalf("played: %d", status)
+		}
+	}
+	if _, err := tastes.Build(t.Context(), user); err != nil {
+		t.Fatal(err)
+	}
+	taglines := func(name string) []string {
+		t.Helper()
+		var dto BaseItemDto
+		if status := s.get(t, "/Users/"+user.ID.String()+"/Items/"+ids[name], token, &dto); status != http.StatusOK || dto.Taglines == nil {
+			t.Fatalf("details of %s: %d", name, status)
+		}
+		return *dto.Taglines
+	}
+	if got := taglines("Thriller D"); len(got) != 1 || !strings.HasSuffix(got[0], "% for you · because you like Thriller") {
+		t.Errorf("a thriller's taglines: %q", got)
+	}
+	if got := taglines("Comedy B"); len(got) != 0 {
+		t.Errorf("a comedy's taglines: %q", got)
+	}
+}

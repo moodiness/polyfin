@@ -61,6 +61,13 @@ const (
 	// Top picks for you and come last elsewhere.
 	vetoBelow  = -1.5
 	vetoTitles = 2
+	// likeAbove is the weight at or over which a value is one the user
+	// likes, once likeTitles titles at least weigh for it: a tagline gives
+	// such a value of the title as its reason, and a title without one has
+	// no tagline. Two titles finished in the last months, say; the same two
+	// a year ago no longer.
+	likeAbove  = 1.5
+	likeTitles = 2
 	// minMatch and maxMatch bound the percentage a tagline shows.
 	minMatch, maxMatch = 60, 98
 )
@@ -121,13 +128,21 @@ func key(value string) string {
 type Affinity struct {
 	Name   string  `json:"name"`
 	Weight float64 `json:"weight"`
-	// Against counts the titles that weighed against the value.
+	// Against counts the titles that weighed against the value, For
+	// those that weighed for it.
 	Against int `json:"against,omitempty"`
+	For     int `json:"for,omitempty"`
 }
 
 // vetoes reports whether a genre's affinity vetoes its titles.
 func (a Affinity) vetoes() bool {
 	return a.Weight <= vetoBelow && a.Against >= vetoTitles
+}
+
+// likes reports whether the user likes the value enough for a tagline to
+// give it as a reason.
+func (a Affinity) likes() bool {
+	return a.Weight >= likeAbove && a.For >= likeTitles
 }
 
 // Profile is a user's taste. The zero value is a user nothing is known of.
@@ -183,6 +198,8 @@ func Build(evidence []Evidence, now time.Time) Profile {
 				a.Weight += w
 				if w < 0 {
 					a.Against++
+				} else {
+					a.For++
 				}
 				values[k] = a
 			}
@@ -302,12 +319,15 @@ type Match struct {
 	// Percent is how much the title matches, from minMatch to maxMatch.
 	Percent int
 	// Reason is the value of the title the user likes most, among its
-	// genres, directors and cast, empty when none.
+	// genres, directors and cast, of those they like (see likes).
 	Reason string
 }
 
-// Match tells how much t matches a confident profile. It reports false
-// below the confidence gate, and for a title vetoed or not matching.
+// Match tells how much t matches a confident profile, and why. It reports
+// false below the confidence gate, for a title vetoed or not matching, and
+// for a title none of whose genres, directors and actors the user likes
+// (see likes): its decade and language alone, or a genre of a single title
+// or of titles long ago, give no reason.
 func (p Profile) Match(t Title) (Match, bool) {
 	score := p.Score(t)
 	if !p.Confident() || score <= 0 || p.Vetoed(t) {
@@ -317,12 +337,12 @@ func (p Profile) Match(t Title) (Match, bool) {
 	best := 0.0
 	for _, facet := range []Facet{FacetGenre, FacetDirector, FacetCast} {
 		for _, value := range t.values(facet) {
-			if c := p.contribution(facet, value); c > best {
+			if c := p.contribution(facet, value); c > best && p.Affinities[facet][key(value)].likes() {
 				best, m.Reason = c, value
 			}
 		}
 	}
-	return m, true
+	return m, m.Reason != ""
 }
 
 // Order orders items by how much the user should like them, the most

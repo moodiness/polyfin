@@ -186,16 +186,20 @@ Until then, **Top picks for you** lists the libraries' first titles as their cat
 Once confident:
 
 - **Top picks for you** lists the titles in the order of the profile. Those it ranks the same keep the order above.
-- Similar titles, **Because you watched** rows and [movie recommendations](jellyfin-compatibility.md#movie-recommendations) are ordered half by how close each title is, and half by the profile. The sum of the two ranks decides.
+- A movie's or series' similar titles, **Because you watched** rows and [movie recommendations](jellyfin-compatibility.md#movie-recommendations) are ordered half by how close each title is, and half by the profile. The sum of the two ranks decides. An album's similar albums keep their order: the profile knows nothing of music.
 - `/Items/Suggestions` puts the titles the profile ranks first first, and the others at random as before.
-- A movie's or series' page adds to its taglines why it is for the user: "87% for you · because you like Thriller". It comes after the title's own tagline, from TMDB (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)) or the metadata editor, and first when the title has none.
+- A movie's or series' page adds to its taglines why it is for the user, when the user likes one of its genres, directors or actors: "87% for you · because you like Thriller". It comes after the title's own tagline, from TMDB (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)) or the metadata editor, and first when the title has none.
+
+The user likes a genre, director or actor once it weighs 1.5 or more, from two titles at least: two movies finished in the last months, say. One title is not enough, nor two finished a year ago, as their weight halved twice.
 
 The tagline:
 
+- shows only on a title of a genre, director or actor the user likes, and gives as its reason the one of them the user likes most. A title the user likes none of has no tagline, even when it shares a decade or a language with what they watched;
+- has a percentage from 60 to 98: the title's score against the whole profile, its genres, directors, actors, decade and language, brought within that range. It is no probability: 60 is a title the profile barely favors, and the more of the title the user likes, and the more they like it, the closer it comes to 98. Three thrillers of the 2000s finished lately give a thriller of the 2000s about 80%;
 - is in the user's metadata language when Polyfin speaks it, else the server's;
-- has a percentage from 60 to 98;
-- gives as its reason the genre, director or actor of the title the user likes most;
 - is never saved by the metadata editor, which sends the taglines it was shown.
+
+With no history, or too little for the profile to be confident, no title has a tagline.
 
 ### Vetoed genres
 
@@ -219,7 +223,7 @@ Before the profile is confident, the section says the lists keep their usual ord
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Tell me why a title is for me** | **My account › Taste profile** | On | Starts a title's page with "87% for you · because you like …" once the profile is confident. Off, no title's page says it. |
+| **Tell me why a title is for me** | **My account › Taste profile** | On | Starts the page of a title of a genre, director or actor the user likes with "87% for you · because you like …", once the profile is confident. Off, no title's page says it. |
 
 **Compared with Jellyfin**
 

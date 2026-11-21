@@ -43,7 +43,7 @@ func (h *Handler) auxiliaryRoutes(rt *router) {
 	// studios.go).
 	signedIn(http.MethodGet, "/Studios", h.studios)
 	// Jellyfin answers similar titles under each of these routes.
-	for _, similar := range []string{"/Items/{itemId}/Similar", "/Movies/{itemId}/Similar", "/Shows/{itemId}/Similar", "/Trailers/{itemId}/Similar"} {
+	for _, similar := range []string{"/Items/{itemId}/Similar", "/Movies/{itemId}/Similar", "/Shows/{itemId}/Similar", "/Trailers/{itemId}/Similar", "/Albums/{itemId}/Similar"} {
 		signedIn(http.MethodGet, similar, h.similarItems)
 	}
 	signedIn(http.MethodGet, "/Items/{itemId}/Collections", h.itemCollections)
@@ -1072,12 +1072,14 @@ func (h *Handler) ownItemExists(ctx context.Context, user accounts.User, id acco
 // does not say.
 const similarLimit = 50
 
-// similarItems lists titles close to a movie or series (see
-// library.Service.Similar), blended with the user's taste (see taste.go).
-// Like Jellyfin, it leaves out the titles the user played, and describes
-// the titles with their provider identifiers, asked for or not. Other
-// items have none, and so does every item with similar titles turned off
-// in the settings: no addon is asked then.
+// similarItems lists titles close to a movie, series or album (see
+// library.Service.Similar), a movie's or series' blended with the user's
+// taste (see taste.go). Like Jellyfin, it leaves out the titles the user
+// played, and the albums of the artists excludeArtistIds names, which
+// jellyfin-web sets to an album's artist; it describes the titles with
+// their provider identifiers, asked for or not. Other items have none, and
+// so does every item with similar titles turned off in the settings: no
+// addon is asked then.
 func (h *Handler) similarItems(w http.ResponseWriter, r *http.Request) {
 	limit, limited := 0, false
 	// Similar items take a limit but no start index: StartIndex is 0.
@@ -1091,13 +1093,18 @@ func (h *Handler) similarItems(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	var items []library.Item
 	if id != (accounts.ID{}) && h.Accounts.Settings().SimilarTitles {
-		// Twice the limit leaves room for the played titles left out.
+		// Twice the limit leaves room for the titles left out.
 		found, err := h.similarTitles(r.Context(), user, id, 2*limit)
 		if err != nil && !errors.Is(err, library.ErrNotFound) {
 			h.browseError(w, r, err)
 			return
 		}
 		items = found
+	}
+	if excluded := guidsOf(r, "excludeArtistIds"); len(excluded) > 0 {
+		items = slices.DeleteFunc(items, func(item library.Item) bool {
+			return slices.ContainsFunc(item.AlbumArtists, func(artist library.Credit) bool { return slices.Contains(excluded, artist.ID) })
+		})
 	}
 	state, err := h.userState(r.Context(), user, items)
 	if err != nil {

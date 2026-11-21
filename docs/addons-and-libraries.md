@@ -427,10 +427,19 @@ A genre or studio a title's page links to opens its page in jellyfin-web, which 
 
 ## Similar titles
 
-A movie's or series' similar titles come from the first page of the catalogs of your addons that offer one of its genres in their genre filter.
+Similar titles keep the type of the title open:
 
+| Title open | Similar titles |
+|---|---|
+| Movie | Movies from the first page of the movie catalogs of your addons that offer one of its genres in their genre filter |
+| Series | Series, the same way, from the series catalogs |
+| Album | Albums of your music libraries that share one of its genres |
+
+- A catalog of a title's type can list other types too, as list addons do. Those titles are left out: a series never lists a movie, a Live TV channel or a channel of videos as similar.
 - They are ranked by shared genres, directors and actors, and release year.
 - The title itself, and titles you played, are left out.
+- A title without genres has none. Only local music folders give albums genres, from their tags: music addons give none.
+- Other items have none: episodes, Live TV channels and programmes, artists, songs and playlists.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|

@@ -15,18 +15,19 @@ import (
 //
 // Each user's taste profile (see package taste) ranks the titles of a Top
 // picks for you home row, and reorders the lists Jellyfin derives from a
-// user's titles: similar titles, and the Because you watched rows and
-// movie recommendations made of them, half by how close they are and half
-// by the user's taste; suggestions by the user's taste alone. Below the
-// profile's confidence gate, the lists keep their own order, and a Top
-// picks row lists the first titles of the user's libraries as their
-// catalogs give them, the most popular first. Titles of a genre the user
-// dislikes come last, and leave Top picks for you.
+// user's titles: a movie's or series' similar titles, and the Because you
+// watched rows and movie recommendations made of them, half by how close
+// they are and half by the user's taste; suggestions by the user's taste
+// alone. Below the profile's confidence gate, the lists keep their own
+// order, and a Top picks row lists the first titles of the user's
+// libraries as their catalogs give them, the most popular first. Titles of
+// a genre the user dislikes come last, and leave Top picks for you.
 //
 // A movie's or series' details also start their Taglines with why the
-// title is for the user, above the gate and unless they turned it off:
-// "87% for you · because you like Thriller". Saving the title's metadata
-// leaves it out (see dropTasteTagline).
+// title is for the user, above the gate, when the user likes one of its
+// genres, directors or actors (see taste.Profile.Match), and unless they
+// turned it off: "87% for you · because you like Thriller". Saving the
+// title's metadata leaves it out (see dropTasteTagline).
 
 // tasteProfile returns the user's profile: the zero Profile, below the
 // confidence gate, without one, for a request without a user, or when it
@@ -44,11 +45,13 @@ func (h *Handler) tasteProfile(ctx context.Context, user accounts.User) taste.Pr
 }
 
 // similarTitles lists up to count titles similar to id (see
-// library.Service.Similar), blended with the user's taste.
+// library.Service.Similar), a movie's or series' blended with the user's
+// taste. The profile knows nothing of music: an album's similar albums keep
+// their order.
 func (h *Handler) similarTitles(ctx context.Context, user accounts.User, id accounts.ID, count int) ([]library.Item, error) {
 	similar, err := h.Library.Similar(ctx, user, id, count)
-	if err != nil {
-		return nil, err
+	if err != nil || len(similar) == 0 || library.MusicKind(similar[0].Kind) {
+		return similar, err
 	}
 	return taste.Blend(h.tasteProfile(ctx, user), similar, taste.TitleOf), nil
 }
@@ -95,20 +98,10 @@ var tasteTagline = i18n.Text{
 	"%d%% para você · porque você gosta de %s",
 }
 
-// tasteMatch is the text for a matched title the user likes nothing of
-// in particular.
-var tasteMatch = i18n.Text{
-	"%d%% for you",
-	"%d\u00a0%% pour vous",
-	"%d\u00a0%% für dich",
-	"%d\u00a0%% para usted",
-	"%d%% per te",
-	"%d%% para você",
-}
-
 // tasteTaglineOf is why item is for the user, in their language, "" when
-// it is not a movie or series, below the confidence gate, when it does
-// not match, and when the user turned taglines off.
+// it is not a movie or series, below the confidence gate, when the user
+// likes none of its genres, directors and actors (see taste.Profile.Match),
+// and when the user turned taglines off.
 func (h *Handler) tasteTaglineOf(ctx context.Context, user accounts.User, item library.Item) string {
 	if h.Taste == nil || user.ID == (accounts.ID{}) || item.Kind != library.KindMovie && item.Kind != library.KindSeries {
 		return ""
@@ -124,9 +117,6 @@ func (h *Handler) tasteTaglineOf(ctx context.Context, user accounts.User, item l
 	language := i18n.Match(user.MetadataLanguage)
 	if language == "" {
 		language = h.Accounts.Settings().Language
-	}
-	if match.Reason == "" {
-		return fmt.Sprintf(tasteMatch.In(language), match.Percent)
 	}
 	return fmt.Sprintf(tasteTagline.In(language), match.Percent, match.Reason)
 }

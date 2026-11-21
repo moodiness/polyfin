@@ -135,6 +135,50 @@ func TestConfidenceGateHidesTheMatch(t *testing.T) {
 	}
 }
 
+// A confident profile gives as a reason only a genre, director or actor
+// the user likes: one of two titles at least, recently. A title it shares
+// only a decade and a language with, or a genre of one title, or of titles
+// long ago, gets no tagline at all.
+func TestMatchNamesOnlyWhatTheUserLikes(t *testing.T) {
+	t.Parallel()
+	seen := func(at time.Time, director string, genres ...string) Evidence {
+		return Evidence{Title: Title{Genres: genres, Directors: []string{director}, Year: 2004, Language: "en"}, Activity: Activity{Finished: 1, At: at}}
+	}
+	evidence := []Evidence{
+		seen(now.AddDate(-2, 0, 0), "Old Hand", "Drama"),
+		seen(now.AddDate(-2, 0, 0), "Old Hand", "Drama"),
+		seen(now.Add(-72*time.Hour), "Some Director", "Thriller"),
+		seen(now.Add(-48*time.Hour), "Some Director", "Thriller"),
+		seen(now.Add(-24*time.Hour), "Another Director", "Thriller", "Comedy"),
+	}
+	profile := Build(evidence, now)
+	if !profile.Confident() {
+		t.Fatalf("not confident: %+v", profile)
+	}
+	for _, c := range []struct {
+		name   string
+		title  Title
+		reason string
+	}{
+		{"a comedy, of one title finished", Title{Genres: []string{"Comedy"}, Year: 2003, Language: "en"}, ""},
+		{"a horror movie of the decade and language", Title{Genres: []string{"Horror"}, Year: 2001, Language: "en"}, ""},
+		{"a drama, of two titles two years ago", Title{Genres: []string{"Drama"}, Directors: []string{"Old Hand"}}, ""},
+		{"a director of one title", Title{Genres: []string{"Horror"}, Directors: []string{"Another Director"}}, ""},
+		{"a comedy thriller", Title{Genres: []string{"Comedy", "Thriller"}}, "Thriller"},
+		{"a horror movie of a director of two titles", Title{Genres: []string{"Horror"}, Directors: []string{"Some Director"}}, "Some Director"},
+	} {
+		match, ok := profile.Match(c.title)
+		if ok != (c.reason != "") || match.Reason != c.reason {
+			t.Errorf("%s: %+v %v, want reason %q", c.name, match, ok, c.reason)
+		}
+	}
+	// A second comedy finished lately makes a comedy's reason.
+	profile = Build(append([]Evidence{seen(now.Add(-96*time.Hour), "Fourth Director", "Comedy")}, evidence...), now)
+	if match, ok := profile.Match(Title{Genres: []string{"Comedy"}}); !ok || match.Reason != "Comedy" || match.Percent < minMatch || match.Percent > maxMatch {
+		t.Errorf("a comedy after two comedies: %+v %v", match, ok)
+	}
+}
+
 // Evidence counts less as it ages: comedies finished yesterday come
 // before thrillers finished two years ago, as many times.
 func TestOlderEvidenceCountsLess(t *testing.T) {

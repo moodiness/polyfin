@@ -16,14 +16,18 @@ import (
 // of similar titles reads. Apps ask for it each time a title's page opens.
 const similarSources = 8
 
-// Similar lists up to count titles of the same kind as a movie or series,
-// closest first. Addons recommend nothing, so the candidates are the titles
-// on the first page of catalogs narrowed to one of the title's genres
-// through their genre filter, as on genre pages: each catalog once, with
-// the first of the title's genres it offers, those of the user's libraries
-// first, then the other catalogs of the user's addons. They are ranked with
-// Jellyfin's weights (see similarity); candidates that rank equal keep the
-// catalogs' order. Other items have no similar titles.
+// Similar lists up to count titles of the same kind as a movie, a series or
+// an album, closest first: a movie's are movies, a series' series and an
+// album's albums (see similarAlbums), as Jellyfin's. Addons recommend
+// nothing, so a movie's or series' candidates are the titles on the first
+// page of catalogs narrowed to one of the title's genres through their
+// genre filter, as on genre pages: each catalog once, with the first of the
+// title's genres it offers, those of the user's libraries first, then the
+// other catalogs of the user's addons. A catalog of the title's type may
+// list titles of other types, a list addon's movies, series and channels:
+// those are no candidates. They are ranked with Jellyfin's weights (see
+// similarity); candidates that rank equal keep the catalogs' order. Other
+// items, and titles without genres, have no similar titles.
 func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.ID, count int) ([]Item, error) {
 	v, err := s.view(ctx, user)
 	if err != nil {
@@ -33,8 +37,11 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 	if err != nil {
 		return nil, err
 	}
-	if title.Kind != KindMovie && title.Kind != KindSeries || len(title.Genres) == 0 || count <= 0 {
+	if title.Kind != KindMovie && title.Kind != KindSeries && title.Kind != KindAlbum || len(title.Genres) == 0 || count <= 0 {
 		return nil, nil
+	}
+	if title.Kind == KindAlbum {
+		return s.similarAlbums(ctx, user, title, count)
 	}
 	sources := similarSourcesOf(v, title)
 	pages := make([][]stremio.Meta, len(sources))
@@ -73,7 +80,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 			}
 			added = true
 			item, r, err := listed{metas[rank], sources[i]}.title(s, accounts.ID{}, v.country)
-			if err != nil || seen[item.ID] || sameTitle(title, item) {
+			if err != nil || item.Kind != title.Kind || seen[item.ID] || sameTitle(title, item) {
 				continue
 			}
 			seen[item.ID] = true
@@ -100,6 +107,38 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 	}
 	s.translate(ctx, v, items)
 	return s.overridden(items), s.save(ctx, records)
+}
+
+// similarAlbums lists up to count albums of the user's music libraries that
+// share a genre with album, closest first (see similarity), as Jellyfin
+// lists an album's similar albums by its genres. Only local music folders'
+// albums have genres, addons telling none. Only the libraries' rows are
+// read, and the albums their items name, no album page (see
+// MusicQuery.Shallow). Albums that rank equal keep the libraries' order.
+func (s *Service) similarAlbums(ctx context.Context, user accounts.User, album Item, count int) ([]Item, error) {
+	listed, err := s.Music(ctx, user, MusicQuery{Kinds: []Kind{KindAlbum}, Recursive: true, Shallow: true})
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		item  Item
+		score int
+	}
+	var candidates []candidate
+	seen := map[accounts.ID]bool{album.ID: true}
+	for _, item := range listed {
+		if item.Kind != KindAlbum || seen[item.ID] || sharedGenres(album, item) == 0 {
+			continue
+		}
+		seen[item.ID] = true
+		candidates = append(candidates, candidate{item, similarity(album, item)})
+	}
+	slices.SortStableFunc(candidates, func(a, b candidate) int { return cmp.Compare(b.score, a.score) })
+	items := make([]Item, 0, min(count, len(candidates)))
+	for _, c := range candidates[:min(count, len(candidates))] {
+		items = append(items, c.item)
+	}
+	return items, nil
 }
 
 // similarSourcesOf picks the catalogs similar titles are read from: up to
@@ -172,12 +211,7 @@ func sameTitle(title, candidate Item) bool {
 // director and 15 per shared actor. Release years five years apart or less
 // add up to 5 more, the closer the more.
 func similarity(title, candidate Item) int {
-	score := 0
-	for _, genre := range candidate.Genres {
-		if slices.ContainsFunc(title.Genres, func(other string) bool { return strings.EqualFold(other, genre) }) {
-			score += 10
-		}
-	}
+	score := 10 * sharedGenres(title, candidate)
 	weights := map[string]int{"Director": 50, "Actor": 15}
 	for _, person := range candidate.People {
 		if weight := weights[person.Type]; weight > 0 &&
@@ -190,4 +224,16 @@ func similarity(title, candidate Item) int {
 		score += max(0, 5-max(gap, -gap))
 	}
 	return score
+}
+
+// sharedGenres counts the genres of candidate that title has too, whatever
+// their case.
+func sharedGenres(title, candidate Item) int {
+	shared := 0
+	for _, genre := range candidate.Genres {
+		if slices.ContainsFunc(title.Genres, func(other string) bool { return strings.EqualFold(other, genre) }) {
+			shared++
+		}
+	}
+	return shared
 }

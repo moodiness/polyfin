@@ -525,7 +525,10 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 ### Similar titles for apps
 
+- `/Items/{id}/Similar`, `/Movies/{id}/Similar`, `/Shows/{id}/Similar`, `/Trailers/{id}/Similar` and `/Albums/{id}/Similar` answer the same list, whichever is asked: a movie's items are of `Type` `Movie`, a series' `Series` and an album's `MusicAlbum`. Other items answer an empty list (see [Similar titles](addons-and-libraries.md#similar-titles)).
+- `excludeArtistIds` leaves out the albums of those artists, as jellyfin-web asks on an album's page. `limit` defaults to 50.
 - With **Similar titles** off, every Similar route answers an empty list. An unknown title is still not found.
+- Jellyfin lists a series' series and an album's albums of its genres, less those of `excludeArtistIds` ([SeriesSimilarItemsProvider.cs, line 46](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/SimilarItems/SeriesSimilarItemsProvider.cs#L46), [MusicAlbumSimilarItemsProvider.cs, lines 41 to 47](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/SimilarItems/MusicAlbumSimilarItemsProvider.cs#L41-L47)). For a movie it lists movies, and trailers and Live TV programmes too while **Enable external content in suggestions** is on, its default ([MovieSimilarItemsProvider.cs, lines 116 to 120](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/SimilarItems/MovieSimilarItemsProvider.cs#L116-L120)). Polyfin lists movies only. It has no `/Artists/{id}/Similar`.
 
 ### Studios for apps
 
