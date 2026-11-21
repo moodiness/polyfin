@@ -18,14 +18,16 @@ import (
 // (429, or 503 with Retry-After) starts its server's wait, as a refused
 // catalog page does, so that the checks that follow do not ask it either.
 // They are background work, paced (see pacing): an addon whose server's
-// background requests pause is not asked either. Only the answers of the
-// addons asked count: complete is false when an addon was not asked,
-// failed, or answered only notices refusing the request for its rate
-// (see refusedNotices), in which case versions are those of the others.
-// Other notices alone, such as an addon's summary of the streams its own
-// filters left out, are an answer with nothing to play, or the list it
-// gave before when it has one (see noticedAnswer). A movie waiting for
-// its digital release has none, and its addons are not asked.
+// background requests pause is not asked either, nor one that had nothing
+// for the title lately (see nothingAnswer), whose answer counts again.
+// Only the answers of the addons asked count: complete is false when an
+// addon was not asked, failed, or answered only notices refusing the
+// request for its rate (see limitedNotices), in which case versions are
+// those of the others. Other notices alone, such as an addon's summary of
+// the streams its own filters left out, are an answer with nothing to
+// play, or the list it gave before when it has one (see
+// rememberedAnswer). A movie waiting for its digital release has none,
+// and its addons are not asked.
 func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id accounts.ID) (versions []Version, complete bool, err error) {
 	ctx = Background(ctx)
 	t, v, err := s.target(ctx, user, id)
@@ -64,13 +66,14 @@ func (s *Service) WatchlistVersions(ctx context.Context, user accounts.User, id 
 			switch {
 			case err == nil && len(streams) > 0 && streamKind.count(streams) == 0:
 				// Notices alone, never stored.
-				answered[i] = !refusedNotices(streams)
+				answered[i] = !limitedNotices(streams)
 				nothing[i] = answered[i]
 			case err == nil:
 				answered[i] = true
 			case errors.Is(err, errOnlyNotices):
-				notices, _ := s.noticed.Get(entry.key())
-				answered[i] = !refusedNotices(notices)
+				// Only a refusal for the rate is remembered as noticed.
+				_, refused := s.noticed.Get(entry.key())
+				answered[i] = !refused
 			case ctx.Err() == nil:
 				s.catalogRefused(entry.addon.ManifestURL, err)
 			}

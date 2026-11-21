@@ -48,9 +48,10 @@ func TestWatchlistChecksAskNoAddonThatAskedToWait(t *testing.T) {
 
 // An addon's answer of notices alone that refuse nothing, such as its
 // summary of the streams its own filters left out, settles a watchlist
-// check: with nothing to play, or with the list it gave before. Notices
-// refusing the request for its rate leave the title unsettled, as a
-// failure does.
+// check: with nothing to play, or with the list it gave before. The
+// checks within the hour after it get it again without asking the addon.
+// Notices refusing the request for its rate leave the title unsettled, as
+// a failure does.
 func TestWatchlistChecksSettleOnNoticesThatRefuseNothing(t *testing.T) {
 	t.Parallel()
 	// 0 answers a summary, 1 a refusal for the rate, 2 one stream.
@@ -77,6 +78,8 @@ func TestWatchlistChecksSettleOnNoticesThatRefuseNothing(t *testing.T) {
 	}
 	check("a summary", 0, 1, true)
 	e.wait(noticeLife + time.Second)
+	check("the summary within the hour", 0, 1, true)
+	e.wait(nothingFirst)
 	mode.Store(1)
 	check("a refusal", 0, 2, false)
 	e.wait(paceWait + time.Second)

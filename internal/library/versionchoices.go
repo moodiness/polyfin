@@ -100,28 +100,51 @@ func (c choiceSet) blocked(version Version) (VersionBlock, bool) {
 }
 
 // versionChoices holds the choices read from the database, nil until
-// read; mu orders the changes, each read again whole afterwards.
+// read; mu orders the changes, each read again whole afterwards. read
+// reads them, readChoices unless a test set another.
 type versionChoices struct {
-	set atomic.Pointer[choiceSet]
-	mu  sync.Mutex
+	set  atomic.Pointer[choiceSet]
+	mu   sync.Mutex
+	read func(context.Context) (choiceSet, error)
 }
 
 // versionChoices returns what administrators chose for versions, reading
-// it from the database the first time. A read that fails is logged, and
-// tried again by the next listing: meanwhile, nothing is pinned or blocked.
+// it from the database the first time. The listings that ask before it
+// is read share one read: after a restart, the rows of a home screen ask
+// at once, each from several items. A read that fails is logged, and
+// tried again by the next listing: meanwhile, nothing is pinned or
+// blocked.
 func (s *Service) versionChoices(ctx context.Context) choiceSet {
 	if set := s.choices.set.Load(); set != nil {
 		return *set
 	}
-	set, err := s.readChoices(ctx)
+	read, err := s.shared(ctx, "version choices", func(ctx context.Context) (any, error) {
+		// A listing that asked once the shared read had ended finds the
+		// choices it read.
+		if set := s.choices.set.Load(); set != nil {
+			return set, nil
+		}
+		readChoices := s.choices.read
+		if readChoices == nil {
+			readChoices = s.readChoices
+		}
+		set, err := readChoices(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s.choices.set.CompareAndSwap(nil, &set)
+		if kept := s.choices.set.Load(); kept != nil {
+			return kept, nil
+		}
+		return &set, nil
+	})
 	if err != nil {
 		if ctx.Err() == nil {
 			s.logger.Warn("The pinned and blocked versions could not be read", "error", err)
 		}
 		return choiceSet{}
 	}
-	s.choices.set.CompareAndSwap(nil, &set)
-	return *s.choices.set.Load()
+	return *read.(*choiceSet)
 }
 
 // readChoices reads the pins and blocks from the database.

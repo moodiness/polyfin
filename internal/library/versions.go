@@ -426,6 +426,10 @@ func (s *Service) versionsOf(ctx context.Context, user accounts.User, id account
 		// not asked for them again, as Stremio apps do not ask it.
 		serving = slices.DeleteFunc(serving, func(source streamSource) bool { return source.addon.ID == t.embeddedBy.addon.ID })
 	}
+	if mode != knownOnly && !markOf(ctx).background {
+		// A user opens or plays the title.
+		s.userListing(serving)
+	}
 	tracked := s.tracked()
 	tracked.titles.Put(listedTitle{t.metaType, t.id}, t.item)
 	for _, source := range serving {
@@ -976,16 +980,16 @@ func (s *Service) streams(ctx context.Context, entry installed, contentType, id 
 // and renewals included (see VersionsNow and Renew). An answer stored is
 // followed up; until the follow-ups end, it is listed with the items it
 // lacks of the stale list it replaced (see followUpList). An answer of
-// notices alone, nothing to play, is not stored: it is remembered for
-// noticeLife, during which the callers get it again without asking the
-// addon (see noticedAnswer). A refresh of the title while the addon is
-// asked leaves its answer out: the addon is asked again, for the callers
-// waiting too (see forgetLists). Background work's request waits for its
-// turn before it is shared (see streamTurn), so that a user's request
-// never waits behind it.
+// notices alone, nothing to play, is not stored: it is remembered, as an
+// answer with nothing to play is (see nothingAnswer), during which the
+// callers get it again without asking the addon (see rememberedAnswer). A
+// refresh of the title while the addon is asked leaves its answer out: the
+// addon is asked again, for the callers waiting too (see forgetLists).
+// Background work's request waits for its turn before it is shared (see
+// streamTurn), so that a user's request never waits behind it.
 func (s *Service) streamAnswer(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	for {
-		if streams, ok, err := s.noticedAnswer(ctx, key); ok {
+		if streams, ok, err := s.rememberedAnswer(ctx, entry, key); ok {
 			return streams, err
 		}
 		asking, release, answered, err := s.streamTurn(ctx, entry, key)
@@ -1029,7 +1033,7 @@ func (s *Service) streamTurn(ctx context.Context, entry installed, key streamKey
 	if l, _, ok := s.streamListOf(ctx, key); ok && !l.at.Before(waited) {
 		return asking, release, func() ([]stremio.Stream, error) { return l.items, nil }, nil
 	}
-	if streams, ok, err := s.noticedAnswer(ctx, key); ok {
+	if streams, ok, err := s.rememberedAnswer(ctx, entry, key); ok {
 		return asking, release, func() ([]stremio.Stream, error) { return streams, err }, nil
 	}
 	return asking, release, nil, nil
@@ -1038,8 +1042,9 @@ func (s *Service) streamTurn(ctx context.Context, entry installed, key streamKey
 // askStreamsOf asks an addon for its streams for a title once, as
 // streamAnswer does. A failure, and an answer of notices alone, are
 // logged here, once whoever waits for it (see streamsFailed), and the
-// notices remembered (see noticedAnswer), as is the failure (see
-// failedFor) until the addon answers.
+// notices remembered (see rememberedAnswer), as is the failure (see
+// failedFor) until the addon answers, and an empty answer (see
+// streamsListed).
 func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamKey) ([]stremio.Stream, error) {
 	flight := streamsFlight(key)
 	s.streamLogs.waits(ctx, flight)
@@ -1048,16 +1053,21 @@ func (s *Service) askStreamsOf(ctx context.Context, entry installed, key streamK
 		defer done()
 		s.logger.Debug("An addon is asked for streams", "addon", entry.addon.LogName(), "type", key.contentType, "id", key.id)
 		streams, err := s.fetchStreams(ctx, entry, key.contentType, key.id)
-		if userWaited := s.streamLogs.ended(flight); err != nil {
+		userWaited := s.streamLogs.ended(flight)
+		if err != nil {
 			s.streamsFailed(ctx, entry, key, userWaited, err)
 			s.failedNow(key, asked)
 			return nil, err
 		}
 		s.failedLately.Delete(key)
 		if len(streams) > 0 && streamKind.count(streams) == 0 {
-			return s.noticesAnswered(ctx, entry, key, asked, streams)
+			return s.noticesAnswered(ctx, entry, key, asked, userWaited, streams)
 		}
-		return s.followStreams(ctx, entry, key, asked, streams)
+		listed, err := s.followStreams(ctx, entry, key, asked, streams)
+		if err == nil {
+			s.streamsListed(entry, key, asked, len(streams) == 0)
+		}
+		return listed, err
 	})
 }
 
@@ -1079,42 +1089,64 @@ func (s *Service) failed(key streamKey) bool {
 	return ok
 }
 
-// noticeLife is how long an addon's answer of notices alone for a title
-// is remembered: an addon limiting requests refuses at once, and asking
-// it again at once would only prolong the refusal.
+// noticeLife is how long an addon's answer of notices alone refusing the
+// request for its rate (see limitedNotices) is remembered: it refuses at
+// once, and asking it again at once would only prolong the refusal.
 const noticeLife = time.Minute
 
 // noticesAnswered remembers notices, an addon's answer of notices alone
-// to request asked (see ask), and logs it (see noticesLogged). A request
-// a refresh forgot meanwhile is errForgotten, its answer left out. It
-// returns what noticedAnswer returns.
-func (s *Service) noticesAnswered(ctx context.Context, entry installed, key streamKey, asked uint64, notices []stremio.Stream) ([]stremio.Stream, error) {
+// to request asked (see ask), and logs it (see noticesLogged), userWaited
+// telling whether a user waited for it: for noticeLife when it refuses
+// the request for its rate, else as an answer with nothing to play (see
+// nothingNow). A request a refresh forgot meanwhile is errForgotten, its
+// answer left out. It returns what rememberedAnswer returns.
+func (s *Service) noticesAnswered(ctx context.Context, entry installed, key streamKey, asked uint64, userWaited bool,
+	notices []stremio.Stream) ([]stremio.Stream, error) {
+	limited := limitedNotices(notices)
 	s.followUps.mu.Lock()
 	if s.followUps.asking[followKey{listStreams, key}] != asked {
 		s.followUps.mu.Unlock()
 		return nil, errForgotten
 	}
-	s.noticed.Put(key, notices)
+	if limited {
+		s.noticed.Put(key, notices)
+	} else {
+		s.nothingNow(entry, key, notices)
+	}
 	s.followUps.mu.Unlock()
-	streams, _, err := s.noticedAnswer(ctx, key)
+	streams, _, err := s.rememberedAnswer(ctx, entry, key)
 	message := "An addon answered only notices, nothing to play"
 	if err != nil {
 		message = "An addon answered only notices, nothing to play; the streams it listed before are kept"
 	}
-	s.noticesLogged(ctx, entry, key, message, notices)
+	s.noticesLogged(ctx, entry, key, message, userWaited, limited, notices)
 	return streams, err
 }
 
-// noticedAnswer returns, while an addon's answer of notices alone for a
+// rememberedAnswer returns, while an addon's answer of notices alone for a
 // title is remembered (ok), what the callers get instead of asking it:
 // the list kept that has streams to play, with errOnlyNotices, else the
-// notices.
-func (s *Service) noticedAnswer(ctx context.Context, key streamKey) (streams []stremio.Stream, ok bool, err error) {
+// notices. A refusal for the rate is remembered noticeLife, and an answer
+// with nothing to play as nothingFor tells; an empty one, which is kept as
+// its list, for background work only, which gets the list unless one with
+// streams to play replaced it: freshness tells the others (see streams).
+func (s *Service) rememberedAnswer(ctx context.Context, entry installed, key streamKey) (streams []stremio.Stream, ok bool, err error) {
 	notices, ok := s.noticed.Get(key)
 	if !ok {
-		return nil, false, nil
+		var nothing nothingAnswer
+		if nothing, ok = s.nothingFor(ctx, entry, key); !ok {
+			return nil, false, nil
+		}
+		notices = nothing.notices
 	}
-	if kept, _, ok := s.streamListOf(ctx, key); ok && streamKind.count(kept.items) > 0 {
+	kept, _, listed := s.streamListOf(ctx, key)
+	playable := listed && streamKind.count(kept.items) > 0
+	switch {
+	case notices == nil && (!listed || playable || !markOf(ctx).background):
+		return nil, false, nil
+	case notices == nil:
+		return kept.items, true, nil
+	case playable:
 		return kept.items, true, errOnlyNotices
 	}
 	return notices, true, nil

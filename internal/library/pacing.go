@@ -382,10 +382,11 @@ type paceMark struct {
 type paceKey struct{}
 
 // Background marks ctx as background work's, whose requests to addons are
-// paced (see pacing): the work no user waits for, such as listing ahead
-// the titles of home rows, preparing, preloading or checking watchlists.
-// Health counts its requests as background work's (see
-// stremio.InBackground).
+// paced (see pacing), and leave alone for a while an addon that had
+// nothing to play for a title (see nothingAnswer): the work no user waits
+// for, such as listing ahead the titles of home rows, preparing,
+// preloading or checking watchlists. Health counts its requests as
+// background work's (see stremio.InBackground).
 func Background(ctx context.Context) context.Context {
 	return context.WithValue(stremio.InBackground(ctx), paceKey{}, paceMark{background: true})
 }

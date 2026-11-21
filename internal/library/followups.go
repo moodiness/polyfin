@@ -496,13 +496,15 @@ func (s *Service) forgetLists(ctx context.Context, key streamKey) {
 }
 
 // forgetStreams forgets an addon's stream list for a title as forgetLists
-// does, its subtitle list kept (see AskAgain), and its failure to give it
-// lately. A request asking the addon since before is not joined any more:
-// the next one asks it anew.
+// does, its subtitle list kept (see AskAgain), its failure to give it
+// lately, and its answers with nothing to play (see nothingAnswer). A
+// request asking the addon since before is not joined any more: the next
+// one asks it anew.
 func (s *Service) forgetStreams(ctx context.Context, key streamKey) {
 	s.stopFollowUps(key, listStreams)
 	s.flight.Forget(streamsFlight(key))
 	s.noticed.Delete(key)
+	s.tracked().nothing.Delete(key)
 	s.failedLately.Delete(key)
 	s.dropStreams(ctx, key)
 }
@@ -524,10 +526,10 @@ func (s *Service) ForgetAddonVersionLists(ctx context.Context, addon accounts.ID
 // forgetVersionLists forgets the lists the addons gave for titles, every
 // addon's, or addon's alone unless it is nil, as forgetLists does for a
 // title: their stream lists, saved ones included, their subtitle lists,
-// their answers of notices alone, their failures remembered (see
-// failedFor), and the versions known from them or with a mirror of
-// theirs. Their follow-ups stop, and the requests asking them since
-// before are not joined any more: their answers, which may be
+// their answers of notices alone and with nothing to play, their failures
+// remembered (see failedFor), and the versions known from them or with a
+// mirror of theirs. Their follow-ups stop, and the requests asking them
+// since before are not joined any more: their answers, which may be
 // what the forgetting is to replace, are not stored, the addons are asked
 // anew (see ask). The lists are dropped under every list's lock (see
 // listLocks): a save or a read back under way ends first, and none after
@@ -572,6 +574,7 @@ func (s *Service) forgetVersionLists(ctx context.Context, addon *accounts.ID) (i
 	})
 	dropAll(s.subtitleLists, of)
 	dropAll(s.noticed, of)
+	dropAll(tracked.nothing, of)
 	dropAll(s.failedLately, of)
 	s.versions.DeleteFunc(func(_ accounts.ID, version Version) bool {
 		return of(version.Origin.Addon) || slices.ContainsFunc(version.Mirrors, func(mirror Version) bool { return of(mirror.Origin.Addon) })

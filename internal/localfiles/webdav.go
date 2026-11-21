@@ -34,6 +34,8 @@ type webdavShare struct {
 	client         *http.Client
 	// bounds bound what is read and kept of one folder's listing.
 	bounds listBounds
+	// deep tells whether the share is listed deep (see deepRemote).
+	deep deepLists
 }
 
 func newWebDAV(u *url.URL, user, password string) *webdavShare {
@@ -101,9 +103,11 @@ func statusError(status int) error {
 	return fmt.Errorf("%w: status %d", errShareUnreachable, status)
 }
 
-// davResponse is one entry of a PROPFIND's answer.
+// davResponse is one entry of a PROPFIND's answer: Status is set for one
+// the server could not list.
 type davResponse struct {
 	Href     string `xml:"DAV: href"`
+	Status   string `xml:"DAV: status"`
 	Propstat []struct {
 		Status string `xml:"DAV: status"`
 		Prop   struct {
@@ -116,27 +120,27 @@ type davResponse struct {
 	} `xml:"DAV: propstat"`
 }
 
-func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, error) {
-	folder := c.address(rel, true)
-	response, err := c.request(ctx, "PROPFIND", folder,
-		http.Header{"Depth": {"1"}, "Content-Type": {"application/xml; charset=utf-8"}}, propfind)
+// propfind lists the folder at rel to depth, "1" or "infinity", within
+// b: each is given each entry of the answer in turn, with its path,
+// decoded and clean, and its properties, nil when the server gave none;
+// failed tells an entry the server answered with a failure of its own.
+// The answer is read entry by entry, never whole, each within the bounds
+// of one. read tells an error met reading the answer, returned as is; the
+// others are classed (see statusError).
+func (c *webdavShare) propfind(ctx context.Context, rel, depth string, b listBounds,
+	each func(entryPath string, entry *remoteEntry, failed bool) error) (read bool, err error) {
+	response, err := c.request(ctx, "PROPFIND", c.address(rel, true),
+		http.Header{"Depth": {depth}, "Content-Type": {"application/xml; charset=utf-8"}}, propfind)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusMultiStatus {
-		return nil, statusError(response.StatusCode)
+		return false, statusError(response.StatusCode)
 	}
-	// The answer is read entry by entry, never whole, each within the
-	// bounds of one.
-	kept := folderList{bounds: c.bounds}
-	self := path.Clean(folder.Path)
-	err = eachElement(response.Body, c.bounds, func(decoder *xml.Decoder, start xml.StartElement) error {
+	return true, eachElement(response.Body, b, func(decoder *xml.Decoder, start xml.StartElement) error {
 		if start.Name.Space != "DAV:" || start.Name.Local != "response" {
 			return decoder.Skip()
-		}
-		if err := kept.another(); err != nil {
-			return err
 		}
 		var r davResponse
 		if err := decoder.DecodeElement(&r, &start); err != nil {
@@ -156,6 +160,17 @@ func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, erro
 			modified, _ := http.ParseTime(strings.TrimSpace(p.Prop.Modified))
 			entry = &remoteEntry{name: path.Base(entryPath), folder: p.Prop.ResourceType.Collection != nil, size: size, modified: modified}
 		}
+		return each(entryPath, entry, r.Status != "" && !strings.Contains(r.Status, " 200 "))
+	})
+}
+
+func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, error) {
+	kept := folderList{bounds: c.bounds}
+	self := path.Clean(c.address(rel, true).Path)
+	read, err := c.propfind(ctx, rel, "1", c.bounds, func(entryPath string, entry *remoteEntry, _ bool) error {
+		if err := kept.another(); err != nil {
+			return err
+		}
 		switch {
 		case entry == nil:
 		case entryPath == self:
@@ -171,11 +186,57 @@ func (c *webdavShare) list(ctx context.Context, rel string) ([]remoteEntry, erro
 	switch {
 	case err == nil:
 		return kept.entries, nil
-	case errors.Is(err, errIsFile), errors.As(err, &bound):
+	case !read, errors.Is(err, errIsFile), errors.As(err, &bound):
 		return nil, err
 	}
 	return nil, fmt.Errorf("%w: %v", errShareUnreachable, err)
 }
+
+// listDeep lists the share's folder with PROPFIND at infinite depth,
+// within deepBounds. A server that sends nothing for listTimeout ends it,
+// as one ends the listing of a folder. Servers that refuse such a listing
+// answer it with a failure, a 403 most often.
+func (c *webdavShare) listDeep(ctx context.Context, each func(dir string, e remoteEntry) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	idle := time.AfterFunc(listTimeout, cancel)
+	defer idle.Stop()
+	self := path.Clean(c.base.Path)
+	prefix := strings.TrimSuffix(self, "/") + "/"
+	entries := 0
+	_, err := c.propfind(ctx, "", "infinity", deepBounds, func(entryPath string, entry *remoteEntry, failed bool) error {
+		idle.Reset(listTimeout)
+		if entries++; entries > deepBounds.entries {
+			return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("more than %d entries in a deep listing", deepBounds.entries)}
+		}
+		rel, under := strings.CutPrefix(entryPath, prefix)
+		switch {
+		case failed:
+			return fmt.Errorf("the server could not list %.200q", entryPath)
+		case entry == nil:
+			return nil
+		case entryPath == self:
+			if !entry.folder {
+				return errIsFile
+			}
+			return nil
+		case !under:
+			return nil
+		case len(entry.name) > deepBounds.name:
+			return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("a name of more than %d bytes", deepBounds.name)}
+		}
+		dir := path.Dir(rel)
+		if dir == "." {
+			dir = ""
+		}
+		e := *entry
+		e.name = strings.Clone(e.name)
+		return each(dir, e)
+	})
+	return err
+}
+
+func (c *webdavShare) deepLists() *deepLists { return &c.deep }
 
 func (c *webdavShare) open(ctx context.Context, rel string) (io.ReadSeekCloser, time.Time, error) {
 	u := c.address(rel, false)
