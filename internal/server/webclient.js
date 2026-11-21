@@ -140,15 +140,19 @@
 // jellyfin-web leaves no room for the arrow in those menus. Their text ends
 // with "…" before it; the open menu still lists whole names.
 //
-// Fifth, the title of a collection library's "Recently Added" row on the
-// home page opens the library on the screen its user chose (Settings › Home
-// › Default screen), as the library's links in the header and the menu do.
-// jellyfin-web, which calls a library without a CollectionType mixed, opens
-// every library's Suggestions from that title (#/mixed?…&tab=1), and a
-// collection library has no suggestions of its own. The script drops the
-// tab from such a link as it is pressed or clicked, before jellyfin-web
-// follows it: pressed covers a link opened in a new tab, clicked one
-// followed with the keyboard.
+// Fifth, the title of a collection library's or a catalog library's
+// "Recently Added" row on the home page opens the library on the screen its
+// user chose (Settings › Home › Default screen), as the library's links in
+// the header and the menu do. jellyfin-web opens a library's Suggestions
+// from that title (tab=1). It calls a library without a CollectionType
+// mixed (#/mixed?…), and a collection library has no suggestions of its
+// own. A catalog library lists an addon's catalog whose titles Polyfin does
+// not store: its row is the catalog's first titles, not recent additions,
+// so its Suggestions page is empty or repeats the row. The views
+// /Polyfin/UserViews marks Catalog (see Seventh) tell those libraries'
+// #/movies? and #/tv? links. The script drops the tab from such a link as
+// it is pressed or clicked, before jellyfin-web follows it: pressed covers a
+// link opened in a new tab, clicked one followed with the keyboard.
 //
 // Sixth, it closes the generic error jellyfin-web shows on top of a refused
 // playback's own error. When a title's PlaybackInfo answers with an
@@ -165,18 +169,19 @@
 // administrator for the server's libraries or by the user for their own;
 // each keeps its row on the home page, and other apps list it. Once a user
 // is signed in, it asks /Polyfin/UserViews, which lists the user's views as
-// /UserViews does, in its order, each with HideInMenus, and keeps one style
-// that hides the links of each such library: the buttons of the top bar
-// (jellyfin-web 12.4's UserViewNav, MUI Buttons in the AppBar whose address
-// holds the view's identifier), its More menu (#user-view-overflow-menu),
-// the side menu of that layout (an MUI Drawer, used below 900 pixels wide
-// instead of the buttons) and the legacy layout's side menu
-// (.libraryMenuOptions, by data-itemid). Other links to the library, such as
-// its home row's title, the tabs of its page or the search button on that
-// page, are left alone. The top bar shows the first 3 views, 5 from 1200
-// pixels wide and 8 from 1536 (MUI's lg and xl breakpoints), or all of them
-// when only one more would go under More, its button listing the rest; the
-// views come after config.json's menuLinks, none in the one Polyfin ships.
+// /UserViews does, in its order, each with HideInMenus and Catalog (see
+// Fifth), and keeps one style that hides the links of each such library:
+// the buttons of the top bar (jellyfin-web 12.4's UserViewNav, MUI Buttons
+// in the AppBar whose address holds the view's identifier), its More menu
+// (#user-view-overflow-menu), the side menu of that layout (an MUI Drawer,
+// used below 900 pixels wide instead of the buttons) and the legacy
+// layout's side menu (.libraryMenuOptions, by data-itemid). Other links to
+// the library, such as its home row's title, the tabs of its page or the
+// search button on that page, are left alone. The top bar shows the first 3
+// views, 5 from 1200 pixels wide and 8 from 1536 (MUI's lg and xl
+// breakpoints), or all of them when only one more would go under More, its
+// button listing the rest; the views come after config.json's menuLinks,
+// none in the one Polyfin ships.
 // Where every view More would list is hidden, its button is hidden too. It
 // asks again whenever the user signed in changes, which a route change goes
 // with; jellyfin-web may restore the user after the first route, so after
@@ -2559,16 +2564,28 @@
     if (ripple) ripple.textContent = ''
     return item
   }
-  // The link pressed or clicked, if it opens a collection library on
-  // Suggestions, without the tab: the library opens on its chosen screen.
+  // The link pressed or clicked, if it opens a collection library or a
+  // catalog library on Suggestions, without the tab: the library opens on
+  // its chosen screen.
   function chosenScreen(event) {
     var link = event.target && event.target.closest && event.target.closest('a[href]')
     var href = link ? link.getAttribute('href') : ''
-    if (!/^#!?\/mixed\?/i.test(href)) return
+    if (!/^#!?\/mixed\?/i.test(href) && !(/^#!?\/(movies|tv)\?/i.test(href) && catalogView(href))) return
     var chosen = href.replace(/([?&])tab=1(&|$)/, function (match, before, after) {
       return after ? before : ''
     })
     if (chosen !== href) link.setAttribute('href', chosen)
+  }
+  // catalogView reports whether the topParentId of href is a view that the
+  // answer kept for the user signed in marks Catalog.
+  function catalogView(href) {
+    var found = /[?&]topparentid=([^&]*)/i.exec(href)
+    var saved = savedViews()
+    if (!found || !saved || !hiddenFor || saved.user !== hiddenFor) return false
+    var id = decodeURIComponent(found[1]).replace(/-/g, '').toLowerCase()
+    return saved.items.some(function (view) {
+      return !!view && view.Catalog === true && String(view.Id).replace(/-/g, '').toLowerCase() === id
+    })
   }
   // The last alert shown, and how close a second alert with the same title
   // follows it to be the duplicate one.

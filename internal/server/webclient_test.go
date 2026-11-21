@@ -346,6 +346,80 @@ process.stdout.write(JSON.stringify(results))
 	}
 }
 
+// The title of a catalog library's row opens the library on its chosen
+// screen too: its row is the catalog's first titles, and its Suggestions
+// page is empty or repeats them. The views the kept /Polyfin/UserViews
+// answer marks Catalog tell those libraries, whatever their identifiers'
+// dashes and case; other libraries, views the answer does not list and
+// other tabs keep their link, as do all without a kept answer.
+func TestRowTitlesOpenACatalogLibraryOnItsChosenScreen(t *testing.T) {
+	t.Parallel()
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is not installed")
+	}
+	// The link each one becomes once clicked, with the answer kept.
+	links := map[string]string{
+		"#/movies?topParentId=aaaa-1111&collectionType=movies&tab=1": "#/movies?topParentId=aaaa-1111&collectionType=movies",
+		"#!/tv?tab=1&topParentId=AAAA1111":                           "#!/tv?topParentId=AAAA1111",
+		"#/tv?topParentId=aaaa1111&collectionType=tvshows&tab=1":     "#/tv?topParentId=aaaa1111&collectionType=tvshows",
+		"#/movies?topParentId=aaaa1111&tab=3":                        "#/movies?topParentId=aaaa1111&tab=3",
+		"#/movies?topParentId=bbbb2222&collectionType=movies&tab=1":  "#/movies?topParentId=bbbb2222&collectionType=movies&tab=1",
+		"#/tv?topParentId=cccc3333&collectionType=tvshows&tab=1":     "#/tv?topParentId=cccc3333&collectionType=tvshows&tab=1",
+		"#/details?id=aaaa1111&tab=1":                                "#/details?id=aaaa1111&tab=1",
+		"#/mixed?topParentId=bbbb2222&tab=1":                         "#/mixed?topParentId=bbbb2222",
+	}
+	const harness = scriptRunner + `
+const { script, links } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
+const results = {}
+const kept = JSON.stringify({ user: 'u1', items: [{ Id: 'aaaa1111', HideInMenus: false, Catalog: true }, { Id: 'bbbb2222', HideInMenus: false, Catalog: false }] })
+for (const stored of [true, false]) {
+  for (const href of links) {
+    const listeners = {}
+    const store = stored ? { polyfinUserViews: kept } : {}
+    const localStorage = { getItem: (name) => (name in store ? store[name] : null), setItem: (name, value) => { store[name] = String(value) } }
+    const location = { href: 'http://polyfin.test/web/#/home', hash: '#/home', replace: () => {} }
+    const history = { pushState: () => {}, replaceState: () => {} }
+    const document = { head: { appendChild: () => {} }, createElement: () => ({}) }
+    runScript(script, { location, history, URL, document, window: { localStorage }, addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) } })
+    const attributes = { href }
+    const link = { parentNode: null, closest: (selector) => (selector === 'a[href]' ? link : null), getAttribute: (name) => attributes[name] ?? null, setAttribute: (name, value) => { attributes[name] = String(value) } }
+    for (const listener of listeners.click || []) listener({ type: 'click', target: link })
+    results[(stored ? 'kept ' : 'none ') + href] = attributes.href
+  }
+}
+process.stdout.write(JSON.stringify(results))
+`
+	hrefs := make([]string, 0, len(links))
+	for href := range links {
+		hrefs = append(hrefs, href)
+	}
+	input, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "links": hrefs})
+	command := exec.CommandContext(t.Context(), node, "-e", harness)
+	command.Stdin = strings.NewReader(string(input))
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	var results map[string]string
+	if err := json.Unmarshal(output, &results); err != nil {
+		t.Fatalf("node printed %q: %v", output, err)
+	}
+	if len(results) != len(links)*2 {
+		t.Fatalf("%d results for %d links", len(results), len(links))
+	}
+	for key, got := range results {
+		href := key[strings.Index(key, "#"):]
+		want := links[href]
+		if strings.HasPrefix(key, "none ") && !strings.Contains(href, "/mixed?") {
+			want = href
+		}
+		if got != want {
+			t.Errorf("%s: became %q, want %q", key, got, want)
+		}
+	}
+}
+
 // The title of a collection library's "Recently Added" row on the home
 // page, which jellyfin-web opens on Suggestions (#/mixed?…&tab=1), opens the
 // library on the screen its user chose instead: the script drops the tab
