@@ -240,13 +240,14 @@ func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 	}
 	var root, rel, kind, image string
 	var title int
+	var follow bool
 	var d discInput
 	err = s.db.QueryRow(ctx, `SELECT a.manifest_url, f.path, l.kind, coalesce(i.kind, ''), coalesce(i.title, 0),
-			f.addon_id, l.share_user, l.share_password, f.size, f.modified
+			f.addon_id, l.share_user, l.share_password, f.size, f.modified, l.follow_links
 		FROM local_files f JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id
 		LEFT JOIN local_disc_images i ON i.addon_id = f.addon_id AND i.path = regexp_replace(f.path, '#[0-9]+$', '')
 		WHERE f.id = $1`, id).
-		Scan(&root, &rel, &kind, &image, &title, &d.folder, &d.user, &d.sealed, &d.size, &d.modified)
+		Scan(&root, &rel, &kind, &image, &title, &d.folder, &d.user, &d.sealed, &d.size, &d.modified, &follow)
 	d.id = id
 	if errors.Is(err, pgx.ErrNoRows) {
 		return discInput{}, ErrGone
@@ -266,11 +267,7 @@ func (s *Service) disc(ctx context.Context, key string) (discInput, error) {
 			return discInput{}, ErrGone
 		}
 		folder = func(rel string) (string, error) {
-			dir, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
-			if err != nil || !within(real, dir) {
-				return "", ErrGone
-			}
-			return dir, nil
+			return s.resolve(ctx, d.folder, follow, real, rel)
 		}
 	}
 	base, number, titled := titleOf(rel)
