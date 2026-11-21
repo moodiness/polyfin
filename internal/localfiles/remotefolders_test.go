@@ -176,8 +176,9 @@ func TestRemoteFoldersAreScannedAndRead(t *testing.T) {
 					t.Fatalf("at %d: %v", off, err)
 				}
 			}
+			// Each read is no stream: it asks its own block alone.
 			if c.ranges != nil {
-				if got := c.ranges()[before:]; !slices.Equal(got, []string{"bytes=2097152-", "bytes=0-"}) {
+				if got := c.ranges()[before:]; !slices.Equal(got, []string{"bytes=2097152-3145727", "bytes=0-1048575"}) {
 					t.Errorf("ranges read: %v", got)
 				}
 			}

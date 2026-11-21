@@ -318,6 +318,9 @@ func TestFirstBytesAreReadForTheChosenVersionAlone(t *testing.T) {
 	if _, warmed := s.warmed.Get(version.ID); warming || warmed {
 		t.Fatal("planning the version warmed it")
 	}
+	// The index read ahead during the analysis may still hold the source:
+	// joined, it has released it once its result comes.
+	<-s.doShared("index ahead "+version.ID.String(), func() (any, error) { return nil, nil })
 	// The index read is kept: the file's bytes are all a warm lacks now.
 	if !s.sources.Discard(version.ID) {
 		t.Fatal("the source is held")

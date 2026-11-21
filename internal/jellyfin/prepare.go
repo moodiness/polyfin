@@ -440,16 +440,6 @@ func episodeAfter(episodes []library.Item, current accounts.ID) (library.Item, b
 	return episodes[regular[i+1]], true
 }
 
-// unanalyzed reports whether a version is neither analyzed nor recently
-// failed, which a preparation would only repeat.
-func (h *Handler) unanalyzed(ctx context.Context, version library.Version) bool {
-	if h.Playback.Failed(version.ID) {
-		return false
-	}
-	_, analyzed := h.Playback.Analyzed(ctx, version.ID)
-	return !analyzed
-}
-
 // idleTorrent reports whether a version is a torrent's file that no
 // playback reads now.
 func (h *Handler) idleTorrent(version library.Version) bool {
