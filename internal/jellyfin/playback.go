@@ -1462,6 +1462,9 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	if !named {
 		version, chosen = h.lastChosen(r.Context(), user, grant, item, wanted)
 	}
+	// Whether the title stands for the version, which another may then
+	// stand in for (see analyzedFirst).
+	standsIn := chosen || wanted == item.ID && versioned(item.Kind)
 	if !chosen {
 		if wanted == item.ID && versioned(item.Kind) {
 			wanted = h.firstWorkingVersion(h.mediaContext(r, servedToAnyone, user), user, item)
@@ -1473,12 +1476,27 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// An app that may not be told where the version comes from gets it
-	// through Polyfin, whatever its grant asks (see keptFromSource).
-	kept := h.keptFromSource(r, user, version)
+	// through Polyfin, whatever its grant asks (see keptFromSource). A
+	// player that authenticates with a header might send it to the source
+	// too: relay instead of redirecting it.
+	relayed := func(version library.Version) (kept, relay bool) {
+		kept = h.keptFromSource(r, user, version)
+		return kept, grant.Relay || kept || strings.Contains(r.Header.Get("Authorization"), "Token=")
+	}
+	kept, relay := relayed(version)
+	// A player with no play session about to be sent from the start to a
+	// version never analyzed has it analyzed first (see analyzedFirst).
+	if grant.Version == (accounts.ID{}) && !relay && fromStart(r) && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) &&
+		h.Playback.Redirects(r, version) {
+		var ok bool
+		if version, ok = h.analyzedFirst(r, user, item, version, standsIn); !ok {
+			http.Error(w, "source unavailable", http.StatusBadGateway)
+			h.streamFailed(r, user, item, query(r, "deviceId"))
+			return
+		}
+		kept, relay = relayed(version)
+	}
 	grant.Relay = grant.Relay || kept
-	// A player that authenticates with a header might send it to the
-	// source too: relay instead of redirecting it.
-	relay := grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	if h.playsLive(r.Context(), item, version) {
 		h.serveChannel(w, r, user, item, version, relay, grant)
 		return
@@ -1543,6 +1561,79 @@ func (h *Handler) lastChosen(ctx context.Context, user accounts.User, grant play
 	}
 	version, err := h.version(ctx, user, item, chosen.version)
 	return version, err == nil
+}
+
+// fromStart reports whether a stream request asks for a version's bytes
+// from their start: with no range, or a range from byte 0, as a player's
+// first request of a file is. Its later requests, as it seeks, ask from
+// further on.
+func fromStart(r *http.Request) bool {
+	asked := strings.TrimSpace(r.Header.Get("Range"))
+	return asked == "" || strings.HasPrefix(asked, "bytes=0-")
+}
+
+// analyzedFirst is the version a stream request from its start, with no
+// play session, is sent to: version, analyzed now if it never was, so
+// that an app is never sent to a file the analysis would refuse, as
+// PlaybackInfo refuses it: an error file or a short clip its host
+// answers in its place, a host that refuses it or asks to slow down, a
+// file that is no video. Infuse and external players ask for a stream
+// with no PlaybackInfo before; the first byte the stream route checks
+// before sending a player to a source tells none of that. The analysis
+// is kept, for the play's PlaybackInfo and its next plays. A version
+// whose analysis failed lately fails again at once, until its failure is
+// forgotten, as in PlaybackInfo.
+//
+// When the title stands for the version (standsIn), as a request naming
+// the title alone, a version whose analysis fails gives way to the next
+// one the title offers, analyzed in turn when never analyzed, within
+// VersionAttempts in all, as a play picking no version tries them. A
+// version the app named itself is the one it plays or nothing: ok is
+// false when its analysis fails, or when none of those tried plays.
+//
+// Torrents, files of Polyfin's own folders and those it reads as inputs,
+// and versions holding one of their source's connections are played as
+// before: there is no other host's answer to check, or the stream reads
+// them as the analysis would.
+func (h *Handler) analyzedFirst(r *http.Request, user accounts.User, item library.Item, version library.Version, standsIn bool) (library.Version, bool) {
+	ctx := r.Context()
+	unchecked := func(v library.Version) bool {
+		return v.Torrent != nil || v.LocalFolder || v.HoldsConnection || h.Playback.ReadsInput(v)
+	}
+	analyzes := func(v library.Version) bool {
+		_, err := h.Playback.Analyze(ctx, v)
+		if err != nil && ctx.Err() == nil {
+			h.Logger.Info("A version a stream asked for could not be analyzed: the app is not sent to it", "addon", v.AddonLog, "error", err)
+		}
+		return err == nil
+	}
+	if unchecked(version) || analyzes(version) {
+		return version, true
+	}
+	if !standsIn || ctx.Err() != nil {
+		return version, false
+	}
+	versions, err := h.Library.Versions(ctx, user, item.ID)
+	if err != nil {
+		return version, false
+	}
+	tries := h.Accounts.Settings().VersionAttempts - 1
+	for _, next := range h.offered(h.mediaContext(r, servedToAnyone, user), user, item, versions) {
+		switch {
+		case next.ID == version.ID || h.didNotStart(next):
+			continue
+		case unchecked(next):
+			return next, true
+		case tries <= 0 || ctx.Err() != nil:
+			return version, false
+		}
+		tries--
+		if analyzes(next) {
+			h.Logger.Info("A stream of the title plays its next version", "addon", next.AddonLog)
+			return next, true
+		}
+	}
+	return version, false
 }
 
 // mimeTypes are the content types of media containers.

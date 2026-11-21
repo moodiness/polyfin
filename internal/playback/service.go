@@ -1274,7 +1274,7 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.
 		http.Error(w, "not one file", http.StatusNotFound)
 		return ErrNoFile
 	}
-	if !delivery.Relay && !navigation(r) && !version.HoldsConnection && version.Torrent == nil && len(version.Headers) == 0 && s.public(r.Context(), version.URL) {
+	if !delivery.Relay && s.Redirects(r, version) {
 		current, err := s.check(r.Context(), version)
 		if err != nil {
 			http.Error(w, "source unavailable", http.StatusBadGateway)
@@ -1286,6 +1286,15 @@ func (s *Service) Serve(w http.ResponseWriter, r *http.Request, version library.
 		return nil
 	}
 	return s.relay(w, r, version, delivery)
+}
+
+// Redirects reports whether Serve sends a player asking r for version to
+// its source, unless the delivery asks to relay it: the source needs no
+// headers, holds no connection, is no torrent, is on a public address,
+// and the request is not a browser opening the address as a page.
+func (s *Service) Redirects(r *http.Request, version library.Version) bool {
+	return !s.ReadsInput(version) && !navigation(r) && !version.HoldsConnection && version.Torrent == nil && len(version.Headers) == 0 &&
+		s.public(r.Context(), version.URL)
 }
 
 // navigation reports whether a browser asks for an address as a page, a

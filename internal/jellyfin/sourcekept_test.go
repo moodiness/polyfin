@@ -381,8 +381,11 @@ func TestAMemberPlaysTheServersSourcesThroughPolyfin(t *testing.T) {
 	}
 
 	// Send apps to the source: every play is sent to its source, an IPTV
-	// source's too.
+	// source's too, once analyzed (see analyzedFirst).
 	k.setting(t, func(settings *accounts.Settings) { settings.SendAppsToSource = true })
+	member := playbackSetup{testServer: k.testServer, user: k.member}
+	member.analyzed(t, k.versions[k.movie], "h264-aac-mp4")
+	member.analyzed(t, k.versions[k.episode], "h264-aac-mp4")
 	for item, address := range map[string]string{k.played: keptResolved, k.movie: keptMovie, k.episode: keptEpisode, k.playlist: keptLive + "55.m3u8",
 		k.stream: keptLive + "56.ts"} {
 		k.ask(t, http.MethodGet, stream(item), nil, 0).sent(t, "with Send apps to the source, "+k.versions[item].URL, "http://"+publicSource+address)
@@ -405,7 +408,9 @@ func TestAnAdministratorIsSentToAServerAddonNotToAnIPTVSource(t *testing.T) {
 	}
 	k.ask(t, http.MethodGet, stream(k.played), nil, 0).sent(t, "the addon's movie", "http://"+publicSource+keptResolved)
 	k.ask(t, http.MethodGet, "/Items/"+k.played+"/Download?ApiKey="+token, nil, 0).sent(t, "a download of the addon's movie", "http://"+publicSource+keptResolved)
-	// A playlist the addon lists is the addon's too.
+	// A playlist the addon lists is the addon's too, once analyzed (see
+	// analyzedFirst).
+	k.analyzedAs(t, k.listed, "hls", time.Hour)
 	k.ask(t, http.MethodGet, stream(k.listed), nil, 0).sent(t, "the addon's playlist", "http://"+publicSource+keptPlaylist)
 
 	for name, item := range map[string]string{"the list's movie": k.movie, "the list's episode": k.episode} {
