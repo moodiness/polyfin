@@ -142,7 +142,9 @@ func loadMigrations(files fs.FS) ([]migration, error) {
 // migrate applies the migrations the database lacks, under the migration
 // lock (see lock). A database that applied none, being created, logs each
 // migration at Debug, and one line at Info once done; an upgrade logs
-// each at Info.
+// each at Info. Once it applied any, the pool's connections are opened
+// again, for their listing statements to be prepared on the schema as it
+// is now (see prepareListings).
 func (r migrator) migrate(ctx context.Context, pool *pgxpool.Pool, migrations []migration) error {
 	conn, err := pool.Acquire(ctx)
 	if err != nil {
@@ -223,6 +225,7 @@ func (r migrator) migrate(ctx context.Context, pool *pgxpool.Pool, migrations []
 		r.logger.Log(ctx, level, "Applied a database migration", "migration", name, "duration", time.Since(start).Round(time.Millisecond))
 	}
 	r.logger.Info("The database is migrated", "migrations", pending, "duration", time.Since(began).Round(time.Millisecond))
+	pool.Reset()
 	return nil
 }
 

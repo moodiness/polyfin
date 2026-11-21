@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // TrackChoice is what a user chose of a title's tracks, a series for its
@@ -39,12 +40,16 @@ func (c TrackChoice) Empty() bool {
 	return c.AudioLanguage == "" && !c.Subtitle.Chosen()
 }
 
-// TrackChoices returns the track choices user made, by title.
-func (s *Store) TrackChoices(ctx context.Context, user accounts.ID) (map[accounts.ID]TrackChoice, error) {
-	rows, err := s.db.Query(ctx, `
+// trackChoices reads the track choices a user made, as listings read
+// them (see database.Listing).
+var trackChoices = database.Listing(`
 		SELECT title_id, audio_language, audio_variant, subtitle, subtitle_language, subtitle_forced,
 			subtitle_hearing_impaired
-		FROM track_choices WHERE user_id = $1`, user)
+		FROM track_choices WHERE user_id = $1`)
+
+// TrackChoices returns the track choices user made, by title.
+func (s *Store) TrackChoices(ctx context.Context, user accounts.ID) (map[accounts.ID]TrackChoice, error) {
+	rows, err := s.db.Query(ctx, trackChoices, user)
 	if err != nil {
 		return nil, err
 	}

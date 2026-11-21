@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // tick is Jellyfin's unit of time.
@@ -123,13 +124,35 @@ func (s *Store) entries(ctx context.Context, query string, args ...any) ([]Entry
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Entry, error) { return scanEntry(row) })
 }
 
+// The statements listings run on every request, prepared on each new
+// connection (see database.Listing).
+var (
+	itemsData = database.Listing("SELECT " + columns + " FROM user_data WHERE user_id = $1 AND item_id = ANY($2)")
+	counted   = database.Listing(`
+		SELECT series_id, count(*) FILTER (WHERE played), count(*) FILTER (WHERE position_ticks > 0)
+		FROM user_data WHERE user_id = $1 AND series_id = ANY($2) GROUP BY series_id
+		UNION ALL
+		SELECT season_id, count(*) FILTER (WHERE played), count(*) FILTER (WHERE position_ticks > 0)
+		FROM user_data WHERE user_id = $1 AND season_id = ANY($2) GROUP BY season_id`)
+	resumable = database.Listing("SELECT " + columns + ` FROM user_data WHERE user_id = $1 AND position_ticks > 0
+		ORDER BY last_played_at DESC NULLS LAST, item_id`)
+	watchedSeries = database.Listing(`SELECT series_id, last_played_at FROM (
+			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
+			WHERE user_id = $1 AND series_id IS NOT NULL AND last_played_at IS NOT NULL
+			ORDER BY series_id, last_played_at DESC NULLS LAST, item_id) latest
+		ORDER BY last_played_at DESC, item_id`)
+	seriesEpisodes = database.Listing("SELECT " + columns + ` FROM user_data
+		WHERE user_id = $1 AND series_id = ANY($2) AND (played OR position_ticks > 0 OR last_played_at IS NOT NULL)
+		ORDER BY last_played_at DESC NULLS LAST, item_id`)
+)
+
 // Get returns the user's data for those of ids that have any.
 func (s *Store) Get(ctx context.Context, user accounts.ID, ids []accounts.ID) (map[accounts.ID]Data, error) {
 	result := make(map[accounts.ID]Data, len(ids))
 	if len(ids) == 0 {
 		return result, nil
 	}
-	entries, err := s.entries(ctx, "SELECT "+columns+" FROM user_data WHERE user_id = $1 AND item_id = ANY($2)", user, ids)
+	entries, err := s.entries(ctx, itemsData, user, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -146,13 +169,7 @@ func (s *Store) EpisodeCounts(ctx context.Context, user accounts.ID, parents []a
 	if len(parents) == 0 {
 		return result, nil
 	}
-	rows, err := s.db.Query(ctx, `
-		SELECT series_id, count(*) FILTER (WHERE played), count(*) FILTER (WHERE position_ticks > 0)
-		FROM user_data WHERE user_id = $1 AND series_id = ANY($2) GROUP BY series_id
-		UNION ALL
-		SELECT season_id, count(*) FILTER (WHERE played), count(*) FILTER (WHERE position_ticks > 0)
-		FROM user_data WHERE user_id = $1 AND season_id = ANY($2) GROUP BY season_id`,
-		user, parents)
+	rows, err := s.db.Query(ctx, counted, user, parents)
 	if err != nil {
 		return nil, err
 	}
@@ -190,8 +207,7 @@ func (s *Store) SeriesLastPlayed(ctx context.Context, user accounts.ID, series [
 // Resumable lists the items with a resume point, most recently played
 // first; those never started come last.
 func (s *Store) Resumable(ctx context.Context, user accounts.ID) ([]Entry, error) {
-	return s.entries(ctx, "SELECT "+columns+` FROM user_data WHERE user_id = $1 AND position_ticks > 0
-		ORDER BY last_played_at DESC NULLS LAST, item_id`, user)
+	return s.entries(ctx, resumable, user)
 }
 
 // Favorites lists the user's favorite items.
@@ -242,11 +258,7 @@ type Watched struct {
 // the index user_data_series_latest: no episode has a null date here, so
 // NULLS LAST changes nothing but lets the index give the order.
 func (s *Store) WatchedSeries(ctx context.Context, user accounts.ID) ([]Watched, error) {
-	rows, err := s.db.Query(ctx, `SELECT series_id, last_played_at FROM (
-			SELECT DISTINCT ON (series_id) series_id, last_played_at, item_id FROM user_data
-			WHERE user_id = $1 AND series_id IS NOT NULL AND last_played_at IS NOT NULL
-			ORDER BY series_id, last_played_at DESC NULLS LAST, item_id) latest
-		ORDER BY last_played_at DESC, item_id`, user)
+	rows, err := s.db.Query(ctx, watchedSeries, user)
 	if err != nil {
 		return nil, err
 	}
@@ -280,9 +292,7 @@ func (s *Store) SeriesEpisodes(ctx context.Context, user accounts.ID, series []a
 	if len(series) == 0 {
 		return nil, nil
 	}
-	return s.entries(ctx, "SELECT "+columns+` FROM user_data
-		WHERE user_id = $1 AND series_id = ANY($2) AND (played OR position_ticks > 0 OR last_played_at IS NOT NULL)
-		ORDER BY last_played_at DESC NULLS LAST, item_id`, user, series)
+	return s.entries(ctx, seriesEpisodes, user, series)
 }
 
 // Change applies change to the data of each item, in one transaction, and

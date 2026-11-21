@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // NextUpRemoval is a series a user took off Next Up, and when they did.
@@ -33,11 +34,15 @@ func (s *Store) PutBackOnNextUp(ctx context.Context, user, series accounts.ID) (
 	return tag.RowsAffected() > 0, err
 }
 
+// nextUpRemovals reads the series a user took off Next Up, as listings
+// read them (see database.Listing).
+var nextUpRemovals = database.Listing(`SELECT series_id, removed_at FROM next_up_removed WHERE user_id = $1
+		ORDER BY removed_at DESC, series_id`)
+
 // NextUpRemovals lists the series the user took off Next Up, the latest
 // removed first, whether or not the removal still holds.
 func (s *Store) NextUpRemovals(ctx context.Context, user accounts.ID) ([]NextUpRemoval, error) {
-	rows, err := s.db.Query(ctx, `SELECT series_id, removed_at FROM next_up_removed WHERE user_id = $1
-		ORDER BY removed_at DESC, series_id`, user)
+	rows, err := s.db.Query(ctx, nextUpRemovals, user)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // Dropped is a series the user dropped on a tracking service whose
@@ -26,14 +27,7 @@ type Dropped struct {
 // from Next Up does. Each series comes once per service listing it, the
 // series dropped last first.
 func (s *Store) Dropped(ctx context.Context, user accounts.ID) ([]Dropped, error) {
-	rows, err := s.db.Query(ctx, `WITH listed AS (
-			SELECT series_id, service, coalesce(dropped_at, seen_at) AS at FROM tracker_dropped WHERE user_id = $1
-		), held AS (
-			SELECT series_id, max(at) AS at FROM listed GROUP BY series_id
-		)
-		SELECT l.series_id, l.service, l.at FROM listed l JOIN held h ON h.series_id = l.series_id
-		WHERE NOT EXISTS (SELECT 1 FROM user_data u WHERE u.user_id = $1 AND u.series_id = h.series_id AND u.last_played_at > h.at)
-		ORDER BY h.at DESC, l.series_id, l.service`, user)
+	rows, err := s.db.Query(ctx, droppedSeries, user)
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +38,17 @@ func (s *Store) Dropped(ctx context.Context, user accounts.ID) ([]Dropped, error
 		return d, err
 	})
 }
+
+// droppedSeries reads the series a user dropped (see Dropped), as
+// listings read them (see database.Listing).
+var droppedSeries = database.Listing(`WITH listed AS (
+			SELECT series_id, service, coalesce(dropped_at, seen_at) AS at FROM tracker_dropped WHERE user_id = $1
+		), held AS (
+			SELECT series_id, max(at) AS at FROM listed GROUP BY series_id
+		)
+		SELECT l.series_id, l.service, l.at FROM listed l JOIN held h ON h.series_id = l.series_id
+		WHERE NOT EXISTS (SELECT 1 FROM user_data u WHERE u.user_id = $1 AND u.series_id = h.series_id AND u.last_played_at > h.at)
+		ORDER BY h.at DESC, l.series_id, l.service`)
 
 // DroppedSeries is the set of the series of Dropped.
 func (s *Store) DroppedSeries(ctx context.Context, user accounts.ID) (map[accounts.ID]bool, error) {

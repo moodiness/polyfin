@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // HiddenTitle is a movie or series a user hid from their lists, and when
@@ -32,10 +33,14 @@ func (s *Store) Show(ctx context.Context, user, title accounts.ID) (bool, error)
 	return tag.RowsAffected() > 0, err
 }
 
+// hiddenTitles reads the titles a user hid, as listings read them (see
+// database.Listing).
+var hiddenTitles = database.Listing(`SELECT item_id, hidden_at FROM hidden_titles WHERE user_id = $1
+		ORDER BY hidden_at DESC, item_id`)
+
 // Hidden lists the titles the user hid, the latest hidden first.
 func (s *Store) Hidden(ctx context.Context, user accounts.ID) ([]HiddenTitle, error) {
-	rows, err := s.db.Query(ctx, `SELECT item_id, hidden_at FROM hidden_titles WHERE user_id = $1
-		ORDER BY hidden_at DESC, item_id`, user)
+	rows, err := s.db.Query(ctx, hiddenTitles, user)
 	if err != nil {
 		return nil, err
 	}

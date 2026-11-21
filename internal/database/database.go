@@ -74,7 +74,9 @@ func Connect(ctx context.Context, url string, logger *slog.Logger) (*pgxpool.Poo
 
 // poolConfig reads the database URL into the pool's configuration, maxConns
 // connections at most unless the URL's pool_max_conns sets another bound,
-// with the statements that run slow logged into logger (see slowLog).
+// with the statements that run slow logged into logger (see slowLog), and
+// the listing statements prepared on each new connection (see
+// prepareListings).
 func poolConfig(url string, logger *slog.Logger) (*pgxpool.Config, error) {
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
@@ -83,6 +85,7 @@ func poolConfig(url string, logger *slog.Logger) (*pgxpool.Config, error) {
 	}
 	config.ConnConfig.RuntimeParams["application_name"] = "polyfin"
 	config.ConnConfig.Tracer = newSlowLog(logger)
+	config.AfterConnect = prepareListings(logger)
 	// pgxpool takes pool_max_conns out of the settings it parses, and
 	// gives the same bound whether the URL set it or not: the URL is
 	// read again to tell.
