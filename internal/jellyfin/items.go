@@ -508,9 +508,13 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 	}
 	if detail || fields.has("DateCreated") {
 		created := time.Unix(0, 0).UTC()
-		// A replay was made when it aired.
-		if item.Kind == library.KindReplay {
+		// A replay was made when it aired; a title of an addon's library
+		// sorted by date added was added when Polyfin first saw it there.
+		switch {
+		case item.Kind == library.KindReplay:
 			created = *item.StartDate
+		case item.Added != nil:
+			created = *item.Added
 		}
 		dto.DateCreated = new(Time(created))
 	}

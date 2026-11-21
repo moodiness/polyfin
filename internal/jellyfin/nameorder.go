@@ -66,13 +66,16 @@ import (
 // keys they sort by, and whether they are the whole library. ranks are
 // the places of the titles in their catalog. An order by another key
 // holds the same titles, with places, the indexes in items of its titles
-// in ascending order; places is nil for the order by name.
+// in ascending order; places is nil for the order by name. added is set
+// for the titles of an addon's catalog, which tell when they were added
+// (see library.Item.Added).
 type nameOrder struct {
 	items  []library.Item
 	keys   []string
 	ranks  []int32
 	places []int32
 	whole  bool
+	added  bool
 }
 
 // keptKeys are the keys of the titles of the order by name that keep
@@ -130,6 +133,13 @@ func (o nameOrder) sortedBy(sort titleSort) nameOrder {
 	var compare func(a, b int32) int
 	switch sort.key {
 	case "DateCreated":
+		if o.added {
+			// Titles added together keep their catalog's order.
+			compare = func(a, b int32) int {
+				return cmp.Or(compareDates(items[a].Added, items[b].Added), cmp.Compare(o.ranks[a], o.ranks[b]))
+			}
+			break
+		}
 		// The catalog lists the titles added last first.
 		compare = func(a, b int32) int { return cmp.Compare(o.ranks[b], o.ranks[a]) }
 	case "PremiereDate":
@@ -395,6 +405,20 @@ func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accoun
 	// The count is read before the titles: a change stored while they are
 	// sorted sorts them again at the next listing.
 	changes := strconv.FormatUint(h.Library.StoredChanges(), 10)
+	return h.sortedOrder(r, user, parent, genre, rating, sort, "stored "+changes+"|", h.sortByName)
+}
+
+// orderBuild sorts the titles of a library by name for an order kept
+// under key, and tells whether it kept it (see sortByName).
+type orderBuild func(ctx context.Context, user accounts.User, parent accounts.ID, genre string, hidden library.HiddenTitles,
+	key drawKey) (nameOrder, bool, error)
+
+// sortedOrder returns the order sort asks for of the titles of library
+// parent that build sorts by name, as storedOrder tells. version names
+// those titles as they are, so that the orders of other titles, or of the
+// same titles since changed, are kept apart.
+func (h *Handler) sortedOrder(r *http.Request, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
+	sort titleSort, version string, build orderBuild) (nameOrder, error) {
 	byName, err := h.newDrawKey(r, user, parent, genre)
 	if err != nil {
 		return nameOrder{}, err
@@ -410,9 +434,9 @@ func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accoun
 	// One order holds every kind; hiding a title sorts again, so that
 	// positions follow at once.
 	byName.kinds = ""
-	byName.order = "name|" + changes + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	byName.order = version + "name|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
 	key := byName
-	key.order = sort.name() + "|" + changes + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	key.order = version + sort.name() + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
 	if order, ok := h.nameOrders.Get(key); ok {
 		return order, nil
 	}
@@ -420,7 +444,7 @@ func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accoun
 		order, kept := h.nameOrders.Get(byName)
 		if !kept {
 			var err error
-			if order, kept, err = h.sortByName(ctx, user, parent, genre, hidden, byName); err != nil {
+			if order, kept, err = build(ctx, user, parent, genre, hidden, byName); err != nil {
 				return nameOrder{}, err
 			}
 		}
@@ -460,21 +484,7 @@ func (h *Handler) sortByName(ctx context.Context, user accounts.User, parent acc
 	case !stored:
 		return nameOrder{}, false, errNotStored
 	}
-	pool := hidden.Without(page.Items)
-	keys := make([]string, len(pool))
-	for i := range pool {
-		keys[i] = library.NameKey(pool[i])
-	}
-	// The places of the titles in the catalog, in their order by name.
-	ranks := make([]int32, len(pool))
-	for i := range ranks {
-		ranks[i] = int32(i)
-	}
-	slices.SortFunc(ranks, func(a, b int32) int { return library.CompareNames(&pool[a], &pool[b], keys[a], keys[b]) })
-	order := nameOrder{items: make([]library.Item, len(pool)), keys: make([]string, len(pool)), ranks: ranks, whole: !page.More}
-	for i, rank := range ranks {
-		order.items[i], order.keys[i] = pool[rank], keys[rank]
-	}
+	order := sortedByName(hidden.Without(page.Items), !page.More)
 	if err := h.Library.WithLengths(ctx, user, parent, order.items); err != nil {
 		return nameOrder{}, false, err
 	}

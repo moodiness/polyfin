@@ -101,6 +101,10 @@ type Item struct {
 	Runtime         time.Duration
 	CommunityRating float64
 	OfficialRating  string
+	// Added is when Polyfin first saw the title in the addon's catalog
+	// that lists it, set by the listings sorted by it (see CatalogPool);
+	// nil otherwise.
+	Added *time.Time
 	// Language is the original language a title's addon gives, as it
 	// writes it, empty when it gives none.
 	Language string

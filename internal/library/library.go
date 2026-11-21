@@ -282,9 +282,11 @@ type Service struct {
 	// (see overridesNow); overridesMu orders their loading and changes.
 	overrides   atomic.Pointer[overrideSet]
 	overridesMu sync.Mutex
-	// storedChanges counts the changes to the IPTV sources' lists and to
-	// the overrides (see StoredChanges).
+	// storedChanges counts the changes to the IPTV sources' lists, and
+	// editChanges those to the overrides (see StoredChanges and
+	// catalogVersion).
 	storedChanges atomic.Uint64
+	editChanges   atomic.Uint64
 
 	// warmed tells when Warm read the libraries' first pages, and opened
 	// the users' own libraries opened lately (see warmedposters.go).

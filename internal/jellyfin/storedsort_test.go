@@ -149,11 +149,11 @@ func TestStoredLibrariesPageInTheSortAsked(t *testing.T) {
 	if want := []string{"Delta", "Golf", "Bravo"}; !slices.Equal(names, want) {
 		t.Errorf("through /Users/{id}/Items: %v, want %v", names, want)
 	}
-	for _, sortBy := range []string{"SortName", "DateCreated,SortName", "CommunityRating,SortName"} {
-		names, _ := s.pageNames(t, listing(deep, sortBy, "Descending"), token)
-		if want := []string{"Movie 003", "Movie 004", "Movie 005"}; !slices.Equal(names, want) {
-			t.Errorf("an addon's catalog by %s: %v, want %v", sortBy, names, want)
-		}
+	// An addon's catalog by name ascending, as apps ask by default, keeps
+	// its order (see TestAddonLibrariesSortTheTitlesRead for its sorts).
+	names, _ = s.pageNames(t, listing(deep, "SortName", "Ascending"), token)
+	if want := []string{"Movie 003", "Movie 004", "Movie 005"}; !slices.Equal(names, want) {
+		t.Errorf("an addon's catalog by name: %v, want %v", names, want)
 	}
 }
 

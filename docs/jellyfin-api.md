@@ -354,7 +354,17 @@ jellyfin-web's Sort menu orders a library by Name, Date added, Release date, Yea
 - `DateCreated` follows the order the library's source lists its titles in, the latest added first: an IPTV source's by the date its provider gives, those without one last, a local folder's by the dates of its files. The titles' own `DateCreated` stays the one Polyfin gives every title. `ProductionYear` is a title's year, else its premiere date's. `Runtime` is how long a local folder's movie file plays; an IPTV source's lists give none. `CommunityRating` is the rating the provider lists, MDBList's when its key is set, or an administrator's edit.
 - As in Jellyfin, a title without a value comes first in ascending order and last in descending order.
 - The order holds what the order by name for Silo's apps above holds: every title up to 50,000 and the library's maximum, within the user's parental control and blocked genres, and the listing's rating filters, without the titles they hid. Each order is kept 2 minutes, sorted from the order by name, unless what the library lists changes first, as above, and two orders are sorted at once on the server at most.
-- An addon's catalog, and a library of collections, keep their catalog's order past their first page: a listing that fits on its first page is sorted as asked.
+- A library of collections keeps its catalog's order past its first page: a listing that fits on its first page is sorted as asked. An addon's catalog is sorted as [Addon libraries sorted for apps](#addon-libraries-sorted-for-apps) tells.
+
+### Addon libraries sorted for apps
+
+A library of an addon's catalog is read a page at a time, so its Sort menu works on the titles Polyfin has read of the catalog:
+
+- **Name** shows the catalog's order. Apps send the same request for their default order and for Name (`SortBy=SortName`, ascending), and a popular or trending catalog's own order is what it is for; its first page stays as fast as before.
+- **Name, descending** sorts the titles by name.
+- **Date added, Release date, Year, Community rating and Runtime** (`DateCreated`, `PremiereDate`, `ProductionYear`, `CommunityRating`, `Runtime` as the first `SortBy`) sort the titles by that key, ascending or descending, as stored libraries do above. A title's `DateCreated` is when Polyfin first saw it in the catalog; titles first seen together keep the catalog's order.
+- A sorted listing first reads the titles it reaches in the catalog's order, as a listing in that order reads them, so a library sorted before it was ever opened shows titles at once. Then the rest of the catalog is read in the background, up to the most titles the library lists, after the pages users wait for. Until it is read, the listing sorts the titles read so far: `TotalRecordCount` counts them and `X-Polyfin-Partial-Total` is `true`. The next listings sort more of it, then all of it.
+- Once the catalog is read whole, or up to the most titles the library lists, the order is kept 2 minutes while the catalog's pages stay as they are: a page the addon gives anew, a metadata edit, or an addon or library changed sorts again. A user under parental control or with blocked genres has the pages read so far sorted, without the reading in the background.
 
 ### Libraries hidden from the top bar for apps
 

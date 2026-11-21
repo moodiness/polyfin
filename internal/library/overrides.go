@@ -437,8 +437,9 @@ func (s *Service) changeOverrides(ctx context.Context, write func(*overrideSet) 
 	change(next)
 	next.index()
 	s.overrides.Store(next)
-	// An edit may rename, date or rate a title (see StoredChanges).
-	s.storedChanges.Add(1)
+	// An edit may rename, date or rate a title (see StoredChanges and
+	// catalogVersion).
+	s.editChanges.Add(1)
 	return nil
 }
 

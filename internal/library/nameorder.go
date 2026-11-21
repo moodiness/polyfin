@@ -104,7 +104,7 @@ func (s *Service) Stores(ctx context.Context, user accounts.User, parent account
 // that an order of a stored library's titles kept at one count is sorted
 // again once it moved.
 func (s *Service) StoredChanges() uint64 {
-	changes := s.storedChanges.Load() + s.addons.Changes()
+	changes := s.storedChanges.Load() + s.editChanges.Load() + s.addons.Changes()
 	if s.local != nil {
 		changes += s.local.Changes()
 	}

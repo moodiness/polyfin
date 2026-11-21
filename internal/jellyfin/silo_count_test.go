@@ -69,9 +69,11 @@ func (x shelf) count(t *testing.T, library, sort string, facets silotest.Facets,
 	return page.Total, page.TotalExact
 }
 
-// An addon's catalog read in part tells its total is not exact, by date
-// added and by title, so the Android app shows no count rather than the
-// titles read so far.
+// An addon's catalog read in part tells its total is not exact, by title,
+// so the Android app shows no count rather than the titles read so far.
+// By date added, the listing sorts the titles read, and reads the rest of
+// the catalog in the background: its total is not exact while the catalog
+// is read in part, and exact, every title, once it is read whole.
 func TestSiloAppsCountOfAnAddonCatalogReadInPart(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
@@ -85,7 +87,11 @@ func TestSiloAppsCountOfAnAddonCatalogReadInPart(t *testing.T) {
 	}
 	x := newShelf(t, s, "movies")
 	for _, sort := range []string{"", "-added_at", "title"} {
-		if total, exact := x.count(t, x.library, sort, silotest.Facets{}, 250); exact || total >= 250 {
+		total, exact := x.count(t, x.library, sort, silotest.Facets{}, 250)
+		if sort == "-added_at" && exact && total == 250 {
+			continue
+		}
+		if exact || total >= 250 {
 			t.Errorf("by %q: %d, exact %v", sort, total, exact)
 		}
 	}

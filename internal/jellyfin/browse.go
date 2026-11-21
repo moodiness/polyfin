@@ -641,8 +641,10 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A library whose titles Polyfin stores is sorted whole, by the keys
-	// of jellyfin-web's Sort menu (see storedListing).
-	if sort, ok := storedSortOf(r); ok && h.storedListing(w, r, user, parent, genre, rating, sort, fields, keep, start, limit) {
+	// of jellyfin-web's Sort menu (see storedListing); an addon's, over
+	// the titles read of its catalog (see catalogListing).
+	if sort, ok := storedSortOf(r); ok && (h.storedListing(w, r, user, parent, genre, rating, sort, fields, keep, start, limit) ||
+		h.catalogListing(w, r, user, parent, genre, rating, sort, fields, keep, start, limit)) {
 		return
 	}
 	asked := time.Now()
