@@ -1,15 +1,20 @@
 package library
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -75,8 +80,8 @@ func (saved savedList) streams() []stremio.Stream {
 }
 
 // savedStreams reads back the stream list saved for key, still kept. A key
-// found missing is not looked for again: every list saved since went
-// through saveStreams, which forgets that.
+// found missing, or saved past keeping, is not looked for again: every
+// list saved since went through saveStreams, which forgets that.
 func (s *Service) savedStreams(ctx context.Context, key streamKey) (list[stremio.Stream], bool) {
 	if s.db == nil {
 		return list[stremio.Stream]{}, false
@@ -100,6 +105,13 @@ func (s *Service) savedStreams(ctx context.Context, key streamKey) (list[stremio
 		s.logger.Warn("Reading a saved stream list failed", "error", err)
 		return list[stremio.Stream]{}, false
 	}
+	return s.savedList(key, data, answer, at)
+}
+
+// savedList is the stream list saved for key as data, answer and at
+// tell, when it is still kept. One saved past keeping is not looked for
+// again (see savedStreams).
+func (s *Service) savedList(key streamKey, data []byte, answer int, at time.Time) (list[stremio.Stream], bool) {
 	var saved savedList
 	if err := json.Unmarshal(data, &saved); err != nil {
 		return list[stremio.Stream]{}, false
@@ -107,9 +119,86 @@ func (s *Service) savedStreams(ctx context.Context, key streamKey) (list[stremio
 	streams := saved.streams()
 	l := list[stremio.Stream]{items: streams, answer: min(max(answer, 0), len(streams)), at: at, restored: true}
 	if _, kept := l.state(s.now(), s.listLife()); !kept {
+		s.tracked().unsaved.Put(key, true)
 		return list[stremio.Stream]{}, false
 	}
 	return l, true
+}
+
+// savedListsOf reads the stream lists saved for keys, by their place
+// among them (see restoreStreams).
+var savedListsOf = database.Listing(`SELECT k.n, l.streams, l.answer, l.fetched_at
+	FROM unnest($1::uuid[], $2::text[], $3::text[]) WITH ORDINALITY AS k(addon_id, content_type, stremio_id, n)
+	JOIN stream_lists l ON l.addon_id = k.addon_id AND l.content_type = k.content_type AND l.stremio_id = k.stremio_id`)
+
+// restoreStreams reads back, in one statement, the stream lists saved for
+// keys that are neither kept in memory nor known missing, and keeps them
+// as streamListOf keeps the one it reads back, under their locks: a
+// listing reads its titles' lists so, rather than one by one after a
+// restart (see Service.ListingAhead).
+func (s *Service) restoreStreams(ctx context.Context, keys []streamKey) {
+	if s.db == nil {
+		return
+	}
+	tracked := s.tracked()
+	slices.SortFunc(keys, compareStreamKeys)
+	keys = slices.Compact(keys)
+	keys = slices.DeleteFunc(keys, func(key streamKey) bool {
+		_, _, kept := listOf(s, s.streamLists, key)
+		_, missing := tracked.unsaved.Get(key)
+		return kept || missing
+	})
+	if len(keys) == 0 {
+		return
+	}
+	defer tracked.saving.lockMany(keys)()
+	addonIDs := make([]accounts.ID, len(keys))
+	types := make([]string, len(keys))
+	ids := make([]string, len(keys))
+	for i, key := range keys {
+		addonIDs[i], types[i], ids[i] = key.addon, key.contentType, key.id
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), savedTimeout)
+	defer cancel()
+	rows, err := s.db.Query(ctx, savedListsOf, addonIDs, types, ids)
+	if err != nil {
+		s.logger.Warn("Reading saved stream lists failed", "error", err)
+		return
+	}
+	found := make([]bool, len(keys))
+	var (
+		n      int
+		data   []byte
+		answer int
+		at     time.Time
+	)
+	if _, err := pgx.ForEachRow(rows, []any{&n, &data, &answer, &at}, func() error {
+		key := keys[n-1]
+		found[n-1] = true
+		if saved, ok := s.savedList(key, data, answer, at); ok {
+			// An answer stored meanwhile wins.
+			s.streamLists.Update(key, func(kept list[stremio.Stream], had bool) (list[stremio.Stream], bool) {
+				if had {
+					return kept, false
+				}
+				return saved, true
+			})
+		}
+		return nil
+	}); err != nil {
+		s.logger.Warn("Reading saved stream lists failed", "error", err)
+		return
+	}
+	for i, key := range keys {
+		if !found[i] {
+			tracked.unsaved.Put(key, true)
+		}
+	}
+}
+
+// compareStreamKeys orders stream keys, as lockMany locks them.
+func compareStreamKeys(a, b streamKey) int {
+	return cmp.Or(bytes.Compare(a.addon[:], b.addon[:]), strings.Compare(a.contentType, b.contentType), strings.Compare(a.id, b.id))
 }
 
 // saveStreams saves the stream list kept in memory for key, and now and
@@ -225,12 +314,13 @@ func (s *Service) deleteSavedLists(ctx context.Context, addon *accounts.ID, dele
 }
 
 // listLocks holds a lock for each stream list being saved, read back or
-// dropped (see writeStreams, streamListOf and dropStreams), and a lock of
-// every list, which forgetting many lists at once holds (see lockAll). A
-// list's lock is dropped once nothing holds or awaits it. Its zero value
-// is ready.
+// dropped (see writeStreams, streamListOf, restoreStreams and
+// dropStreams), and a lock of every list, which forgetting many lists at
+// once holds (see lockAll). A list's lock is dropped once nothing holds or
+// awaits it. Its zero value is ready.
 type listLocks struct {
-	// all is held shared with each list's lock, and alone by lockAll.
+	// all is held shared with the lists' locks, once by whoever holds one
+	// or more, and alone by lockAll.
 	all   sync.RWMutex
 	mu    sync.Mutex
 	locks map[streamKey]*listLock
@@ -245,6 +335,33 @@ type listLock struct {
 // lock locks key's list, and returns what unlocks it.
 func (l *listLocks) lock(key streamKey) func() {
 	l.all.RLock()
+	k := l.lockKey(key)
+	return func() {
+		l.unlockKey(key, k)
+		l.all.RUnlock()
+	}
+}
+
+// lockMany locks the lists of keys, in the order compareStreamKeys gives,
+// which keys are in, each once, and returns what unlocks them. Locking
+// them in one order, while every list's lock is held once, keeps two
+// callers, or one and lockAll, from waiting on each other.
+func (l *listLocks) lockMany(keys []streamKey) func() {
+	l.all.RLock()
+	locked := make([]*listLock, len(keys))
+	for i, key := range keys {
+		locked[i] = l.lockKey(key)
+	}
+	return func() {
+		for i, key := range keys {
+			l.unlockKey(key, locked[i])
+		}
+		l.all.RUnlock()
+	}
+}
+
+// lockKey locks key's list alone, l.all being held, and returns its lock.
+func (l *listLocks) lockKey(key streamKey) *listLock {
 	l.mu.Lock()
 	if l.locks == nil {
 		l.locks = map[streamKey]*listLock{}
@@ -257,15 +374,17 @@ func (l *listLocks) lock(key streamKey) func() {
 	k.users++
 	l.mu.Unlock()
 	k.Lock()
-	return func() {
-		k.Unlock()
-		l.mu.Lock()
-		if k.users--; k.users == 0 {
-			delete(l.locks, key)
-		}
-		l.mu.Unlock()
-		l.all.RUnlock()
+	return k
+}
+
+// unlockKey unlocks k, the lock of key's list lockKey returned.
+func (l *listLocks) unlockKey(key streamKey, k *listLock) {
+	k.Unlock()
+	l.mu.Lock()
+	if k.users--; k.users == 0 {
+		delete(l.locks, key)
 	}
+	l.mu.Unlock()
 }
 
 // lockAll locks every list, once the lists locked now are unlocked, and

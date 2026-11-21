@@ -153,8 +153,10 @@ func versionFields(fields fieldSet) bool {
 
 // listDtos describes listed items, with what the user did with them in
 // state, in their order. Items whose versions are read are described
-// listingAtOnce at a time. A panic while describing one is raised again
-// here, in the request, as it was when they were described one by one.
+// listingAtOnce at a time, once what their versions read from the
+// database is read for them all (see library.Service.ListingAhead). A
+// panic while describing one is raised again here, in the request, as it
+// was when they were described one by one.
 func (h *Handler) listDtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, state userState) []BaseItemDto {
 	result := make([]BaseItemDto, len(items))
 	if len(items) < 2 || !versionFields(fields) {
@@ -163,6 +165,7 @@ func (h *Handler) listDtos(r *http.Request, user accounts.User, items []library.
 		}
 		return result
 	}
+	r = r.WithContext(h.Library.ListingAhead(r.Context(), user, items))
 	var (
 		group    errgroup.Group
 		mu       sync.Mutex

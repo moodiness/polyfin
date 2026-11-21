@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -207,13 +208,17 @@ func fingerprint(data string) int64 {
 	return int64(binary.BigEndian.Uint64(sum[:8]))
 }
 
+// fingerprintedVersions reads the versions of the items a record of the
+// given fingerprint left as they are (see fingerprinted).
+var fingerprintedVersions = database.Listing(`SELECT f.item_id, f.version FROM unnest($1::uuid[], $2::bigint[]) AS r(id, fingerprint)
+		JOIN item_records f ON f.item_id = r.id AND f.fingerprint = r.fingerprint
+		JOIN items i ON i.id = f.item_id AND i.xmin = f.version`)
+
 // fingerprinted returns, of the items ids, the versions of those stored
 // as a record of the given fingerprint left them (see keepFingerprints):
 // a save leaves the record out, as it would leave the item as it is.
 func (s *Service) fingerprinted(ctx context.Context, ids []accounts.ID, fingerprints []int64) (map[accounts.ID]uint32, error) {
-	rows, err := s.db.Query(ctx, `SELECT f.item_id, f.version FROM unnest($1::uuid[], $2::bigint[]) AS r(id, fingerprint)
-		JOIN item_records f ON f.item_id = r.id AND f.fingerprint = r.fingerprint
-		JOIN items i ON i.id = f.item_id AND i.xmin = f.version`, ids, fingerprints)
+	rows, err := s.db.Query(ctx, fingerprintedVersions, ids, fingerprints)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +278,10 @@ func (s *Service) keepFingerprints(ctx context.Context, records []*record, finge
 	}
 }
 
+// storedVersions reads the versions items are stored at (see
+// stillStored).
+var storedVersions = database.Listing("SELECT id, xmin FROM items WHERE id = ANY($1::uuid[]) ORDER BY id")
+
 // stillStored tells which of the items ids are stored at the version
 // versions gives each, -1 for none: those left out of a save, as what it
 // saves left them as they are (see savedRecords). One statement reads
@@ -288,7 +297,7 @@ func (s *Service) stillStored(ctx context.Context, ids []accounts.ID, versions [
 	if len(known) == 0 {
 		return kept, nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT id, xmin FROM items WHERE id = ANY($1::uuid[]) ORDER BY id", known)
+	rows, err := s.db.Query(ctx, storedVersions, known)
 	if err != nil {
 		return nil, err
 	}
@@ -655,13 +664,16 @@ func isPreloaded(ctx context.Context, id accounts.ID) bool {
 	return ok
 }
 
+// itemByID reads an item's row (see load).
+var itemByID = database.Listing("SELECT key, data FROM items WHERE id = $1")
+
 func (s *Service) load(ctx context.Context, id accounts.ID) (record, error) {
 	if r, ok, err := preloaded(ctx, id); ok {
 		return r, err
 	}
 	var r record
 	var data []byte
-	err := s.db.QueryRow(ctx, "SELECT key, data FROM items WHERE id = $1", id).Scan(&r.Key, &data)
+	err := s.db.QueryRow(ctx, itemByID, id).Scan(&r.Key, &data)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return record{}, ErrNotFound
 	}
@@ -681,7 +693,7 @@ func (s *Service) loadAll(ctx context.Context, ids []accounts.ID) ([]record, err
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	return s.loadWhere(ctx, "id = ANY($1::uuid[])", ids)
+	return s.loadWhere(ctx, itemsWithIDs, ids)
 }
 
 // loadWhere returns the records of the items condition, on the items

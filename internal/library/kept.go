@@ -919,19 +919,30 @@ func (s *Service) refreshMeta(ctx context.Context, addon installed, key metaKey,
 // memory. An addon's notice kept as the title's description, before such
 // answers were refused (see stremio.Meta.Describes), is not read: the
 // title is described again. Nor is a description too large for memory,
-// as loadPage tells of a page.
+// as loadPage tells of a page. One a listing found missing ahead is not
+// read again (see metasAhead).
 func (s *Service) loadMeta(ctx context.Context, addon installed, key metaKey) (fetched[stremio.Meta], bool) {
+	if missingAhead(ctx, key) {
+		return fetched[stremio.Meta]{}, false
+	}
 	var data []byte
-	var kept fetched[stremio.Meta]
+	var at time.Time
 	err := s.db.QueryRow(ctx, `SELECT meta, fetched_at FROM metas
 		WHERE addon_id = $1 AND meta_type = $2 AND meta_id = $3 AND config = $4 AND fetched_at > $5`,
-		key.addon, key.metaType, key.id, configOf(addon.addon), s.now().Add(-metaKept)).Scan(&data, &kept.at)
+		key.addon, key.metaType, key.id, configOf(addon.addon), s.now().Add(-metaKept)).Scan(&data, &at)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Debug("A kept description could not be read", "error", err)
 		}
-		return kept, false
+		return fetched[stremio.Meta]{}, false
 	}
+	return s.loadedMeta(ctx, addon, key, data, at)
+}
+
+// loadedMeta keeps in memory the description of key read from the
+// database as data, kept at, as loadMeta tells.
+func (s *Service) loadedMeta(ctx context.Context, addon installed, key metaKey, data []byte, at time.Time) (fetched[stremio.Meta], bool) {
+	kept := fetched[stremio.Meta]{at: at}
 	if err := json.Unmarshal(data, &kept.value); err != nil || !kept.value.Describes(key.metaType, key.id) {
 		return kept, false
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/database"
 )
 
 // SearchEpisodes lists up to count episodes whose name contains term,
@@ -71,6 +72,13 @@ type preloadedRow struct {
 	data []byte
 }
 
+// itemsByIDs reads the rows of items, as withPreloaded and loadAll read
+// them.
+var itemsByIDs = database.Listing("SELECT id, key, data FROM items WHERE " + itemsWithIDs)
+
+// itemsWithIDs is the condition on the rows of the items of $1.
+const itemsWithIDs = "id = ANY($1::uuid[])"
+
 // withPreloaded reads the rows of ids in one query, for load to find in
 // the context it returns rather than reading them one by one. Each load
 // decodes its own record, so callers may change it.
@@ -78,7 +86,7 @@ func (s *Service) withPreloaded(ctx context.Context, ids []accounts.ID) (context
 	if len(ids) == 0 {
 		return ctx, nil
 	}
-	rows, err := s.db.Query(ctx, "SELECT id, key, data FROM items WHERE id = ANY($1::uuid[])", ids)
+	rows, err := s.db.Query(ctx, itemsByIDs, ids)
 	if err != nil {
 		return ctx, err
 	}

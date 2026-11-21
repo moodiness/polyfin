@@ -179,6 +179,11 @@ func TestListingStatementsStayWithinABudget(t *testing.T) {
 		{"Latest shows", "/Items/Latest?Limit=100&ParentId=" + views["Shows"], series, 10},
 		{"A page of movies", "/Items?ParentId=" + views["Movies"], movies, 7},
 		{"A page of shows", "/Items?ParentId=" + views["Shows"], series, 10},
+		// With paths, as home screens ask, the titles' versions are read,
+		// for all of them at once (see library.Service.ListingAhead).
+		{"Continue Watching with paths", "/UserItems/Resume?Limit=100&Fields=Path", movies + series, 12},
+		{"Next Up with paths", "/Shows/NextUp?Limit=100&Fields=Path", series, 13},
+		{"Latest movies with paths", "/Items/Latest?Limit=100&Fields=Path&ParentId=" + views["Movies"], movies, 8},
 	} {
 		// The first request after the restart reads the addons'
 		// descriptions and stores what it lists; the second only reads.
