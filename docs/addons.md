@@ -193,11 +193,28 @@ Polyfin names an episode as Stremio addons do:
 
 Anime databases make each season, or part of a season, an entry of its own. Its episodes are numbered from 1. So `kitsu:<id>:3` uses the id of the entry for that season.
 
+### When the series is numbered otherwise
+
+A stream addon asked by `tt…:2:3` or `tmdb:…:2:3` reads season 2, episode 3 as that identifier's numbering has it. The metadata addon that lists the series may number it otherwise: in TVDB's order, a season split in two or two seasons merged, specials counted among the regular episodes, or one absolute run. Asked with the metadata addon's numbers, such an addon finds another episode, or none.
+
+So when Polyfin asks for an episode by its series' IMDb or TMDB identifier, it pairs the series' episodes with those of the other numbering, as [tracking](tracking.md#what-gets-sent) does: by the day they aired and their names. It then asks with the numbers the same episode has there.
+
+| Asked by | The other numbering |
+|---|---|
+| `tmdb:…` | TMDB's, the one tracking services use. It comes from TMDB's own video identifiers, a server addon describing the series as `tmdb:<id>`, or TMDB with a [TMDB key](collections-people-and-ratings.md#what-a-key-brings). |
+| `tt…` | The one the server's metadata addons give the series described by its IMDb identifier. These are the numbers Polyfin asks for when it lists the series by that identifier. |
+
+- **Only a sure pair changes the numbers.** An episode keeps its own numbers when the two numberings agree, when nothing numbers the series otherwise yet, or when the pairing leaves the episode alone.
+- **Videos without an episode number** are never paired.
+- **A series listed by its IMDb or TMDB identifier** is asked by that identifier with its own numbers: its metadata addon names the episodes so.
+- **Nothing waits on TMDB or an addon.** The pairs come from what Polyfin keeps: TMDB's numbering of the series, kept 7 days and shared with tracking, and the description of its IMDb identifier, kept as other descriptions are. When one is missing, Polyfin asks for it in the background, and the series' next request uses it. Meanwhile, its episodes keep their own numbers.
+- **Each series' pairs are kept in memory for an hour**, for all its episodes, then read again from what is kept. A new TMDB numbering of the series, or a new TMDB identifier, replaces them at once.
+
 ### Where the other identifiers come from
 
 **A title named by IMDb or TMDB:**
 
-- It has the identifiers its description gives: `imdb_id`, TMDB's and, for a series, TVDB's. Episodes keep the same season and number.
+- It has the identifiers its description gives: `imdb_id`, TMDB's and, for a series, TVDB's. Episodes keep their season and number, unless the series is [numbered otherwise](#when-the-series-is-numbered-otherwise).
   - TMDB's comes from an administrator's [edit](artwork-and-editing.md#edit-metadata), else from `_tmdbId` or a `tmdb:<id>` identifier, else from `moviedb_id`. A series' TVDB identifier comes from an edit, else from `_tvdbId`, else from `tvdb_id`. Each may be a number or a text. A title named `tmdb:<id>` or `tvdb:<id>` keeps that identifier.
   - A `moviedb_id` that is not a positive number is left out. So is one equal to a TVDB identifier of the description: a metadata addon was seen to copy a series' TVDB identifier there, which names another title on TMDB. A movie's `tvdb_id` is left out too.
   - With a [TMDB key](collections-people-and-ratings.md#what-a-key-brings), Polyfin checks each `moviedb_id` in the background: about four lookups a second, shared with credits and artwork, a title's page first, then a daily pass for the rest. TMDB is asked which title has the title's IMDb identifier. A wrong `moviedb_id` is replaced by TMDB's identifier of the title, else dropped: TMDB does not know it, or lists another IMDb identifier for it. A title without an IMDb identifier is judged by its year, within one year. `_tmdbId` and edited identifiers are never checked; an edit always wins.

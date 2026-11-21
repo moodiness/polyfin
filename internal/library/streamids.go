@@ -91,10 +91,11 @@ func (s *Service) streamServing(ctx context.Context, v view, t target) []streamS
 // follow it count each season apart.
 //
 // A title named by IMDb or TMDB has the identifiers its description
-// gives, the episode numbered as it is; its anime entry is the one the
-// mapping gives for its IMDb or TMDB identifier, or, for an episode, the
-// AniDB entry that holds its TVDB season and number (see
-// anime.Service.Entry). A title named by an anime entry has the
+// gives, an episode numbered as each identifier numbers it when its
+// series' pairs tell (see streamnumbering.go), else as it is; its anime
+// entry is the one the mapping gives for its IMDb or TMDB identifier, or,
+// for an episode, the AniDB entry that holds its TVDB season and number
+// (see anime.Service.Entry). A title named by an anime entry has the
 // identifiers the mapping gives: for an episode, IMDb's in TVDB's
 // numbering, and no TMDB one, as TMDB may number the series' seasons
 // otherwise. An identifier the mapping gives is only used when one entry
@@ -165,16 +166,20 @@ func (s *Service) streamRequests(ctx context.Context, v view, t target) []stream
 	if !movie && (t.season < 0 || t.episode <= 0) {
 		return requests
 	}
-	suffix := ""
-	if !movie {
-		suffix = episodeSuffix(t.season, t.episode)
-	}
 	imdb, tmdb := ids["Imdb"], ids["Tmdb"]
+	imdbSuffix, tmdbSuffix := "", ""
+	if !movie {
+		// Each identifier's numbering may differ from the addon's (see
+		// streamnumbering.go).
+		pin := s.streamNumbering(ctx, t, imdb, tmdb, series)
+		imdbSuffix = episodeSuffix(pin.imdb.asked(t.season, t.episode))
+		tmdbSuffix = episodeSuffix(pin.tmdb.asked(t.season, t.episode))
+	}
 	if imdb != "" {
-		add(imdb + suffix)
+		add(imdb + imdbSuffix)
 	}
 	if tmdb != "" {
-		add("tmdb:" + tmdb + suffix)
+		add("tmdb:" + tmdb + tmdbSuffix)
 	}
 	if found, number, ok := s.animeEntry(t, imdb, tmdb, ids["Tvdb"], series); ok {
 		for _, id := range animeIDs(found, number, "") {

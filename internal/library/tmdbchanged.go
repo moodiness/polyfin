@@ -13,7 +13,8 @@ import (
 // former identifier is dropped, or asked again by the new one:
 //   - a series' alignment of its episodes on TMDB's numbering (see
 //     episodealign.go), which the next numbering makes again, and which
-//     a series left without a TMDB identifier would otherwise keep;
+//     a series left without a TMDB identifier would otherwise keep, with
+//     the pairs its stream requests pinned (see streamnumbering.go);
 //   - the segment databases' answers about the movie, or about each of
 //     the series' episodes, asked with the former identifier (see package
 //     mediasegments), so that they are asked again with the new one;
@@ -34,6 +35,7 @@ func (s *Service) titleTMDBChanged(ctx context.Context, title Item, old, now map
 	case KindSeries:
 		_, err := s.db.Exec(ctx, "DELETE FROM episode_alignments WHERE series = $1", title.StremioID)
 		errs = append(errs, err)
+		s.streamNumberings.forget(title.StremioID)
 		_, err = s.db.Exec(ctx, `DELETE FROM media_segments WHERE item_id IN
 			(SELECT id FROM items WHERE kind = 'episode' AND data->>'seriesId' = $1)`, title.StremioID)
 		errs = append(errs, err)
