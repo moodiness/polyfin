@@ -223,8 +223,10 @@ type registered struct {
 	version library.Version
 	src     *source.Source
 	// budget counts what is read of the source, nil for nothing (see
-	// registerWithin).
+	// registerWithin); asked serves it without reading ahead (see
+	// registerAsked).
 	budget *readBudget
+	asked  bool
 	// head is what the source's first bytes were found to be once read:
 	// headUnread, headPlaylist or headFile.
 	head atomic.Int32
@@ -241,18 +243,28 @@ const (
 // register makes a version's source, src, readable at the returned URL
 // until release is called.
 func (l *loopback) register(version library.Version, src *source.Source) (string, func()) {
-	return l.registerWithin(version, src, nil)
+	return l.add(&registered{version: version, src: src})
+}
+
+// registerAsked is register, the source served without reading ahead (see
+// source.Source.ServeAsked): what is fetched of it is what is served,
+// within a block a request.
+func (l *loopback) registerAsked(version library.Version, src *source.Source) (string, func()) {
+	return l.add(&registered{version: version, src: src, asked: true})
 }
 
 // registerWithin is register, what is read of the source counted by
 // budget, which refuses to serve more than its limit; nil counts nothing.
-// A source read within a budget is served without reading ahead (see
-// source.Source.ServeAsked): what is fetched of it is what is served,
-// within a block a request.
+// A source read within a budget is served as registerAsked serves it.
 func (l *loopback) registerWithin(version library.Version, src *source.Source, budget *readBudget) (string, func()) {
+	return l.add(&registered{version: version, src: src, budget: budget, asked: budget != nil})
+}
+
+// add serves reg until release is called, at the URL returned.
+func (l *loopback) add(reg *registered) (string, func()) {
 	key := randomKey()
 	l.mu.Lock()
-	l.sources[key] = &registered{version: version, src: src, budget: budget}
+	l.sources[key] = reg
 	l.mu.Unlock()
 	release := func() {
 		l.mu.Lock()
@@ -303,7 +315,7 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 	if l.servePlaylist(w, r, key, reg) {
 		return
 	}
-	if reg.budget != nil {
+	if reg.asked {
 		reg.src.ServeAsked(w, r)
 		return
 	}

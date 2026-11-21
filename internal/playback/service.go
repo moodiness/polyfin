@@ -787,10 +787,17 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 		}
 		// ffprobe reads through the source cache, so that confined sources
 		// stay confined, required headers are sent, and what it reads is
-		// kept for playback.
+		// kept for playback. In the background, as ahead of a play, what
+		// it reads alone is fetched, nothing ahead of it: the play may
+		// never come, or choose another version. A torrent's file is read
+		// ahead as it plays, its swarm joined.
 		src := s.open(version)
 		defer src.Release()
-		target, release := s.loopback.register(version, src)
+		register := s.loopback.register
+		if background(ctx) && version.Torrent == nil {
+			register = s.loopback.registerAsked
+		}
+		target, release := register(version, src)
 		defer release()
 		// A track's DASH manifest is read as it plays (see audioInput): at
 		// the live stream's address, where the loopback interface rewrites

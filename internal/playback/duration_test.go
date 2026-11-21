@@ -23,7 +23,7 @@ func TestAVersionPastTheLongestDurationIsNotCut(t *testing.T) {
 			Streams: []media.Stream{{Index: 0, Type: "video", Codec: "h264", Width: 160, Height: 90}}})
 		return version
 	}
-	plan, err := s.plan(t.Context(), analyzed(0, media.MaxDuration))
+	plan, err := s.Plan(t.Context(), analyzed(0, media.MaxDuration))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,14 +33,14 @@ func TestAVersionPastTheLongestDurationIsNotCut(t *testing.T) {
 		plan.End(plan.Len()-1) != media.MaxDuration {
 		t.Errorf("the longest version: %d segments, up to %v, want %d", plan.Len(), plan.End(plan.Len()-1), want)
 	}
-	_, none := s.plan(t.Context(), analyzed(1, 0))
+	_, none := s.Plan(t.Context(), analyzed(1, 0))
 	if none == nil {
 		t.Fatal("a version without a duration is cut")
 	}
 	// The shorter length comes first: a plan made from it stops the test
 	// before one is made from 285 years.
 	for n, duration := range []time.Duration{media.MaxDuration + time.Second, 2500 * time.Hour, 9_000_000_000 * time.Second} {
-		plan, err := s.plan(t.Context(), analyzed(byte(n+2), duration))
+		plan, err := s.Plan(t.Context(), analyzed(byte(n+2), duration))
 		if !errors.Is(err, none) || plan.Len() != 0 {
 			t.Fatalf("%v: a plan of %d segments, %v", duration, plan.Len(), err)
 		}
@@ -67,11 +67,11 @@ func TestAKeptAnalysisPastTheLongestDurationIsNotSegmented(t *testing.T) {
 		return version
 	}
 	movie := kept(0, 2*time.Hour)
-	if plan, err := s.plan(t.Context(), movie); err != nil || plan.Len() == 0 || !s.Segmented(t.Context(), movie) {
+	if plan, err := s.Plan(t.Context(), movie); err != nil || plan.Len() == 0 || !s.Segmented(t.Context(), movie) {
 		t.Fatalf("a movie: a plan of %d segments, %v", plan.Len(), err)
 	}
 	without := kept(1, 0)
-	_, none := s.plan(t.Context(), without)
+	_, none := s.Plan(t.Context(), without)
 	if none == nil || s.Segmented(t.Context(), without) {
 		t.Fatal("a version kept without a duration is cut")
 	}
@@ -82,7 +82,7 @@ func TestAKeptAnalysisPastTheLongestDurationIsNotSegmented(t *testing.T) {
 		if s.Segmented(t.Context(), version) {
 			t.Fatalf("%v: told as cut into segments", duration)
 		}
-		if plan, err := s.plan(t.Context(), version); !errors.Is(err, none) || plan.Len() != 0 {
+		if plan, err := s.Plan(t.Context(), version); !errors.Is(err, none) || plan.Len() != 0 {
 			t.Fatalf("%v: a plan of %d segments, %v", duration, plan.Len(), err)
 		}
 	}

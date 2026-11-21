@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/iptv"
@@ -15,15 +16,16 @@ import (
 // soon as an app asks for those rows, so that a title opened from them
 // lists its versions at once rather than a placeholder until the addons
 // answer. The first version of the first homeRowPrepared titles is
-// analyzed too, those a user is most likely to play next; item details
-// analyze the versions a title opens with (see prepareOpened).
+// analyzed too, those a user is most likely to play next, and the bytes
+// of the segment its play starts at read within the user's budget (see
+// prepareRowTitle); item details analyze the version a title opens with
+// (see prepareOpened).
 
 const (
 	// homeRowTitles is how many titles of a row's answer are listed ahead:
 	// those an app shows first.
 	homeRowTitles = 10
-	// homeRowPrepared is how many of them have their first version
-	// analyzed once listed.
+	// homeRowPrepared is how many of them are prepared once listed.
 	homeRowPrepared = 2
 	// maxListing is how many titles are listed at once over the server,
 	// as maxPreparing bounds preparations, for sources that limit their
@@ -127,8 +129,8 @@ func (h *Handler) listAhead(user accounts.User, items []library.Item) {
 // listVersions lists a title's versions as PlaybackInfo does, waiting for
 // every addon: lists still kept cost nothing, and an addon asked for the
 // title already, by details opened meanwhile, is joined, not asked again.
-// With prepare, the first version a play would read is then analyzed (see
-// prepareVersions). It is background work, whose requests to addons are
+// With prepare, the first version a play would read is then prepared (see
+// prepareRowTitle). It is background work, whose requests to addons are
 // paced (see library.Background). An IPTV source is checked once for the
 // listing, which describes its title more than once (see iptv.CheckOnce).
 func (h *Handler) listVersions(user accounts.User, title accounts.ID, prepare bool) {
@@ -140,6 +142,29 @@ func (h *Handler) listVersions(user accounts.User, title accounts.ID, prepare bo
 		return
 	}
 	if versions = h.offered(ctx, user, library.Item{ID: title}, versions); prepare && len(versions) > 0 {
-		h.prepareVersions(ctx, preparationKey{user: user.ID, title: title, version: versions[0].ID}, versions[:1])
+		h.prepareRowTitle(user, title, versions[0])
 	}
+}
+
+// prepareRowTitle queues a preparation of a home row's title whose first
+// version is version: its analysis, unless it was analyzed, then the
+// bytes of the segment its play starts at, where the user stopped, within
+// what the user's first segments may read ahead (see warmAhead). A
+// version that recently failed, or a torrent's that no playback runs, is
+// left as prepareVersions leaves it.
+func (h *Handler) prepareRowTitle(user accounts.User, title accounts.ID, version library.Version) {
+	if h.Playback.Failed(version.ID) || h.idleTorrent(version) {
+		return
+	}
+	h.prepare(preparationKey{user: user.ID, title: title, version: version.ID}, func(ctx context.Context) bool {
+		if _, analyzed := h.Playback.Analyzed(ctx, version.ID); !analyzed && !h.analyzeInTurn(ctx, []library.Version{version}) {
+			return false
+		}
+		var start time.Duration
+		if data, err := h.UserData.Get(ctx, user.ID, []accounts.ID{title}); err == nil {
+			start = data[title].Position
+		}
+		h.warmAhead(ctx, user, version, start)
+		return true
+	})
 }

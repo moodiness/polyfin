@@ -78,27 +78,6 @@ type Remux struct {
 	Start     time.Duration
 }
 
-// Plan returns how a version is cut into segments, reading its keyframe
-// index on first use. A file of a container whose index Polyfin does not
-// read, MPEG-TS, an MPEG program stream or AVI, and an HLS playlist (see
-// unindexedFormat), is cut every few seconds (see hls.NewGridPlan): it
-// plays over HLS only converted, as Jellyfin plays such files, with FFmpeg
-// reading it from before the time asked (see hls.Plan.Searched). So is a
-// version read from its input (see LocalInputs) whose keyframes the disc
-// does not tell, and an MPEG-TS file of a local folder or a share whose
-// keyframes could not be read from the whole file, or not yet within
-// scanWait for a play, which those that could are cut on (see
-// scannedKeyframes). The bytes of its first segment are warmed meanwhile,
-// unless a warm of the version ran lately (see Warm), in the background
-// when ctx is.
-func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
-	plan, err := s.plan(ctx, version)
-	if err == nil && !plan.Grid() {
-		s.warm(version, 0, false, !background(ctx))
-	}
-	return plan, err
-}
-
 // Segmented reports whether a version is known to be cut into HLS
 // segments (see Plan) from what is kept alone, reading nothing from its
 // source: a version read from its input, or a file of a container whose
@@ -122,9 +101,21 @@ func (s *Service) Segmented(ctx context.Context, version library.Version) bool {
 	return ok
 }
 
-// plan is Plan, without warming. A duration past media.MaxDuration, which
-// no analysis read now tells, is no more a length than a missing one.
-func (s *Service) plan(ctx context.Context, version library.Version) (hls.Plan, error) {
+// Plan returns how a version is cut into segments, reading its keyframe
+// index on first use. A file of a container whose index Polyfin does not
+// read, MPEG-TS, an MPEG program stream or AVI, and an HLS playlist (see
+// unindexedFormat), is cut every few seconds (see hls.NewGridPlan): it
+// plays over HLS only converted, as Jellyfin plays such files, with FFmpeg
+// reading it from before the time asked (see hls.Plan.Searched). So is a
+// version read from its input (see LocalInputs) whose keyframes the disc
+// does not tell, and an MPEG-TS file of a local folder or a share whose
+// keyframes could not be read from the whole file, or not yet within
+// scanWait for a play, which those that could are cut on (see
+// scannedKeyframes). A duration past media.MaxDuration, which no analysis
+// read now tells, is no more a length than a missing one. Planning warms
+// nothing: the bytes of a first segment are read ahead for the version a
+// play chose alone (see Warm).
+func (s *Service) Plan(ctx context.Context, version library.Version) (hls.Plan, error) {
 	analysis, err := s.Analyze(ctx, version)
 	if err != nil {
 		return hls.Plan{}, err
