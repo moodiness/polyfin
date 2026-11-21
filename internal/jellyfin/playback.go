@@ -517,6 +517,13 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// for that version alone.
 	requested, _ := parseGUID(request.MediaSourceId)
 	explicit := request.MediaSourceId != "" && requested != item.ID
+	// A device playing the title already, as an app switching tracks asks
+	// again with the title's own identifier, starts from the version it
+	// plays: the first version may be another by now, a failure, a late
+	// addon answer or a pin having moved it, whose track of the index the
+	// app names is not the one meant (see versionPlaying).
+	current, playsTitle := h.versionPlaying(r.Context(), item)
+	switching := request.MediaSourceId != "" && !explicit && playsTitle
 	plan := func(versions []library.Version) candidates {
 		at := openedIndex(opened, versions)
 		if explicit {
@@ -527,17 +534,27 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 			}
 			return candidates{named: -1}
 		}
-		// The version the item was opened as first, then the others in
-		// order. Its tracks are those the app asked for, if it named it.
+		// The version the item was opened as first, or the one the device
+		// plays, then the others in order. Its tracks are those the app
+		// asked for, if it named it: the version played's only, which the
+		// app chose them in, and none when that one is not offered now.
 		c := candidates{order: make([]int, 0, len(versions)), analyzed: settings.VersionAttempts, named: -1}
+		first, named := at, request.MediaSourceId != ""
+		if switching {
+			if i := slices.IndexFunc(versions, func(v library.Version) bool { return v.ID == current }); i >= 0 {
+				first = i
+			} else {
+				named = false
+			}
+		}
 		if len(versions) > 0 {
-			c.order = append(c.order, at)
-			if request.MediaSourceId != "" {
-				c.named = at
+			c.order = append(c.order, first)
+			if named {
+				c.named = first
 			}
 		}
 		for i := range versions {
-			if i != at {
+			if i != first {
 				c.order = append(c.order, i)
 			}
 		}
@@ -552,9 +569,10 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// profile was known: its version menu was ordered for it, the versions
 	// it plays without conversion first (see appOrder), so the identifier,
 	// which it sends for the version the menu shows first, picked or not,
-	// names a version Play keeps even when it needs a conversion.
+	// names a version Play keeps even when it needs a conversion; so does
+	// a device playing the title already.
 	menuPick := request.MediaSourceId != "" && !explicit && profileKnown
-	prefer := settings.PreferDirectPlay && !explicit && !menuPick
+	prefer := settings.PreferDirectPlay && !explicit && !menuPick && !switching
 	c := plan(p.versions)
 	choice := h.choose(r, user, p, opened, request, c, prefer)
 	unstarted := choice.unstarted || p.unstarted

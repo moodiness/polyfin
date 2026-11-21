@@ -1,9 +1,11 @@
 package jellyfin
 
 import (
+	"context"
 	"sync"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -62,4 +64,22 @@ func (h *Handler) playedVersion(device accounts.ID, playing playback.NowPlaying)
 		return chosen.version, true
 	}
 	return source, err == nil
+}
+
+// versionPlaying is the version the device asking plays now, when it
+// plays item (see playedVersion): ok is false when it plays nothing, or
+// another title, or a version Polyfin cannot tell apart from the title's
+// first, as a media source named after the title, with no play session
+// and no PlaybackInfo choice of the device to tell it.
+func (h *Handler) versionPlaying(ctx context.Context, item library.Item) (accounts.ID, bool) {
+	device := callerFrom(ctx).Device.ID
+	if device == (accounts.ID{}) {
+		return accounts.ID{}, false
+	}
+	playing, ok := h.sessions.Playing(device)
+	if !ok || h.titleOf(playing.Item) != item.ID {
+		return accounts.ID{}, false
+	}
+	version, ok := h.playedVersion(device, playing)
+	return version, ok && version != item.ID
 }
