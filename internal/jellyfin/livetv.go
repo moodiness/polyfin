@@ -925,66 +925,120 @@ const playbackInfoPatience = 5 * time.Second
 
 // patientWriter sends an answer's status, 200, and its headers once wait
 // passed with nothing written, then a space after each wait, until the
-// handler writes its answer, whose status must then be 200 too.
+// handler writes its answer, whose status must then be 200 too. One
+// goroutine sends the spaces. Every write to the response goes through
+// the writer's lock, and the handler's headers are its own (see Header):
+// its answer, whichever it is, is written only once that goroutine
+// stopped and returned (see stop).
 type patientWriter struct {
-	http.ResponseWriter
-	wait time.Duration
+	w http.ResponseWriter
+	// header is the handler's headers, which only the answer sends.
+	header http.Header
+	// ticks tells when a space is due, and halt stops them; quit ends the
+	// goroutine sending the spaces, which closes ended as it returns.
+	ticks       <-chan time.Time
+	halt        func()
+	quit, ended chan struct{}
+	once        sync.Once
 
-	mu    sync.Mutex
-	timer *time.Timer
-	sent  bool
-	done  bool
+	mu      sync.Mutex
+	sent    bool
+	stopped bool
 }
 
 func newPatientWriter(w http.ResponseWriter, wait time.Duration) *patientWriter {
-	p := &patientWriter{ResponseWriter: w, wait: wait}
-	p.mu.Lock()
-	p.timer = time.AfterFunc(wait, p.keep)
-	p.mu.Unlock()
+	ticker := time.NewTicker(wait)
+	return newPatientWriterTicking(w, ticker.C, ticker.Stop)
+}
+
+// newPatientWriterTicking is newPatientWriter sending a space at each of
+// ticks, which halt stops: tests drive it with ticks of their own.
+func newPatientWriterTicking(w http.ResponseWriter, ticks <-chan time.Time, halt func()) *patientWriter {
+	p := &patientWriter{w: w, header: w.Header().Clone(), ticks: ticks, halt: halt, quit: make(chan struct{}), ended: make(chan struct{})}
+	go p.keepAlive()
 	return p
+}
+
+func (p *patientWriter) keepAlive() {
+	defer close(p.ended)
+	for {
+		select {
+		case <-p.quit:
+			return
+		case <-p.ticks:
+			p.keep()
+		}
+	}
 }
 
 // keep sends the status and headers, the first time, and a space.
 func (p *patientWriter) keep() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.done {
+	if p.stopped {
 		return
 	}
 	if !p.sent {
-		p.Header().Set("Content-Type", "application/json; charset=utf-8")
-		p.ResponseWriter.WriteHeader(http.StatusOK)
+		p.w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		p.w.WriteHeader(http.StatusOK)
 		p.sent = true
 	}
-	if _, err := io.WriteString(p.ResponseWriter, " "); err != nil {
+	if _, err := io.WriteString(p.w, " "); err != nil {
 		return
 	}
-	_ = http.NewResponseController(p.ResponseWriter).Flush()
-	p.timer.Reset(p.wait)
+	_ = http.NewResponseController(p.w).Flush()
 }
 
-// stop sends no more spaces; it reports whether the status was sent.
+// stop sends no more spaces, and returns once the goroutine sending them
+// returned; it reports whether the status was sent.
 func (p *patientWriter) stop() bool {
+	p.once.Do(func() {
+		p.mu.Lock()
+		p.stopped = true
+		p.mu.Unlock()
+		close(p.quit)
+		p.halt()
+		<-p.ended
+	})
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.done = true
-	p.timer.Stop()
 	return p.sent
 }
 
+// Header returns the handler's headers, which the answer sends unless
+// the spaces sent the status already: the goroutine sending the spaces
+// never reads them.
+func (p *patientWriter) Header() http.Header { return p.header }
+
 func (p *patientWriter) WriteHeader(status int) {
-	if !p.stop() {
-		p.ResponseWriter.WriteHeader(status)
+	if p.stop() {
+		return
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	sent := p.w.Header()
+	clear(sent)
+	maps.Copy(sent, p.header)
+	p.w.WriteHeader(status)
+	p.sent = true
 }
 
 func (p *patientWriter) Write(data []byte) (int, error) {
-	p.stop()
-	return p.ResponseWriter.Write(data)
+	if !p.stop() {
+		p.WriteHeader(http.StatusOK)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.w.Write(data)
 }
 
-// Unwrap returns the underlying writer, for http.ResponseController.
-func (p *patientWriter) Unwrap() http.ResponseWriter { return p.ResponseWriter }
+// Flush sends what the answer wrote so far, once the spaces stopped.
+func (p *patientWriter) Flush() {
+	p.stop()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_ = http.NewResponseController(p.w).Flush()
+}
 
 // liveSource describes a channel's stream with the decision for the app's
 // device profile. Subtitles in live streams are not offered. Only the
