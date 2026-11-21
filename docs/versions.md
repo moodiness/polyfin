@@ -521,7 +521,7 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 
 - Converted names give the first reason in the table that applies.
 - Versions analyzed or described by [RemuxDB](#tracks-from-remuxdb) get an exact ending. Naming reads nothing: it runs a play's decision on what is known.
-  - Opening a title analyzes its first two versions, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on. Each playback reads up to three.
+  - Opening a title analyzes the version a play reads first, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, and the next ones only when it fails. Each playback reads up to three.
   - An analysis wins over a description; either replaces an estimate at the next listing.
 - The others get an estimate from their labels, worded as one: "(likely direct play)", "(likely direct stream)", "(likely converted: audio)"; in French, "(lecture directe probable)", "(flux direct probable)", "(conversion probable : audio)".
   - The labels must name the video codec and an audio codec. Polyfin builds the tracks they suggest, typical values filling the rest, and runs the same decision.

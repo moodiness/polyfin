@@ -208,7 +208,7 @@ func (h *Handler) schedulePush(title accounts.ID, tracks bool) {
 
 // pushVersions tells the pages that watch a title their progress, on their
 // users' jellyfin-web sockets, and, with playback prepared ahead, prepares
-// the versions a play would now read first (see prepareOpened): an addon
+// the version a play would now read first (see prepareOpened): an addon
 // that answered after the details may have put another version first.
 func (h *Handler) pushVersions(title accounts.ID) {
 	w := h.watched

@@ -407,9 +407,8 @@ func newListsAddon(t *testing.T) *listsAddon {
 	return a
 }
 
-// Opening a title prepares the first two versions a play would read; an
-// addon asked again that puts another version first has that one prepared
-// too.
+// Opening a title prepares the version a play would read first; an addon
+// asked again that puts another version first has that one prepared too.
 func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
 	t.Parallel()
 	probe := newFakeProbe(t, true)
@@ -432,10 +431,10 @@ func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
 
 	h.sources(t)
 	addon.replies <- []string{"B", "C", "D"}
-	eventually(t, "the first two versions to be prepared", func() bool { return analyzed("B") && analyzed("C") })
+	eventually(t, "the first version to be prepared", func() bool { return analyzed("B") })
 	h.settle(t)
-	if analyzed("D") || probe.runs() != 2 {
-		t.Fatalf("%d analyses, the third analyzed: %v", probe.runs(), analyzed("D"))
+	if analyzed("C") || analyzed("D") || probe.runs() != 1 {
+		t.Fatalf("%d analyses, the next analyzed: %v %v", probe.runs(), analyzed("C"), analyzed("D"))
 	}
 	// The follow-up lists A first.
 	addon.replies <- []string{"A", "B", "C", "D"}
@@ -443,14 +442,15 @@ func TestPreparationFollowsTheVersionThatComesFirst(t *testing.T) {
 	addon.replies <- []string{"A", "B", "C", "D"}
 	h.reaches(t, VersionProgress{Pending: 0, Count: 4, Known: 4}, "A", "B", "C", "D")
 	h.settle(t)
-	if probe.runs() != 3 || analyzed("D") {
-		t.Errorf("%d analyses, the fourth analyzed: %v", probe.runs(), analyzed("D"))
+	if probe.runs() != 2 || analyzed("C") || analyzed("D") {
+		t.Errorf("%d analyses, the next analyzed: %v %v", probe.runs(), analyzed("C"), analyzed("D"))
 	}
 }
 
-// A title whose versions are all new to Polyfin has its first two versions
-// analyzed as its page opens.
-func TestOpeningATitlePreparesItsFirstTwoVersions(t *testing.T) {
+// A title whose versions are all new to Polyfin has the first analyzed as
+// its page opens, and the next left for a play to read should the first
+// not play.
+func TestOpeningATitlePreparesItsFirstVersionAlone(t *testing.T) {
 	t.Parallel()
 	probe := newFakeProbe(t, true)
 	p := playingOn(t, newProbingServer(t, 10, probe.path))
@@ -460,11 +460,11 @@ func TestOpeningATitlePreparesItsFirstTwoVersions(t *testing.T) {
 	p.get(t, "/Users/"+p.user.ID.String()+"/Items/"+p.remote, p.token, nil)
 	p.settle(t)
 	for i, version := range versions {
-		if _, ok := p.handler.Playback.Analyzed(t.Context(), version.ID); !ok {
-			t.Errorf("version %d not analyzed", i+1)
+		if _, ok := p.handler.Playback.Analyzed(t.Context(), version.ID); ok != (i == 0) {
+			t.Errorf("version %d analyzed: %v", i+1, ok)
 		}
 	}
-	if probe.runs() != 2 {
+	if probe.runs() != 1 {
 		t.Errorf("%d analyses", probe.runs())
 	}
 }

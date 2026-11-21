@@ -23,10 +23,10 @@ import (
 //
 // The first segment of an HLS play is ready once FFmpeg has read its
 // bytes, up to the next segment's keyframe: from a debrid host, seconds
-// for 4K. Those bytes are read into the source cache as soon as the
-// version's keyframe index is known, when a title's details open (with
-// playback prepared ahead) or a PlaybackInfo plans the version, so that
-// FFmpeg finds them there. A resume reads the file's head, which FFmpeg
+// for 4K. Those bytes are read into the source cache for the version a
+// play chose, as its PlaybackInfo answers, so that FFmpeg finds them
+// there; and, within a budget, for the titles a user is likely to play
+// next (see WarmAhead). A resume reads the file's head, which FFmpeg
 // probes, and the segment it resumes at.
 
 const (
@@ -41,18 +41,20 @@ const (
 	warmTime = 2 * time.Minute
 	maxWarms = 2
 	// warmedFor is how long a version warmed is not warmed again from
-	// the same start, nor by Plan from another.
+	// the same start.
 	warmedFor = 10 * time.Minute
 	// indexAheadTime bounds the keyframe index read during an analysis.
 	indexAheadTime = time.Minute
 )
 
-// warmRun is a warm under way, for a playback (urgent) or in the
-// background.
+// ErrWarmDeclined reports a warm ahead whose bytes its budget did not
+// allow (see WarmAhead).
+var ErrWarmDeclined = errors.New("the budget declined the first bytes")
+
+// warmRun is a warm under way.
 type warmRun struct {
 	start   time.Duration
 	started time.Time
-	urgent  bool
 	cancel  context.CancelFunc
 }
 
@@ -62,29 +64,18 @@ type warmRun struct {
 // A warm of the version from another start under way is replaced, one
 // from the same start or done lately is not repeated, and at most a few
 // run at once, the newest. It returns at once. The version is the one a
-// play chose: its source is read as a playback's.
+// play chose: its source is read as a playback's. A version read from its
+// input, on the server's disk, is not warmed.
 func (s *Service) Warm(version library.Version, start time.Duration) {
-	s.warm(version, start, true, true)
-}
-
-// warm is Warm; a warm that does not replace one under way, nor repeats
-// one done lately from any start, nor runs while the version is remuxed,
-// is what Plan starts, urgent unless Plan was asked in the background. An
-// urgent warm replaces one in the background from the same start. A
-// version read from its input, on the server's disk, is not warmed.
-func (s *Service) warm(version library.Version, start time.Duration, replace, urgent bool) {
 	if s.ReadsInput(version) {
 		return
 	}
-	if warmed, ok := s.warmed.Get(version.ID); ok && (warmed == start || !replace) {
-		return
-	}
-	if !replace && s.sources.Streamed(version.ID) {
+	if warmed, ok := s.warmed.Get(version.ID); ok && warmed == start {
 		return
 	}
 	s.warmMu.Lock()
 	if run := s.warming[version.ID]; run != nil {
-		if (run.start == start || !replace) && (run.urgent || !urgent) {
+		if run.start == start {
 			s.warmMu.Unlock()
 			return
 		}
@@ -102,13 +93,29 @@ func (s *Service) warm(version library.Version, start time.Duration, replace, ur
 		delete(s.warming, oldest)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), warmTime)
-	if !urgent {
-		ctx = Background(ctx)
-	}
-	run := &warmRun{start: start, started: time.Now(), urgent: urgent, cancel: cancel}
+	run := &warmRun{start: start, started: time.Now(), cancel: cancel}
 	s.warming[version.ID] = run
 	s.warmMu.Unlock()
 	go s.runWarm(ctx, cancel, version, start, run)
+}
+
+// WarmAhead reads what Warm reads, ahead of a play that may come, once
+// allow, told how many of those bytes the source cache lacks, allows
+// them; else it reads nothing more and returns ErrWarmDeclined. It reads
+// in the background, giving way to playbacks, and returns once done. A
+// version warmed lately from start costs nothing.
+func (s *Service) WarmAhead(ctx context.Context, version library.Version, start time.Duration, allow func(missing int64) bool) error {
+	if s.ReadsInput(version) {
+		return nil
+	}
+	if warmed, ok := s.warmed.Get(version.ID); ok && warmed == start {
+		return nil
+	}
+	if err := s.warmFrom(Background(ctx), version, start, allow); err != nil {
+		return err
+	}
+	s.warmed.Put(version.ID, start)
+	return nil
 }
 
 // runWarm runs a warm of version from start, run, until ctx ends, then
@@ -119,7 +126,7 @@ func (s *Service) runWarm(ctx context.Context, cancel func(), version library.Ve
 	started := time.Now()
 	err := func() (err error) {
 		defer s.panicked(&err, "Reading a version's first bytes ahead ended on a panic", "addon", version.AddonLog)
-		return s.warmFrom(ctx, version, start)
+		return s.warmFrom(ctx, version, start, nil)
 	}()
 	s.warmMu.Lock()
 	if s.warming[version.ID] == run {
@@ -135,11 +142,12 @@ func (s *Service) runWarm(ctx context.Context, cancel func(), version library.Ve
 }
 
 // warmFrom reads what a play of version from start reads first, as a
-// playback's reads unless ctx is marked Background. A version cut on a
-// grid, or one FFmpeg searches (see hls.Plan.Searched), has no index
-// that tells where its keyframes are: it is not warmed.
-func (s *Service) warmFrom(ctx context.Context, version library.Version, start time.Duration) error {
-	plan, err := s.plan(ctx, version)
+// playback's reads unless ctx is marked Background, once allow, unless
+// nil, allows the bytes the cache lacks of it. A version cut on a grid,
+// or one FFmpeg searches (see hls.Plan.Searched), has no index that tells
+// where its keyframes are: it is not warmed.
+func (s *Service) warmFrom(ctx context.Context, version library.Version, start time.Duration, allow func(missing int64) bool) error {
+	plan, err := s.Plan(ctx, version)
 	if err != nil || plan.Grid() || plan.IsSearched() {
 		return err
 	}
@@ -162,6 +170,9 @@ func (s *Service) warmFrom(ctx context.Context, version library.Version, start t
 	})
 	if err != nil {
 		return err
+	}
+	if allow != nil && !allow(src.Missing(spans...)) {
+		return ErrWarmDeclined
 	}
 	return src.Warm(ctx, spans...)
 }

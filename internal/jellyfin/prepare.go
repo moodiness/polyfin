@@ -18,11 +18,17 @@ import (
 )
 
 // With playback prepared ahead in the settings, Polyfin does before a play
-// what its first play would wait for: it reads the versions a title plays
+// what its first play would wait for: it reads the version a title plays
 // first as soon as the title's details open, again when an addon answering
 // later changes which version comes first, the first version of the first
 // titles of Continue Watching and Next Up (see listAhead), and readies the
-// next episode near the end of the one playing.
+// next episode near the end of the one playing. It reads what an analysis
+// and the keyframe index need, nothing ahead (see source.askedUntil); the
+// next versions only when the first fails or stays silent (see
+// analyzeInTurn). The bytes of a first segment are read ahead for the
+// version a PlaybackInfo chose, and, within a small budget for each user,
+// for the titles of Continue Watching and Next Up and the next episode
+// (see warmAhead).
 
 const (
 	// maxNextEpisodeLead is how long before an episode ends the next one is
@@ -43,10 +49,20 @@ const (
 	// and subtitles, then analyzing some, which ffprobe's timeout bounds
 	// too.
 	preparationTimeout = 2 * time.Minute
-	// preparedVersions is how many of a title's versions opening it
-	// prepares: the first ones a play reads at once (see
-	// parallelAttempts).
-	preparedVersions = 2
+	// preparedVersions is how many of a title's versions opening it may
+	// prepare: those a play tries at once (see parallelAttempts), in turn.
+	preparedVersions = 3
+	// silentFor is how long the analysis of a version may go before the
+	// next one is analyzed too, as when its host does not answer: as long
+	// as a play waits for the versions before the one it could play (see
+	// versionPatience).
+	silentFor = 3 * time.Second
+	// aheadBytes is how many bytes of first segments the titles of a
+	// user's Continue Watching and Next Up may read ahead within
+	// aheadPeriod: a few 1080p segments, which a title opened and played
+	// does not count against.
+	aheadBytes  = 32 << 20
+	aheadPeriod = time.Hour
 )
 
 // preparationKey names what a preparation prepares for a user: a title
@@ -66,10 +82,14 @@ type preparation struct {
 
 // preparations runs preparations, maxPreparing at a time, the newest
 // first. A preparation done is not done again for preparedFor; one that
-// failed may be, by a later trigger.
+// failed may be, by a later trigger. It keeps what each user's first
+// segments read ahead spent of aheadBytes (see spend).
 type preparations struct {
 	now    func() time.Time
 	logger *slog.Logger
+	// after is time.After, which tests replace to tell when a version's
+	// analysis stays silent (see analyzeInTurn).
+	after func(time.Duration) <-chan time.Time
 
 	mu      sync.Mutex
 	workers int
@@ -78,10 +98,40 @@ type preparations struct {
 	queue    []preparation
 	running  map[preparationKey]bool
 	prepared map[preparationKey]time.Time
+	// spent is what each user's first segments read ahead spent, since
+	// when.
+	spent map[accounts.ID]spentBytes
+}
+
+// spentBytes is what a user's first segments read ahead spent since a
+// time.
+type spentBytes struct {
+	since time.Time
+	bytes int64
 }
 
 func newPreparations(logger *slog.Logger) *preparations {
-	return &preparations{now: time.Now, logger: logger, running: map[preparationKey]bool{}, prepared: map[preparationKey]time.Time{}}
+	return &preparations{now: time.Now, logger: logger, after: time.After, running: map[preparationKey]bool{},
+		prepared: map[preparationKey]time.Time{}, spent: map[accounts.ID]spentBytes{}}
+}
+
+// spend reports whether a user's first segments read ahead may read n
+// bytes more, aheadBytes at most within aheadPeriod, and counts them if
+// so.
+func (p *preparations) spend(user accounts.ID, n int64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := p.now()
+	spent := p.spent[user]
+	if now.Sub(spent.since) >= aheadPeriod {
+		spent = spentBytes{since: now}
+	}
+	if spent.bytes+n > aheadBytes {
+		return false
+	}
+	spent.bytes += n
+	p.spent[user] = spent
+	return true
 }
 
 // add queues a preparation of key, first, unless it was done recently or
@@ -218,12 +268,12 @@ func (h *Handler) prepare(key preparationKey, work func(ctx context.Context) boo
 	h.preparations.add(key, work)
 }
 
-// prepareOpened analyzes, in the background, the versions a play of a
+// prepareOpened analyzes, in the background, the version a play of a
 // title whose details opened would read first: the version it was opened
-// as (see openedIndex), which PlaybackInfo tries first, then the next, of
-// versions, without those that recently failed, as many as a play reads at
-// once, preparedVersions at most. A play then finds them analyzed, and the
-// keyframe index of an HLS play read.
+// as (see openedIndex), which PlaybackInfo tries first, then, should it
+// fail or stay silent, the next, of versions, without those that recently
+// failed, as many as a play reads at once, preparedVersions at most. A
+// play then finds it analyzed, and the keyframe index of an HLS play read.
 func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) {
 	settings := h.Accounts.Settings()
 	if !settings.PrepareAhead || len(versions) == 0 {
@@ -235,34 +285,67 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 	h.prepareVersions(ctx, preparationKey{user: user.ID, title: item.ID, version: order[0].ID}, order)
 }
 
-// prepareVersions queues a preparation of key that analyzes those of
-// versions not analyzed yet, at once, unless all are. A torrent version
-// whose torrent no playback runs is left out: only a playback reads it
-// (see playback.ErrTorrentIdle), so a preparation would analyze nothing
-// and be made again at each trigger.
+// prepareVersions queues a preparation of key that analyzes versions in
+// turn (see analyzeInTurn), unless the first of them is analyzed already.
+// Those that recently failed are left out, and so is a torrent version
+// whose torrent no playback runs: only a playback reads it (see
+// playback.ErrTorrentIdle), so a preparation would analyze nothing and be
+// made again at each trigger.
 func (h *Handler) prepareVersions(ctx context.Context, key preparationKey, versions []library.Version) {
 	versions = slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool {
-		return !h.unanalyzed(ctx, v) || h.idleTorrent(v)
+		return h.Playback.Failed(v.ID) || h.idleTorrent(v)
 	})
 	if len(versions) == 0 {
 		return
 	}
+	if _, analyzed := h.Playback.Analyzed(ctx, versions[0].ID); analyzed {
+		return
+	}
 	h.prepare(key, func(ctx context.Context) bool {
-		var wg sync.WaitGroup
-		for _, version := range versions {
-			wg.Go(func() {
-				defer logPanic(h.Logger, "Analyzing a version ahead ended on a panic", "addon", version.AddonLog)
-				h.analyzeAhead(ctx, version)
-			})
+		return h.analyzeInTurn(ctx, versions)
+	})
+}
+
+// analyzeInTurn analyzes versions ahead one at a time, as a play would
+// try them: the next once the one before failed, or stayed silentFor
+// without an analysis, as when its host does not answer, which goes on
+// meanwhile. Once one is analyzed, no other starts. It reports whether
+// one was, once those started ended.
+func (h *Handler) analyzeInTurn(ctx context.Context, versions []library.Version) bool {
+	results := make(chan bool, len(versions))
+	started, ended, analyzed := 0, 0, false
+	var silence <-chan time.Time
+	next := func() {
+		version := versions[started]
+		started++
+		silence = nil
+		if started < len(versions) {
+			silence = h.preparations.after(silentFor)
 		}
-		wg.Wait()
-		for _, version := range versions {
-			if _, ok := h.Playback.Analyzed(ctx, version.ID); !ok {
-				return false
+		go func() {
+			ok := false
+			defer func() { results <- ok }()
+			defer logPanic(h.Logger, "Analyzing a version ahead ended on a panic", "addon", version.AddonLog)
+			h.analyzeAhead(ctx, version)
+			_, ok = h.Playback.Analyzed(ctx, version.ID)
+		}()
+	}
+	next()
+	for ended < started {
+		select {
+		case ok := <-results:
+			ended++
+			analyzed = analyzed || ok
+			if !ok && !analyzed && started < len(versions) {
+				next()
+			}
+		case <-silence:
+			if !analyzed {
+				next()
 			}
 		}
-		return true
-	})
+	}
+	return analyzed
 }
 
 // prepareListed prepares as prepareOpened does once the title's versions
@@ -295,8 +378,9 @@ func nextEpisodeLead(settings accounts.Settings) time.Duration {
 }
 
 // prepareNearTheEnd prepares the episode after the one a user plays once
-// at most nextEpisodeLead of it is left. runtime is that of the version
-// playing; an unknown runtime prepares nothing.
+// at most nextEpisodeLead of it is left, the bytes of its first segment
+// within what the user may read ahead (see warmAhead). runtime is that of
+// the version playing; an unknown runtime prepares nothing.
 func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item library.Item, runtime, position time.Duration) {
 	settings := h.Accounts.Settings()
 	if item.Kind != library.KindEpisode || runtime <= 0 || runtime-position > nextEpisodeLead(settings) || !settings.PrepareAhead {
@@ -332,6 +416,7 @@ func (h *Handler) prepareNearTheEnd(user accounts.User, device accounts.ID, item
 			return true
 		}
 		h.analyzeAhead(ctx, versions[0])
+		h.warmAhead(ctx, user, versions[0], 0)
 		// Its images too, in the background, as its play would ask,
 		// once the playback of this episode stopped.
 		if h.Thumbnails != nil {
@@ -373,12 +458,12 @@ func (h *Handler) idleTorrent(version library.Version) bool {
 
 // analyzeAhead does before a play asks what the first play of a version
 // waits for: its analysis, then what an HLS play reads besides, its
-// keyframe index, read while it is analyzed, the bytes of its first
-// segment, which Plan warms into the source cache, and where its subtitle
-// tracks sit in the index. Each is kept like the analysis, and a
-// PlaybackInfo arriving meanwhile waits for the read under way rather than
-// starting another. All of it is background work, which gives way to the
-// playbacks reading the same hosts (see playback.Background).
+// keyframe index, read while it is analyzed, and where its subtitle tracks
+// sit in the index. Each is kept like the analysis, and a PlaybackInfo
+// arriving meanwhile waits for the read under way rather than starting
+// another. All of it is background work, which gives way to the
+// playbacks reading the same hosts (see playback.Background). The bytes
+// of its first segment are left to the play (see warmAhead).
 func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 	if h.Playback.Failed(version.ID) {
 		return
@@ -399,11 +484,23 @@ func (h *Handler) analyzeAhead(ctx context.Context, version library.Version) {
 		return
 	}
 	// A version without an index still plays as it is; a first play would
-	// find that out the same way. One with an index has the bytes of its
-	// first segment warmed in the background (see playback.Service.Warm).
+	// find that out the same way.
 	if _, err := h.Playback.Plan(ctx, version); err != nil {
 		h.Logger.Debug("A version's keyframe index could not be read ahead of playback", "addon", version.AddonLog, "error", err)
 	}
 	h.Playback.SubtitlesLocated(ctx, version, analysis)
 	h.Logger.Debug("Prepared a version ahead of playback", "addon", version.AddonLog, "duration", time.Since(started))
+}
+
+// warmAhead reads ahead, in the background, the bytes of the first
+// segment a play of version from start reads, for a title user is likely
+// to play next, within what the user's first segments may read ahead (see
+// preparations.spend): what the source cache holds costs nothing.
+func (h *Handler) warmAhead(ctx context.Context, user accounts.User, version library.Version, start time.Duration) {
+	err := h.Playback.WarmAhead(ctx, version, start, func(missing int64) bool {
+		return h.preparations.spend(user.ID, missing)
+	})
+	if err != nil {
+		h.Logger.Debug("A version's first bytes were not read ahead", "addon", version.AddonLog, "error", err)
+	}
 }

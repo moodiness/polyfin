@@ -291,9 +291,11 @@ func plan0End(plan hls.Plan, keyframes []container.Keyframe) int64 {
 	return offsetAt(keyframes, plan.Start(1)) + warmMargin
 }
 
-// Plan warms the first segment once; Warm from another start replaces a
-// warm under way, and is not repeated.
-func TestPlanWarmsTheFirstSegment(t *testing.T) {
+// Planning a version warms nothing: a play reads ahead the first segment
+// of the version it chose alone (see Warm). A warm ahead reads it once its
+// budget allows what the cache lacks, and nothing when it does not. Warm
+// from another start replaces the warm lately done.
+func TestFirstBytesAreReadForTheChosenVersionAlone(t *testing.T) {
 	t.Parallel()
 	data, err := os.ReadFile(filepath.Join("testdata", "codecs.mkv"))
 	if err != nil {
@@ -310,30 +312,47 @@ func TestPlanWarmsTheFirstSegment(t *testing.T) {
 	if _, err := s.Plan(t.Context(), version); err != nil {
 		t.Fatal(err)
 	}
-	warmed := func(start time.Duration) bool {
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			if at, ok := s.warmed.Get(version.ID); ok && at == start {
-				return true
-			}
-			time.Sleep(10 * time.Millisecond)
+	s.warmMu.Lock()
+	_, warming := s.warming[version.ID]
+	s.warmMu.Unlock()
+	if _, warmed := s.warmed.Get(version.ID); warming || warmed {
+		t.Fatal("planning the version warmed it")
+	}
+	// The index read is kept: the file's bytes are all a warm lacks now.
+	if !s.sources.Discard(version.ID) {
+		t.Fatal("the source is held")
+	}
+	asked := host.count.Load()
+	var told []int64
+	budget := func(allowed bool) func(int64) bool {
+		return func(missing int64) bool {
+			told = append(told, missing)
+			return allowed
 		}
-		return false
 	}
-	if !warmed(0) {
-		t.Fatal("Plan warmed nothing")
+	if err := s.WarmAhead(t.Context(), version, 0, budget(false)); !errors.Is(err, ErrWarmDeclined) {
+		t.Fatalf("declined: %v", err)
 	}
-	s.Warm(version, 3*time.Second)
-	if !warmed(3 * time.Second) {
-		t.Fatal("Warm from a resume warmed nothing")
+	if n := host.count.Load(); n != asked || !slices.Equal(told, []int64{int64(len(data))}) {
+		t.Fatalf("declined: %d requests more, told %v", n-asked, told)
 	}
-	// Plan does not warm the start over a resume warmed lately.
-	if _, err := s.Plan(t.Context(), version); err != nil {
+	if err := s.WarmAhead(t.Context(), version, 0, budget(true)); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	if at, _ := s.warmed.Get(version.ID); at != 3*time.Second {
-		t.Errorf("warmed from %v", at)
+	if _, cached := s.CachedSource(version); !cached || host.count.Load() == asked {
+		t.Fatal("allowed, the warm read nothing")
+	}
+	// Warmed lately, it costs nothing.
+	if err := s.WarmAhead(t.Context(), version, 0, budget(true)); err != nil || len(told) != 2 {
+		t.Fatalf("again: %v, told %v", err, told)
+	}
+	s.Warm(version, 3*time.Second)
+	deadline := time.Now().Add(5 * time.Second)
+	for at, _ := s.warmed.Get(version.ID); at != 3*time.Second; at, _ = s.warmed.Get(version.ID) {
+		if time.Now().After(deadline) {
+			t.Fatal("Warm from a resume warmed nothing")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
