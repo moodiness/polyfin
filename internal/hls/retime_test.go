@@ -114,18 +114,19 @@ func near(a, b float64) bool {
 }
 
 // The best timings of the last 7 days apply as soon as the GPU is chosen,
-// each chain's own; the GPU's timing at startup joins them.
+// each chain's own; neither the GPU nor the processor is timed at
+// startup.
 func TestTheBestRecentTimingsApplyAtStart(t *testing.T) {
 	t.Parallel()
 	m, _, path, log := timedManager(t, usual)
 	keep(t, path,
 		kept(nvidiaKey, 48*time.Hour, map[string]float64{chainSDRMemory: 3.6, chainSDRGPU: 0.5, chainHDRMemory: 1.2, chainHDRGPU: 1.4, chainProcessor: 1.2}),
 		kept(nvidiaKey, 24*time.Hour, map[string]float64{chainSDRMemory: 3.5, chainSDRGPU: 0.4, chainHDRMemory: 1.1, chainHDRGPU: 1.1, chainProcessor: 1.8}))
-	release := make(chan struct{})
+	var runs atomic.Int32
 	timed := m.run
 	m.run = func(ctx context.Context, args []string) (time.Duration, error) {
 		if !slices.Contains(args, "0.25") {
-			<-release
+			runs.Add(1)
 		}
 		return timed(ctx, args)
 	}
@@ -140,22 +141,20 @@ func TestTheBestRecentTimingsApplyAtStart(t *testing.T) {
 	if !strings.Contains(log.String(), `msg="Applied the best recent timings" timings=2`) {
 		t.Errorf("logged %s", log)
 	}
-	close(release)
 	m.measuring.Wait()
-	// The GPU's timing is kept; the processor's of the last 7 days stands,
-	// and it is not timed at startup.
-	if got := keptIn(t, path); len(got) != 3 || !near(got[2].Speeds[chainHDRGPU], 1.3) || got[2].Speeds[chainProcessor] != 0 {
-		t.Errorf("kept %+v", got)
+	if got := keptIn(t, path); len(got) != 2 || runs.Load() != 0 {
+		t.Errorf("%d runs, kept %+v", runs.Load(), got)
 	}
 	if hw := m.Hardware(); hw.HDRSpeed != 1.4 || !hw.VulkanDecoding || m.ToneMappedHeight() != 1080 {
 		t.Errorf("after the timing: %+v at %dp", hw, m.ToneMappedHeight())
 	}
 }
 
-// A timing at startup on a busy server changes nothing and is not kept:
+// A scheduled timing on a busy server changes nothing and is not kept:
 // the best recent timings stay in force, and the GPU is timed again 30
 // to 60 minutes later, once Polyfin has done no work for the quiet
-// window. The test drives the clock, runs the retry itself and hears
+// window. The start, with a timing of the last 7 days kept, times
+// nothing. The test drives the clock, runs the retry itself and hears
 // each look at whether Polyfin is quiet: nothing hangs on real time.
 func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	t.Parallel()
@@ -207,12 +206,20 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	writes, applied := make(chan error, 8), make(chan struct{}, 1)
 	m.timings.wrote = func(err error) { writes <- err }
 	m.retime.applied = func() { applied <- struct{}{} }
-	// A file converts meanwhile, which the timing at startup does not
-	// wait for.
+	m.SelectHardware("nvenc", "")
+	m.measuring.Wait()
+	if !m.processorTimed.Load() || len(writes) != 0 {
+		t.Fatalf("timed at startup: %+v", keptIn(t, path))
+	}
+	// The scheduled timing, asked for by hand, meets a busy server.
+	if err := m.Retime(t.Context(), true); err != nil {
+		t.Fatal(err)
+	}
+	<-applied
+	// A file converts meanwhile.
 	m.mu.Lock()
 	m.files = 1
 	m.mu.Unlock()
-	m.SelectHardware("nvenc", "")
 	var again retry
 	select {
 	case again = <-retries:
@@ -222,9 +229,6 @@ func TestABusyTimingIsLeftOutAndTimedAgainWhenQuiet(t *testing.T) {
 	if again.delay < 30*time.Minute || again.delay >= time.Hour {
 		t.Errorf("timed again %v later", again.delay)
 	}
-	// The retry counts among the timings Close waits for: the test waits
-	// for the processor's timing instead.
-	eventually(t, "the timings at startup", m.processorTimed.Load)
 	hw := m.Hardware()
 	if hw.HDRSpeed != 1.3 || !hw.VulkanDecoding || m.HDRPath(hw).Reason != HDRKeepsUp || m.ToneMappedHeight() != 1080 {
 		t.Errorf("after the busy timing: %+v at %dp", hw, m.ToneMappedHeight())

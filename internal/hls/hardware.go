@@ -131,9 +131,9 @@ func (m *Manager) methods() []gpuMethod {
 // choosing it again switches to what was found, encodings already running
 // going on as they started. It reports false when no GPU encodes, and
 // conversions then run on the processor. The best timings kept of the last
-// 7 days apply at once (see UseTimings); the GPU's conversion chains are
-// then timed in the background (see measure): without timings kept,
-// conversions starting before that ends go through memory.
+// 7 days apply at once (see UseTimings); without one of the GPU's chains,
+// they are then timed in the background (see measureLater): until that
+// ends, conversions go through memory.
 func (m *Manager) DetectHardware(want, device string) (Hardware, bool) {
 	m.detecting.Lock()
 	defer m.detecting.Unlock()
@@ -427,7 +427,11 @@ const sampleLength = 2 * time.Second
 // measure), after any other timing, then puts what they tell in hw's
 // place (see settleGPU), as the choice of want and as the GPU chosen,
 // unless another was chosen meanwhile. A timing made while the server was
-// busy is made again later. Close stops it.
+// busy is made again later. With a timing kept from the last 7 days for
+// this GPU, driver and FFmpeg build in which a chain converted, it times
+// nothing: the best already applies (see DetectHardware), and the
+// scheduled timings made when quiet keep it fresh (see Retime). Close
+// stops it.
 func (m *Manager) measureLater(want string, hw *Hardware) {
 	if hw == nil {
 		return
@@ -447,6 +451,12 @@ func (m *Manager) measureLater(want string, hw *Hardware) {
 			}
 		}()
 		m.retime.run.Lock()
+		if m.keptGPUTiming(hw) {
+			m.retime.run.Unlock()
+			m.logger.Info("The GPU's conversion chains are not timed at startup: their best timings of the last 7 days apply",
+				"method", hw.Method, "sdr_chain", chainName(hw.Resident))
+			return
+		}
 		base := hw.untimed()
 		measured, found := m.measure(ctx, base)
 		if ctx.Err() != nil {
