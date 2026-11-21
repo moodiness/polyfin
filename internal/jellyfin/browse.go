@@ -361,16 +361,21 @@ func (h *Handler) serverOrderedViews(r *http.Request, user accounts.User) ([]Bas
 // whether the web player's menus leave it out: its top bar, the bar's More
 // menu and its side menu (see addons.Library.HideInMenus). Polyfin's
 // jellyfin-web script hides the links to the views so marked; the views
-// keep their home screen rows, and other apps list them all.
+// keep their home screen rows, and other apps list them all. Catalog marks
+// a library that lists an addon's catalog whose titles Polyfin does not
+// store (see library.Service.CatalogLibraries): its home row holds the
+// catalog's first titles rather than recent additions, so the script opens
+// it from the row's title on the user's chosen screen, not on Suggestions.
 type MenuView struct {
 	Id          string
 	HideInMenus bool
+	Catalog     bool
 }
 
 // menuViews answers /Polyfin/UserViews: the views /UserViews lists the
 // caller, in the same order, each with whether the web player's menus
-// leave it out. Polyfin's own Live TV, Replay, Playlists and Collections
-// views never are.
+// leave it out and whether it lists an addon's catalog. Polyfin's own Live
+// TV, Replay, Playlists and Collections views never are either.
 func (h *Handler) menuViews(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
 	views, err := h.userViews(r, user, false)
@@ -383,10 +388,15 @@ func (h *Handler) menuViews(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	catalogs, err := h.Library.CatalogLibraries(r.Context(), user)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	items := make([]MenuView, 0, len(views))
 	for _, view := range views {
-		hide := slices.ContainsFunc(hidden, func(id accounts.ID) bool { return id.String() == view.Id })
-		items = append(items, MenuView{Id: view.Id, HideInMenus: hide})
+		is := func(id accounts.ID) bool { return id.String() == view.Id }
+		items = append(items, MenuView{Id: view.Id, HideInMenus: slices.ContainsFunc(hidden, is), Catalog: slices.ContainsFunc(catalogs, is)})
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []MenuView }{items})
 }

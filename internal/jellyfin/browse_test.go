@@ -449,6 +449,62 @@ func TestPolyfinUserViewsTellTheLibrariesLeftOutOfMenus(t *testing.T) {
 	}
 }
 
+// /Polyfin/UserViews marks Catalog the libraries that list an addon's
+// catalog Polyfin does not store, whose home rows hold the catalog's first
+// titles rather than recent additions: neither a library of collections
+// nor Polyfin's own Playlists view is.
+func TestPolyfinUserViewsTellTheCatalogLibraries(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	member := s.user("member", nil)
+	addon, err := s.addons.Install(t.Context(), addons.Shared(), catalogAddon(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Shared(), []addons.LibraryChoice{
+		{AddonID: addon.ID, CatalogType: "movie", CatalogID: "top"},
+		{AddonID: addon.ID, CatalogType: "series", CatalogID: "shows"},
+		{AddonID: addon.ID, CatalogType: "collection", CatalogID: "groups"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	private, err := s.addons.Install(t.Context(), addons.Personal(member.ID), privateAddon(t), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.addons.SetLibraries(t.Context(), addons.Personal(member.ID), []addons.LibraryChoice{
+		{AddonID: private.ID, CatalogType: "movie", CatalogID: "mine"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	token := s.signIn("member", "tv")
+	s.createPlaylist(t, token, map[string]any{"Name": "Evening"})
+	var views QueryResult
+	if status := s.get(t, "/UserViews", token, &views); status != http.StatusOK {
+		t.Fatalf("views: %d", status)
+	}
+	var menus struct{ Items []MenuView }
+	if status := s.get(t, "/Polyfin/UserViews", token, &menus); status != http.StatusOK {
+		t.Fatalf("menu views: %d", status)
+	}
+	if len(menus.Items) != len(views.Items) {
+		t.Fatalf("menu views: %+v, views: %v", menus.Items, itemNames(views.Items))
+	}
+	catalogs := 0
+	for i, view := range menus.Items {
+		want := views.Items[i].CollectionType == "movies" || views.Items[i].CollectionType == "tvshows"
+		if view.Catalog != want {
+			t.Errorf("%s (%s) catalog: %v, want %v", views.Items[i].Name, views.Items[i].CollectionType, view.Catalog, want)
+		}
+		if view.Catalog {
+			catalogs++
+		}
+	}
+	if catalogs != 3 || len(menus.Items) != 5 {
+		t.Errorf("catalog views: %d of %v, want 3 of 5", catalogs, itemNames(views.Items))
+	}
+}
+
 func (s testServer) get(t *testing.T, path, token string, into any) int {
 	t.Helper()
 	status, body := s.call(http.MethodGet, path, app("tv", token), nil)

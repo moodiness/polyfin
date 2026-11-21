@@ -912,6 +912,28 @@ func (s *Service) HiddenInMenus(ctx context.Context, user accounts.User) ([]acco
 	return hidden, nil
 }
 
+// CatalogLibraries lists those of a user's libraries that list an addon's
+// catalog whose titles Polyfin does not store, in order: neither an IPTV
+// source's nor a local folder's, nor a library of collections or of music.
+// Their latest titles are the catalog's first ones, in its order, not
+// recent additions, so the web player opens them on the user's chosen
+// screen rather than on Suggestions. It reads the view the request built
+// for Libraries, under PerRequest.
+func (s *Service) CatalogLibraries(ctx context.Context, user accounts.User) ([]accounts.ID, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	var catalogs []accounts.ID
+	for _, l := range v.libraries {
+		a := l.addon.addon
+		if !a.IPTV() && !a.Local() && !a.HasMusic() && l.catalog.Type != "collection" {
+			catalogs = append(catalogs, l.item.ID)
+		}
+	}
+	return catalogs, nil
+}
+
 // LibraryID is the item of a library in Jellyfin apps, which keeps its
 // identifier when its catalog's type or identifier changes (see
 // addons.Library.Key).
