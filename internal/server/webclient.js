@@ -402,16 +402,19 @@
 // row's name opens its list (#/list?parentId= the row's Id), or, for a row
 // of a playlist (its PlaylistId), the playlist's page; each card a poster
 // with the title's played mark, or count of unplayed episodes, and
-// progress, opening the title's page. An episode shows as jellyfin-web
-// shows one in a row: its series' poster, the series' name, then its
-// season and episode numbers before its name. When jellyfin-web draws the
-// home page anew, which empties it, the page's changes put the rows back
-// from the last answer. Every time it draws them, it leaves out the titles
-// the item menus hid meanwhile, and from the Now available, Still waiting
-// and Watchlist rows those they took off the watchlist, as the tenth keeps
-// them in the session storage for the user signed in (a series hidden
-// taking its items with it), and a row left without a title. Nothing else
-// changes, nor anything while the answer is awaited.
+// progress, opening the title's page. A poster loads as its card comes
+// within half a screen of the screen, at the width the card shows it at,
+// as jellyfin-web loads its own (a browser without IntersectionObserver
+// loads them all at once, 272 pixels wide). An episode shows as
+// jellyfin-web shows one in a row: its series' poster, the series' name,
+// then its season and episode numbers before its name. When jellyfin-web
+// draws the home page anew, which empties it, the page's changes put the
+// rows back from the last answer. Every time it draws them, it leaves out
+// the titles the item menus hid meanwhile, and from the Now available,
+// Still waiting and Watchlist rows those they took off the watchlist, as
+// the tenth keeps them in the session storage for the user signed in (a
+// series hidden taking its items with it), and a row left without a
+// title. Nothing else changes, nor anything while the answer is awaited.
 // Any error just stops it.
 //
 // Twelfth, on a movie's or an episode's page, it adds a "Share" button to
@@ -4160,6 +4163,42 @@
     var attributes = { 'data-polyfin-row': row.Id, 'data-polyfin-kind': row.Kind || '' }
     return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', attributes, [title, scroller])
   }
+  // A row's posters load as they come near the screen, as jellyfin-web
+  // loads its own: a row holds up to 20, and a home page several rows,
+  // which a phone would otherwise all load at once. Each is asked at the
+  // width its card shows it at, which jellyfin-web's styles give the
+  // row's cards (on a phone, about half the 272 pixels of a desktop's),
+  // and half as tall again; getScaledImageUrl multiplies both by the
+  // screen's pixel ratio. A browser without IntersectionObserver loads
+  // them at once, 272 wide.
+  var posterWatcher = null
+  function loadPoster(image) {
+    var load = image.polyfinPoster
+    if (!load) return
+    image.polyfinPoster = null
+    var width = image.offsetWidth > 0 ? Math.ceil(image.offsetWidth) : 272
+    image.style.backgroundImage = 'url("' + load(width) + '")'
+  }
+  function lazyPoster(image, load) {
+    image.polyfinPoster = load
+    if (typeof IntersectionObserver !== 'function') return loadPoster(image)
+    if (!posterWatcher) {
+      // Half a screen ahead, so that a poster is there as its row scrolls.
+      posterWatcher = new IntersectionObserver(
+        function (entries) {
+          for (var i = 0; i < entries.length; i++) {
+            if (!entries[i].isIntersecting) continue
+            posterWatcher.unobserve(entries[i].target)
+            try {
+              loadPoster(entries[i].target)
+            } catch (error) {}
+          }
+        },
+        { rootMargin: '50%' }
+      )
+    }
+    posterWatcher.observe(image)
+  }
   // card draws a title as jellyfin-web's cards of a row of posters. An
   // episode shows its series' poster, the series' name, then its season
   // and episode numbers before its own name, as jellyfin-web shows one.
@@ -4176,14 +4215,16 @@
       role: 'img',
     })
     if (tag) {
-      var url = api.getScaledImageUrl(poster ? item.SeriesId : item.Id, {
-        type: 'Primary',
-        fillHeight: 407,
-        fillWidth: 272,
-        quality: 96,
-        tag: tag,
+      var target = poster ? item.SeriesId : item.Id
+      lazyPoster(image, function (width) {
+        return api.getScaledImageUrl(target, {
+          type: 'Primary',
+          fillHeight: Math.round(width * 1.5),
+          fillWidth: width,
+          quality: 96,
+          tag: tag,
+        })
       })
-      image.style.backgroundImage = 'url("' + url + '")'
     } else {
       image.appendChild(icon(item.Type === 'Series' || episode ? 'tv' : item.Type === 'BoxSet' ? 'folder' : 'movie', 'cardImageIcon'))
     }
