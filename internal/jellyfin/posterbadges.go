@@ -235,9 +235,9 @@ func (h *Handler) badgesOf(ctx context.Context, items []library.Item, size strin
 }
 
 // badgedKey is the key the image at url with badges over it, as tags carry
-// them, is kept by.
+// them, is kept by (see pictureKey).
 func badgedKey(url, badges string) string {
-	return url + "\x00badges=" + badges
+	return pictureKey(url) + "\x00badges=" + badges
 }
 
 // badged returns the image at url, original, with badges over it, at

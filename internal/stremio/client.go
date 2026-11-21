@@ -566,39 +566,79 @@ const maxImageBytes = 15 << 20
 // answers 429, or 503, with a Retry-After asks to wait that long, which
 // RetryAfter reads from the error.
 func (c *Client) Image(ctx context.Context, target string, confined bool) ([]byte, string, error) {
+	picture, err := c.ImageSince(ctx, target, confined, Validators{})
+	return picture.Body, picture.Type, err
+}
+
+// Validators are what an artwork server told of a picture it sent, to
+// ask it later whether the picture changed: its ETag and Last-Modified.
+type Validators struct {
+	ETag         string
+	LastModified string
+}
+
+// Picture is artwork downloaded (see ImageSince): Body, of the type Type
+// tells, with the validators its server gave. Unchanged tells that the
+// server answered that the picture did not change: Body is then empty.
+type Picture struct {
+	Body []byte
+	Type string
+	Validators
+	Unchanged bool
+}
+
+// ImageSince is Image, asking the server for the picture only if it
+// changed since the one known has: known's validators are sent as
+// If-None-Match and If-Modified-Since. A server that answers 304 sends no
+// body; the Picture is then Unchanged, with the validators it answered,
+// known's when it answered none.
+func (c *Client) ImageSince(ctx context.Context, target string, confined bool, known Validators) (Picture, error) {
 	ctx, cancel := c.bound(ctx, c.timeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil || (request.URL.Scheme != "https" && request.URL.Scheme != "http") {
-		return nil, "", fmt.Errorf("%w: invalid image URL", ErrUnreachable)
+		return Picture{}, fmt.Errorf("%w: invalid image URL", ErrUnreachable)
 	}
 	request.Header.Set("Accept", "image/*")
 	request.Header.Set("User-Agent", c.userAgent)
+	if known.ETag != "" {
+		request.Header.Set("If-None-Match", known.ETag)
+	}
+	if known.LastModified != "" {
+		request.Header.Set("If-Modified-Since", known.LastModified)
+	}
 	response, err := c.do(request, confined)
 	if err != nil {
-		return nil, "", err
+		return Picture{}, err
 	}
 	defer response.Body.Close()
+	validators := Validators{ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified")}
+	if response.StatusCode == http.StatusNotModified && known != (Validators{}) {
+		if validators == (Validators{}) {
+			validators = known
+		}
+		return Picture{Validators: validators, Unchanged: true}, nil
+	}
 	contentType := response.Header.Get("Content-Type")
 	if response.StatusCode != http.StatusOK || !strings.HasPrefix(contentType, "image/") {
 		wait, waits := parseRetryAfter(response.Header.Get("Retry-After"), time.Now())
 		if waits && (response.StatusCode == http.StatusTooManyRequests || response.StatusCode == http.StatusServiceUnavailable) {
-			return nil, "", fmt.Errorf("%w: %w %s, %w", ErrUnreachable, httpStatus(response.StatusCode), contentType, wait)
+			return Picture{}, fmt.Errorf("%w: %w %s, %w", ErrUnreachable, httpStatus(response.StatusCode), contentType, wait)
 		}
-		return nil, "", fmt.Errorf("%w: %w %s", ErrUnreachable, httpStatus(response.StatusCode), contentType)
+		return Picture{}, fmt.Errorf("%w: %w %s", ErrUnreachable, httpStatus(response.StatusCode), contentType)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes+1))
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %w", ErrUnreachable, err)
+		return Picture{}, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	if len(body) > maxImageBytes {
-		return nil, "", fmt.Errorf("%w: image larger than %d bytes", ErrInvalidResponse, maxImageBytes)
+		return Picture{}, fmt.Errorf("%w: image larger than %d bytes", ErrInvalidResponse, maxImageBytes)
 	}
 	pictureType, ok := relayed.Picture(body)
 	if !ok {
-		return nil, "", noPicture{}
+		return Picture{}, noPicture{}
 	}
-	return body, pictureType, nil
+	return Picture{Body: body, Type: pictureType, Validators: validators}, nil
 }
 
 // ErrNoPicture reports artwork that is no raster picture by its bytes,

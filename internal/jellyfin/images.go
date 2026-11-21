@@ -65,9 +65,11 @@ import (
 // than an empty card. Downloaded images are kept in memory, the most
 // recently used up to imageCacheBytes, and on disk under the cache
 // folder's images folder, up to imageDiskBytes, which a restart keeps. An
-// app asking for an image much smaller than the original (see
-// resizedWidth) gets it resized, kept the same way. Posters are also
-// warmed ahead of any request (see warmedposters.go).
+// image downloaded is asked again of its server once it is older than
+// imageMaxAge, as its picture may change behind the same address (see
+// artworkrefresh.go). An app asking for an image much smaller than the
+// original (see resizedWidth) gets it resized, kept the same way. Posters
+// are also warmed ahead of any request (see warmedposters.go).
 
 const (
 	// imageCacheBytes bounds the memory used by recently relayed artwork.
@@ -108,6 +110,9 @@ const (
 	// tag, which changes with the image.
 	immutableImage = "public, max-age=31536000, immutable"
 	taggedImage    = "public, max-age=604800"
+	// imageMaxAge is how long a downloaded image is served before its
+	// server is asked whether it changed (see refreshArtwork).
+	imageMaxAge = 24 * time.Hour
 )
 
 // imageResizes bounds the images resized at once: one for each two of the
@@ -118,10 +123,15 @@ var imageResizes = max(2, runtime.GOMAXPROCS(0)/2)
 // the least recently used of all (see trimDisk).
 var neverUsed = time.Unix(0, 0)
 
-// artwork is a downloaded image.
+// artwork is a downloaded image. A relayed one also has the validators its
+// server gave and the time it was checked last, downloaded or asked
+// whether it changed: zero for an image kept before those were, which is
+// checked at its next request.
 type artwork struct {
 	body        []byte
 	contentType string
+	stremio.Validators
+	checked time.Time
 }
 
 // imageCache keeps the artwork relayed recently, in memory and on disk,
@@ -153,6 +163,13 @@ type imageCache struct {
 	// reach the memory of a picture.
 	drawingBeside int64
 
+	// refreshing holds the keys of the images being asked of their server
+	// whether they changed (see refreshArtwork), which refreshes counts;
+	// stamps those whose picture changed (see imageStamps).
+	refreshing map[string]bool
+	refreshes  sync.WaitGroup
+	stamps     imageStamps
+
 	mu sync.Mutex
 	// memory holds the images in memory, most recently used first, by key;
 	// size counts their bytes.
@@ -181,10 +198,14 @@ type memoryImage struct {
 	image artwork
 }
 
+// diskImage is an image kept on disk, by file name, of size bytes, used
+// last at used and checked at checked, when it was read or written since
+// it was opened (see artwork).
 type diskImage struct {
-	name string
-	size int64
-	used time.Time
+	name    string
+	size    int64
+	used    time.Time
+	checked time.Time
 }
 
 // open prepares the cache, keeping images on disk under dir, none when
@@ -203,7 +224,8 @@ func (c *imageCache) open(dir string, logger *slog.Logger) {
 		c.warmResizes = make(chan struct{}, max(1, imageResizes/2))
 		c.memory, c.order = map[string]*list.Element{}, list.New()
 		c.disk, c.diskBytes, c.hosts = map[string]*diskImage{}, imageDiskBytes, map[string]*hostFetches{}
-		c.warmed = map[string][]string{}
+		c.warmed, c.refreshing = map[string][]string{}, map[string]bool{}
+		c.stamps.load(dir, logger)
 		if dir == "" {
 			return
 		}
@@ -220,6 +242,9 @@ func (c *imageCache) open(dir string, logger *slog.Logger) {
 		for _, entry := range entries {
 			info, err := entry.Info()
 			if err != nil || !entry.Type().IsRegular() {
+				continue
+			}
+			if entry.Name() == stampsFile {
 				continue
 			}
 			if strings.HasPrefix(entry.Name(), ".") {
@@ -275,14 +300,17 @@ func (c *imageCache) get(key string) (artwork, bool) {
 		return artwork{}, false
 	}
 	c.mu.Lock()
+	kept.checked = image.checked
 	c.remember(key, image)
 	c.mu.Unlock()
 	return image, true
 }
 
-// put keeps image for key, in memory and on disk.
+// put keeps image for key, in memory and on disk, in place of the one kept
+// before.
 func (c *imageCache) put(key string, image artwork) {
 	c.mu.Lock()
+	c.forgetMemory(key)
 	c.remember(key, image)
 	c.mu.Unlock()
 	if c.dir == "" {
@@ -299,9 +327,34 @@ func (c *imageCache) put(key string, image artwork) {
 	if kept, ok := c.disk[name]; ok {
 		c.diskSize -= kept.size
 	}
-	c.disk[name] = &diskImage{name: name, size: size, used: time.Now()}
+	c.disk[name] = &diskImage{name: name, size: size, used: time.Now(), checked: image.checked}
 	c.diskSize += size
 	c.trimDisk()
+}
+
+// forgetMemory forgets the image kept in memory for key, if any; c.mu is
+// held.
+func (c *imageCache) forgetMemory(key string) {
+	if element, ok := c.memory[key]; ok {
+		c.order.Remove(element)
+		delete(c.memory, key)
+		c.size -= len(element.Value.(*memoryImage).image.body)
+	}
+}
+
+// drop forgets the image kept for key, in memory and on disk.
+func (c *imageCache) drop(key string) {
+	c.mu.Lock()
+	c.forgetMemory(key)
+	kept, ok := c.disk[fileName(key)]
+	if ok {
+		delete(c.disk, kept.name)
+		c.diskSize -= kept.size
+	}
+	c.mu.Unlock()
+	if ok {
+		_ = os.Remove(filepath.Join(c.dir, kept.name))
+	}
 }
 
 // remember keeps image in memory, forgetting the least recently used
@@ -440,7 +493,13 @@ func (c *imageCache) peek(key string) (artwork, bool) {
 		return artwork{}, false
 	}
 	image, err := readImage(filepath.Join(c.dir, kept.name))
-	return image, err == nil
+	if err != nil {
+		return artwork{}, false
+	}
+	c.mu.Lock()
+	kept.checked = image.checked
+	c.mu.Unlock()
+	return image, true
 }
 
 // roomToWarm reports whether the disk has room for images warmed: it is
@@ -466,7 +525,7 @@ func (c *imageCache) startWarming() {
 // it (see get), so the images apps asked for outlast it.
 func (c *imageCache) keepWarmed(key string, image artwork) {
 	name := fileName(key)
-	size := int64(len(image.contentType) + 1 + len(image.body))
+	size := int64(len(imageHeader(image)) + len(image.body))
 	c.mu.Lock()
 	if _, ok := c.disk[name]; ok || c.dir == "" {
 		c.mu.Unlock()
@@ -495,7 +554,7 @@ func (c *imageCache) keepWarmed(key string, image artwork) {
 		// An app's request kept it meanwhile.
 		c.diskSize -= kept.size
 	}
-	c.disk[name] = &diskImage{name: name, size: written, used: neverUsed}
+	c.disk[name] = &diskImage{name: name, size: written, used: neverUsed, checked: image.checked}
 	c.diskSize += written
 }
 
@@ -511,18 +570,44 @@ func (c *imageCache) kept(keys []string) bool {
 	return true
 }
 
-// readImage reads an image file: its content type on the first line, then
-// its bytes.
+// readImage reads an image file: its content type on the first line,
+// followed by a tab and what tells whether it changed when it has that
+// (see imageHeader), then its bytes.
 func readImage(path string) (artwork, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return artwork{}, err
 	}
-	contentType, body, ok := bytes.Cut(data, []byte("\n"))
-	if !ok || !bytes.HasPrefix(contentType, []byte("image/")) {
+	header, body, ok := bytes.Cut(data, []byte("\n"))
+	if !ok || !bytes.HasPrefix(header, []byte("image/")) {
 		return artwork{}, fs.ErrInvalid
 	}
-	return artwork{body: body, contentType: string(contentType)}, nil
+	contentType, fields, _ := strings.Cut(string(header), "\t")
+	image := artwork{body: body, contentType: contentType}
+	if values, err := url.ParseQuery(fields); err == nil {
+		if seconds, err := strconv.ParseInt(values.Get("checked"), 10, 64); err == nil {
+			image.checked = time.Unix(seconds, 0)
+		}
+		image.ETag, image.LastModified = values.Get("etag"), values.Get("modified")
+	}
+	return image, nil
+}
+
+// imageHeader is the first line of an image's file: its content type,
+// then for a relayed image checked once, a tab and the time it was
+// checked last with the validators its server gave, as a query.
+func imageHeader(image artwork) string {
+	if image.checked.IsZero() {
+		return image.contentType + "\n"
+	}
+	values := url.Values{"checked": {strconv.FormatInt(image.checked.Unix(), 10)}}
+	if image.ETag != "" {
+		values.Set("etag", image.ETag)
+	}
+	if image.LastModified != "" {
+		values.Set("modified", image.LastModified)
+	}
+	return image.contentType + "\t" + values.Encode() + "\n"
 }
 
 // writeImage writes an image file whole, or not at all, and returns its
@@ -533,7 +618,8 @@ func writeImage(dir, name string, image artwork) (int64, error) {
 		return 0, err
 	}
 	defer os.Remove(file.Name())
-	_, err = file.Write(append([]byte(image.contentType+"\n"), image.body...))
+	header := imageHeader(image)
+	_, err = file.Write(append([]byte(header), image.body...))
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
@@ -543,7 +629,7 @@ func writeImage(dir, name string, image artwork) (int64, error) {
 	if err := os.Rename(file.Name(), filepath.Join(dir, name)); err != nil {
 		return 0, err
 	}
-	return int64(len(image.contentType) + 1 + len(image.body)), nil
+	return int64(len(header) + len(image.body)), nil
 }
 
 // errImagePanicked reports the making of an image that ended on a panic.
@@ -818,14 +904,17 @@ func (h *Handler) fetchArtworkHeld(ctx context.Context, target string, confined,
 
 // downloadArtwork is fetchArtworkHeld, for warming a poster when warming
 // (see fetchFor and host). The image kept, and the failure remembered,
-// are those of a download confined as this one is (see artworkKey).
+// are those of a download confined as this one is (see artworkKey). An
+// image kept past imageMaxAge is served as it is, and its server asked in
+// the background whether it changed (see refreshArtwork); warming asks
+// nothing, as no app asked for the image.
 func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, iptv, warming bool, hold func(context.Context) (func(), error)) (artwork, error) {
 	key := artworkKey(target, confined)
 	if failed, ok := h.images.failures.Get(key); ok && h.images.now().Before(failed.until) {
 		failed.downloadError = downloadError{failed.status, fmt.Errorf("the last download failed: %w", failed.err)}
 		return artwork{}, failed
 	}
-	return h.images.fetchFor(ctx, key, warming, func(ctx context.Context) (artwork, error) {
+	image, err := h.images.fetchFor(ctx, key, warming, func(ctx context.Context) (artwork, error) {
 		release, err := h.images.host(ctx, target, iptv, warming)
 		if err != nil {
 			return artwork{}, err
@@ -838,7 +927,7 @@ func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, 
 			}
 			defer release()
 		}
-		body, contentType, err := h.Stremio.Image(ctx, target, confined)
+		picture, err := h.Stremio.ImageSince(ctx, target, confined, stremio.Validators{})
 		if err != nil {
 			status := http.StatusBadGateway
 			switch {
@@ -850,8 +939,12 @@ func (h *Handler) downloadArtwork(ctx context.Context, target string, confined, 
 			return artwork{}, h.images.failed(target, confined, status, err)
 		}
 		h.images.failures.Delete(key)
-		return artwork{body: body, contentType: contentType}, nil
+		return artwork{body: picture.Body, contentType: picture.Type, Validators: picture.Validators, checked: h.images.now()}, nil
 	})
+	if err == nil && !warming && h.images.due(image) {
+		h.refreshArtwork(ctx, target, confined, iptv)
+	}
+	return image, err
 }
 
 // maxLocalImageBytes bounds a local folder's image, as relayed artwork is
@@ -945,9 +1038,22 @@ func resizedWidth(query url.Values, width, height int) int {
 	return 0
 }
 
-// resizedKey is the key an image resized to width is kept by.
+// resizedKey is the key an image resized to width is kept by: a picture
+// that changed behind its address has its copies of its own (see
+// pictureKey).
 func resizedKey(target string, width int) string {
-	return target + "\x00width=" + strconv.Itoa(width)
+	return pictureKey(target) + "\x00width=" + strconv.Itoa(width)
+}
+
+// pictureKey is what the copies drawn from the picture at target are kept
+// by: target, with the stamp of its picture when it changed (see
+// library.StampImage), so that the copies of the picture before are not
+// served for the new one.
+func pictureKey(target string) string {
+	if stamp := library.ImageStamp(target); stamp != "" {
+		return target + "\x00stamp=" + stamp
+	}
+	return target
 }
 
 // resized returns the image at target resized to width, made once and
@@ -1155,6 +1261,12 @@ func (h *Handler) taggedArtwork(w http.ResponseWriter, r *http.Request, tag stri
 		header.Set("Cache-Control", taggedImage)
 	}
 	if r.Header.Get("If-None-Match") == etag {
+		// The app keeps the image and shows it still: a relayed one is
+		// asked of its server whether it changed, as when downloaded.
+		if _, local := library.LocalArtworkKey(url); found.Generated == nil && !local {
+			h.images.open(h.imageDir(), h.Logger)
+			h.refreshKept(r.Context(), url, found.URLConfined())
+		}
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}

@@ -350,12 +350,17 @@ func replayKey(channel string, start time.Time) string {
 }
 
 // ImageTag identifies a version of an artwork for HTTP caching; it is empty
-// when there is no artwork.
+// when there is no artwork. It is the URL's, with the stamp of a picture
+// that changed behind it folded in (see StampImage).
 func ImageTag(url string) string {
 	if url == "" {
 		return ""
 	}
-	sum := sha256.Sum256([]byte(url))
+	key := url
+	if stamp := ImageStamp(url); stamp != "" {
+		key += "\x00" + stamp
+	}
+	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:16])
 }
 

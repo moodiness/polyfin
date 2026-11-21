@@ -318,6 +318,7 @@ It leaves alone:
 - the images uploaded with **Edit images** or chosen for libraries, kept in the database;
 - the artwork files of local folders, which stay beside their files;
 - the copy of the web player's theme kept in **Settings › Web player**;
+- the tags of the pictures that changed behind the same address (see [Pictures that change behind the same address](artwork-and-editing.md#pictures-that-change-behind-the-same-address));
 - which titles each generated image shows.
 
 **Compared with Jellyfin**

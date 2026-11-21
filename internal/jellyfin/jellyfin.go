@@ -340,6 +340,9 @@ func New(options Options) *Handler {
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, h.syncPlayConnected, func() time.Time { return h.now() }, options.Logger)
 	h.syncPlay.ended = h.groupEnded
 	h.listings = newListings(h.listVersions)
+	// The tags of the images that changed behind their address are given
+	// from the first listing (see imageStamps).
+	h.images.stamps.load(h.imageDir(), options.Logger)
 	if options.Library != nil {
 		options.Library.OnVersionsChanged(h.versionsChanged)
 		options.Library.OnFirstPagesRead(h.warmPosters)

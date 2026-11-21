@@ -100,6 +100,17 @@ Polyfin relays pictures only: JPEG, PNG, GIF, WebP, BMP, ICO and AVIF. It tells 
 - Polyfin resizes as many images at once as half its processors, 2 at least.
 - An image of more than 16.7 million pixels (4,096 by 4,096) is not resized: apps get it as it is, as they get an animated GIF. Nor is one whose resize would hold more than 256 MiB of memory, which Polyfin counts from the image's size and format before it reads it. A poster of 2,000 by 3,000 pixels and a 4K backdrop are resized to every size. A larger image is resized to the smaller sizes only: as a rule, one of 4,000 by 4,000 up to 1,280 pixels wide, and a backdrop of 5,120 by 2,880 up to 1,920. A PNG of 16 bits a channel, or a progressive JPEG saved at the highest quality, counts more.
 
+### Pictures that change behind the same address
+
+Some posters change while their address stays the same, such as posters that show ratings, or those of the poster address template. Apps keep an image by its tag, so Polyfin checks the images it relays:
+
+- **A day:** an image is served as kept for a day after it was downloaded or checked.
+- **Then checked once:** past that, an app asking for it still gets it at once, and Polyfin asks its server in the background whether it changed. A server that gave an `ETag` or a `Last-Modified` answers `304` with no picture when it did not; another sends the picture again.
+- **Only images in use:** only the images apps still ask for are checked, each once a day at most, with the downloads that warm posters, which leave three quarters of a server's 16 places to apps. A server that fails is asked again a day later, and the image kept is served meanwhile.
+- **A new tag:** a picture that changed replaces the one kept, and its tag changes, so that apps fetch it. A picture that did not change keeps its tag, and apps keep their copies.
+- The tags of the pictures that changed are kept in the `images` folder, across restarts, and clearing the image cache keeps them: an app that kept a picture before it changed would show it again otherwise. The 50,000 most recent are kept.
+- An image kept by a version of Polyfin that did not check images is first checked a day after the first request for it, so that the images kept are not all asked about at once.
+
 ### Failed downloads
 
 An image that could not be downloaded is not asked for again for a while. Meanwhile, its requests answer the same.
