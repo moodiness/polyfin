@@ -635,6 +635,7 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 ### Unmarking without DELETE for apps
 
 - Each `DELETE` of a mark also answers as a `POST` to its address followed by `/Delete`, as an Emby server does: `POST /UserPlayedItems/{id}/Delete` marks the item unplayed, `POST /UserFavoriteItems/{id}/Delete` takes it off the favorites, and `POST /UserItems/{id}/Rating/Delete` clears its like, each with the same answer. So do `/Users/{userId}/PlayedItems/{id}/Delete`, `/Users/{userId}/FavoriteItems/{id}/Delete` and `/Users/{userId}/Items/{id}/Rating/Delete`. VidHub unmarks this way; Jellyfin 12.4 has no such routes.
+- A rating from 6.5 reads as liked in `UserData.Likes` and in the `Likes` filter, a lower one as disliked, as Jellyfin reads it ([UserItemData.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/UserItemData.cs#L13)). Liking an item rates it 10, disliking it 1.
 
 ### Home screen sections for apps
 

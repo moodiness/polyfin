@@ -124,6 +124,20 @@ func TestListsFollowWhatUsersDid(t *testing.T) {
 	}
 }
 
+func TestLikedStartsAtSixAndAHalf(t *testing.T) {
+	t.Parallel()
+	store, alice, _ := setup(t)
+	for i, rating := range []float64{5, 6.4, 6.5, 8} {
+		if _, err := store.Change(t.Context(), alice, []Item{{ID: accounts.ID{byte(i + 1)}}}, func(d *Data) { d.Rating = new(rating) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	liked, err := store.Liked(t.Context(), alice)
+	if ids := entryIDs(liked); err != nil || len(ids) != 2 || ids[0] != (accounts.ID{3}) || ids[1] != (accounts.ID{4}) {
+		t.Errorf("liked: %v %v", ids, err)
+	}
+}
+
 func TestConcurrentChangesAreNotLost(t *testing.T) {
 	t.Parallel()
 	store, alice, _ := setup(t)

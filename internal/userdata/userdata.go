@@ -39,13 +39,17 @@ type Data struct {
 	ResumeRemoved *time.Time
 }
 
+// likedFrom is the lowest rating a user likes an item with, as Jellyfin's
+// UserItemData reads a rating.
+const likedFrom = 6.5
+
 // Likes tells whether the user likes the item, as Jellyfin reads a
-// rating: nil when the item is not rated.
+// rating: from likedFrom, nil when the item is not rated.
 func (d Data) Likes() *bool {
 	if d.Rating == nil {
 		return nil
 	}
-	return new(*d.Rating >= 5)
+	return new(*d.Rating >= likedFrom)
 }
 
 // Item names an item whose data changes. Episodes name their series and
@@ -197,7 +201,7 @@ func (s *Store) Favorites(ctx context.Context, user accounts.ID) ([]Entry, error
 
 // Liked lists the items the user likes.
 func (s *Store) Liked(ctx context.Context, user accounts.ID) ([]Entry, error) {
-	return s.entries(ctx, "SELECT "+columns+" FROM user_data WHERE user_id = $1 AND rating >= 5 ORDER BY item_id", user)
+	return s.entries(ctx, "SELECT "+columns+" FROM user_data WHERE user_id = $1 AND rating >= $2 ORDER BY item_id", user, likedFrom)
 }
 
 // Played lists the items the user played, most recently played first.

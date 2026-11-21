@@ -223,7 +223,7 @@ func TestRatingsReadAsLikes(t *testing.T) {
 	if *d.Rating != 1 || *d.Likes() {
 		t.Errorf("a dislike: %v", *d.Rating)
 	}
-	for rating, likes := range map[float64]bool{4.5: false, 7: true} {
+	for rating, likes := range map[float64]bool{4.5: false, 5: false, 6.4: false, 6.5: true, 7: true} {
 		if got := *(Data{Rating: &rating}).Likes(); got != likes {
 			t.Errorf("rated %v: likes %v", rating, got)
 		}
