@@ -154,6 +154,10 @@ const backups: typeof en = {
           n === 1
             ? '1 chiave di un accesso in due passaggi'
             : `${n} chiavi di accessi in due passaggi`,
+        addresses: (n: number) =>
+          n === 1
+            ? '1 indirizzo di un add-on, un’origine o una guida'
+            : `${n} indirizzi di add-on, origini o guide`,
       },
       serverName: (name: string) => `Digita il nome del server, ${name}, per confermare`,
       confirm: 'Ripristina',

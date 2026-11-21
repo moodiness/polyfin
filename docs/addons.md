@@ -252,6 +252,8 @@ So when Polyfin asks for an episode by its series' IMDb or TMDB identifier, it p
 
 Manifest addresses usually hold your addon settings or keys. Polyfin never shows them in full. To change one, use **Replace the address** in the source's more-actions menu, or the new install link of **Once configured** (see [Configuring an addon](#configuring-an-addon)). The libraries follow the new manifest as they do at a refresh (see [Refreshing an addon](#refreshing-an-addon)). It also forgets the addon's version lists, so that each title asks it again (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)).
 
+With `POLYFIN_SECRET_KEY` set, Polyfin stores them encrypted, and the addresses of IPTV sources and guides too (see [Addon and source addresses](configuration.md#addon-and-source-addresses)).
+
 Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, an addon's **Name**, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
 
 ### Configuring an addon

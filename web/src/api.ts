@@ -5420,6 +5420,12 @@ export type UnreadableSecret = {
   certificate: boolean
   /** The two-step sign-in of `user`. */
   twoStep: boolean
+  /**
+   * The address of an addon or an IPTV source, by its name, of `user` or of the server (`user`
+   * null), or of one of its programme guides (`guide`).
+   */
+  addon: string | null
+  guide: boolean
 }
 
 /**
@@ -5775,7 +5781,8 @@ export type RestorePlan = {
       | 'shares'
       | 'destinations'
       | 'certificates'
-      | 'twoStep',
+      | 'twoStep'
+      | 'addresses',
       number
     >
   >

@@ -363,7 +363,8 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 			}
 			if guide != "" {
 				if _, err := tx.Exec(ctx, `INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url)
-					SELECT addon_id, catalog_type, catalog_id, 1, $2 FROM libraries WHERE addon_id = $1 AND catalog_type = 'tv'`, addon.ID, guide); err != nil {
+					SELECT addon_id, catalog_type, catalog_id, 1, $2 FROM libraries WHERE addon_id = $1 AND catalog_type = 'tv'`, addon.ID,
+					s.addons.SealGuide(guide)); err != nil {
 					return err
 				}
 			}
@@ -575,6 +576,11 @@ func (s *Service) RefreshDue(ctx context.Context, all bool) error {
 	var checked *time.Time
 	if _, err := pgx.ForEachRow(rows, []any{&d.addon.ID, &d.addon.Kind, &d.addon.ManifestURL, &manifestJSON, &d.addon.Enabled,
 		&d.addon.RefreshedAt, &d.addon.ChosenName, &d.confined, &d.addon.Network, &checked, &retry, &d.failure}, func() error {
+		// A list whose address the key cannot decrypt is not fetched: it
+		// counts as not set (see addons.Sealing).
+		if d.addon.ManifestURL = s.addons.OpenAddress(d.addon.ManifestURL); d.addon.ManifestURL == "" {
+			return nil
+		}
 		d.now = all || Due(checked, retry, s.interval(), s.now()) || d.addon.Network == "" && retry == nil
 		// The time is copied: the next row is scanned where it is.
 		d.checked = nil

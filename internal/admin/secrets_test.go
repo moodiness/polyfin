@@ -182,6 +182,51 @@ func TestHealthReportsStoredSecrets(t *testing.T) {
 	}
 }
 
+// Health names an addon's address, or a guide's, that the key cannot
+// decrypt by the addon's name and whose it is, never by the address.
+func TestHealthNamesAddressesTheKeyCannotDecrypt(t *testing.T) {
+	t.Parallel()
+	var box *secrets.Box
+	var pool *pgxpool.Pool
+	api := newTestAPI(t, 10, func(options *Options, deps testDeps) {
+		pool = deps.pool
+		options.Health.Secrets = func(ctx context.Context) (secrets.Report, error) { return box.Inspect(ctx, deps.pool) }
+	})
+	administrator := api.signedIn("administrator", true)
+	alice := api.createUser("alice", false)
+	key, _ := secrets.ParseKey(strings.Repeat("ab", 32))
+	other, _ := secrets.New(key)
+	if _, err := pool.Exec(t.Context(), `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position)
+		VALUES (NULL, 'stremio', $1, '{"name": "Lost"}', 1), ($2, 'm3u', $3, '{"name": "TV", "catalogs": [{"type": "tv", "id": "channels"}]}', 1)`,
+		other.Seal("https://addon.example/lost-key/manifest.json"), alice.ID, other.Seal("http://tv.example/get.php?password=lost")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), "INSERT INTO libraries (addon_id, catalog_type, catalog_id, position) SELECT id, 'tv', 'channels', 1 FROM addons WHERE kind = 'm3u'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), `INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url)
+		SELECT id, 'tv', 'channels', 1, $1 FROM addons WHERE kind = 'm3u'`, other.Seal("http://tv.example/xmltv.php?password=lost")); err != nil {
+		t.Fatal(err)
+	}
+	_, body, _ := administrator.call(http.MethodGet, "/health", nil)
+	report, _ := body["secrets"].(map[string]any)
+	unreadable, _ := report["unreadable"].([]any)
+	want := []string{`{"addon":"Lost","guide":false,"user":null}`, `{"addon":"TV","guide":false,"user":"alice"}`, `{"addon":"TV","guide":true,"user":"alice"}`}
+	if len(unreadable) != len(want) {
+		t.Fatalf("unreadable: %v", report)
+	}
+	for i, entry := range unreadable {
+		named := entry.(map[string]any)
+		encoded, _ := json.Marshal(map[string]any{"addon": named["addon"], "guide": named["guide"], "user": named["user"]})
+		if string(encoded) != want[i] {
+			t.Errorf("unreadable %d: %s, want %s", i, encoded, want[i])
+		}
+	}
+	if encoded, _ := json.Marshal(report); strings.Contains(string(encoded), "lost") || strings.Contains(string(encoded), "enc:v1") {
+		t.Errorf("health holds an address: %s", encoded)
+	}
+}
+
 // Inspecting the secrets fails when the request ends, such as a tab closed
 // during a Health refresh: nothing is logged then, and a real failure still
 // is.

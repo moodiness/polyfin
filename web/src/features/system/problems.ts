@@ -44,7 +44,8 @@ function ownedName(t: Messages, name: string, owner: Owner): string {
 /**
  * The name of a stored secret the key cannot decrypt: a server setting, the keys of the
  * certificate of Let's Encrypt, a user's two-step sign-in, a network share's password, a user's
- * tracking or app connection, or a notification target of a user or of the server.
+ * tracking or app connection, a notification target of a user or of the server, or the address of
+ * an addon, an IPTV source or one of its guides, of a user or of the server.
  */
 export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   const text = t.system.health
@@ -53,6 +54,10 @@ export function unreadableName(t: Messages, secret: UnreadableSecret): string {
   if (secret.twoStep) return text.twoStepOf(secret.user ?? '')
   if (secret.folder !== null) return text.sharePasswordOf(secret.folder)
   if (secret.destination !== null) return text.destinationSecretOf(secret.destination)
+  if (secret.addon !== null) {
+    const address = secret.guide ? text.guideAddressOf(secret.addon) : text.addressOf(secret.addon)
+    return secret.user === null ? address : `${address} (${text.owner.user(secret.user)})`
+  }
   if (secret.target !== null) {
     return secret.user === null
       ? text.serverTargetOf(secret.target)

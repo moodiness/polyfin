@@ -891,6 +891,7 @@ func (s *Service) previewedTitles(ctx context.Context, source accounts.ID, typ s
 		Scan(&kind, &address, &confined, &network, &agent); err != nil {
 		return nil, err
 	}
+	address = s.addons.OpenAddress(address)
 	on := typ == typeMovie && o.Movies || typ == typeSeries && o.Series
 	switch {
 	case kind != addons.KindXtream:

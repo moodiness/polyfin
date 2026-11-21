@@ -24,6 +24,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/eclipse"
+	"github.com/moodiness/polyfin/internal/secrets"
 	"github.com/moodiness/polyfin/internal/serverfile"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
@@ -113,7 +114,9 @@ const (
 // libraries see of it (its name, icon and catalog rows, and
 // eclipse.MyMusic, see eclipse.Manifest.Stremio), and Settings the values
 // chosen for its settings. A local music folder has a Music manifest too,
-// which its catalog rows give (see localMusic).
+// which its catalog rows give (see localMusic). ManifestURL is empty for
+// an address stored encrypted that POLYFIN_SECRET_KEY cannot decrypt (see
+// Sealing): it counts as not set, as other secrets do.
 type Addon struct {
 	ID          accounts.ID
 	Kind        string
@@ -458,7 +461,8 @@ func NewLibraryImage(catalogType string) string {
 const MaxGuides = 10
 
 // Guide is an XMLTV guide of a live TV catalog: its address, which may
-// embed credentials, and how its last download went. FetchedAt is the last
+// embed credentials, empty when the key cannot decrypt it (see Sealing),
+// and how its last download went. FetchedAt is the last
 // success, CheckedAt the last attempt; Channels and Programmes count what
 // the last success held, Generation names it; Error is the code of the last
 // failure, empty after a success.
@@ -476,9 +480,10 @@ type Guide struct {
 
 const guideColumns = "g.id, g.position, g.url, g.generation, g.checked_at, g.fetched_at, g.channels, g.programmes, g.error"
 
-func scanGuide(row pgx.CollectableRow) (Guide, error) {
+func scanGuide(box *secrets.Box, row pgx.Row, extra ...any) (Guide, error) {
 	var g Guide
-	err := row.Scan(&g.ID, &g.Position, &g.URL, &g.Generation, &g.CheckedAt, &g.FetchedAt, &g.Channels, &g.Programmes, &g.Error)
+	err := row.Scan(append(extra, &g.ID, &g.Position, &g.URL, &g.Generation, &g.CheckedAt, &g.FetchedAt, &g.Channels, &g.Programmes, &g.Error)...)
+	g.URL = OpenAddress(box, g.URL)
 	return g, err
 }
 
@@ -534,10 +539,66 @@ type Store struct {
 	// again (see LocateSources), and reports false when ctx ended first;
 	// nil but in tests.
 	locateWait func(ctx context.Context, d time.Duration) bool
+	// box seals and opens the addresses that embed credentials (see
+	// Sealing).
+	box *secrets.Box
 }
 
-func New(db *pgxpool.Pool, client *stremio.Client) *Store {
-	return &Store{db: db, client: client}
+// Option configures a Store.
+type Option func(*Store)
+
+// Sealing has the store seal with box, as other secrets are, the
+// addresses of the addons and IPTV sources it stores (see
+// secrets.SealsAddress) and those of their guides, which embed their keys
+// and passwords, and open those it reads. An address installed twice in a
+// scope is told by its fingerprint (see secrets.Box.Fingerprint).
+func Sealing(box *secrets.Box) Option {
+	return func(s *Store) { s.box = box }
+}
+
+func New(db *pgxpool.Pool, client *stremio.Client, options ...Option) *Store {
+	s := &Store{db: db, client: client}
+	for _, option := range options {
+		option(s)
+	}
+	return s
+}
+
+// storedAddress returns what the addons table stores for the address of
+// an addon of kind, sealed when the store has a key and the kind's
+// address is sealed (see secrets.SealsAddress), and the fingerprint it is
+// told by: nil for an address stored as it is, which tells itself.
+func (s *Store) storedAddress(kind, address string) (string, *string) {
+	if !s.box.Enabled() || !secrets.SealsAddress(kind) {
+		return address, nil
+	}
+	fingerprint := s.box.Fingerprint(address)
+	return s.box.Seal(address), &fingerprint
+}
+
+// storeAddress sets, in an update of addons, the address to $3, as
+// storedAddress gives it, and its fingerprint to $6. An address whose
+// fingerprint is the same keeps the value stored: a refresh does not
+// encrypt it again.
+const storeAddress = "manifest_url = CASE WHEN address_key = $6 THEN manifest_url ELSE $3 END, address_key = $6"
+
+// SealGuide returns what the live_guides table stores for a guide's
+// address: sealed when the store has a key (see Sealing).
+func (s *Store) SealGuide(address string) string { return s.box.Seal(address) }
+
+// OpenAddress opens an address of an addon, an IPTV source or a guide as
+// the database stores it (see Sealing), for those who read it there: empty
+// when the key cannot decrypt it, which counts as not set.
+func (s *Store) OpenAddress(stored string) string { return OpenAddress(s.box, stored) }
+
+// OpenAddress opens stored with box, empty when box cannot (see
+// Store.OpenAddress).
+func OpenAddress(box *secrets.Box, stored string) string {
+	address, err := box.Open(stored)
+	if err != nil {
+		return ""
+	}
+	return address
 }
 
 type queryer interface {
@@ -545,8 +606,9 @@ type queryer interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-// scanAddon reads a row of addonColumns, then the extra columns.
-func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
+// scanAddon reads a row of addonColumns, then the extra columns, its
+// address opened (see OpenAddress).
+func (s *Store) scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	var addon Addon
 	var manifest []byte
 	err := row.Scan(append([]any{&addon.ID, &addon.Kind, &addon.ManifestURL, &manifest, &addon.Settings, &addon.Enabled, &addon.RefreshedAt,
@@ -557,6 +619,7 @@ func scanAddon(row pgx.Row, extra ...any) (Addon, error) {
 	if err != nil {
 		return addon, err
 	}
+	addon.ManifestURL = OpenAddress(s.box, addon.ManifestURL)
 	if addon.Kind == KindEclipse {
 		var music eclipse.Manifest
 		if err := json.Unmarshal(manifest, &music); err != nil {
@@ -614,16 +677,16 @@ func (s *Store) Addons(ctx context.Context, scope Scope) ([]Addon, error) {
 	return slices.Clone(list), nil
 }
 
-func addons(ctx context.Context, db queryer, scope Scope) ([]Addon, error) {
+func (s *Store) addons(ctx context.Context, db queryer, scope Scope) ([]Addon, error) {
 	rows, err := db.Query(ctx, "SELECT "+addonColumns+" FROM addons WHERE owner_id IS NOT DISTINCT FROM $1 ORDER BY position, created_at", scope.Owner)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Addon, error) { return scanAddon(row) })
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Addon, error) { return s.scanAddon(row) })
 }
 
 func (s *Store) addon(ctx context.Context, db queryer, scope Scope, id accounts.ID) (Addon, error) {
-	return scanAddon(db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner))
+	return s.scanAddon(db.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2", id, scope.Owner))
 }
 
 // InScope returns the addon id of the scope, read from the database:
@@ -653,7 +716,7 @@ func (s *Store) HintsUnread(ctx context.Context) ([]Unread, error) {
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Unread, error) {
 		var u Unread
 		var err error
-		u.Addon, err = scanAddon(row, &u.Confined)
+		u.Addon, err = s.scanAddon(row, &u.Confined)
 		return u, err
 	})
 }
@@ -876,9 +939,10 @@ func (s *Store) InstallFor(ctx context.Context, scope Scope, rawURL string, conf
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position, network)
-			VALUES ($1, $2, $3, $4, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $5)
-			RETURNING `+addonColumns, scope.Owner, f.kind, f.url, f.encoded, f.network.stored()))
+		stored, fingerprint := s.storedAddress(f.kind, f.url)
+		addon, err = s.scanAddon(tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, address_key, manifest, position, network)
+			VALUES ($1, $2, $3, $4, $5, (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $6)
+			RETURNING `+addonColumns, scope.Owner, f.kind, stored, fingerprint, f.encoded, f.network.stored()))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1023,9 +1087,10 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 			network = NetworkLocal
 		}
 		var id accounts.ID
-		err := tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, manifest, position, network)
-			VALUES ($1, $2, $3, '{}', (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $4)
-			RETURNING id`, scope.Owner, kind, address, network.stored()).Scan(&id)
+		stored, fingerprint := s.storedAddress(kind, address)
+		err := tx.QueryRow(ctx, `INSERT INTO addons (owner_id, kind, manifest_url, address_key, manifest, position, network)
+			VALUES ($1, $2, $3, $4, '{}', (SELECT coalesce(max(position), 0) + 1 FROM addons WHERE owner_id IS NOT DISTINCT FROM $1), $5)
+			RETURNING id`, scope.Owner, kind, stored, fingerprint, network.stored()).Scan(&id)
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1037,7 +1102,7 @@ func (s *Store) Create(ctx context.Context, scope Scope, kind, address string, b
 		if err != nil {
 			return err
 		}
-		if addon, err = scanAddon(tx.QueryRow(ctx, "UPDATE addons SET manifest = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded)); err != nil {
+		if addon, err = s.scanAddon(tx.QueryRow(ctx, "UPDATE addons SET manifest = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded)); err != nil {
 			return err
 		}
 		var last int
@@ -1094,9 +1159,10 @@ func (s *Store) Update(ctx context.Context, scope Scope, id accounts.ID, kind, a
 		if err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now()
-			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, address, encoded,
-			settleKeys(keys, manifest, moved)))
+		stored, fingerprint := s.storedAddress(kind, address)
+		addon, err = s.scanAddon(tx.QueryRow(ctx, `UPDATE addons SET `+storeAddress+`, manifest = $4, library_keys = $5, refreshed_at = now()
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, stored, encoded,
+			settleKeys(keys, manifest, moved), fingerprint))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1253,7 +1319,7 @@ func lockScope(ctx context.Context, tx pgx.Tx, scope Scope) error {
 // SetEnabled turns an addon on or off; a disabled addon keeps its libraries.
 func (s *Store) SetEnabled(ctx context.Context, scope Scope, id accounts.ID, enabled bool) (Addon, error) {
 	defer s.changed()
-	return scanAddon(s.db.QueryRow(ctx, "UPDATE addons SET enabled = $3 WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING "+addonColumns,
+	return s.scanAddon(s.db.QueryRow(ctx, "UPDATE addons SET enabled = $3 WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING "+addonColumns,
 		id, scope.Owner, enabled))
 }
 
@@ -1267,7 +1333,7 @@ func (s *Store) SetLanguage(ctx context.Context, scope Scope, id accounts.ID, la
 		return Addon{}, ErrInvalidLanguage
 	}
 	defer s.changed()
-	addon, err := scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET language = $3
+	addon, err := s.scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET language = $3
 		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND (kind = $4 OR $3 = '') RETURNING `+addonColumns,
 		id, scope.Owner, language, KindStremio))
 	if errors.Is(err, ErrNotFound) && language != "" {
@@ -1289,7 +1355,7 @@ func (s *Store) SetName(ctx context.Context, scope Scope, id accounts.ID, name s
 		return Addon{}, ErrInvalidName
 	}
 	defer s.changed()
-	addon, err := scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET name = nullif(nullif($3, ''), manifest->>'name')
+	addon, err := s.scanAddon(s.db.QueryRow(ctx, `UPDATE addons SET name = nullif(nullif($3, ''), manifest->>'name')
 		WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 AND kind IN ($4, $5) RETURNING `+addonColumns,
 		id, scope.Owner, name, KindStremio, KindEclipse))
 	if errors.Is(err, ErrNotFound) {
@@ -1325,7 +1391,7 @@ func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, va
 	defer s.changed()
 	var addon Addon
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		current, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+		current, err := s.scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
 			id, scope.Owner))
 		if err != nil {
 			return err
@@ -1341,7 +1407,7 @@ func (s *Store) SetSettings(ctx context.Context, scope Scope, id accounts.ID, va
 		if err != nil {
 			return err
 		}
-		addon, err = scanAddon(tx.QueryRow(ctx, "UPDATE addons SET settings = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded))
+		addon, err = s.scanAddon(tx.QueryRow(ctx, "UPDATE addons SET settings = $2 WHERE id = $1 RETURNING "+addonColumns, id, encoded))
 		return err
 	})
 	return addon, err
@@ -1416,7 +1482,7 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 	var addon Addon
 	var after func()
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		old, err := scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+		old, err := s.scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
 			id, scope.Owner))
 		if err != nil {
 			return err
@@ -1438,10 +1504,11 @@ func (s *Store) store(ctx context.Context, scope Scope, id accounts.ID, f fetche
 		}
 		// The manifest downloaded holds the configure hint: no background
 		// read of it is left to make (see HintsUnread).
-		addon, err = scanAddon(tx.QueryRow(ctx, `UPDATE addons SET manifest_url = $3, manifest = $4, library_keys = $5, refreshed_at = now(),
-			hints_read = true, network = $6
-			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, manifestURL, encoded,
-			settleKeys(old.LibraryKeys, manifest, moved), f.network.stored()))
+		stored, fingerprint := s.storedAddress(old.Kind, manifestURL)
+		addon, err = s.scanAddon(tx.QueryRow(ctx, `UPDATE addons SET `+storeAddress+`, manifest = $4, library_keys = $5, refreshed_at = now(),
+			hints_read = true, network = $7
+			WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 RETURNING `+addonColumns, id, scope.Owner, stored, encoded,
+			settleKeys(old.LibraryKeys, manifest, moved), fingerprint, f.network.stored()))
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrExists
@@ -1493,7 +1560,7 @@ func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) (Addon,
 	var after func()
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		var err error
-		removed, err = scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
+		removed, err = s.scanAddon(tx.QueryRow(ctx, "SELECT "+addonColumns+" FROM addons WHERE id = $1 AND owner_id IS NOT DISTINCT FROM $2 FOR UPDATE",
 			id, scope.Owner))
 		if err != nil {
 			return err
@@ -1520,12 +1587,12 @@ func (s *Store) Remove(ctx context.Context, scope Scope, id accounts.ID) (Addon,
 // and holds them as they are until tx ends: a refresh, a change or a
 // removal waits for it. The cleanup of what removed addons left (see
 // library's leftovers.go) tells what is gone from them.
-func Installed(ctx context.Context, tx pgx.Tx) ([]Addon, error) {
+func (s *Store) Installed(ctx context.Context, tx pgx.Tx) ([]Addon, error) {
 	rows, err := tx.Query(ctx, "SELECT "+addonColumns+" FROM addons FOR SHARE")
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Addon, error) { return scanAddon(row) })
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Addon, error) { return s.scanAddon(row) })
 }
 
 // Reorder sets the order of the scope's addons; ids must list each of them
@@ -1536,7 +1603,7 @@ func (s *Store) Reorder(ctx context.Context, scope Scope, ids []accounts.ID) err
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
-		current, err := addons(ctx, tx, scope)
+		current, err := s.addons(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -1568,8 +1635,8 @@ func (s *Store) Libraries(ctx context.Context, scope Scope) ([]Library, error) {
 }
 
 // libraries reads a scope's libraries, in db (see Libraries).
-func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) {
-	installed, err := addons(ctx, db, scope)
+func (s *Store) libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) {
+	installed, err := s.addons(ctx, db, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -1578,7 +1645,7 @@ func libraries(ctx context.Context, db queryer, scope Scope) ([]Library, error) 
 	if err != nil {
 		return nil, err
 	}
-	guides, err := guideRows(ctx, db, ofScope, scope.Owner)
+	guides, err := s.guideRows(ctx, db, ofScope, scope.Owner)
 	if err != nil {
 		return nil, err
 	}
@@ -1626,7 +1693,7 @@ type guideRow struct {
 
 // guideRows reads the guides filter selects, g being the guide and a its
 // addon, in order.
-func guideRows(ctx context.Context, db queryer, filter string, args ...any) ([]guideRow, error) {
+func (s *Store) guideRows(ctx context.Context, db queryer, filter string, args ...any) ([]guideRow, error) {
 	rows, err := db.Query(ctx, `SELECT a.owner_id, g.addon_id, g.catalog_type, g.catalog_id, `+guideColumns+`
 		FROM live_guides g JOIN addons a ON a.id = g.addon_id`+filter+" ORDER BY g.position", args...)
 	if err != nil {
@@ -1634,9 +1701,8 @@ func guideRows(ctx context.Context, db queryer, filter string, args ...any) ([]g
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (guideRow, error) {
 		var r guideRow
-		g := &r.guide
-		err := row.Scan(&r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID, &g.ID, &g.Position, &g.URL, &g.Generation,
-			&g.CheckedAt, &g.FetchedAt, &g.Channels, &g.Programmes, &g.Error)
+		var err error
+		r.guide, err = scanGuide(s.box, row, &r.owner, &r.key.AddonID, &r.key.CatalogType, &r.key.CatalogID)
 		return r, err
 	})
 }
@@ -1737,7 +1803,7 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 		if err := lockScope(ctx, tx, scope); err != nil {
 			return err
 		}
-		installed, err := addons(ctx, tx, scope)
+		installed, err := s.addons(ctx, tx, scope)
 		if err != nil {
 			return err
 		}
@@ -1799,7 +1865,7 @@ func (s *Store) SetLibraries(ctx context.Context, scope Scope, choices []Library
 				return err
 			}
 		}
-		result, err = libraries(ctx, tx, scope)
+		result, err = s.libraries(ctx, tx, scope)
 		return err
 	})
 	return result, err
@@ -1875,13 +1941,13 @@ func lockCatalog(ctx context.Context, tx pgx.Tx, scope Scope, key LibraryKey) er
 	return err
 }
 
-func catalogGuides(ctx context.Context, db queryer, key LibraryKey) ([]Guide, error) {
+func (s *Store) catalogGuides(ctx context.Context, db queryer, key LibraryKey) ([]Guide, error) {
 	rows, err := db.Query(ctx, "SELECT "+guideColumns+` FROM live_guides g
 		WHERE g.addon_id = $1 AND g.catalog_type = $2 AND g.catalog_id = $3 ORDER BY g.position`, key.AddonID, key.CatalogType, key.CatalogID)
 	if err != nil {
 		return nil, err
 	}
-	guides, err := pgx.CollectRows(rows, scanGuide)
+	guides, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Guide, error) { return scanGuide(s.box, row) })
 	if guides == nil {
 		guides = []Guide{}
 	}
@@ -1906,7 +1972,7 @@ func (s *Store) SetGuide(ctx context.Context, scope Scope, key LibraryKey, rawUR
 		if err := lockCatalog(ctx, tx, scope, key); err != nil {
 			return err
 		}
-		guides, err := catalogGuides(ctx, tx, key)
+		guides, err := s.catalogGuides(ctx, tx, key)
 		if err != nil {
 			return err
 		}
@@ -1929,7 +1995,7 @@ func (s *Store) SetGuide(ctx context.Context, scope Scope, key LibraryKey, rawUR
 			return recountMapped(ctx, tx, key)
 		}
 		_, err = tx.Exec(ctx, "INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url) VALUES ($1, $2, $3, 1, $4)",
-			key.AddonID, key.CatalogType, key.CatalogID, guideURL)
+			key.AddonID, key.CatalogType, key.CatalogID, s.SealGuide(guideURL))
 		return err
 	})
 	return changed, err
@@ -1965,7 +2031,7 @@ func (s *Store) SetGuides(ctx context.Context, scope Scope, key LibraryKey, list
 		if err := lockCatalog(ctx, tx, scope, key); err != nil {
 			return err
 		}
-		current, err := catalogGuides(ctx, tx, key)
+		current, err := s.catalogGuides(ctx, tx, key)
 		if err != nil {
 			return err
 		}
@@ -2005,7 +2071,7 @@ func (s *Store) SetGuides(ctx context.Context, scope Scope, key LibraryKey, list
 			}
 			var id accounts.ID
 			if err := tx.QueryRow(ctx, `INSERT INTO live_guides (addon_id, catalog_type, catalog_id, position, url) VALUES ($1, $2, $3, $4, $5)
-				RETURNING id`, key.AddonID, key.CatalogType, key.CatalogID, position+1, entry.URL).Scan(&id); err != nil {
+				RETURNING id`, key.AddonID, key.CatalogType, key.CatalogID, position+1, s.SealGuide(entry.URL)).Scan(&id); err != nil {
 				return err
 			}
 			added = append(added, id)
@@ -2087,7 +2153,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 	var administrator bool
 	if _, err := pgx.ForEachRow(rows, []any{&c.Addon.ID, &c.Addon.Kind, &c.Addon.ManifestURL, &manifest, &c.Addon.Enabled,
 		&c.Addon.RefreshedAt, &c.Addon.ChosenName, &c.Scope.Owner, &administrator, &c.Key.CatalogType, &c.Key.CatalogID, &c.Addon.Network}, func() error {
-		c.Addon.Manifest = stremio.Manifest{}
+		c.Addon.Manifest, c.Addon.ManifestURL = stremio.Manifest{}, OpenAddress(s.box, c.Addon.ManifestURL)
 		if err := json.Unmarshal(manifest, &c.Addon.Manifest); err != nil {
 			return err
 		}
@@ -2104,7 +2170,7 @@ func (s *Store) liveCatalogsOf(ctx context.Context, filter string, enabledOnly b
 		return nil, err
 	}
 	for i := range result {
-		if result[i].Guides, err = catalogGuides(ctx, s.db, result[i].Key); err != nil {
+		if result[i].Guides, err = s.catalogGuides(ctx, s.db, result[i].Key); err != nil {
 			return nil, err
 		}
 	}

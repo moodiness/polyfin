@@ -320,7 +320,7 @@ Some IPTV addons publish no Native EPG guide, while their provider publishes one
 
 - **Where:** a Stremio addon's catalog opens its **Guides** page with **Guides and mapping**, on its row under **Content › Live TV**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
 - **How many:** up to 10 guides per catalog, in order, saved with **Save and download**. The catalog's row shows the first one.
-- **Credentials:** a guide address may hold the provider's credentials. Like manifest addresses, it is never shown in full.
+- **Credentials:** a guide address may hold the provider's credentials. Like manifest addresses, it is never shown in full, and it is stored encrypted when `POLYFIN_SECRET_KEY` is set (see [Addon and source addresses](configuration.md#addon-and-source-addresses)).
 - **Local guides:** only administrators can use a guide on a local network address, or a file of the server by its path. They enter it in **Guide address or file** (see [Lists and guides that are files of the server](iptv.md#lists-and-guides-that-are-files-of-the-server)). A file's path is shown whole.
 - **Native EPG first:** a channel with Native EPG programmes keeps them. The XMLTV guide only fills the channels without.
 - **Removing a guide:** its mappings go with it.

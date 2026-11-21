@@ -681,6 +681,8 @@ const system = {
       destinationSecretOf: (name: string) => `password or key of the backup destination “${name}”`,
       certificateKeys: 'keys of the Let’s Encrypt certificate',
       twoStepOf: (user: string) => `key of the two-step sign-in of ${user}`,
+      addressOf: (name: string) => `address of “${name}”`,
+      guideAddressOf: (name: string) => `programme guide address of “${name}”`,
       noAddonsHint: 'Add a Stremio addon under Content › Sources.',
       noIptvHint: 'Add an IPTV account under Content › Sources.',
       noGuides: 'No programme guide.',

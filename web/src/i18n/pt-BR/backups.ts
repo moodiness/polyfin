@@ -149,6 +149,10 @@ const backups: typeof en = {
             : `${n} chaves do certificado Let’s Encrypt`,
         twoStep: (n: number) =>
           n === 1 ? '1 chave de login em duas etapas' : `${n} chaves de login em duas etapas`,
+        addresses: (n: number) =>
+          n === 1
+            ? '1 endereço de um complemento, uma fonte ou um guia'
+            : `${n} endereços de complementos, fontes ou guias`,
       },
       serverName: (name: string) => `Digite o nome do servidor, ${name}, para confirmar`,
       confirm: 'Restaurar',

@@ -157,7 +157,7 @@ func (s *Service) CleanUpRemoved(ctx context.Context) (Cleaned, error) {
 	var live []addons.Addon
 	err := pgx.BeginTxFunc(ctx, s.db, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
 		var err error
-		if live, err = addons.Installed(ctx, tx); err != nil {
+		if live, err = s.addons.Installed(ctx, tx); err != nil {
 			return err
 		}
 		if l, err = goneLeftovers(ctx, tx, live); err != nil {

@@ -710,6 +710,8 @@ const system: typeof en = {
         `password o chiave della destinazione del backup «${name}»`,
       certificateKeys: 'chiavi del certificato Let’s Encrypt',
       twoStepOf: (user: string) => `chiave dell’accesso in due passaggi di ${user}`,
+      addressOf: (name: string) => `indirizzo di «${name}»`,
+      guideAddressOf: (name: string) => `indirizzo della guida dei programmi di «${name}»`,
       noAddonsHint: 'Aggiungi un add-on Stremio in Contenuti › Origini.',
       noIptvHint: 'Aggiungi un account IPTV in Contenuti › Origini.',
       noGuides: 'Nessuna guida dei programmi.',

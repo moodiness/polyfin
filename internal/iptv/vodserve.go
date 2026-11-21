@@ -331,6 +331,7 @@ func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string
 	if errors.Is(err, pgx.ErrNoRows) {
 		return storedTitle{}, stremio.ErrNotFound
 	}
+	t.manifestAddress = s.addons.OpenAddress(t.manifestAddress)
 	return t, err
 }
 

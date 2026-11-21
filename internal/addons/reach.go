@@ -179,11 +179,14 @@ func (s *Store) SetNetwork(ctx context.Context, tx pgx.Tx, id accounts.ID, netwo
 // are read again, the last one before every later read.
 var locateDelays = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour}
 
-// unlocated is a source whose network is to be told by reading it.
+// unlocated is a source whose network is to be told by reading it, with
+// its address as the database stores it, which tells it unchanged (see
+// Sealing).
 type unlocated struct {
 	id          accounts.ID
 	kind        string
 	manifestURL string
+	stored      string
 }
 
 // LocateSources tells, at start, where the sources not told yet are (see
@@ -263,9 +266,10 @@ func (s *Store) locateByAddress(ctx context.Context) ([]unlocated, int, error) {
 			member bool
 		}
 		sources, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (source, error) {
-			var s source
-			err := row.Scan(&s.id, &s.kind, &s.manifestURL, &s.member)
-			return s, err
+			var src source
+			err := row.Scan(&src.id, &src.kind, &src.stored, &src.member)
+			src.manifestURL = s.OpenAddress(src.stored)
+			return src, err
 		})
 		if err != nil || len(sources) == 0 {
 			return err
@@ -278,7 +282,8 @@ func (s *Store) locateByAddress(ctx context.Context) ([]unlocated, int, error) {
 			case source.kind == KindLocal:
 				network = NetworkLocal
 			case !ok:
-				if source.kind == KindStremio || source.kind == KindEclipse {
+				// An address the key cannot decrypt is not read.
+				if (source.kind == KindStremio || source.kind == KindEclipse) && source.manifestURL != "" {
 					pending = append(pending, source.unlocated)
 				}
 				continue
@@ -312,7 +317,7 @@ func (s *Store) locateByReading(ctx context.Context, sources []unlocated) []unlo
 		}
 		err = pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx, "UPDATE addons SET network = $2 WHERE id = $1 AND network IS NULL AND manifest_url = $3",
-				source.id, string(f.network), source.manifestURL)
+				source.id, string(f.network), source.stored)
 			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}

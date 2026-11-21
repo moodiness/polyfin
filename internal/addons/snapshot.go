@@ -113,7 +113,7 @@ func (s *Store) load(ctx context.Context) (*snapshot, error) {
 		}
 		if installed, err = pgx.CollectRows(result, func(row pgx.CollectableRow) (ownedAddon, error) {
 			var owned ownedAddon
-			addon, err := scanAddon(row, &owned.owner)
+			addon, err := s.scanAddon(row, &owned.owner)
 			owned.addon = addon
 			return owned, err
 		}); err != nil {
@@ -122,7 +122,7 @@ func (s *Store) load(ctx context.Context) (*snapshot, error) {
 		if rows, err = libraryRows(ctx, tx, ""); err != nil {
 			return err
 		}
-		guides, err = guideRows(ctx, tx, "")
+		guides, err = s.guideRows(ctx, tx, "")
 		return err
 	})
 	if err != nil {

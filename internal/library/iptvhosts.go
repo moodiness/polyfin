@@ -57,7 +57,7 @@ func (s *Service) IPTVHost(ctx context.Context, host string) bool {
 			sources := map[string]bool{}
 			var address string
 			if _, err = pgx.ForEachRow(rows, []any{&address}, func() error {
-				if parsed, err := url.Parse(address); err == nil && parsed.Host != "" {
+				if parsed, err := url.Parse(s.addons.OpenAddress(address)); err == nil && parsed.Host != "" {
 					sources[parsed.Host] = true
 				}
 				return nil

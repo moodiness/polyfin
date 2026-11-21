@@ -113,8 +113,10 @@ type secretsHealthJSON struct {
 // to an app, a notification target, by its name, of a user, or of the
 // server (user null), a network share's password, by its folder's name,
 // a backup destination's, by what it shows, the keys of the certificate
-// of Let's Encrypt (certificate true), or a user's two-step sign-in
-// (twoStep true).
+// of Let's Encrypt (certificate true), a user's two-step sign-in
+// (twoStep true), or the address of an addon or an IPTV source, by its
+// name, of a user or of the server (user null), or of one of its guides
+// (guide true).
 type unreadableJSON struct {
 	Setting     *string `json:"setting"`
 	Service     *string `json:"service"`
@@ -125,6 +127,8 @@ type unreadableJSON struct {
 	Destination *string `json:"destination"`
 	Certificate bool    `json:"certificate"`
 	TwoStep     bool    `json:"twoStep"`
+	Addon       *string `json:"addon"`
+	Guide       bool    `json:"guide"`
 }
 
 // secretsHealth reads how the stored secrets stand; nil when it cannot.
@@ -160,6 +164,10 @@ func newUnreadableJSON(u secrets.Unreadable) unreadableJSON {
 		return unreadableJSON{Destination: &u.Destination}
 	case u.Folder != "":
 		return unreadableJSON{Folder: &u.Folder}
+	case u.Addon != "" && u.User == "":
+		return unreadableJSON{Addon: &u.Addon, Guide: u.Guide}
+	case u.Addon != "":
+		return unreadableJSON{Addon: &u.Addon, Guide: u.Guide, User: &u.User}
 	case u.Target != "" && u.User == "":
 		return unreadableJSON{Target: &u.Target}
 	case u.Target != "":

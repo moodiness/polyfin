@@ -705,6 +705,8 @@ const system: typeof en = {
         `contraseña o clave del destino de las copias de seguridad «${name}»`,
       certificateKeys: 'claves del certificado de Let’s Encrypt',
       twoStepOf: (user: string) => `clave del inicio de sesión en dos pasos de ${user}`,
+      addressOf: (name: string) => `dirección de «${name}»`,
+      guideAddressOf: (name: string) => `dirección de la guía de programación de «${name}»`,
       noAddonsHint: 'Añada una extensión de Stremio en Contenido › Fuentes.',
       noIptvHint: 'Añada una cuenta IPTV en Contenido › Fuentes.',
       noGuides: 'No hay ninguna guía de programación.',

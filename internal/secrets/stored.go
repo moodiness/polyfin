@@ -22,10 +22,10 @@ import (
 // of the notification targets, the passwords, secret keys, private keys
 // and passphrases of the network shares, the
 // secret keys, passwords and private keys of the backup destinations, the
-// account key and private key of the certificate of Let's Encrypt, and the
-// secrets of the users' two-step sign-in.
-// Nothing else is sealed: addon addresses, IPTV passwords and guide
-// addresses are stored as they are.
+// account key and private key of the certificate of Let's Encrypt, the
+// secrets of the users' two-step sign-in, and the addresses of the addons,
+// IPTV sources and guides (see SealsAddress), which embed their keys and
+// passwords.
 var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
@@ -49,8 +49,10 @@ var settingSecrets = []struct{ column, name string }{
 // the connection of a user to an app, a notification target, by its name,
 // of a user or of the server (User empty), the password, secret key,
 // private key or passphrase of a network share, by its folder's name, a backup destination, by what it shows
-// (see DestinationName), the keys of the certificate of Let's Encrypt, or
-// the two-step sign-in of a user.
+// (see DestinationName), the keys of the certificate of Let's Encrypt,
+// the two-step sign-in of a user, or the address of an addon or an IPTV
+// source, by its name, of a user or of the server (User empty), or of
+// one of its guides (Guide true).
 type Unreadable struct {
 	Setting       string
 	Service, User string
@@ -60,6 +62,8 @@ type Unreadable struct {
 	Destination   string
 	Certificate   bool
 	TwoStep       bool
+	Addon         string
+	Guide         bool
 }
 
 func (u Unreadable) String() string {
@@ -74,6 +78,15 @@ func (u Unreadable) String() string {
 		return "backup destination " + u.Destination
 	case u.Folder != "":
 		return fmt.Sprintf("password or key of the share %s", u.Folder)
+	case u.Addon != "":
+		what := "address of " + u.Addon
+		if u.Guide {
+			what = "guide address of " + u.Addon
+		}
+		if u.User != "" {
+			what += " of " + u.User
+		}
+		return what
 	case u.Target != "" && u.User == "":
 		return fmt.Sprintf("server notification target %s", u.Target)
 	case u.Target != "":
@@ -193,7 +206,10 @@ func (b *Box) SealStored(ctx context.Context, db *pgxpool.Pool) (int, error) {
 		if err := sealCertificate(ctx, b, tx, &sealed); err != nil {
 			return err
 		}
-		return sealTwoStep(ctx, b, tx, &sealed)
+		if err := sealTwoStep(ctx, b, tx, &sealed); err != nil {
+			return err
+		}
+		return sealAddresses(ctx, b, tx, &sealed)
 	})
 	return sealed, err
 }
@@ -358,7 +374,69 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 	if err := twoSteps.Err(); err != nil {
 		return Report{}, err
 	}
+	if err := b.inspectAddresses(ctx, db, &report); err != nil {
+		return Report{}, err
+	}
 	return report, nil
+}
+
+// inspectAddresses counts into report the addresses of the addons and
+// IPTV sources (see SealsAddress), of the server's then of each user's,
+// then those of their guides, stored unsealed, and names those the key
+// cannot open: each addon's own, and its guides' once.
+func (b *Box) inspectAddresses(ctx context.Context, db *pgxpool.Pool, report *Report) error {
+	inspect := func(address string, unreadable Unreadable) bool {
+		if !Sealed(address) {
+			if address != "" {
+				report.Plaintext++
+			}
+			return false
+		}
+		if _, err := b.Open(address); err != nil {
+			report.Unreadable = append(report.Unreadable, unreadable)
+			return true
+		}
+		return false
+	}
+	rows, err := db.Query(ctx, `SELECT coalesce(u.name, ''), coalesce(a.name, a.manifest->>'name', ''), a.manifest_url
+		FROM addons a LEFT JOIN users u ON u.id = a.owner_id
+		WHERE a.kind NOT IN (`+plainAddressKinds+`) ORDER BY u.name NULLS FIRST, a.position, a.created_at`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user, name, address string
+		if err := rows.Scan(&user, &name, &address); err != nil {
+			return err
+		}
+		inspect(address, Unreadable{Addon: name, User: user})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	guides, err := db.Query(ctx, `SELECT a.id, coalesce(u.name, ''), coalesce(a.name, a.manifest->>'name', ''), g.url
+		FROM live_guides g JOIN addons a ON a.id = g.addon_id LEFT JOIN users u ON u.id = a.owner_id
+		ORDER BY u.name NULLS FIRST, a.position, a.created_at, a.id, g.position`)
+	if err != nil {
+		return err
+	}
+	defer guides.Close()
+	var named [16]byte
+	for guides.Next() {
+		var id [16]byte
+		var user, name, address string
+		if err := guides.Scan(&id, &user, &name, &address); err != nil {
+			return err
+		}
+		if id == named && Sealed(address) {
+			continue
+		}
+		if inspect(address, Unreadable{Addon: name, User: user, Guide: true}) {
+			named = id
+		}
+	}
+	return guides.Err()
 }
 
 // DestinationName is what a backup destination shows: an S3 bucket and its
@@ -403,6 +481,7 @@ const (
 	KindDestination = "destinations"
 	KindCertificate = "certificates"
 	KindTwoStep     = "twoStep"
+	KindAddress     = "addresses"
 )
 
 // sealedTables are the columns of the stored secrets, by table, and the
@@ -419,7 +498,20 @@ var sealedTables = map[string]struct {
 	"backup_destinations":  {KindDestination, []string{"secret", "private_key"}},
 	"acme_certificate":     {KindCertificate, []string{"account_key", "private_key"}},
 	"users":                {KindTwoStep, []string{"two_step_secret"}},
+	"addons":               {KindAddress, []string{"manifest_url"}},
+	"live_guides":          {KindAddress, []string{"url"}},
 }
+
+// plainAddressKinds are the kinds of addons whose address is stored as it
+// is, in SQL: a local folder's path and an HDHomeRun tuner's address,
+// which hold no credentials, and which queries compare (see SealsAddress).
+const plainAddressKinds = "'local', 'hdhomerun'"
+
+// SealsAddress reports whether the address of an addon of kind is sealed
+// with the key: a Stremio or Eclipse addon's manifest address, an M3U
+// list's or an Xtream account's, which embed their keys and passwords;
+// not a local folder's path, nor a tuner's address.
+func SealsAddress(kind string) bool { return kind != "local" && kind != "hdhomerun" }
 
 func settingColumns() []string {
 	columns := make([]string, len(settingSecrets))
@@ -630,6 +722,56 @@ func sealTwoStep(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	}
 	for _, p := range secrets {
 		if _, err := tx.Exec(ctx, "UPDATE users SET two_step_secret = $2 WHERE id = $1", p.id, b.Seal(p.secret)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	return nil
+}
+
+// sealAddresses seals the addresses of the addons and IPTV sources (see
+// SealsAddress), and of the guides, stored as plaintext, counting them
+// into sealed. An addon's address takes its fingerprint (see
+// Fingerprint), which tells it installed twice in its scope, unless an
+// addon of the scope sealed earlier with the key holds it already, as
+// when the address was installed again while the key was not set: both
+// stay, as they were.
+func sealAddresses(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
+	type plain struct {
+		id      [16]byte
+		address string
+	}
+	scan := func(r pgx.CollectableRow) (plain, error) {
+		var p plain
+		return p, r.Scan(&p.id, &p.address)
+	}
+	rows, err := tx.Query(ctx, `SELECT id, manifest_url FROM addons WHERE kind NOT IN (`+plainAddressKinds+`) AND manifest_url NOT LIKE $1
+		ORDER BY id FOR UPDATE`, prefix+"%")
+	if err != nil {
+		return err
+	}
+	addresses, err := pgx.CollectRows(rows, scan)
+	if err != nil {
+		return err
+	}
+	for _, p := range addresses {
+		if _, err := tx.Exec(ctx, `UPDATE addons a SET manifest_url = $2, address_key = CASE WHEN EXISTS (SELECT 1 FROM addons o
+			WHERE o.owner_id IS NOT DISTINCT FROM a.owner_id AND o.address_key = $3) THEN NULL ELSE $3 END WHERE id = $1`,
+			p.id, b.Seal(p.address), b.Fingerprint(p.address)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	rows, err = tx.Query(ctx, "SELECT id, url FROM live_guides WHERE url NOT LIKE $1 ORDER BY id FOR UPDATE", prefix+"%")
+	if err != nil {
+		return err
+	}
+	guides, err := pgx.CollectRows(rows, scan)
+	if err != nil {
+		return err
+	}
+	for _, p := range guides {
+		if _, err := tx.Exec(ctx, "UPDATE live_guides SET url = $2 WHERE id = $1", p.id, b.Seal(p.address)); err != nil {
 			return err
 		}
 		*sealed++

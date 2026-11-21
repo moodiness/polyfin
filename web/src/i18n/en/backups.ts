@@ -145,6 +145,10 @@ const backups = {
             : `${n} keys of the Let’s Encrypt certificate`,
         twoStep: (n: number) =>
           n === 1 ? '1 key of a two-step sign-in' : `${n} keys of two-step sign-ins`,
+        addresses: (n: number) =>
+          n === 1
+            ? '1 address of an addon, a source or a guide'
+            : `${n} addresses of addons, sources or guides`,
       },
       serverName: (name: string) => `Type the server’s name, ${name}, to confirm`,
       confirm: 'Restore',

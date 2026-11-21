@@ -99,6 +99,7 @@ An **Xtream Codes account** source takes a **Name**, the **Server address**, a *
 - By default, the guide is the one the server publishes for the account: **Use the provider's programme guide**.
 - Polyfin reads the account through its player API: its live categories and streams.
 - Its channels stream in MPEG-TS, or in HLS when the account allows only HLS.
+- The account's address, with its username and password, is stored encrypted when `POLYFIN_SECRET_KEY` is set. Its channels' stream addresses, which hold them too, are stored as they are (see [Addon and source addresses](configuration.md#addon-and-source-addresses)).
 
 ### What is read
 

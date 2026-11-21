@@ -158,6 +158,10 @@ const backups: typeof en = {
           n === 1
             ? '1 clave de un inicio de sesión en dos pasos'
             : `${n} claves de inicios de sesión en dos pasos`,
+        addresses: (n: number) =>
+          n === 1
+            ? '1 dirección de una extensión, una fuente o una guía'
+            : `${n} direcciones de extensiones, fuentes o guías`,
       },
       serverName: (name: string) => `Escriba el nombre del servidor, ${name}, para confirmar`,
       confirm: 'Restaurar',

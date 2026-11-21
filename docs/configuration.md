@@ -323,8 +323,11 @@ Polyfin stores a few secrets in its database. With `POLYFIN_SECRET_KEY` set, the
 | [Backup destinations](backups.md#destinations) | Passwords, secret keys and private keys |
 | [Let's Encrypt](https-and-networking.md#let-s-encrypt) | The account key and the certificate's private key. The certificate is stored as it is. |
 | [Identity provider](sign-in-and-security.md#identity-provider-settings) | Its **Client secret** |
+| [Addons](addons.md#manifest-addresses) and [IPTV sources](iptv.md) | The addresses of Stremio and Eclipse addons, of M3U lists and of Xtream accounts, which hold their keys, logins and passwords, and the addresses of the programme guides (see [Addon and source addresses](#addon-and-source-addresses)) |
 
-Addon addresses, IPTV passwords and guide addresses stay unencrypted.
+A local folder's path and an HDHomeRun tuner's address are stored as they are: they hold no credentials.
+
+The addresses of the streams an IPTV list gives are stored as they are too. A provider can put the account's username and password in them, as Xtream servers do, so the database still holds the password of such an account.
 
 The server's signing secret is not encrypted either. With the key set, a copy of the database alone signs nothing all the same (see [The signing secret](#the-signing-secret)).
 
@@ -348,6 +351,9 @@ Set again the key they were encrypted with, or enter them again:
 | A server key | Its section of **Settings** |
 | The keys of the Let's Encrypt certificate | None: they are obtained again by themselves, with a new account |
 | A backup destination's password or key | **Settings › Backups** |
+| An addon's address | **Replace the address**, in its more-actions menu (see [Manifest addresses](addons.md#manifest-addresses)) |
+| An IPTV source's address or password | **Edit the account**, on its page (see [The source page](iptv.md#the-source-page)) |
+| A programme guide's address | The catalog's guides, under **Content › Live TV**, or on the source's page (see [XMLTV guides](live-tv.md#xmltv-guides)) |
 | A user's connection | **My account › Tracking** |
 | An app connection | Sign in again in **My account › Import from an app** |
 | A user's two-step sign-in key | The user signs in with a recovery code, then turns two-step sign-in off and on again in **My account**. Or an administrator turns it off with **Turn off two-step sign-in** on their page. |
@@ -360,6 +366,16 @@ Until a secret is entered again, saving other settings keeps the value the right
 - It then asks before going ahead (see [Restoring a backup from the admin app](backups.md#restoring-a-backup-from-the-admin-app)).
 
 Administrators can read the server's saved keys again. Each user can read their own MDBList and PublicMetaDB keys and ListenBrainz token. See [Administration](administration.md#showing-a-saved-key).
+
+### Addon and source addresses
+
+An addon's address often holds its settings and keys, and an M3U list's or an Xtream account's holds its login and password. With `POLYFIN_SECRET_KEY` set, Polyfin stores them encrypted, as the other secrets, and the programme guides' addresses too.
+
+- **Installed twice:** each encryption of an address differs. Polyfin stores next to it a hash of the address under the key (HMAC-SHA256), which tells it without holding it. An address already among the server's sources, or among a user's own, is still refused, as `addon_exists`.
+- **Refreshes:** a refresh keeps the stored value while the address stays the same.
+- **A key that cannot decrypt it:** the addon or source acts as not configured. Its requests fail, its list is not downloaded and its guides are not either. **System › Health** names it, with whose it is. Enter the address again, or set the key again.
+- **A changed key:** an address added again under the new key is not told from the one the old key encrypted. Remove the old one.
+- **Without the key:** addresses are stored as they are, as in earlier versions.
 
 ### The signing secret
 

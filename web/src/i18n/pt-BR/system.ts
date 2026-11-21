@@ -699,6 +699,8 @@ const system: typeof en = {
       destinationSecretOf: (name: string) => `senha ou chave do destino do backup “${name}”`,
       certificateKeys: 'chaves do certificado Let’s Encrypt',
       twoStepOf: (user: string) => `chave do login em duas etapas de ${user}`,
+      addressOf: (name: string) => `endereço de “${name}”`,
+      guideAddressOf: (name: string) => `endereço do guia de programação de “${name}”`,
       noAddonsHint: 'Adicione um complemento Stremio em Conteúdo › Fontes.',
       noIptvHint: 'Adicione uma conta IPTV em Conteúdo › Fontes.',
       noGuides: 'Nenhum guia de programação.',

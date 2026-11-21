@@ -707,6 +707,8 @@ const system: typeof en = {
       destinationSecretOf: (name: string) => `Passwort oder Schlüssel des Backup-Ziels „${name}“`,
       certificateKeys: 'Schlüssel des Let’s-Encrypt-Zertifikats',
       twoStepOf: (user: string) => `Schlüssel der zweistufigen Anmeldung von ${user}`,
+      addressOf: (name: string) => `Adresse von „${name}“`,
+      guideAddressOf: (name: string) => `Adresse des Fernsehprogramms von „${name}“`,
       noAddonsHint: 'Füge unter Inhalte › Quellen ein Stremio-Add-on hinzu.',
       noIptvHint: 'Füge unter Inhalte › Quellen ein IPTV-Konto hinzu.',
       noGuides: 'Kein Fernsehprogramm.',

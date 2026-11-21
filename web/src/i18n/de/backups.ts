@@ -151,6 +151,10 @@ const backups: typeof en = {
           n === 1
             ? '1 Schlüssel einer zweistufigen Anmeldung'
             : `${n} Schlüssel zweistufiger Anmeldungen`,
+        addresses: (n: number) =>
+          n === 1
+            ? '1 Adresse eines Add-ons, einer Quelle oder eines Fernsehprogramms'
+            : `${n} Adressen von Add-ons, Quellen oder Fernsehprogrammen`,
       },
       serverName: (name: string) => `Gib zur Bestätigung den Servernamen ein: ${name}`,
       confirm: 'Wiederherstellen',
