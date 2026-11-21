@@ -527,7 +527,7 @@ func (d *decider) transcodeReasons(t *TranscodingProfile) reason {
 	if d.video != nil && !listHas(t.VideoCodec, d.video.Codec) {
 		why |= videoCodecNotSupported
 	}
-	if d.hasAudio && (d.checked == nil || !streamCarries(t, d.checked.Codec)) {
+	if d.hasAudio && (d.checked == nil || !StreamCarries(t, d.checked.Codec)) {
 		why |= audioCodecNotSupported
 	}
 	return why
@@ -726,7 +726,7 @@ func (d *decider) streamAudio(t *TranscodingProfile, options Options, limit int6
 	if most, err := strconv.Atoi(t.MaxAudioChannels); err == nil && audio.Channels != nil && *audio.Channels > most {
 		channelsTaken = false
 	}
-	copyable := !options.ConvertAudio && channelsTaken && streamCarries(t, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s)
+	copyable := !options.ConvertAudio && channelsTaken && StreamCarries(t, audio.Codec) && !d.remuxFails("VideoAudio", audio, t.Container, s)
 	heavy := convertVideo && limit > 0 && audio.BitRate != nil && *audio.BitRate > audioShare(limit)
 	if copyable && !heavy {
 		return nil, true

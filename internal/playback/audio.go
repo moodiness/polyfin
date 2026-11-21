@@ -105,9 +105,10 @@ func segmentAudioCodecs(t *TranscodingProfile) []string {
 	return hlsAudioCodecs["ts"]
 }
 
-// streamCarries reports whether a video streamed with t may copy audio of
-// codec: t takes it, and its segments carry it.
-func streamCarries(t *TranscodingProfile, codec string) bool {
+// StreamCarries reports whether a video streamed with t may copy audio of
+// codec: t takes it, and its segments carry it. The HLS requests of a
+// TranscodingUrl check the track they are asked for with it too.
+func StreamCarries(t *TranscodingProfile, codec string) bool {
 	carried := segmentAudioCodecs(t)
 	return listHas(t.AudioCodec, codec) && (carried == nil || slices.Contains(carried, strings.ToLower(codec)))
 }

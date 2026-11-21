@@ -335,7 +335,7 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 			remux.Burn = new(index - len(files))
 		}
 	}
-	if strings.EqualFold(query(r, "allowAudioStreamCopy"), "false") {
+	convertAudio := func() {
 		var source playback.AudioSource
 		for _, stream := range analysis.Streams {
 			if stream.Index == remux.Audio {
@@ -351,6 +351,21 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		remux.ConvertAudio = playback.ConvertAudio(query(r, "audioCodec"), query(r, "transcodingMaxAudioChannels"), source,
 			limits.Bitrate, tuning)
 	}
+	switch {
+	case strings.EqualFold(query(r, "allowAudioStreamCopy"), "false"):
+		convertAudio()
+	case remux.Audio >= 0 && !h.audioCopyable(r, analysis, files, remux.Audio):
+		// The URL names a track PlaybackInfo would not have copied, as
+		// one edited, or kept from before the app switched tracks: copied,
+		// a codec the segments do not carry would play silent.
+		if !allowed.Audio {
+			h.Logger.Info("An audio track the stream cannot copy was refused, as the user may not have audio converted")
+			processingError(w, http.StatusBadRequest)
+			return remuxRequest{}, false
+		}
+		h.Logger.Info("An audio track the stream cannot copy is converted", "track", remux.Audio)
+		convertAudio()
+	}
 	// PlaybackInfo copies no video above the user's bitrate limit, nor
 	// taller than their quality group: this guards URLs kept from before
 	// the limit or the group was set, or made up.
@@ -365,6 +380,29 @@ func (h *Handler) remuxFor(w http.ResponseWriter, r *http.Request, user accounts
 		return remuxRequest{}, false
 	}
 	return remuxRequest{remux: remux, user: user, item: item, analysis: analysis, files: files, live: live}, true
+}
+
+// audioCopyable reports whether the audio track audio of analysis, after
+// the files counted first, may be copied into the stream r asks for, by
+// PlaybackInfo's own rule: the codecs of the URL's audioCodec take it, its
+// HLS segments, when r asks for segments, carry it, and it has no more
+// channels than the URL's transcodingMaxAudioChannels. The track is read
+// as PlaybackInfo lists it.
+func (h *Handler) audioCopyable(r *http.Request, analysis media.Analysis, files []library.ExternalSubtitle, audio int) bool {
+	streams := playback.MediaStreams(analysis, externalStreams(files), h.Accounts.Settings().Language)
+	i := slices.IndexFunc(streams, func(s playback.MediaStream) bool { return s.Type == "Audio" && s.Index == audio+len(files) })
+	if i < 0 {
+		return true
+	}
+	track := streams[i]
+	stream := &playback.TranscodingProfile{Protocol: "http", Container: query(r, "segmentContainer"), AudioCodec: query(r, "audioCodec")}
+	if stream.Container != "" {
+		stream.Protocol = "hls"
+	}
+	if most, err := strconv.Atoi(query(r, "transcodingMaxAudioChannels")); err == nil && track.Channels != nil && *track.Channels > most {
+		return false
+	}
+	return playback.StreamCarries(stream, track.Codec)
 }
 
 // conversionLimits are what video converted for an HLS request is scaled
