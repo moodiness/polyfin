@@ -286,7 +286,7 @@ var errNoSources = fmt.Errorf("%w: the item has no media sources", library.ErrNo
 func (h *Handler) played(ctx context.Context, user accounts.User, opened accounts.ID) (library.Item, error) {
 	item, err := h.Library.Item(ctx, user, opened)
 	if errors.Is(err, library.ErrNotFound) {
-		if owner, ok := h.Library.VersionOwner(opened); ok {
+		if owner, ok := h.Library.SavedVersionOwner(ctx, opened); ok {
 			item, err = h.Library.Item(ctx, user, owner)
 		} else if recording, ok := h.recordingTitle(ctx, user, opened); ok {
 			return recording, nil

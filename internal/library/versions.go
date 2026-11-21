@@ -677,6 +677,7 @@ func (s *Service) buildVersions(t target, serving []streamSource, lists [][]stre
 			}
 		}
 	}
+	s.keepOwners(kept, before)
 	return versions
 }
 

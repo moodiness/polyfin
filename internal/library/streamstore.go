@@ -146,6 +146,9 @@ func (s *Service) saveStreamsAfter(key streamKey, failures int) {
 		if _, err := s.db.Exec(ctx, "DELETE FROM stream_lists WHERE fetched_at < $1", now.Add(-s.keptListLife())); err != nil {
 			s.logger.Warn("Deleting old stream lists failed", "error", err)
 		}
+		if _, err := s.db.Exec(ctx, "DELETE FROM version_owners WHERE seen_at < $1", now.Add(-versionOwnersLife)); err != nil {
+			s.logger.Warn("Deleting the owners of old versions failed", "error", err)
+		}
 	}
 }
 
