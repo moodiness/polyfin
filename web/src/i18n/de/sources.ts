@@ -411,6 +411,9 @@ const sources: typeof en = {
     readExtras: 'Extras und Theme-Medien einlesen',
     readExtrasHelp:
       'Extras, lokale Trailer und Titelmusik neben den Titeln, benannt wie bei Jellyfin, etwa Extras/Making of.mkv, Movie (2001)-trailer.mkv oder theme.mp3, erscheinen im Bonusmaterial ihrer Titel, werden über die Schaltfläche „Trailer“ abgespielt oder laufen im Hintergrund ihrer Seiten. Aus: Der nächste Scan lässt sie aus.',
+    followLinks: 'Links aus dem Ordner heraus folgen',
+    followLinksHelp:
+      'Symbolische Links auf Dateien und Ordner an anderer Stelle des Servers, wie sie Download-Manager zu einem eingebundenen Laufwerk anlegen, werden als Dateien dieses Ordners gelesen und für seine Nutzer abgespielt. Einem Link in einen anderen Ordner des Servers wird nur gefolgt, wenn jeder Nutzer dieses Ordners auch jenen nutzt. Aus: Nur Links auf Dateien dieses Ordners wird gefolgt.',
     add: 'Ordner hinzufügen',
     added: (name: string) => `${name} wurde hinzugefügt. Der erste Scan hat begonnen.`,
     edit: 'Ordner bearbeiten',
@@ -468,6 +471,12 @@ const sources: typeof en = {
       unreadable:
         'Der Ordner existiert, aber Polyfin kann seinen Inhalt nicht auflisten: Gib dem Konto, unter dem Polyfin läuft (unter Docker Benutzer 65532), das Recht, ihn zu lesen und seine Ordner zu öffnen.',
       not_folder: 'Dieser Pfad ist eine Datei, kein Ordner.',
+      too_deep:
+        'Die Ordner, zu denen die Links des Ordners führen, sind mehr als 32 Ebenen tief verschachtelt, und Polyfin hat dort aufgehört. Lass die Links auf die Ordner zeigen, die die Dateien enthalten, oder schalte Links aus dem Ordner heraus folgen aus.',
+      too_many_folders:
+        'Über seine Links enthält der Ordner mehr als 1.000.000 Ordner, mehr als Polyfin in einem Scan liest. Lass die Links auf die Ordner zeigen, die die Dateien enthalten, oder füge Teile davon als getrennte Ordner hinzu.',
+      too_many_files:
+        'Über seine Links enthält der Ordner mehr als 4.000.000 Dateien, mehr als Polyfin in einem Scan liest. Lass die Links auf die Ordner zeigen, die die Dateien enthalten, oder füge Teile davon als getrennte Ordner hinzu.',
     } as Record<string, string>,
     shareErrors: {
       missing: 'Die Freigabe oder der Ordner darin existiert nicht: Prüfe die Adresse.',
@@ -601,6 +610,20 @@ const sources: typeof en = {
         : `${figure} Folgen gibt es nur in den Dateien`,
     unlistedHelp:
       'Das Metadaten-Addon, das ihre Serien beschreibt, führt sie nicht auf, etwa weil es Staffeln oder Specials anders nummeriert. Sie werden trotzdem aufgeführt, nach ihren Dateien benannt, und lassen sich abspielen. Ihre Serien und Nummern stehen unter Folgen nur in den Dateien.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'Der letzte Scan hat 1 symbolischen Link übersprungen' : `Der letzte Scan hat ${figure} symbolische Links übersprungen`}: ${parts.join('; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} aus dem Ordner heraus`,
+      fenced: (figure: string) =>
+        `${figure} in einen Ordner, den manche seiner Nutzer nicht nutzen`,
+      broken: (figure: string) =>
+        `${figure} ins Leere, im Kreis oder zurück zu einem schon gelesenen Ordner`,
+      unreadable: (figure: string) => `${figure} zu etwas, das Polyfin nicht lesen kann`,
+    },
+    skippedLinksOutHelp:
+      'Um die Dateien zu lesen, zu denen sie führen, schalte Links aus dem Ordner heraus folgen unter Ordner bearbeiten ein.',
+    skippedLinksUnreadableHelp:
+      'Gib dem Konto, unter dem Polyfin läuft (unter Docker Benutzer 65532), das Recht, zu lesen, wohin sie führen. Was über sie gefunden wurde, bleibt so lange erhalten.',
     unlistedListTitle: 'Folgen nur in den Dateien',
     unlistedListHelp:
       'Eine Datei wird nur dann eine Version einer Folge des Katalogs, wenn ihre Staffel und Folgennummer die des Katalogs sind. Diese Dateien sind anders nummeriert, daher ist jede eine eigene Folge neben denen des Katalogs. Benenne sie mit den Nummern des Katalogs um und scanne dann. Oder wähle, wie die Dateien der Serie nummeriert sind: Sie werden dann ohne Umbenennen Versionen der Folgen des Katalogs.',

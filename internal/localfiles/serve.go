@@ -317,9 +317,10 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	}
 	var folder accounts.ID
 	var root, rel, user, sealed string
+	var follow bool
 	var data []byte
 	var modified *time.Time
-	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, f.data, f.modified, l.share_user, l.share_password
+	err = s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, f.data, f.modified, l.share_user, l.share_password, l.follow_links
 		FROM (SELECT addon_id, path, NULL::bytea AS data, NULL::timestamptz AS modified FROM local_files WHERE id = $1
 			UNION ALL SELECT addon_id, CASE WHEN $2 AND pair <> '' THEN pair ELSE path END, NULL, NULL FROM local_subtitles WHERE id = $1
 			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_tracks WHERE id = $1
@@ -328,7 +329,7 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 			UNION ALL SELECT addon_id, path, NULL, NULL FROM local_extras WHERE id = $1
 			UNION ALL SELECT addon_id, path, frame, modified FROM local_videos WHERE frame_id = $1 AND frame IS NOT NULL) f
 		JOIN addons a ON a.id = f.addon_id JOIN local_folders l ON l.addon_id = f.addon_id`, id, strings.EqualFold(extension, "sub")).
-		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed)
+		Scan(&folder, &root, &rel, &data, &modified, &user, &sealed, &follow)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, time.Time{}, ErrGone
 	}
@@ -356,9 +357,9 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	if err != nil {
 		return nil, time.Time{}, ErrGone
 	}
-	target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
-	if err != nil || !within(real, target) {
-		return nil, time.Time{}, ErrGone
+	target, err := s.resolve(ctx, folder, follow, real, rel)
+	if err != nil {
+		return nil, time.Time{}, err
 	}
 	file, err := os.Open(target)
 	if err != nil {

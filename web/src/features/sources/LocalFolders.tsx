@@ -108,6 +108,9 @@ const matchMethods: MatchMethod[] = [
   'tmdb',
 ]
 
+/** Why a scan skipped symbolic links, in the order a folder's figures tell them. */
+const linkReasons = ['out', 'fenced', 'broken', 'unreadable'] as const
+
 /**
  * Keeps the server's sources fresh while a folder's scan goes on, every 2 seconds, so that its
  * figures and unmatched files follow; the list they come from is shared with the page.
@@ -268,6 +271,7 @@ export function LocalFolderAddForm({
   const [kind, setKind] = useState<FolderKind>('movies')
   const [useArtwork, setUseArtwork] = useState(true)
   const [readExtras, setReadExtras] = useState(true)
+  const [followLinks, setFollowLinks] = useState(false)
   const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft())
   const share = location === 'local' ? null : location
   const system = useServerSystem()
@@ -281,7 +285,7 @@ export function LocalFolderAddForm({
             ? rcloneAddress(draft.rcloneInstance, draft.rcloneFolder)
             : path.trim(),
         kind,
-        ...(share === null ? {} : { user: user.trim(), password }),
+        ...(share === null ? { followLinks } : { user: user.trim(), password }),
         ...(isRemote(share) ? remoteFields(share, draft, false) : {}),
         ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
       }),
@@ -392,6 +396,11 @@ export function LocalFolderAddForm({
           <Switch checked={readExtras} onChange={setReadExtras} stateText />
         </Field>
       )}
+      {share === null && (
+        <Field label={text.followLinks} help={text.followLinksHelp}>
+          <Switch checked={followLinks} onChange={setFollowLinks} stateText />
+        </Field>
+      )}
       {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
       <div>
         <Button type="submit" variant="primary" loading={mutation.isPending}>
@@ -404,8 +413,9 @@ export function LocalFolderAddForm({
 
 /**
  * The form changing a folder's name, path or address, a share's user and password, whether a
- * movies or shows folder's titles show its artwork, and what it holds. A change of what it holds
- * is asked first: what follows the files and what is dropped.
+ * movies or shows folder's titles show its artwork, whether a folder in the container follows
+ * the symbolic links leading out of it, and what it holds. A change of what it holds is asked
+ * first: what follows the files and what is dropped.
  */
 export function LocalFolderEditForm({
   addon,
@@ -427,6 +437,7 @@ export function LocalFolderEditForm({
   const [password, setPassword] = useState<string | undefined>(undefined)
   const [useArtwork, setUseArtwork] = useState(folder.useArtwork)
   const [readExtras, setReadExtras] = useState(folder.readExtras)
+  const [followLinks, setFollowLinks] = useState(folder.followLinks)
   const [kind, setKind] = useState<FolderKind>(folder.kind)
   const [confirming, setConfirming] = useState(false)
   const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft(folder))
@@ -439,7 +450,7 @@ export function LocalFolderEditForm({
       updateLocalFolder(addon.id, {
         name: name.trim(),
         path: address,
-        ...(share === '' ? {} : { user: user.trim(), password }),
+        ...(share === '' ? { followLinks } : { user: user.trim(), password }),
         ...(isRemote(share) ? remoteFields(share, draft, true) : {}),
         ...(kind === 'music' || kind === 'homevideos' ? {} : { useArtwork, readExtras }),
         ...(retyped ? { kind } : {}),
@@ -550,6 +561,11 @@ export function LocalFolderEditForm({
       {kind !== 'music' && kind !== 'homevideos' && (
         <Field label={text.readExtras} help={text.readExtrasHelp}>
           <Switch checked={readExtras} onChange={setReadExtras} stateText />
+        </Field>
+      )}
+      {share === '' && (
+        <Field label={text.followLinks} help={text.followLinksHelp}>
+          <Switch checked={followLinks} onChange={setFollowLinks} stateText />
         </Field>
       )}
       {mutation.isError && !confirming && (
@@ -942,6 +958,11 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const methods = matchMethods
     .filter((method) => folder.matchedBy[method] > 0)
     .map((method) => text.matchMethods[method](folder.matchedBy[method].toLocaleString(language)))
+  const skipped = folder.skippedLinks
+  const skippedTotal = linkReasons.reduce((total, reason) => total + skipped[reason], 0)
+  const skippedParts = linkReasons
+    .filter((reason) => skipped[reason] > 0)
+    .map((reason) => text.skippedLinks[reason](skipped[reason].toLocaleString(language)))
   const errors = folder.share === '' ? text.errors : text.shareErrors
   const failure = folderFailure(folder)
   return (
@@ -1027,6 +1048,20 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
             .
           </strong>{' '}
           {text.absoluteHelp}
+        </Notice>
+      )}
+      {folder.share === '' && skippedTotal > 0 && (
+        <Notice tone="warn" className="mt-5">
+          <strong className="font-medium">
+            {text.skippedLinksTitle(
+              skippedTotal,
+              skippedTotal.toLocaleString(language),
+              skippedParts,
+            )}
+            .
+          </strong>
+          {skipped.out > 0 && ` ${text.skippedLinksOutHelp}`}
+          {skipped.unreadable > 0 && ` ${text.skippedLinksUnreadableHelp}`}
         </Notice>
       )}
     </FolderSection>

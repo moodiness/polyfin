@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -73,11 +74,14 @@ func (n notifyWatcher) Close() error                  { return n.w.Close() }
 // or a share's address, and its kind, KindMusic for a music folder, else
 // empty: a watch reads the folders of movies and shows alike. every is
 // how often a share is listed again, 0 for shareEvery (see sharewatch.go).
+// follow tells whether a folder in the container follows the symbolic
+// links leading out of it: the folders they lead to are watched too.
 type watchFolder struct {
-	id    accounts.ID
-	root  string
-	kind  string
-	every time.Duration
+	id     accounts.ID
+	root   string
+	kind   string
+	every  time.Duration
+	follow bool
 }
 
 // watchable are the folders to watch among the server's addons: the
@@ -109,13 +113,15 @@ func watchable(settings accounts.Settings, installed []addons.Addon, polls map[a
 }
 
 // watching is how the watch of a folder goes: its path, and the same with
-// its symbolic links resolved, as events name it; its kind (see
-// watchFolder); whether it is watched; whether it went missing, so that it
-// is scanned when it is back; and when it last could not be watched.
+// its symbolic links resolved, as events name it; its kind and whether it
+// follows the links leading out of it (see watchFolder); whether it is
+// watched; whether it went missing, so that it is scanned when it is back;
+// and when it last could not be watched.
 type watching struct {
 	root     string
 	real     string
 	kind     string
+	follow   bool
 	on       bool
 	lost     bool
 	failedAt time.Time
@@ -162,15 +168,16 @@ type watcher struct {
 	shareWatches map[accounts.ID]shareWatchState
 
 	// What follows belongs to the loop. files is nil while nothing is
-	// watched; dirs are the folders watched, by path, with their folder;
-	// created the folders created in a folder's tree since its last scan
-	// began, when they are watched again (see rewatch); changed the last
-	// change of the folders waiting for their scan; scanning the folders a
-	// scan of the watch is under way for, again those that changed
-	// meanwhile; polls the shares polled.
+	// watched; dirs are the folders watched, by path, with the folders
+	// whose trees hold them, or whose links lead to them; created the
+	// folders created in a folder's tree since its last scan began, when
+	// they are watched again (see rewatch); changed the last change of the
+	// folders waiting for their scan; scanning the folders a scan of the
+	// watch is under way for, again those that changed meanwhile; polls
+	// the shares polled.
 	files    fileWatcher
 	watched  map[accounts.ID]*watching
-	dirs     map[string]accounts.ID
+	dirs     map[string][]accounts.ID
 	created  map[accounts.ID][]string
 	changed  map[accounts.ID]time.Time
 	scanning map[accounts.ID]bool
@@ -185,7 +192,7 @@ func newWatcher(ctx context.Context, logger *slog.Logger, folders func(context.C
 		rearm: shareRearm, gap: shareGap, lists: shareLists,
 		kicks: make(chan struct{}, 1), due: make(chan accounts.ID), done: make(chan accounts.ID), polled: make(chan sharePolled),
 		notified: make(chan accounts.ID), unwatched: map[accounts.ID]string{}, shareWatches: map[accounts.ID]shareWatchState{},
-		watched: map[accounts.ID]*watching{}, dirs: map[string]accounts.ID{}, created: map[accounts.ID][]string{},
+		watched: map[accounts.ID]*watching{}, dirs: map[string][]accounts.ID{}, created: map[accounts.ID][]string{},
 		changed: map[accounts.ID]time.Time{}, scanning: map[accounts.ID]bool{}, again: map[accounts.ID]bool{}, polls: map[accounts.ID]*polling{}}
 }
 
@@ -308,7 +315,7 @@ func (w *watcher) reconcile() {
 	}
 	w.pollShares(shares)
 	for id, state := range w.watched {
-		if folder, ok := want[id]; !ok || folder.root != state.root || folder.kind != state.kind {
+		if folder, ok := want[id]; !ok || folder.root != state.root || folder.kind != state.kind || folder.follow != state.follow {
 			w.unwatch(id)
 			delete(w.watched, id)
 			delete(w.changed, id)
@@ -322,7 +329,7 @@ func (w *watcher) reconcile() {
 	}
 	for id, folder := range want {
 		if w.watched[id] == nil {
-			w.watched[id] = &watching{root: folder.root, kind: folder.kind}
+			w.watched[id] = &watching{root: folder.root, kind: folder.kind, follow: folder.follow}
 		}
 	}
 	now := time.Now()
@@ -366,18 +373,53 @@ func (w *watcher) reconcile() {
 	}
 }
 
-// addTree watches a folder and the folders under it a scan reads; a
-// failure leaves the whole folder unwatched, and reports false.
+// addTree watches a folder and the folders under it a scan reads, and
+// when its folder follows the links leading out of it, the folders they
+// lead to (see linkedDir), each once; a failure leaves the whole folder
+// unwatched, and reports false.
 func (w *watcher) addTree(id accounts.ID, top string) bool {
-	kind := w.watched[id].kind
-	err := filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
+	state := w.watched[id]
+	var seen map[string]bool
+	if state.follow {
+		seen = map[string]bool{}
+	}
+	if err := w.addDirs(id, state, top, seen); err != nil {
+		w.fail(id, err)
+		return false
+	}
+	return true
+}
+
+// addDirs watches top and the folders under it a scan of the folder
+// state watches reads, for the folder id; with seen, the folders watched
+// so far, it follows the links leading out of the folder.
+func (w *watcher) addDirs(id accounts.ID, state *watching, top string, seen map[string]bool) error {
+	return filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
 		// A folder gone meanwhile, or that cannot be listed, is skipped,
 		// as a scan skips it.
-		if err != nil || !d.IsDir() {
+		if err != nil {
 			return nil
 		}
-		if path != top && skippedIn(kind, d.Name()) {
+		if d.Type()&fs.ModeSymlink != 0 {
+			if seen == nil || skippedIn(state.kind, d.Name()) {
+				return nil
+			}
+			if target, ok := linkedDir(state.real, path); ok && !seen[target] {
+				return w.addDirs(id, state, target, seen)
+			}
+			return nil
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path != top && skippedIn(state.kind, d.Name()) {
 			return fs.SkipDir
+		}
+		if seen != nil {
+			if seen[path] {
+				return fs.SkipDir
+			}
+			seen[path] = true
 		}
 		if err := w.files.Add(path); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -385,14 +427,23 @@ func (w *watcher) addTree(id accounts.ID, top string) bool {
 			}
 			return err
 		}
-		w.dirs[path] = id
+		if !slices.Contains(w.dirs[path], id) {
+			w.dirs[path] = append(w.dirs[path], id)
+		}
 		return nil
 	})
-	if err != nil {
-		w.fail(id, err)
-		return false
+}
+
+// linkedDir is the real path of the folder the link at leads to, when a
+// watch of the folder whose real path is real follows it: a folder out of
+// it, and not one that holds it, which would lead back into it.
+func linkedDir(real, at string) (string, bool) {
+	target, err := filepath.EvalSymlinks(at)
+	if err != nil || within(real, target) || within(target, real) {
+		return "", false
 	}
-	return true
+	info, err := os.Stat(target)
+	return target, err == nil && info.IsDir()
 }
 
 // fail leaves a folder unwatched after err, until it is tried again: it
@@ -407,11 +458,17 @@ func (w *watcher) fail(id accounts.ID, err error) {
 		"error", err)
 }
 
-// unwatch stops watching the folders of a folder's tree.
+// unwatch stops watching the folders of a folder's tree, and those its
+// links lead to, but those another folder's watch has too.
 func (w *watcher) unwatch(id accounts.ID) {
-	for path, owner := range w.dirs {
-		if owner == id {
+	for path, owners := range w.dirs {
+		if !slices.Contains(owners, id) {
+			continue
+		}
+		if len(owners) == 1 {
 			w.forget(path)
+		} else {
+			w.dirs[path] = slices.DeleteFunc(slices.Clone(owners), func(owner accounts.ID) bool { return owner == id })
 		}
 	}
 }
@@ -449,29 +506,40 @@ func (w *watcher) close() {
 
 // event handles a change: a folder added is watched, a folder watched gone
 // is no longer, and a change of a folder, or of a file its folder's scan
-// lists (see walked), schedules the scan of its folder.
+// lists (see walked), schedules the scan of its folder, of each folder
+// whose watch has it.
 func (w *watcher) event(event fsnotify.Event) {
 	name := filepath.Clean(event.Name)
-	if id, ok := w.dirs[name]; ok {
+	if owners, ok := w.dirs[name]; ok {
 		if !event.Has(fsnotify.Remove) && !event.Has(fsnotify.Rename) {
 			return
 		}
 		w.drop(name)
-		if state := w.watched[id]; state != nil && name == state.real {
-			state.on, state.lost = false, true
+		for _, id := range owners {
+			if state := w.watched[id]; state != nil && name == state.real {
+				state.on, state.lost = false, true
+			}
+			w.change(id)
 		}
-		w.change(id)
 		return
 	}
-	id, ok := w.dirs[filepath.Dir(name)]
-	if !ok {
-		return
+	// Watching a folder created changes w.dirs.
+	for _, id := range slices.Clone(w.dirs[filepath.Dir(name)]) {
+		w.entryEvent(id, name, event)
 	}
+}
+
+// entryEvent handles a change of the entry name, of a folder the watch of
+// the folder id has. A folder that follows the links leading out of it
+// watches the folder a link created leads to, and is scanned again when an
+// entry that may have been such a link goes.
+func (w *watcher) entryEvent(id accounts.ID, name string, event fsnotify.Event) {
 	base := filepath.Base(name)
-	kind := w.watched[id].kind
+	state := w.watched[id]
 	if event.Has(fsnotify.Create) {
-		if info, err := os.Lstat(name); err == nil && info.IsDir() {
-			if !skippedIn(kind, base) && w.addTree(id, name) {
+		info, err := os.Lstat(name)
+		if err == nil && info.IsDir() {
+			if !skippedIn(state.kind, base) && w.addTree(id, name) {
 				if w.rewatch {
 					w.created[id] = append(w.created[id], name)
 				}
@@ -479,8 +547,20 @@ func (w *watcher) event(event fsnotify.Event) {
 			}
 			return
 		}
+		if err == nil && info.Mode()&fs.ModeSymlink != 0 && state.follow && !skippedIn(state.kind, base) {
+			if _, ok := linkedDir(state.real, name); ok {
+				if w.addTree(id, name) {
+					w.change(id)
+				}
+				return
+			}
+		}
 	}
-	if file, side := walked(kind, filepath.ToSlash(name)); (file || side) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0 {
+	file, side := walked(state.kind, filepath.ToSlash(name))
+	switch {
+	case (file || side) && event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) != 0:
+		w.change(id)
+	case state.follow && event.Op&(fsnotify.Remove|fsnotify.Rename) != 0:
 		w.change(id)
 	}
 }
@@ -572,7 +652,7 @@ func (w *watcher) rewatchCreatedIn(id accounts.ID) {
 	created := w.created[id]
 	delete(w.created, id)
 	for _, dir := range created {
-		if owner, ok := w.dirs[dir]; ok && owner == id && !w.addTree(id, dir) {
+		if slices.Contains(w.dirs[dir], id) && !w.addTree(id, dir) {
 			return
 		}
 	}

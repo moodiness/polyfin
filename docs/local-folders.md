@@ -74,6 +74,7 @@ A folder Polyfin cannot read is reported on its page in the admin app, and under
 | `missing` | The path does not exist in the container. This is usually a share that is not mounted. |
 | `unreadable` | The path exists, but Polyfin may not list it: a permissions problem. |
 | `not_folder` | The path is a file. |
+| `too_deep`, `too_many_folders`, `too_many_files` | The folder follows the links leading out of it, and through them reaches folders more than 32 deep, more than 1,000,000 folders or more than 4,000,000 files (see [Symbolic links](#symbolic-links)). |
 
 The files found before stay in the library while the folder cannot be read. A share unmounted for a while empties no library.
 
@@ -102,7 +103,29 @@ A few titles are looked up at once, so a large first scan takes a while. The fol
 
 The folders due on the schedule, or under **Scan local folders**, are scanned in groups that run side by side: one for the local folders, and one for the network shares of each server. Within a group, one folder is scanned after the other. A slow share delays only the shares of its own server (see [Network shares](network-shares.md#performance)).
 
-Symbolic links to files of the folder are followed. Links leading out of the folder, and links to folders, are not.
+### Symbolic links
+
+Symbolic links to files of the folder are followed. Links to folders of the folder are not: their files are read where they are.
+
+**Follow links leading out of the folder**, under **Edit the folder**, is off by default. Turn it on for a folder whose files are links to files somewhere else, as download managers make towards a mounted drive. With it on:
+
+- links to files and folders anywhere the container can read are read as the folder's own files, under the path of the link;
+- its scans, its watch and the files it serves follow them;
+- a folder reached through several links is read once, and a link that leads back into the folder, or to a folder that holds it, is not followed: no loop is read twice;
+- the folders reached through the links are read within the bounds of a share's scan: 32 folders deep, 1,000,000 folders and 4,000,000 files. Past them, the scan stops with `too_deep`, `too_many_folders` or `too_many_files`, and the files found before stay.
+
+Its files play for the folder's users, whoever else may reach the files the links lead to. A link into another folder of the server is followed only when every user of this folder uses that one too: when that folder is used by everyone, or by the same groups and users or more. A link into a folder that is off, or used by fewer, is skipped. This is checked again each time a file is served, so changing who uses a folder applies at once.
+
+The folder's page counts the links its last scan skipped, and the server's log tells them once per scan:
+
+| Skipped | Why |
+|---|---|
+| Leading out of the folder | The option is off. |
+| Leading into a folder some of its users do not use | See above. |
+| Leading nowhere, round in a loop or back to a folder read already | The file or folder it leads to is gone, or links lead round in a loop. Its file leaves the library, as a file removed does. |
+| Leading to what Polyfin cannot read | Polyfin may not read the file it leads to, or the folders on the way, as when a mount stopped answering. What was found through it stays in the library meanwhile. |
+
+A link that leads nowhere is counted only when it is named as a file a scan reads, such as a video, or when the folder follows links leading out of it: another may have led to a folder.
 
 ### Watching for changes
 
@@ -115,6 +138,7 @@ Folders mounted in the container are watched for changes, with inotify on Linux.
 - Only changes to these files start a scan: videos, theme songs, disc images, NFO files, subtitle files, images (see [Artwork](naming-and-matching.md#artwork)), a DVD's `.IFO` and `.VOB` files, and a Blu-ray disc's playlists.
 - The extras folders of movies and shows folders are watched as their titles' folders are (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)), whether the folder reads extras or not.
 - In a music folder, subfolders named `Extras` or `Other` are watched, as its scans read them. Its audio files, artwork, lyrics files and playlists start a scan.
+- A folder that follows the links leading out of it watches the folders its links lead to as well. A link added starts a scan, and so does any entry removed or renamed in it, as that may have been a link to a folder. A drive mounted through FUSE, as many network mounts are, may tell of no changes: the schedule and **Scan now** read those.
 
 | Share | Watched by |
 |---|---|

@@ -90,6 +90,24 @@ type folderJSON struct {
 	// UnmappedEpisodes counts its shows' files their numbering could not
 	// place, each an episode of its own.
 	UnmappedEpisodes int `json:"unmappedEpisodes"`
+	// FollowLinks tells whether a folder in the container follows the
+	// symbolic links leading out of it, and skippedLinks counts those its
+	// last scan skipped.
+	FollowLinks  bool             `json:"followLinks"`
+	SkippedLinks skippedLinksJSON `json:"skippedLinks"`
+}
+
+// skippedLinksJSON counts the symbolic links the last scan of a folder in
+// the container skipped: leading out of it, when it follows none (out);
+// leading into another folder of the server one of its users may not
+// reach (fenced); leading to nothing, round in a loop, or to a folder read
+// already or holding it (broken); to what Polyfin cannot read
+// (unreadable).
+type skippedLinksJSON struct {
+	Out        int `json:"out"`
+	Fenced     int `json:"fenced"`
+	Broken     int `json:"broken"`
+	Unreadable int `json:"unreadable"`
 }
 
 // searchFailureJSON is a failed search of a title: the name of the addon
@@ -175,7 +193,9 @@ func newFolderJSON(f localfiles.Folder) *folderJSON {
 		Endpoint: f.Endpoint, Region: f.Region, RcloneRemote: f.Remote, PrivateKeySet: f.PrivateKeySet, PassphraseSet: f.PassphraseSet,
 		HostKey: f.HostKey, OfferedHostKey: f.OfferedHostKey, HostKeyForgotten: f.HostKeyForgotten, PollMinutes: f.PollMinutes,
 		SearchFailed: f.SearchFailed, SearchFailure: newSearchFailureJSON(f.SearchAddon, f.SearchFailure), SearchRetryAt: f.SearchRetryAt,
-		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute, UnmappedEpisodes: f.Unmapped}
+		NoSearch: f.NoSearch, UnlistedEpisodes: f.Unlisted, AbsoluteEpisodes: f.Absolute, UnmappedEpisodes: f.Unmapped,
+		FollowLinks: f.FollowLinks, SkippedLinks: skippedLinksJSON{Out: f.SkippedLinks.Out, Fenced: f.SkippedLinks.Fenced,
+			Broken: f.SkippedLinks.Broken, Unreadable: f.SkippedLinks.Unreadable}}
 }
 
 // folderScope answers the folder routes' scope: local folders are the
@@ -197,8 +217,10 @@ func (h *handler) folderScope(w http.ResponseWriter, r *http.Request) (addons.Sc
 // "music" or "homevideos", left out on a change to keep it; a share's user
 // and password; whether its titles show the artwork beside their files,
 // and whether its scans read the extras beside them, yes when left out on
-// adding. On a change, a password left out keeps the one stored, and an
-// empty one removes it. An S3 bucket also has its endpoint and region, its
+// adding; whether a folder in the container follows the symbolic links
+// leading out of it, no when left out on adding. On a change, a password
+// left out keeps the one stored, and an empty one removes it. An S3
+// bucket also has its endpoint and region, its
 // user and password being its access key and secret key; an SFTP folder a
 // private key and its passphrase, kept and removed as the password is; an
 // rclone remote the remote's name; those three how often they are listed
@@ -214,6 +236,7 @@ type folderRequest struct {
 	Password      *string `json:"password"`
 	UseArtwork    *bool   `json:"useArtwork"`
 	ReadExtras    *bool   `json:"readExtras"`
+	FollowLinks   *bool   `json:"followLinks"`
 	Endpoint      *string `json:"endpoint"`
 	Region        *string `json:"region"`
 	PrivateKey    *string `json:"privateKey"`
@@ -237,7 +260,8 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras, PollMinutes: body.PollMinutes}
+	folder := localfiles.NewFolder{Kind: body.Kind, UseArtwork: body.UseArtwork, ReadExtras: body.ReadExtras, FollowLinks: body.FollowLinks,
+		PollMinutes: body.PollMinutes}
 	if folder.UsedBy, ok = usedBy(w, scope, body.UsedBy); !ok {
 		return
 	}
@@ -264,10 +288,11 @@ func (h *handler) addFolder(w http.ResponseWriter, r *http.Request) {
 
 // updateFolder changes a local folder's name, path or address, a share's
 // user or password, whether its titles show the artwork beside their
-// files, whether its scans read the extras beside them, or what it holds;
-// a new path or address, a new user or password, or what it holds, is
-// scanned at once. A host key accepted that is not the one the server
-// offers now is a conflict, offered_host_key_changed.
+// files, whether its scans read the extras beside them, whether it follows
+// the symbolic links leading out of it, or what it holds; a new path or
+// address, a new user or password, what it holds, or whether it follows
+// links, is scanned at once. A host key accepted that is not the one the
+// server offers now is a conflict, offered_host_key_changed.
 func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.folderScope(w, r)
 	if !ok {
@@ -282,14 +307,14 @@ func (h *handler) updateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Name == nil && body.Path == nil && body.User == nil && body.Password == nil && body.UseArtwork == nil && body.ReadExtras == nil &&
-		body.Kind == "" && body.Endpoint == nil && body.Region == nil && body.PrivateKey == nil && body.Passphrase == nil &&
+		body.FollowLinks == nil && body.Kind == "" && body.Endpoint == nil && body.Region == nil && body.PrivateKey == nil && body.Passphrase == nil &&
 		body.RcloneRemote == nil && body.PollMinutes == nil && body.AcceptHostKey == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request")
 		return
 	}
 	changes := localfiles.Changes{Name: body.Name, Path: body.Path, User: body.User, Password: body.Password, UseArtwork: body.UseArtwork,
-		ReadExtras: body.ReadExtras, Endpoint: body.Endpoint, Region: body.Region, PrivateKey: body.PrivateKey, Passphrase: body.Passphrase,
-		Remote: body.RcloneRemote, PollMinutes: body.PollMinutes, AcceptHostKey: body.AcceptHostKey}
+		ReadExtras: body.ReadExtras, FollowLinks: body.FollowLinks, Endpoint: body.Endpoint, Region: body.Region, PrivateKey: body.PrivateKey,
+		Passphrase: body.Passphrase, Remote: body.RcloneRemote, PollMinutes: body.PollMinutes, AcceptHostKey: body.AcceptHostKey}
 	if body.Kind != "" {
 		changes.Kind = &body.Kind
 	}

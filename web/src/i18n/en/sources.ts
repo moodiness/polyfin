@@ -400,6 +400,9 @@ const sources = {
     readExtras: 'Read extras and theme media',
     readExtrasHelp:
       'Extras, local trailers and theme music beside the titles, as Jellyfin names them, such as Extras/Making of.mkv, Movie (2001)-trailer.mkv or theme.mp3, show under their titles’ special features, play from the Trailer button, or play behind their pages. Off, the next scan leaves them out.',
+    followLinks: 'Follow links leading out of the folder',
+    followLinksHelp:
+      'Symbolic links to files and folders elsewhere on the server, as download managers make towards a mounted drive, are read as files of this folder, and play for its users. A link into another folder of the server is followed only when every user of this folder uses that one too. Off, only the links to files of this folder are followed.',
     add: 'Add the folder',
     added: (name: string) => `${name} was added. Its first scan has started.`,
     edit: 'Edit the folder',
@@ -454,6 +457,12 @@ const sources = {
       unreadable:
         'The folder exists but Polyfin cannot list it: give the account it runs as, user 65532 in Docker, the right to read it and to open its folders.',
       not_folder: 'This path is a file, not a folder.',
+      too_deep:
+        'The folders reached through the folder’s links go more than 32 deep, and Polyfin stopped there. Point the links at the folders that hold the files, or turn off Follow links leading out of the folder.',
+      too_many_folders:
+        'Through its links, the folder holds more than 1,000,000 folders, more than Polyfin reads in one scan. Point the links at the folders that hold the files, or add parts of them as separate folders.',
+      too_many_files:
+        'Through its links, the folder holds more than 4,000,000 files, more than Polyfin reads in one scan. Point the links at the folders that hold the files, or add parts of them as separate folders.',
     } as Record<string, string>,
     shareErrors: {
       missing: 'The share, or the folder in it, does not exist: check the address.',
@@ -579,6 +588,19 @@ const sources = {
       count === 1 ? '1 episode is only in the files' : `${figure} episodes are only in the files`,
     unlistedHelp:
       'The metadata addon that describes their shows does not list them, as when it numbers seasons or specials otherwise. They are listed all the same, named after their files, and play. Their shows and numbers are under Episodes only in the files.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'The last scan skipped 1 symbolic link' : `The last scan skipped ${figure} symbolic links`}: ${parts.join('; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} leading out of the folder`,
+      fenced: (figure: string) => `${figure} leading into a folder some of its users do not use`,
+      broken: (figure: string) =>
+        `${figure} leading nowhere, round in a loop or back to a folder read already`,
+      unreadable: (figure: string) => `${figure} leading to what Polyfin cannot read`,
+    },
+    skippedLinksOutHelp:
+      'To read the files they lead to, turn on Follow links leading out of the folder under Edit the folder.',
+    skippedLinksUnreadableHelp:
+      'Give the account Polyfin runs as, user 65532 in Docker, the right to read what they lead to. What was found through them stays meanwhile.',
     unlistedListTitle: 'Episodes only in the files',
     unlistedListHelp:
       'A file becomes a version of a catalog episode only when its season and episode number are the catalog’s. These files are numbered otherwise, so each is an episode of its own, next to the catalog’s. Rename them to the catalog’s numbers, then scan. Or choose how the show’s files are numbered: they then become versions of the catalog’s episodes without renaming.',

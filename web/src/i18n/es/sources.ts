@@ -414,6 +414,9 @@ const sources: typeof en = {
     readExtras: 'Leer extras y temas',
     readExtrasHelp:
       'Los extras, tráilers locales y músicas de tema junto a los títulos, con los nombres que usa Jellyfin, como Extras/Making of.mkv, Película (2001)-trailer.mkv o theme.mp3, se muestran en los contenidos especiales de sus títulos, se reproducen con el botón Tráiler o suenan de fondo en sus páginas. Desactivado, el próximo escaneo los omite.',
+    followLinks: 'Seguir los enlaces que salen de la carpeta',
+    followLinksHelp:
+      'Los enlaces simbólicos a archivos y carpetas situados en otro lugar del servidor, como los que crean los gestores de descargas hacia una unidad montada, se leen como archivos de esta carpeta y se reproducen para sus usuarios. Un enlace a otra carpeta del servidor solo se sigue si todos los usuarios de esta carpeta usan también aquella. Desactivado, solo se siguen los enlaces a archivos de esta carpeta.',
     add: 'Añadir la carpeta',
     added: (name: string) => `Se ha añadido ${name}. Su primer escaneo ha comenzado.`,
     edit: 'Editar la carpeta',
@@ -471,6 +474,12 @@ const sources: typeof en = {
       unreadable:
         'La carpeta existe, pero Polyfin no puede listarla: conceda a la cuenta con la que se ejecuta (el usuario 65532 en Docker) permiso para leerla y abrir sus carpetas.',
       not_folder: 'Esta ruta es un archivo, no una carpeta.',
+      too_deep:
+        'Las carpetas a las que llevan los enlaces de la carpeta tienen más de 32 niveles de profundidad, y Polyfin se ha detenido ahí. Haga que los enlaces apunten a las carpetas que contienen los archivos, o desactive Seguir los enlaces que salen de la carpeta.',
+      too_many_folders:
+        'A través de sus enlaces, la carpeta contiene más de 1.000.000 de carpetas, más de las que Polyfin lee en un escaneo. Haga que los enlaces apunten a las carpetas que contienen los archivos, o añada partes de ellas como carpetas separadas.',
+      too_many_files:
+        'A través de sus enlaces, la carpeta contiene más de 4.000.000 de archivos, más de los que Polyfin lee en un escaneo. Haga que los enlaces apunten a las carpetas que contienen los archivos, o añada partes de ellas como carpetas separadas.',
     } as Record<string, string>,
     shareErrors: {
       missing:
@@ -604,6 +613,20 @@ const sources: typeof en = {
         : `${figure} episodios solo están en los archivos`,
     unlistedHelp:
       'El addon de metadatos que describe sus series no los incluye, como cuando numera de otra forma las temporadas o los especiales. Se muestran igualmente, con el nombre de su archivo, y se reproducen. Sus series y números están en Episodios solo en los archivos.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'El último escaneo omitió 1 enlace simbólico' : `El último escaneo omitió ${figure} enlaces simbólicos`}: ${parts.join('; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} que salen de la carpeta`,
+      fenced: (figure: string) =>
+        `${figure} que llevan a una carpeta que algunos de sus usuarios no usan`,
+      broken: (figure: string) =>
+        `${figure} que no llevan a ninguna parte, dan vueltas o vuelven a una carpeta ya leída`,
+      unreadable: (figure: string) => `${figure} que llevan a algo que Polyfin no puede leer`,
+    },
+    skippedLinksOutHelp:
+      'Para leer los archivos a los que llevan, active Seguir los enlaces que salen de la carpeta en Editar la carpeta.',
+    skippedLinksUnreadableHelp:
+      'Conceda a la cuenta con la que se ejecuta Polyfin (el usuario 65532 en Docker) permiso para leer aquello a lo que llevan. Lo encontrado a través de ellos se mantiene mientras tanto.',
     unlistedListTitle: 'Episodios solo en los archivos',
     unlistedListHelp:
       'Un archivo solo se convierte en una versión de un episodio del catálogo cuando su temporada y su número de episodio son los del catálogo. Estos archivos están numerados de otra forma, así que cada uno es un episodio propio, junto a los del catálogo. Renómbrelos con los números del catálogo y escanee. O elija cómo están numerados los archivos de la serie: se convierten entonces en versiones de los episodios del catálogo sin renombrarlos.',

@@ -1282,6 +1282,14 @@ export type LocalFolder = {
   absoluteEpisodes: number
   /** Its shows' files their numbering could not place, each an episode of its own. */
   unmappedEpisodes: number
+  /** Whether a folder in the container follows the symbolic links leading out of it. */
+  followLinks: boolean
+  /**
+   * The symbolic links its last scan skipped: leading out of it, when it follows none; into
+   * another folder of the server one of its users may not reach; leading to nothing, round in a
+   * loop or back to a folder read already; to what Polyfin cannot read.
+   */
+  skippedLinks: { out: number; fenced: number; broken: number; unreadable: number }
 }
 
 /**
@@ -1425,6 +1433,8 @@ export type NewLocalFolder = {
   useArtwork?: boolean
   /** Whether its scans read the extras beside its titles; yes when left out. */
   readExtras?: boolean
+  /** Whether a folder in the container follows the symbolic links leading out of it; no when left out. */
+  followLinks?: boolean
   /** An S3 bucket's endpoint and region; its user and password are its access and secret keys. */
   endpoint?: string
   region?: string
@@ -1452,6 +1462,7 @@ export type LocalFolderPatch = Partial<{
   password: string
   useArtwork: boolean
   readExtras: boolean
+  followLinks: boolean
   kind: FolderKind
   endpoint: string
   region: string

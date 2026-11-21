@@ -112,12 +112,17 @@ func newEnv(t *testing.T) env {
 // manifests, installed in their order.
 func newEnvWith(t *testing.T, manifests ...string) env {
 	t.Helper()
+	return newEnvLogged(t, slog.New(slog.NewTextHandler(io.Discard, nil)), manifests...)
+}
+
+// newEnvLogged is newEnvWith whose service logs to logger.
+func newEnvLogged(t *testing.T, logger *slog.Logger, manifests ...string) env {
+	t.Helper()
 	pool := migrated.New(t)
 	users, err := accounts.Open(t.Context(), pool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := stremio.NewClient("test")
 	store := addons.New(pool, client)
 	lib := library.New(pool, store, client, logger, users.Settings)
