@@ -178,27 +178,64 @@ const (
 
 // Notice is a text an addon's answers carried instead of something to
 // play or describe, such as the failure of an addon it gathers. Its URLs
-// and what looks like a key are hidden (see logs.RedactText).
+// and what looks like a key are hidden (see logs.RedactText). The texts
+// alike but for their digits (see NoticeForm) are one notice, which tells
+// the latest of them.
 type Notice struct {
 	Text string
 	// RateLimited tells that the text says the addon, or one it gathers,
-	// refused requests for their rate (see saysRateLimitedText).
+	// refused requests for their rate (see NoticeRateLimited).
 	RateLimited bool
 	// Answers counts the answers that carried it since First, Background
 	// of them to background work's requests; Last is the latest.
 	Answers, Background int
 	First, Last         time.Time
+	// key is what tells it apart (see keyOf).
+	key noticeKey
+}
+
+// noticeKey tells notices apart: by their text's form (see NoticeForm),
+// and whether it tells a refusal for the rate, so that a refusal never
+// merges with a summary that happens to count 429 of something.
+type noticeKey struct {
+	form        string
+	rateLimited bool
+}
+
+func keyOf(text string) noticeKey {
+	return noticeKey{NoticeForm(text), NoticeRateLimited(text)}
+}
+
+// NoticeForm is a notice's text as notices are told apart: each run of
+// digits one '#', as an addon's summary changes its counts and timings
+// from one answer to the next, and would otherwise fill Health's
+// noticesKept places, and the log, with one notice.
+func NoticeForm(text string) string {
+	var form strings.Builder
+	digits := false
+	for _, r := range text {
+		isDigit := r >= '0' && r <= '9'
+		switch {
+		case !isDigit:
+			form.WriteRune(r)
+		case !digits:
+			form.WriteByte('#')
+		}
+		digits = isDigit
+	}
+	return form.String()
 }
 
 // rateLimitHints are what a notice saying a request was refused for its
-// rate may say besides SaysRateLimited's words, in lower case. Only Health
-// reads them: they pause no request.
+// rate may say besides SaysRateLimited's words, in lower case. They pause
+// no request: Health marks the notice, and the library remembers an answer
+// of such notices alone a minute only (see NoticeRateLimited).
 var rateLimitHints = regexp.MustCompile(`\b429\b|retry[ -]after`)
 
-// saysRateLimitedText reports whether a notice's text tells a refusal for
+// NoticeRateLimited reports whether a notice's text tells a refusal for
 // the rate of requests: too many requests, a rate limit, 429, or a time to
-// retry after.
-func saysRateLimitedText(text string) bool {
+// retry after. Health marks such a notice Too many requests.
+func NoticeRateLimited(text string) bool {
 	return SaysRateLimited(text) || rateLimitHints.MatchString(strings.ToLower(text))
 }
 
@@ -244,9 +281,11 @@ func cutText(text string, most int) string {
 }
 
 // noticesOf returns the distinct texts of the notices of an answer, as
-// they are kept, noticesKept at most.
+// they are kept, noticesKept at most: one of the texts alike but for
+// their digits (see keyOf).
 func noticesOf(streams []Stream) []string {
 	var texts []string
+	var keys []noticeKey
 	for _, s := range streams {
 		if !s.Notice() {
 			continue
@@ -255,7 +294,9 @@ func noticesOf(streams []Stream) []string {
 		if text == "" {
 			continue
 		}
-		if text = keptNotice(text); !slices.Contains(texts, text) {
+		text = keptNotice(text)
+		if key := keyOf(text); !slices.Contains(keys, key) {
+			keys = append(keys, key)
 			if texts = append(texts, text); len(texts) == noticesKept {
 				break
 			}
@@ -265,12 +306,14 @@ func noticesOf(streams []Stream) []string {
 }
 
 // note records that an answer to a request for origin carried texts at
-// now, in notices, which it returns: a text seen before counts one more
-// answer, a new one forgets those not seen within noticeLife, and the one
-// seen least lately when noticesKept are kept.
+// now, in notices, which it returns: a text seen before, or one alike but
+// for its digits (see keyOf), counts one more answer and becomes the
+// notice's text; a new one forgets those not seen within noticeLife, and
+// the one seen least lately when noticesKept are kept.
 func note(notices []Notice, texts []string, origin Origin, now time.Time) []Notice {
 	for _, text := range texts {
-		i := slices.IndexFunc(notices, func(n Notice) bool { return n.Text == text })
+		key := keyOf(text)
+		i := slices.IndexFunc(notices, func(n Notice) bool { return n.key == key })
 		if i < 0 {
 			notices = slices.DeleteFunc(notices, func(n Notice) bool { return now.Sub(n.Last) >= noticeLife })
 			if len(notices) >= noticesKept {
@@ -282,10 +325,11 @@ func note(notices []Notice, texts []string, origin Origin, now time.Time) []Noti
 				}
 				notices = slices.Delete(notices, oldest, oldest+1)
 			}
-			notices = append(notices, Notice{Text: text, RateLimited: saysRateLimitedText(text), First: now})
+			notices = append(notices, Notice{RateLimited: key.rateLimited, First: now, key: key})
 			i = len(notices) - 1
 		}
 		n := &notices[i]
+		n.Text = text
 		n.Answers++
 		if origin != OriginApps {
 			n.Background++

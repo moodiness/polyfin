@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/cache"
@@ -38,13 +39,16 @@ type titlePage struct {
 }
 
 // versionTracking ties addon lists to the items they list versions of,
-// remembers the title pages followed, and the stream lists not saved (see
-// savedStreams). Its zero value is ready: its caches are made on first use.
+// remembers the title pages followed, the stream lists not saved (see
+// savedStreams), and the addons' answers with nothing to play (see
+// nothingAnswer). Its zero value is ready: its caches are made on first
+// use.
 type versionTracking struct {
 	once    sync.Once
 	titles  *cache.Cache[listedTitle, accounts.ID]
 	pages   *cache.Cache[askedKey, titlePage]
 	unsaved *cache.Cache[streamKey, bool]
+	nothing *cache.Cache[streamKey, nothingAnswer]
 	// saving locks each stream list being saved or deleted, and every
 	// list while many are forgotten at once (see listLocks).
 	saving listLocks
@@ -63,6 +67,8 @@ func (s *Service) tracked() *versionTracking {
 		t.titles = cache.New[listedTitle, accounts.ID](maxTitles, versionsTTL)
 		t.pages = cache.New[askedKey, titlePage](maxPages, askedFor)
 		t.unsaved = cache.New[streamKey, bool](maxTitles, staleLists)
+		t.nothing = cache.NewLasting[streamKey, nothingAnswer](nothingKept, func() time.Duration { return nothingLife }, func() time.Time { return s.now() }).
+			Sized(nothingBytes, func(n nothingAnswer) int { return cache.MemorySize(n.notices) })
 	})
 	return t
 }
