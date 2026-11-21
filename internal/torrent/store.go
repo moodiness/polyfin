@@ -453,11 +453,14 @@ func (s *store) close() {
 	_ = os.RemoveAll(s.dir)
 }
 
-// usage is the bytes the store keeps, or is writing.
+// usage is the bytes of the pieces the store keeps, or is writing. Those
+// of pieces removed are not, though their files may still be deleted, or
+// read: the store no longer has them. A torrent's pieces count no more
+// once drop removed them from the index, as Windows deletes files slowly.
 func (s *store) usage() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.used
+	return s.used - s.leaving
 }
 
 // The store's lists, each a place in the links of the pieces.

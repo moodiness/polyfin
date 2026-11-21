@@ -221,6 +221,61 @@ func TestAStoreRemovesTheLeastRecentlyUsedPiecesFirst(t *testing.T) {
 	}
 }
 
+// A stopped torrent's pieces count no more as soon as the store removed
+// them, while their files are still being deleted, as slowly as Windows
+// may: the stop is seen whole. Their room is given to a write only once
+// they are deleted.
+func TestAStoppedTorrentsPiecesCountNoMoreWhileDeleted(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t, 3*storePiece)
+	defer s.close()
+	stopped, other := Hash{1}, Hash{2}
+	run := s.started(stopped)
+	mustPut(t, s, pieceKey{stopped, 0}, storePiece)
+	mustPut(t, s, pieceKey{stopped, 1}, storePiece)
+	mustPut(t, s, pieceKey{other, 0}, storePiece)
+	kept(t, s, pieceKey{stopped, 0}, storePiece)
+	deleting, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	s.unlink = func(name string) error {
+		once.Do(func() {
+			close(deleting)
+			<-release
+		})
+		return os.Remove(name)
+	}
+	dropped := make(chan struct{})
+	go func() {
+		s.drop(stopped, run)
+		close(dropped)
+	}()
+	<-deleting
+	if used := s.usage(); used != storePiece {
+		t.Errorf("while the stopped torrent's files are deleted, the store counts %d bytes, want the other torrent's piece", used)
+	}
+	var over atomic.Value
+	s.write = func(name string, data []byte) error {
+		if files := onDisk(t, s.dir); total(files)+int64(len(data)) > 3*storePiece {
+			over.Store(fmt.Sprintf("%s written beside %v", relName(s, name), files))
+		}
+		return writeFile(name, data)
+	}
+	written := make(chan error)
+	next := pieceKey{other, 1}
+	go func() { written <- s.put(next, pieceBytes(next, storePiece)) }()
+	close(release)
+	<-dropped
+	if err := <-written; err != nil {
+		t.Fatal(err)
+	}
+	if v := over.Load(); v != nil {
+		t.Fatalf("over the budget: %v", v)
+	}
+	if files := onDisk(t, s.dir); len(files) != 2 || s.usage() != 2*storePiece {
+		t.Fatalf("the disk holds %v, the store counts %d bytes", files, s.usage())
+	}
+}
+
 // A write waits for a read of the piece it removes before writing, so
 // that the pieces on disk stay within the budget, and the read ends with
 // the piece's bytes. A torrent that stops has its pieces deleted once
