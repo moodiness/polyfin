@@ -643,6 +643,7 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 - `POST /Polyfin/UserItems/{id}/Hidden` hides a movie, a home video, a series or a folder of videos (see [Folders of videos](addons-and-libraries.md#folders-of-videos)), a season or an episode standing for its series and a video for its folder, and `DELETE` shows it again; both answer 204.
 - `GET /Polyfin/UserItems/Hidden` lists the hidden titles, the latest hidden first, as a listing describes them.
 - `DELETE /Polyfin/UserItems/{id}/NextUp` takes a series off the user's Next Up, a season or an episode standing for its series, and `POST` puts it back; both answer 204, and 400 for an item that is neither a series nor in one. The series stays off until one of its episodes is played after the removal or one is released after it (see [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up)).
+- `/Shows/Upcoming?parentId=<library>` lists the coming episodes of the series the user follows within the library, and those of the library's first 50 series, its first catalog page, followed or not, whose descriptions Polyfin keeps; hidden and dropped series stay out. It answers at once: the descriptions not kept are read in the background, paced as background work, 4 at a time, and the next answer lists them. Without `parentId` it lists the followed series only (see [Upcoming in a library](jellyfin-compatibility.md#upcoming-in-a-library)).
 
 ### Unmarking without DELETE for apps
 

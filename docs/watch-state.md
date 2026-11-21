@@ -8,7 +8,7 @@ Polyfin keeps each user's played titles, resume points, favorites and ratings, a
 
 - Playback moves the resume point, and marks a title played near its end, with Jellyfin's thresholds (see [Played and resume thresholds](#played-and-resume-thresholds)).
 - **Continue Watching** lists titles under way; **Next Up**, the next episode of each series watched (see [Continue Watching and Next Up](#continue-watching-and-next-up)).
-- The **Upcoming** row lists coming episodes of series watched or marked favorite.
+- The **Upcoming** row lists coming episodes of series watched or marked favorite. A library's Upcoming tab (in the web player, the tab of a TV library) also lists those of the library's first series, its first catalog page, up to 50, followed or not. It shows at once the series whose descriptions Polyfin keeps; the others are read in the background and show the next time the tab opens.
 - Next Up and Upcoming look at the 50 series watched last, as each series asks its addon for episodes. Series dropped on a tracking service do not count in the 50. An imported history can hold hundreds (see [Importing your watch history](tracking-imports.md#importing-your-watch-history)).
 - Marking a series or season played marks its released episodes.
 - Apps keeping Jellyfin's live connection (WebSocket) open hear of changes from the user's other apps at once.

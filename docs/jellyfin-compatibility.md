@@ -125,6 +125,16 @@ Jellyfin apps have no button to take a title off Continue Watching without marki
 
 API details: [Continue Watching, Next Up and hidden titles for apps](jellyfin-api.md#continue-watching-next-up-and-hidden-titles-for-apps).
 
+### Upcoming in a library
+
+The Upcoming tab of a TV library in the web player lists the coming episodes of the series the user follows within the library, and those of the library's first series, followed or not. The Upcoming row of the home screen lists the followed series only (see [Watch state](watch-state.md#watch-state)).
+
+**Compared with Jellyfin**
+
+- Jellyfin lists every episode under the library aired from yesterday on, whoever follows its series ([TvShowsController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/TvShowsController.cs#L138-L181)). Polyfin looks at the series the user follows within the library and at the library's first 50 series, its first catalog page, as each series needs its description from its addon.
+
+API details: [Continue Watching, Next Up and hidden titles for apps](jellyfin-api.md#continue-watching-next-up-and-hidden-titles-for-apps).
+
 ### Home screen sections
 
 In the web player's **Settings › Home**, each user can untick, for a library, "Display in home screen sections such as 'Recently Added Media' and 'Continue Watching'" ([`homeScreenSettings.js`](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/components/homeScreenSettings/homeScreenSettings.js#L354-L368)). The web player then leaves the library's latest row off the home screen, and, as in Jellyfin 12.4, Next Up and Continue Watching leave out the titles only such libraries list, an episode going with its series ([`TVSeriesManager.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/TV/TVSeriesManager.cs#L71-L74), [`ItemsController.cs`](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L953-L961)). A title another library lists too, such as a show a local folder holds (see [Titles your catalogs list too](local-folders.md#titles-your-catalogs-list-too)), stays. The library itself still opens, and other users are not affected.
