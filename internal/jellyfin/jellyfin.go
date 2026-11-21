@@ -231,6 +231,10 @@ type Handler struct {
 	// the one it could play, versionPatience given: time.After, which
 	// tests replace to wait for every version (see choose).
 	patienceEnd func(patience time.Duration) <-chan time.Time
+	// appLimitEnd gives what ends a torrent play's wait for an app whose
+	// requests have a time limit, the time left given: time.After, which
+	// tests replace to end it when they choose (see limitedWait).
+	appLimitEnd func(left time.Duration) <-chan time.Time
 	// newKeys remembers the API keys made from Jellyfin apps until a
 	// listing shows them.
 	newKeys newKeys
@@ -308,6 +312,7 @@ func New(options Options) *Handler {
 		watched:        newWatchedPages(),
 		now:            time.Now,
 		patienceEnd:    time.After,
+		appLimitEnd:    time.After,
 		viewing:        cache.New[accounts.ID, accounts.ID](5000, 12*time.Hour),
 		reasons:        cache.New[string, []string](2000, 12*time.Hour),
 		sizes:          cache.New[string, playback.ConversionSize](2000, 12*time.Hour),

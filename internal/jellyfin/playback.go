@@ -367,6 +367,7 @@ type playbackInfoRequest struct {
 // playbackInfo answers what an app needs to play an item: its version's
 // description, whether the app can play it as it is, and a play session.
 func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
+	arrived := time.Now()
 	b := bindErrors{}
 	opened := b.pathID(r, "itemId")
 	var request playbackInfoRequest
@@ -494,12 +495,18 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// A torrent's first analysis waits for its pieces, longer than apps
 	// wait for a first byte: while one may be waited for, the answer is
 	// kept going with spaces before its JSON (see patientWriter), and
-	// every answer is then a 200.
+	// every answer is then a 200. An app whose request has a time limit
+	// in all, which spaces do not extend, is answered before it (see
+	// limitedWait): the play waits on r, which ends there, until decided.
 	var patient *patientWriter
+	asked, limited := r, timeLimited(r)
 	patientFor := func(versions []library.Version) {
 		if patient == nil && h.mayWaitForTorrent(versions) {
 			patient = newPatientWriter(w, playbackInfoPatience)
 			w = patient
+			if limited {
+				r = r.WithContext(h.limitedWait(r.Context(), arrived))
+			}
 		}
 	}
 	defer func() {
@@ -579,7 +586,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// A play that stopped waiting for a torrent does not wait for it again.
 	if choice.decided == nil && !complete && !choice.late && r.Context().Err() == nil {
 		versions, err := h.Library.Versions(r.Context(), user, item.ID)
-		if err != nil {
+		if err != nil && !appLimitReached(r) {
 			if patient != nil {
 				h.refusePlay(w, r, user, item, "NoCompatibleStream", plays.FailedNoStream)
 				return
@@ -594,6 +601,15 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		choice = h.choose(r, user, p, opened, request, c, prefer)
 		unstarted = unstarted || choice.unstarted
 	}
+	// The app's time limit nears: it is answered before it gives up, while
+	// the torrents go on starting and their analyses on being read, which
+	// its next try finds done (see limitedWait).
+	if choice.decided == nil && appLimitReached(r) {
+		h.Logger.Info("A torrent version is still starting as the app's time limit nears: the app is told to try again", "item", item.ID)
+		writeJSON(w, http.StatusOK, noCompatibleStream{MediaSources: []MediaSourceInfo{}, ErrorCode: "RateLimitExceeded"})
+		return
+	}
+	r = asked
 	if choice.decided == nil {
 		if unstarted {
 			// A torrent that could not start, for its route or its swarm,
@@ -692,6 +708,55 @@ type noCompatibleStream struct {
 // torrent: one is among them that did not fail to start lately.
 func (h *Handler) mayWaitForTorrent(versions []library.Version) bool {
 	return slices.ContainsFunc(versions, func(v library.Version) bool { return v.Torrent != nil && !h.didNotStart(v) })
+}
+
+// appWaitLimit is how long PlaybackInfo waits for a torrent for an app
+// whose request has a time limit in all (see timeLimited), from the
+// request's arrival: the Jellyfin SDK for Kotlin gives a request 30
+// seconds, the connection and the answer's reading included, which leaves
+// the answer 5 seconds.
+const appWaitLimit = 25 * time.Second
+
+// errAppTimeLimit ends a play's wait for its versions as the app's time
+// limit nears (see limitedWait).
+var errAppTimeLimit = errors.New("the app's time limit for the request nears")
+
+// timeLimited reports whether the app asking gives its request a time
+// limit in all, which the spaces PlaybackInfo sends while it waits do not
+// extend: one on the Jellyfin SDK for Kotlin, which Jellyfin for Android
+// TV, the Jellyfin app for Android's integrated player and other Android
+// apps use. Its requests end after 30 seconds by default (requestTimeout
+// in HttpClientOptions.kt, OkHttp's callTimeout in OkHttpFactory.kt, line
+// 51, at v1.9.4), and name it in their User-Agent (OkHttpClient.kt, line
+// 120). Earlier versions of the SDK, which named it nowhere, are not told
+// apart.
+func timeLimited(r *http.Request) bool {
+	return strings.Contains(r.UserAgent(), "jellyfin-sdk-kotlin")
+}
+
+// limitedWait is ctx, ended with errAppTimeLimit once appWaitLimit passed
+// since the request arrived: the play stops waiting for its versions,
+// which go on being read for the next play (see choose), and the app is
+// told to try again (RateLimitExceeded) rather than giving up on an
+// answer it would have had a few seconds later. Its next try finds the
+// analyses done, or waits for those still being read.
+func (h *Handler) limitedWait(ctx context.Context, arrived time.Time) context.Context {
+	limited, cancel := context.WithCancelCause(ctx)
+	end := h.appLimitEnd(appWaitLimit - time.Since(arrived))
+	go func() {
+		select {
+		case <-end:
+			cancel(errAppTimeLimit)
+		case <-limited.Done():
+		}
+	}()
+	return limited
+}
+
+// appLimitReached reports whether r's wait ended as the app's time limit
+// neared (see limitedWait).
+func appLimitReached(r *http.Request) bool {
+	return errors.Is(context.Cause(r.Context()), errAppTimeLimit)
 }
 
 // readPlaybackInfoBody reads a posted PlaybackInfoDto over the query's
