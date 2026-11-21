@@ -255,6 +255,9 @@ type Service struct {
 	smartFetches    chan struct{}
 	smartWait       time.Duration
 	catalogVersions catalogVersions
+	// catalogIndexes are where the pages of catalogs start in their
+	// listings (see catalogindex.go).
+	catalogIndexes *cache.Cache[indexKey, *catalogIndex]
 	// pageReads holds a place for each catalog page read from the
 	// database, and pageReadHook, set by tests, runs in it (see pageRead).
 	pageReads    chan struct{}
@@ -483,6 +486,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.searchPages = cache.NewLasting[pageKey, fetched[[]stremio.Meta]](500, func() time.Duration { return searchTTL }, clock).
 		Sized(searchBytes, fetchedSize[[]stremio.Meta])
 	s.libraryImages = cache.NewLasting[pageKey, fetched[foundImage]](1000, s.keptCatalogLife, clock)
+	s.catalogIndexes = cache.NewLasting[indexKey, *catalogIndex](1000, s.keptCatalogLife, clock).Sized(indexBytes, indexSize)
 	s.catalogSlots = newAddonSlots[string](catalogHostFetches)
 	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
 	s.absent = cache.NewLasting[metaKey, absence](maxAbsent, func() time.Duration { return absentFor }, clock)
@@ -1035,7 +1039,9 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // first, only count while the guess holds; reading then goes on from the
 // actual position. Each read asks for up to pageFetches pages at once, the
 // pages kept not counting, and none past a page kept empty, which ends the
-// catalog. When the catalog's page size is remembered (see pageSize), the
+// catalog; the pages it needs that memory lacks are read from the database
+// together first (see loadPages). When the catalog's page size is
+// remembered (see pageSize), the
 // first read asks for every page it needs at once; a size learned from a
 // short first page is only trusted once a second page confirms it, so
 // that a small catalog is not asked for many empty pages. Titles the
@@ -1048,7 +1054,10 @@ func (src source) extras(skip int) ([]stremio.ExtraValue, bool) {
 // rating: it reports that more may follow, which apps ask for later, once
 // the ratings are known. A page the addon cannot give ends the window
 // there: it returns the items before it, counted as the whole catalog,
-// with errCutShort and why (see cutShort).
+// with errCutShort and why (see cutShort). A listing that leaves out none
+// of the catalog's titles reads through the catalog's index the pages it
+// shows only, and reads on from the last page indexed (see
+// catalogindex.go).
 func (s *Service) window(ctx context.Context, v view, src source, start, count int) ([]stremio.Meta, int, error) {
 	// An IPTV source's movies and series are paged and counted from its
 	// stored lists, whole, but for a restricted user, one who hid titles,
@@ -1056,7 +1065,23 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	if s.storedWindow(v, src) {
 		return s.iptv.CatalogWindow(ctx, src.addon.addon.ID, src.catalog.Type, src.catalog.ID, src.genre, src.search, start, count)
 	}
+	limit := v.limit(src)
+	indexing := s.indexes(v, src)
+	var index *catalogIndex
+	if indexing {
+		index = s.indexOf(src, limit)
+		metas, total, done, stale, err := s.indexedWindow(ctx, src, index, start, count)
+		if done {
+			return metas, total, err
+		}
+		if stale {
+			index = nil
+		}
+	}
+	// collected are the titles listed from start on, and listed counts
+	// every title listed, those before start too.
 	var collected []stremio.Meta
+	listed := 0
 	seen := map[string]bool{}
 	received := 0
 	size := 0
@@ -1064,8 +1089,19 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 		size = s.pageSize(ctx, src)
 	}
 	remembered, trusted, filled := size, size > 0, 0
+	// built is the index the read makes, from the one it reads on from,
+	// and end the page that ended the catalog.
+	var built *catalogIndex
+	var end *pageCheck
+	if indexing {
+		built = &catalogIndex{}
+		if resumed, listedBefore, ok := s.resumeIndex(index, src, seen, start); ok {
+			built, collected = resumed, listedBefore
+			received, listed, filled = resumed.received, resumed.listed, len(resumed.pages)
+			size = max(size, resumed.size)
+		}
+	}
 	more := true
-	limit := v.limit(src)
 	reach := limit
 	if v.narrows() {
 		reach = min(limit, hiddenReach*(start+count))
@@ -1073,7 +1109,8 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	// skipped counts the titles left out as local folders hold them.
 	skipped := 0
 	var failed error
-	for len(collected) < start+count {
+	loaded := false
+	for listed < start+count {
 		if received-skipped >= reach {
 			more = received-skipped < limit
 			if more {
@@ -1082,15 +1119,24 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			break
 		}
 		offsets := []int{received}
-		needed := start + count - len(collected)
+		needed := start + count - listed
 		if !src.first && size > 0 && (trusted || size >= shortPage) {
+			bound := min(received+needed, limit+skipped)
+			if !loaded {
+				loaded = true
+				var wanted []int
+				for next := received; next < bound; next += size {
+					wanted = append(wanted, next)
+				}
+				s.loadMissingPages(ctx, src, wanted, bound)
+			}
 			// Pages a read takes without asking the addon do not count
 			// toward the pages asked for at once (see readyPage).
 			uncached := 0
 			if _, ok := s.readyPage(ctx, src.key(received)); !ok {
 				uncached++
 			}
-			for next := received + size; next < min(received+needed, limit+skipped); next += size {
+			for next := received + size; next < bound; next += size {
 				if kept, ok := s.cachedPage(src.key(offsets[len(offsets)-1])); ok && len(kept) == 0 {
 					break
 				}
@@ -1109,6 +1155,9 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			return nil, 0, ctx.Err()
 		}
 		var fresh []stremio.Meta
+		// passed counts the titles an indexed read lists before start,
+		// which it leaves as they are.
+		passed := 0
 		repeated, unknown := false, false
 		for i, metas := range pages {
 			if offsets[i] != received {
@@ -1125,17 +1174,31 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 				unknown = true
 				break
 			}
-			before := len(fresh)
-			for _, meta := range metas {
-				if !seen[meta.ID] {
-					seen[meta.ID] = true
-					fresh = append(fresh, meta)
+			added := 0
+			var dropped []int
+			for at, meta := range metas {
+				if seen[meta.ID] {
+					if built != nil {
+						dropped = append(dropped, at)
+					}
+					continue
 				}
+				seen[meta.ID] = true
+				added++
+				if built != nil && listed+passed < start {
+					passed++
+					continue
+				}
+				fresh = append(fresh, meta)
 			}
 			// An addon that ignores skip sends the same items again.
-			if len(fresh) == before {
+			if added == 0 {
 				repeated = true
+				end = &pageCheck{offsets[i], len(metas), printOf(metas)}
 				break
+			}
+			if built != nil {
+				built.add(offsets[i], metas, dropped)
 			}
 			received += len(metas)
 			size = max(size, len(metas))
@@ -1144,13 +1207,17 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 			}
 		}
 		trusted = trusted || filled >= 2
+		listed += passed
 		kept, err := s.withoutLocal(ctx, v, src, fresh)
 		if err != nil {
 			return nil, 0, err
 		}
 		skipped += len(fresh) - len(kept)
 		visible, held := s.visibleMetas(ctx, v, src, kept)
-		collected = append(collected, visible...)
+		if listed+len(visible) > start {
+			collected = append(collected, visible[max(0, start-listed):]...)
+		}
+		listed += len(visible)
 		if held {
 			v.held.Store(true)
 			break
@@ -1170,21 +1237,25 @@ func (s *Service) window(ctx context.Context, v view, src source, start, count i
 	if trusted && size > remembered {
 		s.learnPageSize(ctx, src, size)
 	}
+	if built != nil && ctx.Err() == nil {
+		built.ended = !more && failed == nil
+		s.keepIndex(src, limit, built, end)
+	}
 	if failed != nil {
 		err := fmt.Errorf("%w: %w", errCutShort, failed)
-		if start >= len(collected) {
-			return nil, len(collected), err
+		if start >= listed {
+			return nil, listed, err
 		}
-		return collected[start:min(start+count, len(collected))], len(collected), err
+		return collected[:min(count, len(collected))], listed, err
 	}
-	total := len(collected)
+	total := listed
 	if more {
 		total++
 	}
-	if start >= len(collected) {
+	if start >= listed {
 		return nil, total, nil
 	}
-	return collected[start:min(start+count, len(collected))], total, nil
+	return collected[:min(count, len(collected))], total, nil
 }
 
 // shortPage is the length under which a first page does not tell the
@@ -1534,6 +1605,7 @@ func (s *Service) libraryChildren(ctx context.Context, v view, l library, start,
 	result.Partial = result.More && src.paged() && !s.storedWindow(v, src)
 	if result.More && !first {
 		s.prefetch(ctx, v, l.addon, func(ctx context.Context) { _, _, _ = s.window(ctx, v, src, start+count, count) })
+		s.readThrough(ctx, v, src)
 	}
 	return result, s.save(ctx, records)
 }

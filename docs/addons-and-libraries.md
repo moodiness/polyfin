@@ -323,11 +323,14 @@ Polyfin also keeps catalog pages and titles' descriptions in its database. So li
 
 - A page read from the database past that time is read again in the background, as above.
 - A page no one read for 24 hours past that time is forgotten, and so is a description after a week.
+- The pages a listing needs are read from the database together, in one request, so a page deep in a library answers at once after a restart too.
 - Searches stay in memory.
 
 To answer quickly, Polyfin reads ahead:
 
 - **Next page:** while you look at a page of a library or collection, Polyfin reads the next one, unless the addon's last answer failed.
+- **Rest of a library:** once you open a library, Polyfin reads the rest of its catalog in the background, up to the most titles the library lists (see [Catalog limits and refresh](#catalog-limits-and-refresh)), so that scrolling through it waits for the addon only on its first pages. These pages wait for those someone is waiting for, and a page you reach meanwhile is read once, for both. Nothing is read so from an addon whose last answer failed.
+- **Deep pages:** Polyfin remembers where each page of a catalog starts in a library, titles repeated by a later page counted once. A page deep in a library then reads only the catalog pages it shows, not every page before it. Libraries that leave titles out as they read their pages count them from the first page, as before, and aren't read in the background: those of a user under parental control or with blocked genres, a user who hid titles, a listing filtered by rating, movies waiting for their digital release, and a library that leaves out what local folders hold.
 - **First pages:** at start, and every hour, Polyfin reads the first page of every library. This is the scheduled task "Read the libraries' first pages" in jellyfin-web's dashboard. It then warms the posters of those pages, so that a home row or library shows them at once the first time too (see [Posters warmed ahead](artwork-and-editing.md#posters-warmed-ahead)).
 - **Home rows** (**Latest**) show the first page of each catalog only, as Stremio apps do.
 - **Page sizes:** Polyfin remembers how many titles each catalog's pages hold, and where a catalog ends. A collection read again asks its catalogs for all the pages it needs at once.

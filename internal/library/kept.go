@@ -37,8 +37,9 @@ import (
 //
 // Pages and descriptions are also kept in the database (catalog_pages and
 // metas), read when memory lacks them, so that a home screen, a library or
-// a title page answers at once after a restart. Searches and guide pages
-// stay in memory.
+// a title page answers at once after a restart. The pages a listing needs
+// that memory lacks are read together, in one statement (see loadPages).
+// Searches and guide pages stay in memory.
 //
 // A fetch is shared by every request that needs it at once, and runs on a
 // context of its own: a request that gives up stops waiting, not the
@@ -517,12 +518,18 @@ func (s *Service) fetchPage(ctx context.Context, src source, key pageKey) ([]str
 	}
 	s.checkMetas(metas, src.catalog.Type, true)
 	kept := fetched[[]stremio.Meta]{metas, asked}
+	// The catalog's version changes once the page is kept, so that a read
+	// of the version after the pages finds the page it counts (see
+	// keepIndex).
+	changed := false
 	if key.kept() {
-		if before, ok := s.pages.Get(key); !ok || !reflect.DeepEqual(before.value, metas) {
-			s.catalogVersions.changed(catalogRef{key.addon, key.catalogType, key.catalogID, key.genre})
-		}
+		before, ok := s.pages.Get(key)
+		changed = !ok || !reflect.DeepEqual(before.value, metas)
 	}
 	s.pagesOf(key).Put(key, kept)
+	if changed {
+		s.catalogVersions.changed(catalogRef{key.addon, key.catalogType, key.catalogID, key.genre})
+	}
 	s.generated.kept.Add(1)
 	// A search catalog that answers is no longer late (see lateSearch).
 	if key.search != "" {
@@ -596,6 +603,74 @@ func (s *Service) loadPage(ctx context.Context, src source, key pageKey) (fetche
 	s.pages.Put(key, kept)
 	_, held := s.pages.Get(key)
 	return kept, held
+}
+
+// loadPages reads the pages of src's catalog kept in the database from
+// position from to before to, in one statement, and keeps in memory those
+// it lacks, as loadPage does: a listing that needs many pages after a
+// restart waits for one statement, not one for each page.
+func (s *Service) loadPages(ctx context.Context, src source, from, to int) {
+	key := src.key(from)
+	if !key.kept() || readyOnly(ctx) || to <= from {
+		return
+	}
+	release, err := s.pageRead(ctx)
+	if err != nil {
+		return
+	}
+	type row struct {
+		skip int
+		data []byte
+		at   time.Time
+	}
+	rows, err := s.db.Query(ctx, `SELECT skip, metas, fetched_at FROM catalog_pages
+		WHERE addon_id = $1 AND catalog_type = $2 AND catalog_id = $3 AND genre = $4 AND skip >= $5 AND skip < $6 AND config = $7
+			AND fetched_at > $8`,
+		key.addon, key.catalogType, key.catalogID, key.genre, from, to, configOf(src.addon.addon), s.now().Add(-s.keptCatalogLife()))
+	var found []row
+	if err == nil {
+		var r row
+		_, err = pgx.ForEachRow(rows, []any{&r.skip, &r.data, &r.at}, func() error {
+			found = append(found, r)
+			r.data = nil
+			return nil
+		})
+	}
+	release()
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Debug("Kept catalog pages could not be read", "catalog", key.catalogID, "error", err)
+		}
+		return
+	}
+	for _, r := range found {
+		key.skip = r.skip
+		if _, ok := s.pages.Get(key); ok {
+			continue
+		}
+		kept := fetched[[]stremio.Meta]{at: r.at}
+		if json.Unmarshal(r.data, &kept.value) != nil {
+			continue
+		}
+		s.checkMetas(kept.value, key.catalogType, true)
+		s.pages.Put(key, kept)
+	}
+}
+
+// loadMissingPages reads from the database, in one statement, the pages
+// of src's catalog from the first of offsets to before to, when memory
+// lacks more than one of those at offsets (see loadPages); a single one is
+// read as any other.
+func (s *Service) loadMissingPages(ctx context.Context, src source, offsets []int, to int) {
+	missing := 0
+	for _, offset := range offsets {
+		if _, ok := s.cachedPage(src.key(offset)); !ok {
+			missing++
+		}
+	}
+	if missing > 1 {
+		s.loadPages(ctx, src, offsets[0], to)
+	}
 }
 
 // pageRead waits for one of the pageReadsAtOnce places of the pages read
