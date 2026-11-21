@@ -10,13 +10,13 @@ For administrators: preparing playback, reading and keeping addon and remote sto
 
 Playback then starts at once, not after a second or two. Polyfin prepares:
 
-- **A title opened in an app:** it analyzes the first 2 versions a play would read at once, again if a later addon answer puts another first.
-- **Each prepared version:** its keyframe index and subtitle track positions, which HLS playback needs, and its first segment's bytes (see [Reading the sources](#reading-the-sources)).
-- **The next episode:** with its versions and subtitles, once the episode playing has 9 minutes left.
+- **A title opened in an app:** it analyzes the version a play would read first, again if a later addon answer puts another first. The next one, up to 3, only when the one before fails, or has no analysis after 3 seconds.
+- **Each prepared version:** its keyframe index and subtitle track positions, which HLS playback needs. Only what the analysis and the index read is fetched: the file's head and its index (see [How reads are served](#how-reads-are-served)).
+- **The next episode:** with its versions and subtitles, once the episode playing has 9 minutes left, and its first segment's bytes within the user's budget below.
 - **The next track:** as a song or audiobook starts, the next in the app's queue (else the album): its stream, and its analysis if the addon does not describe it.
-- **Continue Watching and Next Up:** in the background, the versions of each row's first 10 movies and episodes. Titles opened there list versions without a placeholder (see [Title pages](versions.md#title-pages)). The first version of each row's first 2 titles is analyzed, for instant resumes.
+- **Continue Watching and Next Up:** in the background, the versions of each row's first 10 movies and episodes. Titles opened there list versions without a placeholder (see [Title pages](versions.md#title-pages)). The first version of each row's first 2 titles is analyzed, and the bytes of the segment its play starts at, where the user stopped, are read within the user's budget below, for instant resumes.
 
-This costs a few more source requests, even for titles never played.
+This costs a few source requests, even for titles never played: about 1 to 3 MiB a title opened.
 
 | Limit | Value |
 |---|---|
@@ -24,6 +24,7 @@ This costs a few more source requests, even for titles never played.
 | Preparations waiting | 4; beyond that, the oldest is skipped |
 | Same title and user | Once per 10 minutes, unless it failed |
 | Row titles listed at once | 2 over the server, apart from preparations, in the order rows asked |
+| First segments read ahead for rows and next episodes | 32 MiB per user an hour; what the cache holds costs nothing, and a segment past the rest of the budget is not read |
 
 - A title waiting or being listed is not queued again. One whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 - All is background work: paced per addon, behind what users open, pausing after a rate refusal (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)).
@@ -63,13 +64,14 @@ Background reads wait for a free connection and yield theirs to playback: read-a
 ### How reads are served
 
 - Each FFmpeg or app request is served on its own, newest first. A seek is not slowed by the request FFmpeg leaves; an ended request stops what it waited for.
+- Only a stream asks its host for the rest of the file: FFmpeg's, a relayed app's, and the analysis of the version a play tries first. Every other read asks for the bytes it needs and no more: an analysis ahead of a play or a keyframe index 1 MiB at first, twice as much each time it reads on in order, up to 16 MiB; a first segment to its end. A host sends what a request asks even once Polyfin stops reading it.
 - Read-ahead grows as playback goes on, up to 256 MiB (at most an eighth of the cache).
 - While FFmpeg waits for the app, the connection stays open 30 seconds instead of reopening per segment.
 - Torrent files are read ahead only during playback. When the last ends, connections close at once, except those serving a waiting read, so a stop leaves the swarm (see [Torrents](torrents.md#only-while-playing)).
 - When a stream redirects, as addon resolvers do, Polyfin reads from the final address: connections skip the resolver, and the file cannot change mid-play.
 - Apps still get the addon's address. A dead final address sends Polyfin back to the addon's, then to a renewed link.
 - Polyfin reads 4 keyframe indexes of Matroska and MP4 files at once at most, 2 from one host: a large index takes tens of MiB of memory while read. A play whose index is not read yet waits for its turn; indexes read before, kept in the database, never wait.
-- Once the keyframe index is known, Polyfin reads the first segment's bytes (64 MiB at most) before the app asks: from `PlaybackInfo`, and when details open with [Prepare playback in advance](#preparing-playback-in-advance) on.
+- Once the keyframe index is known, Polyfin reads the first segment's bytes (64 MiB at most) before the app asks, for the version `PlaybackInfo` chose alone. With [Prepare playback in advance](#preparing-playback-in-advance) on, it also reads them for the first titles of Continue Watching and Next Up and for the next episode, within the user's budget.
 - For a resume, it reads the file's head, which FFmpeg probes, and the resume segment. A Matroska index is read during analysis.
 - Relayed files use the same cache: earlier reads cost no request; seeks fetch only what is missing.
 - Before direct play, Polyfin checks the source answers, unless it answered Polyfin at that address within 2 minutes, as after an analysis.

@@ -74,8 +74,8 @@ func copyHost(t *testing.T, data []byte) (*httptest.Server, func() []string) {
 	}
 }
 
-// A source whose host goes down mid-read reads on from its mirror, from
-// where the read stopped: the reader gets the whole file, and the mirror
+// A source whose host goes down mid-stream reads on from its mirror, from
+// where the stream stopped: the reader gets the whole file, and the mirror
 // is asked only for what was not read yet. Opened again with the location
 // that failed, the source stays on the mirror.
 func TestAFailedSourceReadsOnFromItsMirror(t *testing.T) {
@@ -88,7 +88,7 @@ func TestAFailedSourceReadsOnFromItsMirror(t *testing.T) {
 	location := Location{URL: first.URL + "/file", Mirrors: []Mirror{{Location: Location{URL: mirror.URL + "/copy"}}}}
 	s := cache.Open(accounts.ID{1}, location, nil)
 	defer s.Release()
-	if got := readAll(t, s); !bytes.Equal(got, data) {
+	if got, _ := readToEnd(t, s); !bytes.Equal(got, data) {
 		t.Fatal("content differs")
 	}
 	asked := ranges()

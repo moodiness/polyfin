@@ -237,8 +237,9 @@ func TestTheNewestReaderIsServedFirst(t *testing.T) {
 	o.mu.Lock()
 	ranges := slices.Clone(o.ranges)
 	o.mu.Unlock()
-	// The head, the new reader's stretch, then the old reader's block.
-	if len(ranges) != 3 || ranges[1] != "bytes=41943040-" || ranges[2] != "bytes=20971520-" {
+	// The head, the new reader's stretch, then the old reader's block,
+	// alone: the window is the new reader's.
+	if len(ranges) != 3 || ranges[1] != "bytes=41943040-" || ranges[2] != "bytes=20971520-22020095" {
 		t.Errorf("ranges asked: %q", ranges)
 	}
 }

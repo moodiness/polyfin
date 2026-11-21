@@ -47,7 +47,7 @@ A file whose tracks carry no default flag has its first track checked even when 
 - "(converted: reason)";
 - "(cannot play here)" when it needs a conversion the server or the user may not have.
 
-Names say how a version plays once the app has played something on that device, which Polyfin remembers across restarts. Versions analyzed or described get an exact ending: the first two when a title opens, with **Prepare playback in advance** on, and up to three at each playback. The others get an estimate from their labels, such as "(likely converted: audio)", which may be wrong. **Describe versions from RemuxDB** gives exact endings before a play, and sends titles' IMDb identifiers to a third party. See [Version names](versions.md#version-names).
+Names say how a version plays once the app has played something on that device, which Polyfin remembers across restarts. Versions analyzed or described get an exact ending: the one a play reads first when a title opens, with **Prepare playback in advance** on, the next ones only when it fails, and up to three at each playback. The others get an estimate from their labels, such as "(likely converted: audio)", which may be wrong. **Describe versions from RemuxDB** gives exact endings before a play, and sends titles' IMDb identifiers to a third party. See [Version names](versions.md#version-names).
 
 ### Direct play turned off by the app
 
