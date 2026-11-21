@@ -1,0 +1,77 @@
+diff --git a/assets/lumaaglaass.css b/assets/lumaaglaass.css
+index 674e3e9..c0fc8ba 100644
+--- a/assets/lumaaglaass.css
++++ b/assets/lumaaglaass.css
+@@ -3844,6 +3844,8 @@ html body .cardImageContainer.defaultCardBackground {
+     margin-left: 0 !important;
+ }
+ 
++/* Borderless - The banner spans the page's width with no frame, corner or shadow, so its artwork
++   fills it; its text and controls keep the rows' gutter. */
+ .lg-hero {
+     /* Spacing - No top margin: the page padding already places the hero. */
+     touch-action: pan-y pinch-zoom;
+@@ -3851,25 +3853,21 @@ html body .cardImageContainer.defaultCardBackground {
+     isolation: isolate;
+     box-sizing: border-box;
+     overflow: hidden;
+-    margin: 0 var(--lg-space-gutter) 36px;
+-    border-radius: var(--lg-radius-panel);
+-    /* Size - Backdrops are 16:9: the banner (page width less the gutters) grows from its base height
+-       toward that shape, up to --lg-hero-max-height. aspect-ratio would narrow it instead. */
+-    min-height: min(var(--lg-hero-max-height),max(var(--lg-hero-base-height),calc((100vw - var(--lg-scrollbar-width,0px) - 2 * var(--lg-space-gutter)) * 9 / 16)));
++    margin: 0 0 36px;
++    /* Size - Backdrops are 16:9: the banner (the page's width) grows from its base height toward
++       that shape, up to --lg-hero-max-height. aspect-ratio would narrow it instead. */
++    min-height: min(var(--lg-hero-max-height),max(var(--lg-hero-base-height),calc((100vw - var(--lg-scrollbar-width,0px)) * 9 / 16)));
+     display: flex;
+     flex-direction: column;
+     justify-content: flex-end;
+     /* Home - The bottom padding reserves the indicator row. */
+-    padding: clamp(24px,4vw,60px) clamp(24px,4vw,60px) 88px;
++    padding: clamp(24px,4vw,60px) var(--lg-space-gutter) 88px;
+     background: var(--lg-color-panel);
+     color: var(--lg-color-text);
+-    border: 1px solid var(--lg-edge);
+-    box-shadow: var(--lg-shadow-card);
+ 
+     @media (max-width: 640px) {
+         min-height: 500px;
+-        padding: 24px 20px 88px;
+-        border-radius: var(--lg-radius-panel-compact);
++        padding: 24px var(--lg-space-gutter) 88px;
+     }
+ }
+ 
+diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
+index d44873c..982afb3 100644
+--- a/assets/lumaaglaass.js
++++ b/assets/lumaaglaass.js
+@@ -1026,11 +1026,8 @@
+         const backdrops = element('div', 'lg-hero-backdrops');
+         backdrops.setAttribute('aria-hidden', 'true');
+         slideWidth = slideImageWidth();
+-        for (const item of items) {
+-            const slide = element('div');
+-            slide.style.backgroundImage = backdropArt(backdropUrl(client, item, slideWidth));
+-            backdrops.append(slide);
+-        }
++        // Slides - Empty until shown (render): the artwork of one loads with the slide before it.
++        for (let i = 0; i < items.length; i++) backdrops.append(element('div'));
+         const parts = {
+             slides: [...backdrops.children], kicker: element('div', 'lg-hero-kicker'), title: element('a'),
+             meta: element('div', 'lg-hero-meta'), overview: element('p', 'lg-hero-overview'),
+@@ -1098,6 +1095,13 @@
+         const art = backdropArt(backdropUrl(client, item, slideWidth));
+         showHomeBackdrop(art);
+         rememberBackdrop(art, identity, hero);
++        // Slides - The one shown and the next load their artwork, rather than every slide at once:
++        // two backdrops when the home opens, a third with each slide. A low-end device keeps its
++        // memory and its data for the rows.
++        for (const i of [index, (index + 1) % items.length]) {
++            const slide = parts.slides[i];
++            if (!slide.style.backgroundImage) slide.style.backgroundImage = i === index ? art : backdropArt(backdropUrl(client, items[i], slideWidth));
++        }
+         parts.slides.forEach((n, i) => n.classList.toggle('lg-is-active', i === index));
+         parts.dots.forEach((n, i) => {
+             n.classList.toggle('lg-is-active', i === index);

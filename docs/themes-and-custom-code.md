@@ -129,6 +129,8 @@ The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass
 
 The theme's home carousel is the large rotating artwork above the home rows. It is off by default: the home starts with its rows, over a still background.
 
+- **Borderless:** the carousel spans the page's width, with no frame, rounded corners or shadow, so that the artwork fills it. Its text, its buttons and its dots keep the margin of the rows below.
+- **Light:** it loads the artwork of the slide shown and of the next one, rather than of all its slides at once: two images when the home opens, then one more with each slide.
 - **Pausing it:** a pause button before the dots stops the slides until it is pressed again or the page is loaded again. The carousel also waits while the pointer is over it, while a finger touches it and while keyboard focus is inside it. When the system asks for reduced motion, the carousel never moves by itself, and the button is hidden.
 - **Play:** the banner's "Play" opens the title's page, or a series' next episode, where the user starts playback.
 - **Turning it on:** a user turns it on with "Home carousel" on the LumaaGlaass page, then "Save". An administrator can do it for another user from that user's settings.
@@ -183,6 +185,7 @@ The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with
 - The theme's script loads one more extension, Polyfin's, which shows the studios' logos on a title's page (see [Studio logos](#studio-logos)). Its tooltips may ask to show above their control.
 - The theme's script loads another extension of Polyfin's, which gives the pages of studios and genres their heading (see [List headings](#list-headings)).
 - The theme draws less on modest devices: no blur behind the buttons of cards on touch screens, and none at all on a low-end device or with reduced transparency. Its script runs no pass for the player's changes while a video plays, and asks the page backgrounds at the window's size (see [Modest devices](#modest-devices)).
+- The home carousel is borderless, and loads the artwork of its slides as they come (see [Home carousel](#home-carousel)).
 
 `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again. Each update is thus a change to review.
 
@@ -232,6 +235,7 @@ In **Custom JavaScript**, the bundled theme's loader with the address of the the
 - **Studio logos:** without Polyfin's patches, a title's page shows the studios' names, not their logos.
 - **List headings:** without Polyfin's patches, the page of a studio or a genre has no heading.
 - **Modest devices:** without Polyfin's patches, the theme blurs behind the buttons of every card on touch screens, and blurs on low-end devices and with reduced transparency. Its script also goes over the page while a video plays.
+- **Borderless carousel:** without Polyfin's patches, the home carousel is a framed panel with rounded corners, and loads the artwork of all its slides at once.
 - **Coming back:** to come back to the bundled copy, choose **LumaaGlaass**. The **Custom** texts stay for later.
 
 ## Use another theme

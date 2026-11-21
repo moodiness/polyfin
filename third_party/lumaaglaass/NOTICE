@@ -12,6 +12,7 @@ its repository, at internal/webtheme/lumaaglaass, with Polyfin's patches
 - 0005-list-headings.patch
 - 0006-random-carousel-pool.patch
 - 0007-low-end-devices.patch
+- 0008-borderless-carousel.patch
 
 The web client serves them at /web/polyfin/themes/lumaaglaass/, where the
 custom CSS and script Polyfin serves for the LumaaGlaass theme load them:

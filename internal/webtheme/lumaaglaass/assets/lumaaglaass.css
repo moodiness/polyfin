@@ -3853,6 +3853,8 @@ html body .cardImageContainer.defaultCardBackground {
     margin-left: 0 !important;
 }
 
+/* Borderless - The banner spans the page's width with no frame, corner or shadow, so its artwork
+   fills it; its text and controls keep the rows' gutter. */
 .lg-hero {
     /* Spacing - No top margin: the page padding already places the hero. */
     touch-action: pan-y pinch-zoom;
@@ -3860,25 +3862,21 @@ html body .cardImageContainer.defaultCardBackground {
     isolation: isolate;
     box-sizing: border-box;
     overflow: hidden;
-    margin: 0 var(--lg-space-gutter) 36px;
-    border-radius: var(--lg-radius-panel);
-    /* Size - Backdrops are 16:9: the banner (page width less the gutters) grows from its base height
-       toward that shape, up to --lg-hero-max-height. aspect-ratio would narrow it instead. */
-    min-height: min(var(--lg-hero-max-height),max(var(--lg-hero-base-height),calc((100vw - var(--lg-scrollbar-width,0px) - 2 * var(--lg-space-gutter)) * 9 / 16)));
+    margin: 0 0 36px;
+    /* Size - Backdrops are 16:9: the banner (the page's width) grows from its base height toward
+       that shape, up to --lg-hero-max-height. aspect-ratio would narrow it instead. */
+    min-height: min(var(--lg-hero-max-height),max(var(--lg-hero-base-height),calc((100vw - var(--lg-scrollbar-width,0px)) * 9 / 16)));
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     /* Home - The bottom padding reserves the indicator row. */
-    padding: clamp(24px,4vw,60px) clamp(24px,4vw,60px) 88px;
+    padding: clamp(24px,4vw,60px) var(--lg-space-gutter) 88px;
     background: var(--lg-color-panel);
     color: var(--lg-color-text);
-    border: 1px solid var(--lg-edge);
-    box-shadow: var(--lg-shadow-card);
 
     @media (max-width: 640px) {
         min-height: 500px;
-        padding: 24px 20px 88px;
-        border-radius: var(--lg-radius-panel-compact);
+        padding: 24px var(--lg-space-gutter) 88px;
     }
 }
 

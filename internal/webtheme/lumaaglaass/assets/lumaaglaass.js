@@ -1039,11 +1039,8 @@
         const backdrops = element('div', 'lg-hero-backdrops');
         backdrops.setAttribute('aria-hidden', 'true');
         slideWidth = slideImageWidth();
-        for (const item of items) {
-            const slide = element('div');
-            slide.style.backgroundImage = backdropArt(backdropUrl(client, item, slideWidth));
-            backdrops.append(slide);
-        }
+        // Slides - Empty until shown (render): the artwork of one loads with the slide before it.
+        for (let i = 0; i < items.length; i++) backdrops.append(element('div'));
         const parts = {
             slides: [...backdrops.children], kicker: element('div', 'lg-hero-kicker'), title: element('a'),
             meta: element('div', 'lg-hero-meta'), overview: element('p', 'lg-hero-overview'),
@@ -1111,6 +1108,13 @@
         const art = backdropArt(backdropUrl(client, item, slideWidth));
         showHomeBackdrop(art);
         rememberBackdrop(art, identity, hero);
+        // Slides - The one shown and the next load their artwork, rather than every slide at once:
+        // two backdrops when the home opens, a third with each slide. A low-end device keeps its
+        // memory and its data for the rows.
+        for (const i of [index, (index + 1) % items.length]) {
+            const slide = parts.slides[i];
+            if (!slide.style.backgroundImage) slide.style.backgroundImage = i === index ? art : backdropArt(backdropUrl(client, items[i], slideWidth));
+        }
         parts.slides.forEach((n, i) => n.classList.toggle('lg-is-active', i === index));
         parts.dots.forEach((n, i) => {
             n.classList.toggle('lg-is-active', i === index);
