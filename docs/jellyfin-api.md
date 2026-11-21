@@ -342,7 +342,18 @@ Silo's apps sort a library by title and jump to a letter (see [Title order and A
 - `GET /Polyfin/NameOrder` lists a page of the library's titles by name, from `StartIndex`, `Limit` of them, as `/Items` answers, with `Fields`. `TotalRecordCount` is the number of titles sorted.
 - `GET /Polyfin/NameOrder/Letters` answers `Total`, `Whole` (the order holds the whole library), `Letters`, each a `Letter` (A to Z or `#`), its `Count` and the `Position` of its first title, and `Runs`, the blocks of consecutive titles of one letter, each a `Letter` and a `Position`.
 - The order is that of every title of an IPTV source's movies or series, or of a local folder, up to 50,000 and the library's maximum, by sort name without regard to case or accents, within the user's parental control and blocked genres, without the titles they hid. It is kept 2 minutes for a user and their limits, for every kind of title: each listing keeps the kinds its `IncludeItemTypes`, `ExcludeItemTypes`, `MediaTypes` and `Filters` ask for. Two orders are sorted at once on the server at most, the others waiting their turn, and a sort stops once no listing waits for it.
-- The Jellyfin API's own listings keep their catalog's order.
+- `/Items` lists the same order by name, and the library's other orders, as jellyfin-web's Sort menu asks (see [Stored libraries sorted for apps](#stored-libraries-sorted-for-apps)).
+
+### Stored libraries sorted for apps
+
+jellyfin-web's Sort menu orders a library by Name, Date added, Release date, Year, Community rating or Runtime. A library whose titles Polyfin stores, an IPTV source's movies or series or a local folder, comes in that order on every page:
+
+- A listing with a library as `ParentId`, `Recursive=true` and title types, such as `IncludeItemTypes=Movie`, whose first `SortBy` is `SortName`, `DateCreated`, `PremiereDate`, `ProductionYear`, `CommunityRating` or `Runtime`, pages through the library's order by that key, ascending or descending as its first `SortOrder` asks, from `StartIndex`, `Limit` titles. `/Users/{userId}/Items` answers the same. `TotalRecordCount` counts the titles the listing keeps.
+- Titles of one value come by name, in the direction the listing's `SortOrder` gives `SortName` when a later `SortBy` names it, else in the first key's. The other keys change nothing.
+- `DateCreated` follows the order the library's source lists its titles in, the latest added first: an IPTV source's by the date its provider gives, those without one last, a local folder's by the dates of its files. The titles' own `DateCreated` stays the one Polyfin gives every title. `ProductionYear` is a title's year, else its premiere date's. `Runtime` is how long a local folder's movie file plays; an IPTV source's lists give none. `CommunityRating` is the rating the provider lists, MDBList's when its key is set, or an administrator's edit.
+- As in Jellyfin, a title without a value comes first in ascending order and last in descending order.
+- The order holds what the order by name for Silo's apps above holds: every title up to 50,000 and the library's maximum, within the user's parental control and blocked genres, and the listing's rating filters, without the titles they hid. Each order is kept 2 minutes, sorted from the order by name, and two orders are sorted at once on the server at most.
+- An addon's catalog, and a library of collections, keep their catalog's order past their first page: a listing that fits on its first page is sorted as asked.
 
 ### Libraries hidden from the top bar for apps
 

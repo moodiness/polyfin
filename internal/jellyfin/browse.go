@@ -437,7 +437,8 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	parent, hasParent := b.guid(r, "parentId")
 	var categories programQuery
 	readCategories(b, r, &categories)
-	r = r.WithContext(library.WithRatingFilter(r.Context(), ratingFilterOf(b, r)))
+	rating := ratingFilterOf(b, r)
+	r = r.WithContext(library.WithRatingFilter(r.Context(), rating))
 	user, ok := h.viewer(w, r, b, unknownListingUser)
 	if !ok {
 		return
@@ -600,6 +601,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	if randomOrder(r) && h.randomLibraryListing(w, r, user, parent, genre, fields, keep, start, limit) {
 		return
 	}
+	// A library whose titles Polyfin stores is sorted whole, by the keys
+	// of jellyfin-web's Sort menu (see storedListing).
+	if sort, ok := storedSortOf(r); ok && h.storedListing(w, r, user, parent, genre, rating, sort, fields, keep, start, limit) {
+		return
+	}
 	asked := time.Now()
 	ctx := listingContext(r, keep)
 	var page library.Page
@@ -629,9 +635,9 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Titles listed whole are sorted as asked, as Jellyfin sorts them: a
-	// saga's movies by premiere date. A listing in pages keeps its catalogs'
-	// order, which pages sorted one by one would mix up, and a smart list
-	// the sort it was given, whatever the app asks.
+	// saga's movies by premiere date. A listing in pages of an addon's
+	// catalogs keeps their order, which pages sorted one by one would mix
+	// up, and a smart list the sort it was given, whatever the app asks.
 	if titlesThrough(r) && start <= 0 && !page.More && len(page.Items) == page.Total &&
 		len(listQuery(r, "sortBy")) > 0 && !h.smartList(r, user, parent) {
 		state, err := h.userState(r.Context(), user, page.Items)

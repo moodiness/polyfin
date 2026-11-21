@@ -155,8 +155,9 @@ Search, suggestions and some sorts answer from the addons' catalogs, so they dif
 - **Suggestions:** before anything is typed, the web player suggests the user's favorite and liked titles, then titles from the top of each library.
 - **At random:** a library listed at random draws among its first 100 titles, or up to 500 when an app asks for more. Each draw is kept for 2 minutes.
 - **Series by date:** "Date Episode Added" orders series by their latest aired regular episode, and "Date Played" by the last episode the user played through.
+- **Sort menu:** a library of an IPTV source's movies or series, or of a local folder, sorts by Name, Date added, Release date, Year, Community rating and Runtime across all its pages. A library of an addon's catalog keeps the catalog's order past its first page.
 
-API details: [Search hints](jellyfin-api.md#search-hints), [Search suggestions](jellyfin-api.md#search-suggestions), [Titles at random](jellyfin-api.md#titles-at-random), [Series by their latest episode](jellyfin-api.md#series-by-their-latest-episode).
+API details: [Search hints](jellyfin-api.md#search-hints), [Search suggestions](jellyfin-api.md#search-suggestions), [Titles at random](jellyfin-api.md#titles-at-random), [Series by their latest episode](jellyfin-api.md#series-by-their-latest-episode), [Stored libraries sorted for apps](jellyfin-api.md#stored-libraries-sorted-for-apps).
 
 ### Episode orders
 

@@ -1,12 +1,16 @@
 package library
 
 import (
+	"bytes"
 	"cmp"
+	"context"
 	"slices"
 	"strings"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/moodiness/polyfin/internal/accounts"
 )
 
 // Listings by name, and the letters an alphabetical bar files them under.
@@ -45,7 +49,7 @@ func NameLetter(key string) string {
 
 // SortByName sorts items by name (see NameKey), descending when asked; of
 // two of the same name, by their sort names as set, then by ID, so that
-// the order is the same at every listing.
+// the order is the same at every listing (see CompareNames).
 func SortByName(items []Item, descending bool) {
 	type keyed struct {
 		key  string
@@ -56,8 +60,7 @@ func SortByName(items []Item, descending bool) {
 		sorted[i] = keyed{NameKey(item), item}
 	}
 	slices.SortFunc(sorted, func(a, b keyed) int {
-		result := cmp.Or(strings.Compare(a.key, b.key), strings.Compare(a.item.SortName, b.item.SortName),
-			strings.Compare(a.item.ID.String(), b.item.ID.String()))
+		result := CompareNames(&a.item, &b.item, a.key, b.key)
 		if descending {
 			return -result
 		}
@@ -66,6 +69,50 @@ func SortByName(items []Item, descending bool) {
 	for i := range sorted {
 		items[i] = sorted[i].item
 	}
+}
+
+// CompareNames orders a and b, whose names fold to keyA and keyB (see
+// NameKey), as SortByName sorts them ascending. Their IDs compare as
+// their bytes, which their hexadecimal strings follow.
+func CompareNames(a, b *Item, keyA, keyB string) int {
+	if c := strings.Compare(keyA, keyB); c != 0 {
+		return c
+	}
+	if c := strings.Compare(a.SortName, b.SortName); c != 0 {
+		return c
+	}
+	return bytes.Compare(a.ID[:], b.ID[:])
+}
+
+// Stores reports whether Polyfin stores the titles of parent, one of
+// user's libraries, as NamePool reads them: false for another parent.
+func (s *Service) Stores(ctx context.Context, user accounts.User, parent accounts.ID) (bool, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return false, err
+	}
+	l, ok := v.library(parent)
+	return ok && l.stored(), nil
+}
+
+// WithLengths gives the movies of items, titles of parent, one of user's
+// libraries, that have no length the one their file plays, when parent
+// is a local folder (see localLengths): a listing by length sorts them
+// by it. Its catalog lists none. items are changed in place.
+func (s *Service) WithLengths(ctx context.Context, user accounts.User, parent accounts.ID, items []Item) error {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return err
+	}
+	if l, ok := v.library(parent); !ok || !l.addon.addon.Local() {
+		return nil
+	}
+	titles := make([]*Item, len(items))
+	for i := range items {
+		titles[i] = &items[i]
+	}
+	s.localLengths(ctx, titles)
+	return nil
 }
 
 // Letter is a letter of a listing by name: how many titles file under it,

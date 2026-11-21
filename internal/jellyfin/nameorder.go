@@ -1,20 +1,24 @@
 package jellyfin
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
-// Libraries by name, for Silo's apps (see package silo).
+// Libraries by name, for Silo's apps (see package silo), and sorted as
+// jellyfin-web's Sort menu asks.
 //
 // A library's titles are read a page at a time, in their catalog's order,
 // whatever sort a listing asks (see items). Silo's apps sort a library by
@@ -27,47 +31,151 @@ import (
 // its letters, follow it. An addon's catalog, and a library of
 // collections, keep their catalog's order, as in Jellyfin apps: reading
 // one whole could take thousands of requests, and Silo's Apple app opens
-// every library in title order. The Jellyfin API's own listings keep
-// their order.
+// every library in title order.
+//
+// /Items lists a stored library's titles through its folders in the
+// orders of storedSortKeys (see storedListing), each sorted from the
+// order by name and kept as it is: by its first sortBy key, then by name.
+// The order by date added is the catalog's reversed, as a stored
+// library's catalog lists the titles added last first: an IPTV source's
+// by the date its provider gives, a local folder's by its files' dates.
+// As in Jellyfin, a title without a value comes first in ascending order
+// and last in descending order.
 //
 // One order holds every kind of title of a library, for a user, their
-// limits and the titles they hid, and a genre: each listing keeps the
-// kinds it asks for (includeItemTypes, excludeItemTypes, mediaTypes,
-// filters) as it pages, so that listings asking for other kinds share it.
-// At most nameSortsAtOnce orders are sorted at once on the server, and a
-// sort stops once no listing waits for it.
+// limits and the titles they hid, a genre and the ratings a listing
+// narrows to: each listing keeps the kinds it asks for (includeItemTypes,
+// excludeItemTypes, mediaTypes, filters) as it pages, so that listings
+// asking for other kinds share it. At most nameSortsAtOnce orders are
+// sorted at once on the server, and a sort stops once no listing waits
+// for it.
 //
-// GET /Polyfin/NameOrder lists a page of that order as /Items does, from
-// startIndex, limit titles, in ascending or descending order (sortOrder).
-// GET /Polyfin/NameOrder/Letters answers its letters (see library.Letters)
-// in that order: Total, Letters and Runs, with Whole telling whether the
-// order holds the whole library. Both take parentId, a library, and
-// includeItemTypes, recursive and genres as /Items does; another parent
-// answers 404, and a library whose titles Polyfin does not store 501.
+// GET /Polyfin/NameOrder lists a page of the order by name as /Items does,
+// from startIndex, limit titles, in ascending or descending order
+// (sortOrder). GET /Polyfin/NameOrder/Letters answers its letters (see
+// library.Letters) in that order: Total, Letters and Runs, with Whole
+// telling whether the order holds the whole library. Both take parentId,
+// a library, and includeItemTypes, recursive and genres as /Items does;
+// another parent answers 404, and a library whose titles Polyfin does not
+// store 501.
 
 // nameOrder is a library's titles in ascending order by name, with the
-// keys they sort by, and whether they are the whole library.
+// keys they sort by, and whether they are the whole library. ranks are
+// the places of the titles in their catalog. An order by another key
+// holds the same titles, with places, the indexes in items of its titles
+// in ascending order; places is nil for the order by name.
 type nameOrder struct {
-	items []library.Item
-	keys  []string
-	whole bool
+	items  []library.Item
+	keys   []string
+	ranks  []int32
+	places []int32
+	whole  bool
 }
 
-// kept is the order of the titles keep keeps.
-func (o nameOrder) kept(keep func(library.Item) bool) nameOrder {
-	kept := nameOrder{whole: o.whole}
-	for i, item := range o.items {
-		if keep(item) {
-			kept.items, kept.keys = append(kept.items, item), append(kept.keys, o.keys[i])
+// keptKeys are the keys of the titles of the order by name that keep
+// keeps, in ascending order.
+func (o nameOrder) keptKeys(keep func(library.Item) bool) []string {
+	keeps := byKind(keep)
+	keys := make([]string, 0, len(o.keys))
+	for i := range o.items {
+		if keeps(o.items[i].Kind) {
+			keys = append(keys, o.keys[i])
 		}
 	}
-	return kept
+	return keys
+}
+
+// page returns the titles of the order that keep keeps, in the order
+// asked, from start, up to limit of them, and how many it keeps in all.
+func (o nameOrder) page(keep func(library.Item) bool, start, limit int, descending bool) ([]library.Item, int) {
+	keeps := byKind(keep)
+	found := make([]library.Item, 0, max(0, min(limit, len(o.items)-start)))
+	total := 0
+	for position := range o.items {
+		item := &o.items[o.at(position, descending)]
+		if !keeps(item.Kind) {
+			continue
+		}
+		if total >= start && len(found) < limit {
+			found = append(found, *item)
+		}
+		total++
+	}
+	return found, total
+}
+
+// byKind tells whether keep keeps a title of a kind, asking it once for
+// each kind: a listing keeps titles by their kind (see itemTypeFilter),
+// and an order may hold 50,000 of them.
+func byKind(keep func(library.Item) bool) func(library.Kind) bool {
+	kinds := map[library.Kind]bool{}
+	return func(kind library.Kind) bool {
+		keeps, known := kinds[kind]
+		if !known {
+			keeps = keep(library.Item{Kind: kind})
+			kinds[kind] = keeps
+		}
+		return keeps
+	}
+}
+
+// sortedBy is the order of the titles of the order by name o that sort
+// asks for, ascending (see titleSort): the order by name itself, for a
+// sort by name.
+func (o nameOrder) sortedBy(sort titleSort) nameOrder {
+	items := o.items
+	var compare func(a, b int32) int
+	switch sort.key {
+	case "DateCreated":
+		// The catalog lists the titles added last first.
+		compare = func(a, b int32) int { return cmp.Compare(o.ranks[b], o.ranks[a]) }
+	case "PremiereDate":
+		compare = func(a, b int32) int { return compareDates(items[a].PremiereDate, items[b].PremiereDate) }
+	case "ProductionYear":
+		compare = func(a, b int32) int { return cmp.Compare(productionYear(&items[a]), productionYear(&items[b])) }
+	case "CommunityRating":
+		compare = func(a, b int32) int { return cmp.Compare(items[a].CommunityRating, items[b].CommunityRating) }
+	case "Runtime":
+		compare = func(a, b int32) int { return cmp.Compare(items[a].Runtime, items[b].Runtime) }
+	default:
+		return o
+	}
+	places := make([]int32, len(items))
+	for i := range places {
+		places[i] = int32(i)
+	}
+	if sort.namesAgainst {
+		slices.Reverse(places)
+	}
+	slices.SortStableFunc(places, compare)
+	sorted := o
+	sorted.places = places
+	return sorted
+}
+
+// compareDates orders two dates, one missing first.
+func compareDates(a, b *time.Time) int {
+	if a == nil || b == nil {
+		return compareBool(a != nil, b != nil)
+	}
+	return a.Compare(*b)
+}
+
+// productionYear is the year a title came out: its premiere date's when
+// it gives none, 0 when neither is known.
+func productionYear(item *library.Item) int {
+	if item.ProductionYear == 0 && item.PremiereDate != nil {
+		return item.PremiereDate.Year()
+	}
+	return item.ProductionYear
 }
 
 // nameOrderTitleSize is what a title of an order by name takes in memory,
 // with its key: an order of 50,000 IPTV movies, names of 30 characters
 // without posters, held 64.3 MB, 1,286 bytes a title, and posters and
 // longer names add some. The cache of orders bounds their total by it.
+// An order by another key counts as much: it shares the titles of the
+// order by name, and keeps them once that order is gone.
 const nameOrderTitleSize = 1536
 
 // nameSortsAtOnce bounds the orders by name sorted at once on the server.
@@ -142,8 +250,103 @@ func (b *nameBuilds) run(ctx context.Context, key drawKey, build *nameBuild, sor
 	close(build.done)
 }
 
-// nameOrderOf returns the order by name of the listing r asks for, with
-// the kinds of titles it keeps, or answers r and returns false.
+// storedSortKeys are the sorts of jellyfin-web's Sort menu a listing of a
+// stored library is answered in (see storedListing), as sortBy names them.
+var storedSortKeys = []string{"SortName", "DateCreated", "PremiereDate", "ProductionYear", "CommunityRating", "Runtime"}
+
+// titleSort is the order a listing of a stored library asks for: by key,
+// one of storedSortKeys, ascending or descending, then by name, the other
+// way when namesAgainst is set.
+type titleSort struct {
+	key          string
+	descending   bool
+	namesAgainst bool
+}
+
+// name names the order sort keeps, whichever way it is read.
+func (sort titleSort) name() string {
+	if sort.key == "SortName" {
+		return "name"
+	}
+	if sort.namesAgainst {
+		return strings.ToLower(sort.key) + ",names against"
+	}
+	return strings.ToLower(sort.key)
+}
+
+// storedSortOf returns the order a listing of a folder's titles through
+// its folders (see titlesThrough) asks for when its first sortBy key is
+// one of storedSortKeys. The keys after it change nothing but the order of
+// the titles of one value: by name, the way the listing asks the name, or
+// the first key's when it asks none. A sort by name or by date added has
+// no titles of one value.
+func storedSortOf(r *http.Request) (titleSort, bool) {
+	keys, orders := listQuery(r, "sortBy"), listQuery(r, "sortOrder")
+	if !titlesThrough(r) || len(keys) == 0 {
+		return titleSort{}, false
+	}
+	i := slices.IndexFunc(storedSortKeys, func(key string) bool { return strings.EqualFold(key, keys[0]) })
+	if i < 0 {
+		return titleSort{}, false
+	}
+	sort := titleSort{key: storedSortKeys[i], descending: descendingAt(orders, 0)}
+	if sort.key == "SortName" || sort.key == "DateCreated" {
+		return sort, true
+	}
+	if n := slices.IndexFunc(keys[1:], func(key string) bool {
+		return strings.EqualFold(key, "SortName") || strings.EqualFold(key, "Name")
+	}); n >= 0 {
+		sort.namesAgainst = descendingAt(orders, n+1) != sort.descending
+	}
+	return sort, true
+}
+
+// storedListing answers a listing of the titles of parent through its
+// folders, sorted as sort asks, when Polyfin stores parent's titles, and
+// reports whether it did: another parent, an addon's catalog among them,
+// is not answered here. The listing pages through the library's order
+// (see storedOrder): its total counts the titles keep keeps of it, every
+// one of the library's up to library.StoredNamePool. A listing that asks
+// for no limit lists library.WholeListing titles, as Jellyfin lists every
+// one.
+func (h *Handler) storedListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, genre string,
+	rating library.RatingFilter, sort titleSort, fields fieldSet, keep func(library.Item) bool, start, limit int) bool {
+	stored, err := h.Library.Stores(r.Context(), user, parent)
+	if err != nil {
+		h.browseError(w, r, err)
+		return true
+	}
+	if !stored {
+		return false
+	}
+	order, err := h.storedOrder(r, user, parent, genre, rating, sort)
+	switch {
+	case r.Context().Err() != nil:
+		// The app gave up waiting.
+		return true
+	case errors.Is(err, errNotLibrary) || errors.Is(err, errNotStored):
+		// The user's libraries changed meanwhile.
+		return false
+	case err != nil:
+		h.browseError(w, r, err)
+		return true
+	}
+	if wholeListing(r) {
+		limit = library.WholeListing
+	}
+	start = max(start, 0)
+	found, total := order.page(keep, start, limit, sort.descending)
+	items, err := h.dtos(r, user, found, fields, keep)
+	if err != nil {
+		h.internalError(w, r, err)
+		return true
+	}
+	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: total, StartIndex: start})
+	return true
+}
+
+// nameOrderOf returns the order by name of the listing r asks for, or
+// answers r and returns false.
 func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErrors) (accounts.User, nameOrder, bool) {
 	parent, hasParent := b.guid(r, "parentId")
 	user, ok := h.viewer(w, r, b, unknownListingUser)
@@ -162,26 +365,7 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 		// The library cannot be narrowed to the requested genre.
 		return user, nameOrder{whole: true}, true
 	}
-	key, err := h.newDrawKey(r, user, parent, genre)
-	if err != nil {
-		h.browseError(w, r, err)
-		return accounts.User{}, nameOrder{}, false
-	}
-	hidden, err := h.Library.HiddenTitles(r.Context(), user)
-	if err != nil {
-		h.internalError(w, r, err)
-		return accounts.User{}, nameOrder{}, false
-	}
-	// One order holds every kind; hiding a title sorts again, so that
-	// positions follow at once.
-	key.kinds, key.order = "", "name|"+hiddenFingerprint(hidden)
-	keep := itemTypeFilter(r)
-	if order, ok := h.nameOrders.Get(key); ok {
-		return user, order.kept(keep), true
-	}
-	order, err := h.nameBuilds.wait(r.Context(), key, func(ctx context.Context) (nameOrder, error) {
-		return h.sortByName(ctx, user, parent, genre, hidden, key)
-	})
+	order, err := h.storedOrder(r, user, parent, genre, library.RatingFilter{}, titleSort{key: "SortName"})
 	switch {
 	case r.Context().Err() != nil:
 		// The app gave up waiting.
@@ -192,9 +376,52 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 	case err != nil:
 		h.browseError(w, r, err)
 	default:
-		return user, order.kept(keep), true
+		return user, order, true
 	}
 	return accounts.User{}, nameOrder{}, false
+}
+
+// storedOrder returns the order sort asks for of every title of library
+// parent that user may see, narrowed to genre and by rating, ascending:
+// the one kept, else one sorted for the listings that ask for it
+// meanwhile (see nameBuilds).
+func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
+	sort titleSort) (nameOrder, error) {
+	byName, err := h.newDrawKey(r, user, parent, genre)
+	if err != nil {
+		return nameOrder{}, err
+	}
+	hidden, err := h.Library.HiddenTitles(r.Context(), user)
+	if err != nil {
+		return nameOrder{}, err
+	}
+	narrowed, err := json.Marshal(rating)
+	if err != nil {
+		return nameOrder{}, err
+	}
+	// One order holds every kind; hiding a title sorts again, so that
+	// positions follow at once.
+	byName.kinds = ""
+	byName.order = "name|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	key := byName
+	key.order = sort.name() + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	if order, ok := h.nameOrders.Get(key); ok {
+		return order, nil
+	}
+	return h.nameBuilds.wait(library.WithRatingFilter(r.Context(), rating), key, func(ctx context.Context) (nameOrder, error) {
+		order, kept := h.nameOrders.Get(byName)
+		if !kept {
+			var err error
+			if order, kept, err = h.sortByName(ctx, user, parent, genre, hidden, byName); err != nil {
+				return nameOrder{}, err
+			}
+		}
+		sorted := order.sortedBy(sort)
+		if kept && key != byName {
+			h.nameOrders.Put(key, sorted)
+		}
+		return sorted, nil
+	})
 }
 
 var (
@@ -207,32 +434,47 @@ var (
 )
 
 // sortByName sorts every title of a library by name, as a listing of its
-// titles through its folders reads them, and keeps the order under key
-// once it holds every title it sorts: those of the whole library, or as
-// many as library.NamePool reads at most.
+// titles through its folders reads them, with the lengths a local
+// folder's files play (see library.Service.WithLengths), and keeps the
+// order under key once it holds every title it sorts: those of the whole
+// library, or as many as library.NamePool reads at most. kept tells
+// whether it did.
 func (h *Handler) sortByName(ctx context.Context, user accounts.User, parent accounts.ID, genre string, hidden library.HiddenTitles,
-	key drawKey) (nameOrder, error) {
+	key drawKey) (_ nameOrder, kept bool, _ error) {
 	every := func(library.Kind) bool { return true }
 	listing := library.WithTitlesThrough(library.WithKinds(library.WithOpening(ctx), every))
 	page, bound, stored, isLibrary, err := h.Library.NamePool(listing, user, parent, genre)
 	switch {
 	case err != nil:
-		return nameOrder{}, err
+		return nameOrder{}, false, err
 	case !isLibrary:
-		return nameOrder{}, errNotLibrary
+		return nameOrder{}, false, errNotLibrary
 	case !stored:
-		return nameOrder{}, errNotStored
+		return nameOrder{}, false, errNotStored
 	}
-	items := hidden.Without(slices.Clone(page.Items))
-	library.SortByName(items, false)
-	order := nameOrder{items: items, keys: make([]string, len(items)), whole: !page.More}
-	for i, item := range items {
-		order.keys[i] = library.NameKey(item)
+	pool := hidden.Without(page.Items)
+	keys := make([]string, len(pool))
+	for i := range pool {
+		keys[i] = library.NameKey(pool[i])
+	}
+	// The places of the titles in the catalog, in their order by name.
+	ranks := make([]int32, len(pool))
+	for i := range ranks {
+		ranks[i] = int32(i)
+	}
+	slices.SortFunc(ranks, func(a, b int32) int { return library.CompareNames(&pool[a], &pool[b], keys[a], keys[b]) })
+	order := nameOrder{items: make([]library.Item, len(pool)), keys: make([]string, len(pool)), ranks: ranks, whole: !page.More}
+	for i, rank := range ranks {
+		order.items[i], order.keys[i] = pool[rank], keys[rank]
+	}
+	if err := h.Library.WithLengths(ctx, user, parent, order.items); err != nil {
+		return nameOrder{}, false, err
 	}
 	if !page.More || len(page.Items) >= bound {
 		h.nameOrders.Put(key, order)
+		return order, true, nil
 	}
-	return order, nil
+	return order, false, nil
 }
 
 // hiddenFingerprint names the titles a user hid.
@@ -253,11 +495,14 @@ func descendingOrder(r *http.Request) bool {
 	return len(orders) > 0 && strings.EqualFold(orders[0], "Descending")
 }
 
-// at is the position-th title of an order in the order asked: descending
-// reads it from its end.
+// at is the index in items of the position-th title of an order in the
+// order asked: descending reads it from its end.
 func (o nameOrder) at(position int, descending bool) int {
 	if descending {
-		return len(o.items) - 1 - position
+		position = len(o.items) - 1 - position
+	}
+	if o.places != nil {
+		return int(o.places[position])
 	}
 	return position
 }
@@ -270,18 +515,14 @@ func (h *Handler) nameOrderPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	descending := descendingOrder(r)
-	found := make([]library.Item, 0, max(0, min(limit, len(order.items)-start)))
-	for position := start; position < min(start+limit, len(order.items)); position++ {
-		found = append(found, order.items[order.at(position, descending)])
-	}
 	keep := itemTypeFilter(r)
+	found, total := order.page(keep, start, limit, descendingOrder(r))
 	items, err := h.dtos(r, user, found, requestedFields(r), keep)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(order.items), StartIndex: start})
+	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: total, StartIndex: start})
 }
 
 // nameLetters is the answer of GET /Polyfin/NameOrder/Letters.
@@ -298,9 +539,8 @@ func (h *Handler) nameOrderLetters(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	keys := order.keys
+	keys := order.keptKeys(itemTypeFilter(r))
 	if descendingOrder(r) {
-		keys = slices.Clone(keys)
 		slices.Reverse(keys)
 	}
 	letters, runs := library.Letters(keys)
