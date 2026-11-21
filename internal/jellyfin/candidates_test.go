@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -183,19 +184,139 @@ func TestAVersionThatCannotBeStreamedGivesWay(t *testing.T) {
 }
 
 // With PreferDirectPlay, a version that plays without conversion is looked
-// for among the versions read at once, not beyond: when they all need a
-// conversion, the first plays, and no other is analyzed for it.
-func TestPreferDirectPlayLooksNoFurtherThanTheVersionsReadAtOnce(t *testing.T) {
+// for, once the first plays converted, among the versions analyzed before
+// alone: when they all need a conversion, the first plays, and no other is
+// analyzed for it.
+func TestPreferDirectPlayAnalyzesNoVersionToSaveAConversion(t *testing.T) {
 	t.Parallel()
 	probe := newFakeProbe(t, true)
 	p := manyOn(t, newProbingServer(t, 10, probe.path), manyVersionsAddon(t, 5, nil))
-	for _, version := range p.versions[:parallelAttempts] {
+	for _, version := range p.versions[:3] {
 		p.remuxableVersion(t, version, true)
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay, settings.VersionAttempts = true, 5 })
 	source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "minimal"), nil))
 	if source.Id != p.movie || !strings.HasSuffix(source.TranscodingUrl, "&allowAudioStreamCopy=false") || probe.runs() != 0 {
 		t.Errorf("chosen after %d analyses: %+v", probe.runs(), source)
+	}
+}
+
+// triesOf returns the versions the last play of a title reached, and what
+// came of each.
+func (p playbackSetup) triesOf(t *testing.T, item string) []string {
+	t.Helper()
+	id, _ := accounts.ParseID(item)
+	decisions := p.handler.PlayDecisions(id)
+	if len(decisions) == 0 {
+		t.Fatalf("no play of %s recorded", item)
+	}
+	var tries []string
+	for _, try := range decisions[0].Tries {
+		tries = append(tries, try.Version.String()+" "+try.Outcome)
+	}
+	return tries
+}
+
+// sizedVersionsAddon serves one movie, without a runtime, with n streams
+// named Version 1 to Version n, files of their own, each announced at the
+// size it is served: a source that fails or stays silent leaves the
+// others readable, where a host answering one small size for files
+// announced larger is told answering an error file (see
+// source.ErrorFiles).
+func sizedVersionsAddon(t *testing.T, n int) string {
+	t.Helper()
+	var server *httptest.Server
+	movie := stremio.Meta{ID: "tt4100", Type: "movie", Name: "Movie", Year: "2008"}
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.EscapedPath(); {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "sized", Name: "Sized", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "catalog"}, {Name: "meta"}, {Name: "stream"}},
+				Catalogs: []stremio.Catalog{{Type: "movie", ID: "top", Name: "Top"}}})
+		case strings.HasPrefix(path, "/catalog/movie/top"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"metas": []stremio.Meta{movie}})
+		case path == "/meta/movie/tt4100.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"meta": movie})
+		case path == "/stream/movie/tt4100.json":
+			var streams []stremio.Stream
+			for i := 1; i <= n; i++ {
+				file := fmt.Sprintf("Movie.%d.mkv", i)
+				streams = append(streams, stremio.Stream{Name: fmt.Sprintf("Version %d", i), URL: server.URL + "/files/" + file,
+					BehaviorHints: stremio.StreamBehavior{Filename: file, VideoSize: stremio.Number64(len(mediaBytes) + i)}})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": streams})
+		case strings.HasPrefix(path, "/files/Movie."):
+			i, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "/files/Movie."), ".mkv"))
+			http.ServeContent(w, r, "", time.Time{}, strings.NewReader(mediaBytes+strings.Repeat(" ", i)))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/manifest.json"
+}
+
+// A play analyzes the versions one after another: when the first plays,
+// it alone is read; when it cannot be read, the second is read after it,
+// and the third never.
+func TestAPlayAnalyzesTheVersionsInTurn(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		script   string
+		chosen   int
+		outcomes []string
+	}{
+		{"the first plays", "exec cat \"$0.json\"\n", 0, []string{TryPlays}},
+		{"the first cannot be read", unreadableFirst, 1, []string{TryUnreadable, TryPlays}},
+	} {
+		probe := scriptedProbe(t, tc.script)
+		p := manyOn(t, newProbingServer(t, 10, probe.path), sizedVersionsAddon(t, 3))
+		p.waitForEveryVersion()
+		source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil))
+		var want []string
+		for n, outcome := range tc.outcomes {
+			want = append(want, p.versions[n].ID.String()+" "+outcome)
+		}
+		if got := p.triesOf(t, p.movie); source.ETag != p.versions[tc.chosen].ID.String() || !slices.Equal(got, want) {
+			t.Errorf("%s: chose %s after %v, want %v", tc.name, source.ETag, got, want)
+		}
+	}
+}
+
+// A version that stays silent for versionPatience has the next start
+// alongside it; once that one plays, the play takes it at once, without
+// waiting for the silent one again: a fallback takes no longer than when
+// both were read at once.
+func TestAVersionAfterASilentOneIsNotHeldUp(t *testing.T) {
+	t.Parallel()
+	probe, _ := hungProbe(t)
+	p := manyOn(t, newProbingServer(t, 10, probe.path), sizedVersionsAddon(t, 3))
+	p.setting(t, func(settings *accounts.Settings) { settings.AnalysisTimeout = int(hungWait / time.Second) })
+	// The first wait ends as the first version's silence would, once its
+	// analysis hangs in the probe's first run, so that the second version's
+	// is never that run; the others never end.
+	var waits atomic.Int32
+	p.handler.patienceEnd = func(time.Duration) <-chan time.Time {
+		ended := make(chan time.Time, 1)
+		if waits.Add(1) == 1 {
+			go func() {
+				for probe.runs() < 1 {
+					time.Sleep(5 * time.Millisecond)
+				}
+				ended <- time.Time{}
+			}()
+		}
+		return ended
+	}
+	source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "jellyfin-web-chrome"), nil))
+	want := []string{p.versions[0].ID.String() + " " + TryPassed, p.versions[1].ID.String() + " " + TryPlays}
+	if got := p.triesOf(t, p.movie); source.ETag != p.versions[1].ID.String() || !slices.Equal(got, want) {
+		t.Errorf("chose %s after %v, want %v", source.ETag, got, want)
+	}
+	// The first version's silence and the second's: no wait once it plays.
+	if got := waits.Load(); got != 2 {
+		t.Errorf("%d waits", got)
 	}
 }
 

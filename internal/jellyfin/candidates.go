@@ -14,14 +14,16 @@ import (
 
 // A play chooses among a title's versions, in their order: the first that
 // plays on the app (see decide), or with PreferDirectPlay the one that
-// plays at the least cost (see playCost). The first versions,
-// VersionAttempts of them, are analyzed if they were not before; the
-// others are tried only when they were, which costs nothing. Up to
-// parallelAttempts of them are read at once, a version found unreadable
-// making room for the next: a version whose host never answers holds up
-// the play only for versionPatience once a later one is ready, rather than
-// for the whole analysis timeout. Each analysis runs to its end all the
-// same, and is kept for the next play.
+// plays at the least cost (see playCost) among those tried. The first
+// versions, VersionAttempts of them, are analyzed if they were not before;
+// the others are tried only when they were, which costs nothing. They are
+// read one after another: the next starts when the one before is
+// unreadable or does not settle the play, or stays silent for
+// versionPatience, the silent one read on alongside it. A version whose
+// host never answers thus holds up the play for versionPatience, and the
+// version after it then plays as soon as it is ready, rather than after
+// the whole analysis timeout. Each analysis runs to its end all the same,
+// and is kept for the next play.
 
 const (
 	// endedTorrentWait is how long a play at Torrents at once waits for a
@@ -31,10 +33,9 @@ const (
 	// machine. The cap is never passed meanwhile: the new torrent starts
 	// once the other stopped.
 	endedTorrentWait = 5 * time.Second
-	// parallelAttempts is how many versions a play analyzes at once.
-	parallelAttempts = 3
 	// versionPatience is how long a play waits for the versions before the
-	// one it could play once that one is ready.
+	// one it could play once that one is ready, and how long a version in
+	// turn may stay silent before the next starts alongside it.
 	versionPatience = 3 * time.Second
 )
 
@@ -72,6 +73,13 @@ func (h *Handler) tryable(p playable, c candidates) candidates {
 // time lately (see playback.Service.Unstarted).
 func (h *Handler) didNotStart(version library.Version) bool {
 	return version.Torrent != nil && h.Playback.Unstarted(version.ID)
+}
+
+// analyzedBefore reports whether a version's analysis is kept, from an
+// earlier play or preparation: trying it reads nothing.
+func (h *Handler) analyzedBefore(ctx context.Context, version library.Version) bool {
+	_, ok := h.Playback.Analyzed(ctx, version.ID)
+	return ok
 }
 
 // chosen is what a play found among its candidates: the version chosen,
@@ -137,22 +145,14 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 	// The analyses and keyframe indexes started run to their end whatever
 	// the app does meanwhile, for the next play (see playback.Analyze). The
 	// tries stop waiting for them once the play is decided, or gave up: no
-	// goroutine of the play is left behind. The first candidate is read as
-	// the play's; the others, read alongside in case it does not play, in
-	// the background, giving way to playbacks (see playback.Background). A
-	// torrent, which only a playback reads, is read as the play's wherever
-	// it comes: the play joins its swarm.
+	// goroutine of the play is left behind. Each candidate is read as the
+	// play's: one starts only once the play needs it (see choose's loop).
 	tries, stop := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer stop()
 	detached := r.WithContext(tries)
-	aside := r.WithContext(playback.Background(detached.Context()))
 	try := func(n int, analyze bool) tried {
 		i := c.order[n]
 		version := p.versions[i]
-		detached := detached
-		if n > 0 && version.Torrent == nil {
-			detached = aside
-		}
 		// The web client tells how the torrents analyzed for the play start
 		// (see startprogress.go).
 		start := playStartOf(r.Context())
@@ -237,9 +237,20 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 
 	attempted := min(c.analyzed, len(c.order))
 	results := make(chan tried, attempted)
+	// A candidate starts once the play needs it: the first at once, the
+	// next when those in turn are tried without settling the play, or when
+	// the one in turn stays silent for versionPatience. The candidates
+	// before silentBefore were silent so long: the play passes them over as
+	// soon as a later one plays, having waited for them already.
+	var silence <-chan time.Time
+	silentBefore := 0
 	start := func() {
 		n := started
 		started++
+		silence = nil
+		if started < attempted {
+			silence = h.patienceEnd(versionPatience)
+		}
 		go func() {
 			// A try that panicked, in what reads the version, is one whose
 			// version cannot be read: the play goes on with the next.
@@ -253,7 +264,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			result = try(n, true)
 		}()
 	}
-	for started < min(attempted, parallelAttempts) {
+	if attempted > 0 {
 		start()
 	}
 	states := make([]*tried, attempted)
@@ -273,8 +284,21 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		late = lateTimer.C
 	}
 	waitingOn := map[int]bool{}
+	unsettled := func(t *tried) bool { return t == nil }
+	plays := func(t *tried) bool { return t != nil && t.plays }
 	for started > 0 {
-		if n, done := pick(states[:started], sides, prefer, patient); done {
+		n, done := pick(states[:started], sides, prefer, patient)
+		// The play is settled once it has a version that plays, without
+		// conversion when it prefers one. Else, with no candidate in turn
+		// being read, it tries the next: once one plays converted, only a
+		// version analyzed before, which costs nothing to try.
+		settled := done && n >= 0 && (!prefer || states[n].cost <= costCopied)
+		if !settled && patient && started < attempted && !result.late && !slices.ContainsFunc(states[silentBefore:started], unsettled) &&
+			(!slices.ContainsFunc(states[:started], plays) || h.analyzedBefore(detached.Context(), p.versions[c.order[started]])) {
+			start()
+			continue
+		}
+		if done {
 			if n >= 0 {
 				result.decided = &states[n].decided
 				if n > 0 && states[0] != nil && states[0].plays {
@@ -288,15 +312,28 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 		select {
 		case t := <-results:
 			states[t.n] = &t
+			if t.n == started-1 {
+				silence = nil
+			}
 			if t.unreadable {
 				result.unreadable[c.order[t.n]] = true
 			}
 			result.unstarted = result.unstarted || t.unstarted
-			if !t.plays && started < attempted && !result.late {
-				start()
+			if t.plays {
+				// A version that plays after others stayed silent is not
+				// held up for them again: they had their patience.
+				if !slices.ContainsFunc(states[silentBefore:started], unsettled) && (!prefer || t.cost <= costCopied) {
+					patient = false
+				} else if patience == nil {
+					patience = h.patienceEnd(versionPatience)
+				}
 			}
-			if t.plays && patience == nil {
-				patience = h.patienceEnd(versionPatience)
+		case <-silence:
+			silence = nil
+			if patient && started < attempted && !result.late {
+				h.Logger.Info("A version is slow to analyze: the next one is tried alongside it", "addon", p.versions[c.order[started-1]].AddonLog)
+				silentBefore = started
+				start()
 			}
 		case <-patience:
 			patient = false

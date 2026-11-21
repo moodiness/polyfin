@@ -50,7 +50,7 @@ const (
 	// too.
 	preparationTimeout = 2 * time.Minute
 	// preparedVersions is how many of a title's versions opening it may
-	// prepare: those a play tries at once (see parallelAttempts), in turn.
+	// prepare, in turn: the first a play may analyze.
 	preparedVersions = 3
 	// silentFor is how long the analysis of a version may go before the
 	// next one is analyzed too, as when its host does not answer: as long

@@ -281,7 +281,9 @@ Three more settings change how Polyfin picks a version; two more, about converte
 - A torrent's analysis is not bounded: it waits for its pieces, as its play does (see [Torrents](torrents.md#deadlines)).
 - A channel is analyzed for 8 seconds at most.
 - A source that does not answer in time is given up for 15 minutes, so Polyfin moves on sooner.
-- Versions tried counts titles and channels alike; titles get up to 3 analyzed at once.
+- Versions tried counts titles and channels alike.
+- A title's versions are analyzed one after another, so that a first play reads only the version it plays when that one works. The next starts when the one before cannot be read or does not play, or when it stays silent for 3 seconds: the silent one is read on alongside it (`A version is slow to analyze`, at Info).
+- A version that plays after a silent one is taken as soon as it is ready, the silent one passed over: it already had its 3 seconds. A source that never answers thus delays a play by 3 seconds plus the next version's analysis, as when both were read at once.
 - Later versions already analyzed are still tried, as they cost nothing.
 
 ### How Play waits for addons
@@ -322,14 +324,14 @@ A server set up before the setting was on by default turns it on as it updates: 
 - Each app gets its own order: two devices of a user may list versions differently. The title's own identifier stands for the asking device's first version.
 - A version above the user's **Maximum quality** plays only with its video converted down to it: it ranks 5.
 - **Languages come first.** A version cheaper to play comes before the one the order puts first only when it plays the user's languages as well. Its audio must be in a language the user prefers more, or in the first version's language. When the first shows a subtitle, it must show one too, in the same language and of the same kind, forced or full. A version whose audio states no language, such as one labeled MULTI, never replaces one in a stated language. The languages are those the user would get: their own, else the server's default ones (**Settings › Playback**), and the tracks they chose on the title. When the first version's audio states no language, any language counts as well. A version playing other languages ranks 5.
-- A title's first play may analyze more versions; nothing changes once they are known.
+- A title's first play analyzes no version more for the setting: versions not analyzed yet count as needing conversion until a play, or **Prepare playback in advance**, analyzes them.
 
 **Play** on the title's page starts the menu's first version, even when it needs conversion. jellyfin-web, and apps like it, send the title's own identifier for it, and Polyfin takes it as picked.
 
 - The next versions are tried only when it cannot be read or does not play at all.
 - A version picked further down the menu plays too.
 
-A play that picks no version, from a card such as Next Up, a resumed play, or an app that never names one, checks the first versions analyzed at once. It plays the cheapest in the user's languages as above, the first of them on a tie.
+A play that picks no version, from a card such as Next Up, a resumed play, or an app that never names one, tries the versions in turn until one plays without conversion, as it is or repackaged. Once one plays converted, it looks further among the versions analyzed before only, which cost nothing to try. Of the versions tried, it plays the cheapest in the user's languages as above, the first of them on a tie.
 
 - It waits for the versions still being analyzed only while the cheapest found needs a conversion, and at most 3 seconds once one plays. A version repackaged without conversion is not held up for one that might play as it is.
 - Each time it passes over the first version, the log says at Info level: "Prefer versions the app plays without conversion passed over the first version for one that costs the app less to play", with how each plays.

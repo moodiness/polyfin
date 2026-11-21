@@ -262,8 +262,8 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 		runs        int
 		played      int // -1 for none
 	}{
-		// Both versions are read at once; the first plays.
-		{"Original", "exec cat \"$0.json\"\n", 0, 2, 0},
+		// The first version plays: the second is never read.
+		{"Original", "exec cat \"$0.json\"\n", 0, 1, 0},
 		{"1080p", "exec cat \"$0.json\"\n", 1080, 1, 1},
 		{"1080p, the version that fits unreadable", unreadableFirst, 1080, 1, -1},
 	} {
@@ -277,8 +277,8 @@ func TestQualityGroupsSkipTallerVersionsWhenTrying(t *testing.T) {
 			// were never analyzed.
 			versions := p.versionsOf(t, p.remote)
 			answer := p.ask(t, p.token, p.remote, p.profile(t, "jellyfin-web-chrome"), nil)
-			// The versions after the one that plays are read in the
-			// background: the answer does not wait for them.
+			// The versions are read one after another, the next only when
+			// the one before does not play.
 			eventually(t, "the versions to be analyzed", func() bool { return probe.runs() >= test.runs })
 			switch {
 			case probe.runs() != test.runs:
