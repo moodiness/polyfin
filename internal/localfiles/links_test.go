@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/fsnotify/fsnotify"
@@ -19,13 +20,22 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 )
 
-// symlink makes a symbolic link at link leading to target.
+// errPrivilegeNotHeld is ERROR_PRIVILEGE_NOT_HELD, Windows' answer to a
+// user without the right to make symbolic links, outside developer mode.
+const errPrivilegeNotHeld = syscall.Errno(1314)
+
+// symlink makes a symbolic link at link leading to target; the test is
+// skipped where the user may not make one.
 func symlink(t *testing.T, target, link string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(target, link); err != nil {
+	err := os.Symlink(target, link)
+	if runtime.GOOS == "windows" && errors.Is(err, errPrivilegeNotHeld) {
+		t.Skip("this user may not make symbolic links:", err)
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 }

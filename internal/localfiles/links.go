@@ -8,7 +8,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"syscall"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -309,11 +308,11 @@ func (w *localWalk) add(name string, file bool, info fs.FileInfo) error {
 	return nil
 }
 
-// gone reports whether the link at leads to nothing, or round in a loop,
-// rather than somewhere Polyfin cannot read.
+// gone reports whether the link at leads to nothing, or round in a loop
+// (see looping), rather than somewhere Polyfin cannot read.
 func gone(at string) bool {
 	_, err := os.Stat(at)
-	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ELOOP)
+	return errors.Is(err, fs.ErrNotExist) || looping(err)
 }
 
 // depth is how many folders deep rel, with slashes, is in the folder
