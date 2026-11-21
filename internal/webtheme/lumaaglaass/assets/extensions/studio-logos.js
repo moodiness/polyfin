@@ -154,6 +154,10 @@
     // Links - jellyfin-web links each studio of a title as #/list?studioId=<id>; the line's label is
     // translated, so the links are what tells it.
     const LINKS = '#itemDetailPage .detailsGroupItem a[href*="studioId="]';
+    // Few - Up to three studios show their logos. Past them, the line keeps their names, links to the
+    // same pages: a row of logos would crowd the page.
+    const FEW = 3;
+    const crowded = link => (link.closest('.detailsGroupItem')?.querySelectorAll('a[href*="studioId="]').length || 0) > FEW;
     const studioIdOf = link => {
         try {
             const hash = new URL(link.getAttribute('href'), location.href).hash;
@@ -164,13 +168,14 @@
     // State - Each link with its logo image (null once it failed), and each line's measures.
     const links = new Map();
     const groups = new Map();
-    // Measures - The logo is 64px tall, 48px on the stylesheet's compact layout (699px wide at most),
-    // where the line is narrow. It asks Polyfin for that height in device pixels, for a sharp plate,
-    // of a narrow margin, so the logo fills it. Names keep the line's font size.
+    // Measures - The logo is 40px tall, 32px on the stylesheet's compact layout (699px wide at most),
+    // where the line is narrow: about twice the line's text. It asks Polyfin for that height in
+    // device pixels, for a sharp plate, of a narrow margin, so the logo fills it. Names keep the
+    // line's font size.
     const compact = matchMedia('(max-width:699px)');
     function measure(group, line) {
         const text = parseFloat(getComputedStyle(line).fontSize) || 16;
-        const height = compact.matches ? 48 : 64;
+        const height = compact.matches ? 32 : 40;
         const old = groups.get(group);
         if (old?.text === text && old.height === height) return old;
         const measures = { text, height };
@@ -263,20 +268,21 @@
             toggleAttribute(item, 'data-lg-studio-comma', logos && index > 0 && !logo(item) && !logo(line.children[index - 1]));
         });
     }
-    // Sync - New links get their image; links gone, or moved to another studio, are released. A
-    // page shown keeps its links; hidden pages (.hide) are left as they are until shown.
+    // Sync - New links get their image; links gone, moved to another studio or in a line grown past
+    // a few studios are released. A page shown keeps its links; hidden pages (.hide) are left as they
+    // are until shown.
     function sync() {
         if (stopped) return;
         const on = enabled();
         for (const [link, state] of links) {
-            if (!on || !link.isConnected || studioIdOf(link) !== state.id) release(link);
+            if (!on || !link.isConnected || studioIdOf(link) !== state.id || crowded(link)) release(link);
             else if (nameOf(link) !== state.name) syncLink(link, state);
         }
         if (!on) return;
         const api = currentClient();
         if (!api) return;
         for (const link of document.querySelectorAll(LINKS)) {
-            if (links.has(link) || link.closest('.hide,[hidden]')) continue;
+            if (links.has(link) || link.closest('.hide,[hidden]') || crowded(link)) continue;
             const id = studioIdOf(link);
             if (id) decorate(link, id, api);
         }

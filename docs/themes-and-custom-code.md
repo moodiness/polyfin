@@ -156,9 +156,10 @@ For the lightest web player, give a user jellyfin-web's own look (see [Theme per
 
 ### Studio logos
 
-On a title's page, the Studios line shows each studio's logo in place of its name. Polyfin draws each logo from the one TMDB has for the studio (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)).
+On a title's page, the Studios line shows the logos of up to three studios in place of their names. Polyfin draws each logo from the one TMDB has for the studio (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)).
 
-- **The logo:** a light plate with the studio's logo, 64 pixels tall, 48 on a phone, with rounded corners. The plate leaves a sixteenth of each side free around the logo, half the margin of the Studios tab's cards, so a wordmark stays readable. It is sharp on high-density screens: the page asks for it at the screen's own resolution.
+- **The logo:** a light plate with the studio's logo, 40 pixels tall, 32 on a phone, with rounded corners: about twice the height of the line's text. The plate leaves a sixteenth of each side free around the logo, half the margin of the Studios tab's cards, so a wordmark stays readable. It is sharp on high-density screens: the page asks for it at the screen's own resolution.
+- **Four studios or more:** the line keeps their names, as jellyfin-web shows them, each a link to the studio's page. A row of logos would crowd the page, and the page loads none of them.
 - **The same link:** a logo opens the studio's page, as its name did. It takes keyboard focus in the same order, with the theme's focus ring around the plate. Screen readers read the studio's name, and the pointer and keyboard focus show it as a tooltip, above the logo so that it leaves the next line readable.
 - **Without a logo:** a studio Polyfin has no logo for keeps its name, and so does a logo that fails to load. In a line with logos, names follow each other with commas, and logos need none.
 - **Other themes:** jellyfin-web's own look, a **Custom** theme, and the theme loaded from its repository (see [Follow the theme repository](#follow-the-theme-repository)) show the names, as jellyfin-web does. So do Jellyfin's official apps.
