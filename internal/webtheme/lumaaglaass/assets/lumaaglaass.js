@@ -148,6 +148,10 @@
     const home = () => route() === '#/home';
     // Theme - Only the stylesheet defines --lg-motion: the settings page writes other tokens inline on <html>.
     const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-motion').trim() !== '';
+    // Low-end devices - Under 4 GB of memory (navigator.deviceMemory, Chromium only) or under 4
+    // logical processors: the stylesheet draws them as for reduced transparency, with no blur at all.
+    const lowEnd = navigator.deviceMemory < 4 || navigator.hardwareConcurrency < 4;
+    document.documentElement.classList.toggle('lg-is-low-end', lowEnd);
     const currentClient = () => {
         try {
             return window.ApiClient || window.ConnectionManager?.currentApiClient?.();
@@ -631,10 +635,19 @@
         backdropRequest?.cancel();
         backdropRequest = null;
     }
+    // Page backdrops - The home's and a page card's cover the window, blurred by four times
+    // --lg-blur-backdrop (24px on a phone): half the window's size in image pixels is as sharp, 960 on
+    // a phone or a 1080p screen, where 1920 was asked.
+    const PAGE_BACKDROP_WIDTHS = [480, 960, 1280, 1920];
+    function pageBackdropWidth() {
+        const needed = Math.max(innerWidth, innerHeight * 16 / 9) / 2;
+        return PAGE_BACKDROP_WIDTHS.find(width => width >= needed) || PAGE_BACKDROP_WIDTHS[PAGE_BACKDROP_WIDTHS.length - 1];
+    }
     // Backdrops - The URL of the first of four items whose backdrop loads within 5 s, or null.
     // scene.cancelImage ends the wait early, and a scene that stops being current ends the search.
     async function firstLoadedBackdrop(api, items, scene, current) {
-        for (const url of items.map(item => backdropUrl(api, item)).filter(Boolean).slice(0, 4)) {
+        const width = pageBackdropWidth();
+        for (const url of items.map(item => backdropUrl(api, item, width)).filter(Boolean).slice(0, 4)) {
             if (!current()) return null;
             const request = loadImage(url, 5000);
             scene.cancelImage = request.cancel;
@@ -2408,8 +2421,15 @@
     const ownMutation = record => record.target instanceof Element &&
         (record.target.closest('#lg-hero,#lg-tooltip,#lg-preferences') !== null ||
         (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => node === tooltipController.popup)));
+    // Playback - While the player shows (lg-is-playback-page), its controls change many times a second
+    // (its clock, its slider): changes and image loads inside it mark no pass, nor does the clock. The
+    // player coming or going, a route, a page shown and the menus opened over it still do.
+    const PLAYER = '#videoOsdPage,.videoPlayerContainer';
+    const playback = () => document.documentElement.classList.contains('lg-is-playback-page');
+    const inPlayer = node => node instanceof Element && node.closest(PLAYER) !== null;
     const observer = new MutationObserver(records => {
-        if (!records.every(ownMutation)) schedulePass();
+        const playing = playback();
+        if (!records.every(record => ownMutation(record) || (playing && inPlayer(record.target)))) schedulePass();
     });
     observer.observe(document.documentElement, {
         childList: true, subtree: true, attributes: true,
@@ -2428,10 +2448,10 @@
     listen(document, 'viewbeforeshow', runPass, true);
     listen(document, 'viewshow', runPass, true);
     // Images - Posters and the library image change the layout when they load, without a mutation.
-    listen(document, 'load', schedulePass, true);
+    listen(document, 'load', e => { if (!(playback() && inPlayer(e.target))) schedulePass(); }, true);
     // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, a paused carousel,
-    // layout changes the layout observer does not watch.
-    const poll = setInterval(schedulePass, 1000);
+    // layout changes the layout observer does not watch. None of them shows during playback.
+    const poll = setInterval(() => { if (!playback()) schedulePass(); }, 1000);
 
     // =====================================================================
     // Lifecycle
@@ -2473,6 +2493,7 @@
             clearHomeLibraryTitles();
             clearHeaderInset();
             syncPlaybackPage(false);
+            document.documentElement.classList.toggle('lg-is-low-end', false);
             syncPosterWidth(false);
             clearPageMarks();
             clearPendingControls();

@@ -1,0 +1,203 @@
+diff --git a/assets/extensions/list-headings.js b/assets/extensions/list-headings.js
+index c268afd..f222a38 100644
+--- a/assets/extensions/list-headings.js
++++ b/assets/extensions/list-headings.js
+@@ -196,7 +196,8 @@
+         listen(document, 'viewshow', sync, true);
+         listen(window, 'hashchange', schedule);
+         listen(window, 'popstate', schedule);
+-        timer = setInterval(sync, 1000);
++        // Playback - While the main script marks the player (lg-is-playback-page), no list shows.
++        timer = setInterval(() => { if (!document.documentElement.classList.contains('lg-is-playback-page')) sync(); }, 1000);
+         sync();
+     }
+ 
+diff --git a/assets/extensions/preferences.js b/assets/extensions/preferences.js
+index 9ff78a7..a6f4228 100644
+--- a/assets/extensions/preferences.js
++++ b/assets/extensions/preferences.js
+@@ -1828,7 +1828,11 @@
+             sync();
+         });
+     };
+-    const observer = new MutationObserver(schedule);
++    // Playback - While the main script marks the player (lg-is-playback-page), the player's many
++    // changes a second sync nothing: a route still does, and so does any change once it is gone.
++    const observer = new MutationObserver(() => {
++        if (!document.documentElement.classList.contains('lg-is-playback-page')) schedule();
++    });
+     observer.observe(document.documentElement, { childList: true, subtree: true });
+     window.addEventListener('hashchange', schedule);
+     ensureStyle();
+diff --git a/assets/extensions/studio-logos.js b/assets/extensions/studio-logos.js
+index a5ba9b2..cb83332 100644
+--- a/assets/extensions/studio-logos.js
++++ b/assets/extensions/studio-logos.js
+@@ -313,7 +313,10 @@
+             sync();
+         });
+     };
+-    const observer = new MutationObserver(schedule);
++    // Playback - While the main script marks the player (lg-is-playback-page), no title's page shows:
++    // the player's many changes a second and the clock wait. A route or a page shown still syncs.
++    const playback = () => document.documentElement.classList.contains('lg-is-playback-page');
++    const observer = new MutationObserver(() => { if (!playback()) schedule(); });
+     function start() {
+         document.head.append(style);
+         observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+@@ -324,7 +327,7 @@
+             resized = true;
+             schedule();
+         });
+-        timer = setInterval(sync, 1000);
++        timer = setInterval(() => { if (!playback()) sync(); }, 1000);
+         sync();
+     }
+ 
+diff --git a/assets/lumaaglaass.css b/assets/lumaaglaass.css
+index 674e3e9..33800f2 100644
+--- a/assets/lumaaglaass.css
++++ b/assets/lumaaglaass.css
+@@ -3731,6 +3731,15 @@ html body :is(.cardOverlayButton,.listItemImageButton,.listItemButton) {
+     transition: background-color var(--lg-duration) var(--lg-ease) !important;
+ }
+ 
++/* Touch layout - Its cards show their buttons (⋮, Play) at all times: a blur behind each made a
++   layer per card, 96 of a phone home's 133. They get the artwork veil instead, as dark as the
++   blurred poster under the glass. */
++html.layout-mobile body .card .cardOverlayButton {
++    background: var(--lg-surface-artwork-veil) !important;
++    backdrop-filter: none;
++    -webkit-backdrop-filter: none;
++}
++
+ html body .cardOverlayButtonIcon {
+     background: transparent !important;
+     border-radius: 50% !important;
+@@ -6637,6 +6646,14 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
+     }
+ }
+ 
++/* Low-end devices - The script marks them (lg-is-low-end): they look as for reduced transparency. */
++html.lg-is-low-end {
++    --lg-surface: #30343b;
++    --lg-blur-control: 0px;
++    --lg-blur-panel: 0px;
++    --lg-blur-backdrop: 0px;
++}
++
+ /* Contrast - The open edge stays brighter than the resting one. */
+ @media (prefers-contrast: more) {
+     :root {
+@@ -6674,13 +6691,35 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
+ /* Preferences - The first layer's !important outranks every other rule, layered or not, so
+    what a preference demands always applies. */
+ @layer lg-preferences {
+-    /* Transparency - The plain page color replaces every backdrop artwork, details included. */
++    /* Transparency - The plain page color replaces every backdrop artwork, details included, and
++       nothing is blurred: a blur, even of 0px, still makes a layer of each element under it. Low-end
++       devices get the same (lg-is-low-end). */
+     @media (prefers-reduced-transparency: reduce) {
+         html:is(.lg-has-home-backdrop,.lg-has-last-backdrop,.lg-has-page-card-backdrop) .backgroundContainer::before,
+         #itemDetailPage[data-lg-detail-poster] > .itemBackdrop,
+         .backdropContainer {
+             display: none !important;
+         }
++
++        *,
++        *::before,
++        *::after {
++            -webkit-backdrop-filter: none !important;
++            backdrop-filter: none !important;
++        }
++    }
++
++    html.lg-is-low-end:is(.lg-has-home-backdrop,.lg-has-last-backdrop,.lg-has-page-card-backdrop) .backgroundContainer::before,
++    html.lg-is-low-end #itemDetailPage[data-lg-detail-poster] > .itemBackdrop,
++    html.lg-is-low-end .backdropContainer {
++        display: none !important;
++    }
++
++    html.lg-is-low-end *,
++    html.lg-is-low-end *::before,
++    html.lg-is-low-end *::after {
++        -webkit-backdrop-filter: none !important;
++        backdrop-filter: none !important;
+     }
+ 
+     @media (forced-colors: active) {
+diff --git a/assets/lumaaglaass.js b/assets/lumaaglaass.js
+index d44873c..a208f87 100644
+--- a/assets/lumaaglaass.js
++++ b/assets/lumaaglaass.js
+@@ -148,6 +148,10 @@
+     const home = () => route() === '#/home';
+     // Theme - Only the stylesheet defines --lg-motion: the settings page writes other tokens inline on <html>.
+     const enabled = () => getComputedStyle(document.documentElement).getPropertyValue('--lg-motion').trim() !== '';
++    // Low-end devices - Under 4 GB of memory (navigator.deviceMemory, Chromium only) or under 4
++    // logical processors: the stylesheet draws them as for reduced transparency, with no blur at all.
++    const lowEnd = navigator.deviceMemory < 4 || navigator.hardwareConcurrency < 4;
++    document.documentElement.classList.toggle('lg-is-low-end', lowEnd);
+     const currentClient = () => {
+         try {
+             return window.ApiClient || window.ConnectionManager?.currentApiClient?.();
+@@ -631,10 +635,19 @@
+         backdropRequest?.cancel();
+         backdropRequest = null;
+     }
++    // Page backdrops - The home's and a page card's cover the window, blurred by four times
++    // --lg-blur-backdrop (24px on a phone): half the window's size in image pixels is as sharp, 960 on
++    // a phone or a 1080p screen, where 1920 was asked.
++    const PAGE_BACKDROP_WIDTHS = [480, 960, 1280, 1920];
++    function pageBackdropWidth() {
++        const needed = Math.max(innerWidth, innerHeight * 16 / 9) / 2;
++        return PAGE_BACKDROP_WIDTHS.find(width => width >= needed) || PAGE_BACKDROP_WIDTHS[PAGE_BACKDROP_WIDTHS.length - 1];
++    }
+     // Backdrops - The URL of the first of four items whose backdrop loads within 5 s, or null.
+     // scene.cancelImage ends the wait early, and a scene that stops being current ends the search.
+     async function firstLoadedBackdrop(api, items, scene, current) {
+-        for (const url of items.map(item => backdropUrl(api, item)).filter(Boolean).slice(0, 4)) {
++        const width = pageBackdropWidth();
++        for (const url of items.map(item => backdropUrl(api, item, width)).filter(Boolean).slice(0, 4)) {
+             if (!current()) return null;
+             const request = loadImage(url, 5000);
+             scene.cancelImage = request.cancel;
+@@ -2408,8 +2421,15 @@
+     const ownMutation = record => record.target instanceof Element &&
+         (record.target.closest('#lg-hero,#lg-tooltip,#lg-preferences') !== null ||
+         (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => node === tooltipController.popup)));
++    // Playback - While the player shows (lg-is-playback-page), its controls change many times a second
++    // (its clock, its slider): changes and image loads inside it mark no pass, nor does the clock. The
++    // player coming or going, a route, a page shown and the menus opened over it still do.
++    const PLAYER = '#videoOsdPage,.videoPlayerContainer';
++    const playback = () => document.documentElement.classList.contains('lg-is-playback-page');
++    const inPlayer = node => node instanceof Element && node.closest(PLAYER) !== null;
+     const observer = new MutationObserver(records => {
+-        if (!records.every(ownMutation)) schedulePass();
++        const playing = playback();
++        if (!records.every(record => ownMutation(record) || (playing && inPlayer(record.target)))) schedulePass();
+     });
+     observer.observe(document.documentElement, {
+         childList: true, subtree: true, attributes: true,
+@@ -2428,10 +2448,10 @@
+     listen(document, 'viewbeforeshow', runPass, true);
+     listen(document, 'viewshow', runPass, true);
+     // Images - Posters and the library image change the layout when they load, without a mutation.
+-    listen(document, 'load', schedulePass, true);
++    listen(document, 'load', e => { if (!(playback() && inPlayer(e.target))) schedulePass(); }, true);
+     // Clock - Once a second for what nothing reports: the 30 s and 60 s retries, a paused carousel,
+-    // layout changes the layout observer does not watch.
+-    const poll = setInterval(schedulePass, 1000);
++    // layout changes the layout observer does not watch. None of them shows during playback.
++    const poll = setInterval(() => { if (!playback()) schedulePass(); }, 1000);
+ 
+     // =====================================================================
+     // Lifecycle
+@@ -2473,6 +2493,7 @@
+             clearHomeLibraryTitles();
+             clearHeaderInset();
+             syncPlaybackPage(false);
++            document.documentElement.classList.toggle('lg-is-low-end', false);
+             syncPosterWidth(false);
+             clearPageMarks();
+             clearPendingControls();

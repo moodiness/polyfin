@@ -3731,6 +3731,15 @@ html body :is(.cardOverlayButton,.listItemImageButton,.listItemButton) {
     transition: background-color var(--lg-duration) var(--lg-ease) !important;
 }
 
+/* Touch layout - Its cards show their buttons (⋮, Play) at all times: a blur behind each made a
+   layer per card, 96 of a phone home's 133. They get the artwork veil instead, as dark as the
+   blurred poster under the glass. */
+html.layout-mobile body .card .cardOverlayButton {
+    background: var(--lg-surface-artwork-veil) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
 html body .cardOverlayButtonIcon {
     background: transparent !important;
     border-radius: 50% !important;
@@ -6637,6 +6646,14 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
     }
 }
 
+/* Low-end devices - The script marks them (lg-is-low-end): they look as for reduced transparency. */
+html.lg-is-low-end {
+    --lg-surface: #30343b;
+    --lg-blur-control: 0px;
+    --lg-blur-panel: 0px;
+    --lg-blur-backdrop: 0px;
+}
+
 /* Contrast - The open edge stays brighter than the resting one. */
 @media (prefers-contrast: more) {
     :root {
@@ -6674,13 +6691,35 @@ html.lg-has-now-playing-bar .backgroundContainer.withBackdrop {
 /* Preferences - The first layer's !important outranks every other rule, layered or not, so
    what a preference demands always applies. */
 @layer lg-preferences {
-    /* Transparency - The plain page color replaces every backdrop artwork, details included. */
+    /* Transparency - The plain page color replaces every backdrop artwork, details included, and
+       nothing is blurred: a blur, even of 0px, still makes a layer of each element under it. Low-end
+       devices get the same (lg-is-low-end). */
     @media (prefers-reduced-transparency: reduce) {
         html:is(.lg-has-home-backdrop,.lg-has-last-backdrop,.lg-has-page-card-backdrop) .backgroundContainer::before,
         #itemDetailPage[data-lg-detail-poster] > .itemBackdrop,
         .backdropContainer {
             display: none !important;
         }
+
+        *,
+        *::before,
+        *::after {
+            -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+        }
+    }
+
+    html.lg-is-low-end:is(.lg-has-home-backdrop,.lg-has-last-backdrop,.lg-has-page-card-backdrop) .backgroundContainer::before,
+    html.lg-is-low-end #itemDetailPage[data-lg-detail-poster] > .itemBackdrop,
+    html.lg-is-low-end .backdropContainer {
+        display: none !important;
+    }
+
+    html.lg-is-low-end *,
+    html.lg-is-low-end *::before,
+    html.lg-is-low-end *::after {
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
     }
 
     @media (forced-colors: active) {

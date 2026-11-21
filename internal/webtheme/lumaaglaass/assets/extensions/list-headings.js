@@ -196,7 +196,8 @@
         listen(document, 'viewshow', sync, true);
         listen(window, 'hashchange', schedule);
         listen(window, 'popstate', schedule);
-        timer = setInterval(sync, 1000);
+        // Playback - While the main script marks the player (lg-is-playback-page), no list shows.
+        timer = setInterval(() => { if (!document.documentElement.classList.contains('lg-is-playback-page')) sync(); }, 1000);
         sync();
     }
 

@@ -1828,7 +1828,11 @@
             sync();
         });
     };
-    const observer = new MutationObserver(schedule);
+    // Playback - While the main script marks the player (lg-is-playback-page), the player's many
+    // changes a second sync nothing: a route still does, and so does any change once it is gone.
+    const observer = new MutationObserver(() => {
+        if (!document.documentElement.classList.contains('lg-is-playback-page')) schedule();
+    });
     observer.observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener('hashchange', schedule);
     ensureStyle();

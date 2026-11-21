@@ -238,3 +238,116 @@ log.push('items: ' + items.map(item => item.Id).join(' '))
 		t.Errorf("\n got  %q\n want %q", got, want)
 	}
 }
+
+// themeMarks gives <html> a class list that keeps its classes, logged by
+// marks(): the theme's marks on <html> are what its stylesheet reads.
+const themeMarks = `
+const classes = new Set()
+root.classList = {
+  add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name),
+  toggle(name, on = !classes.has(name)) { if (on) classes.add(name); else classes.delete(name); return on },
+}
+const marks = () => [...classes].filter(name => /^lg-is-(low-end|playback-page)$/.test(name)).sort().join(' ') || 'none'
+const count = (name, change) => {
+  const before = passes
+  change()
+  log.push(name + ': ' + (passes - before) + ' pass' + (passes - before === 1 ? '' : 'es'))
+}
+`
+
+// While the player shows, its controls change many times a second: those
+// changes, image loads in it and the clock run no pass of the theme. What
+// opens over the player (outside it) and leaving it still do
+// (patches/0007-low-end-devices.patch in third_party/lumaaglaass).
+func TestTheThemeRunsNoPassesDuringPlayback(t *testing.T) {
+	t.Parallel()
+	got := runTheme(t, themeMarks+`
+context.location.hash = '#/video'
+start()
+frame()
+log.push('marks: ' + marks())
+// An element of the player's controls.
+const control = make('div')
+control.closest = () => control
+count('the controls change, the clock ticks, an image loads', () => {
+  for (const o of observers) o.fn([{ type: 'childList', target: control, addedNodes: [make('div')], removedNodes: [] }])
+  for (const fn of clocks) fn()
+  fire(documentListeners, 'load', { type: 'load', target: control })
+})
+count('their frame', frame)
+count('a menu opens over the player', batch)
+count('its frame', frame)
+context.location.hash = '#/details'
+count('the player closes', () => fire(windowListeners, 'hashchange', { type: 'hashchange' }))
+count('its frame', frame)
+log.push('marks: ' + marks())
+count('a clock tick', () => { for (const fn of clocks) fn() })
+count('its frame', frame)
+`)
+	want := []string{
+		"marks: lg-is-playback-page",
+		"the controls change, the clock ticks, an image loads: 0 passes",
+		"their frame: 0 passes",
+		"a menu opens over the player: 0 passes",
+		"its frame: 1 pass",
+		"the player closes: 0 passes",
+		"its frame: 1 pass",
+		"marks: none",
+		"a clock tick: 0 passes",
+		"its frame: 1 pass",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("\n got  %q\n want %q", got, want)
+	}
+}
+
+// A device with under 4 GB of memory or under 4 logical processors gets
+// lg-is-low-end on <html>, which draws it as for reduced transparency;
+// stop takes it back (patches/0007-low-end-devices.patch).
+func TestTheThemeMarksLowEndDevices(t *testing.T) {
+	t.Parallel()
+	devices := map[string]struct {
+		navigator string
+		want      []string
+	}{
+		"2 GB, 8 processors":        {`{ deviceMemory: 2, hardwareConcurrency: 8 }`, []string{"marks: lg-is-low-end", "stopped: none"}},
+		"8 GB, 2 processors":        {`{ deviceMemory: 8, hardwareConcurrency: 2 }`, []string{"marks: lg-is-low-end", "stopped: none"}},
+		"4 GB, 4 processors":        {`{ deviceMemory: 4, hardwareConcurrency: 4 }`, []string{"marks: none", "stopped: none"}},
+		"no memory, 8 processors":   {`{ hardwareConcurrency: 8 }`, []string{"marks: none", "stopped: none"}},
+		"neither (another browser)": {`{}`, []string{"marks: none", "stopped: none"}},
+	}
+	for name, device := range devices {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := runTheme(t, themeMarks+`
+context.navigator = { language: 'en', userAgent: 'node', ...`+device.navigator+` }
+start()
+log.push('marks: ' + marks())
+theme().stop()
+log.push('stopped: ' + marks())
+`)
+			if !slices.Equal(got, device.want) {
+				t.Errorf("\n got  %q\n want %q", got, device.want)
+			}
+		})
+	}
+}
+
+// The home's backdrop and a page card's are blurred: they are asked at half
+// the size that covers the window, 960 pixels wide on a phone or a 1080p
+// screen, where 1920 were (patches/0007-low-end-devices.patch).
+func TestPageBackdropsAreAskedAtTheWindowsSize(t *testing.T) {
+	t.Parallel()
+	got := runTheme(t, `
+const at = script.indexOf('    const PAGE_BACKDROP_WIDTHS')
+const source = script.slice(at, script.indexOf('\n    }\n', at) + 6)
+for (const [width, height] of [[360, 800], [390, 844], [1440, 900], [1920, 1080], [2560, 1440], [3840, 2160]]) {
+  const pageBackdropWidth = vm.runInNewContext(source + ';pageBackdropWidth', { innerWidth: width, innerHeight: height })
+  log.push(width + 'x' + height + ': ' + pageBackdropWidth())
+}
+`)
+	want := []string{"360x800: 960", "390x844: 960", "1440x900: 960", "1920x1080: 960", "2560x1440: 1280", "3840x2160: 1920"}
+	if !slices.Equal(got, want) {
+		t.Errorf("\n got  %q\n want %q", got, want)
+	}
+}

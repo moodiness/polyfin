@@ -111,7 +111,7 @@ API details: [Web player theme loading](jellyfin-api.md#web-player-theme-loading
 
 ## LumaaGlaass
 
-The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `89b25b5` of its repository (November 8, 2026, after its version 1.1.0), with five patches of Polyfin's. The theme is updated with Polyfin's releases.
+The theme **LumaaGlaass** is [LumaaGlaass](https://github.com/Dyhlio/LumaaGlaass), a theme for jellyfin-web: its stylesheet and its script. Polyfin bundles its files at commit `89b25b5` of its repository (November 8, 2026, after its version 1.1.0), with patches of Polyfin's, listed below. The theme is updated with Polyfin's releases.
 
 - **Served by Polyfin:** the web player serves the theme's files itself, under `/web/polyfin/themes/lumaaglaass/`. No browser loads them from elsewhere, and the theme works on a server cut off from the internet.
 - **Cached:** their address carries a version that changes with them. A browser keeps each file for a year, and gets the new ones with the Polyfin release that brings them.
@@ -140,6 +140,20 @@ The theme's home carousel is the large rotating artwork above the home rows. It 
   - It draws anew each time a page is loaded 2 minutes or more after the last draw (see [Titles at random](jellyfin-api.md#titles-at-random)).
   - Refreshing the picks without loading the page again is the theme's to do.
 
+### Modest devices
+
+The theme's glass blurs what lies behind its panels and buttons, which costs a weak phone, TV or stick on every frame it draws. The theme draws less where that matters:
+
+- **Cards on touch screens:** jellyfin-web's touch layout, on phones and tablets, shows the buttons of each card (⋮, Play) at all times. They have a dark veil behind them rather than a blur.
+- **Low-end devices:** a device with less than 4 GB of memory, or with fewer than 4 processors, gets no blur at all. Its panels are opaque, and its pages show a plain background rather than blurred artwork.
+  - Chrome, and the browsers and apps built on it, tell the device's memory. Safari and Firefox don't: the theme judges them by the processors alone.
+  - A computer under these limits gets the same.
+- **Reduced transparency:** a system set to reduce transparency gets the look of a low-end device, whatever the device.
+- **While a video plays:** the theme's script leaves the player alone. Its controls change many times a second, and the script runs nothing for them, nor its once-a-second check. A menu opened over the player and leaving it still have the theme's look.
+- **Backgrounds:** the blurred artwork behind the home and a library's page is asked at half the window's size, 960 pixels wide on a phone or a 1080p screen, rather than 1920. The blur makes it as sharp.
+
+For the lightest web player, give a user jellyfin-web's own look (see [Theme per user](#theme-per-user)).
+
 ### Studio logos
 
 On a title's page, the Studios line shows each studio's logo in place of its name. Polyfin draws each logo from the one TMDB has for the studio (see [Studios and taglines from TMDB](collections-people-and-ratings.md#studios-and-taglines-from-tmdb)).
@@ -167,6 +181,7 @@ The patches are in [`third_party/lumaaglaass`](../third_party/lumaaglaass), with
 - The theme's script goes over the page once per frame, rather than after each of jellyfin-web's changes to it, which made the web player slower to start and to change pages.
 - The theme's script loads one more extension, Polyfin's, which shows the studios' logos on a title's page (see [Studio logos](#studio-logos)). Its tooltips may ask to show above their control.
 - The theme's script loads another extension of Polyfin's, which gives the pages of studios and genres their heading (see [List headings](#list-headings)).
+- The theme draws less on modest devices: no blur behind the buttons of cards on touch screens, and none at all on a low-end device or with reduced transparency. Its script runs no pass for the player's changes while a video plays, and asks the page backgrounds at the window's size (see [Modest devices](#modest-devices)).
 
 `scripts/lumaaglaass.sh` makes the bundled copy from a commit of the theme's repository and applies the patches again. Each update is thus a change to review.
 
@@ -215,6 +230,7 @@ In **Custom JavaScript**, the bundled theme's loader with the address of the the
 - **The carousel:** without Polyfin's patches, users who never saved also start with `homeCarousel: false`, but the "Recommended" profile of the LumaaGlaass page turns the carousel on.
 - **Studio logos:** without Polyfin's patches, a title's page shows the studios' names, not their logos.
 - **List headings:** without Polyfin's patches, the page of a studio or a genre has no heading.
+- **Modest devices:** without Polyfin's patches, the theme blurs behind the buttons of every card on touch screens, and blurs on low-end devices and with reduced transparency. Its script also goes over the page while a video plays.
 - **Coming back:** to come back to the bundled copy, choose **LumaaGlaass**. The **Custom** texts stay for later.
 
 ## Use another theme

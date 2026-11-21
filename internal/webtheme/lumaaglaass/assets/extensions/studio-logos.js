@@ -313,7 +313,10 @@
             sync();
         });
     };
-    const observer = new MutationObserver(schedule);
+    // Playback - While the main script marks the player (lg-is-playback-page), no title's page shows:
+    // the player's many changes a second and the clock wait. A route or a page shown still syncs.
+    const playback = () => document.documentElement.classList.contains('lg-is-playback-page');
+    const observer = new MutationObserver(() => { if (!playback()) schedule(); });
     function start() {
         document.head.append(style);
         observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
@@ -324,7 +327,7 @@
             resized = true;
             schedule();
         });
-        timer = setInterval(sync, 1000);
+        timer = setInterval(() => { if (!playback()) sync(); }, 1000);
         sync();
     }
 
