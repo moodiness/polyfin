@@ -103,3 +103,20 @@ func (s *Source) missingBytes(span Span) int64 {
 	}
 	return missing
 }
+
+// Missing is how many bytes of spans the cache lacks, those Warm fetches
+// for them: their blocks not cached, whole, up to where each span ends,
+// which is within the file.
+func (s *Source) Missing(spans ...Span) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var missing int64
+	for _, span := range spans {
+		for block := max(span.Off, 0) / blockSize; block*blockSize < span.End; block++ {
+			if s.missing(block) {
+				missing += min((block+1)*blockSize, span.End) - block*blockSize
+			}
+		}
+	}
+	return missing
+}

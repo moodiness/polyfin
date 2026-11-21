@@ -31,12 +31,22 @@ import (
 // read over one for a while. A host asking to slow down (429, 503) is
 // asked again a few times, its readers waiting meanwhile, and a host's
 // connections over every file are bounded (see slots.go).
+//
+// A request is open-ended only for the window a streaming reader reads
+// ahead of, a playback's stream. Every other one asks for the bytes it is
+// for and no more: a span warmed to its end, the blocks a reader waits
+// for by a stretch that grows with what it read in order. A host sends
+// what an open-ended request asks until the connection closes, which a
+// read of a file's head or index would leave megabytes past its need.
 
 const (
 	// maxConnections bounds the connections reading a file.
 	maxConnections = 3
 	// minStretch is the fewest blocks a connection more is opened for.
 	minStretch = 4
+	// maxAsked bounds the stretch a request asks for a reader that is not
+	// streaming (see askedUntil).
+	maxAsked = 16
 	// headerTimeout bounds the wait for a source's headers: a host that
 	// accepts a connection and says nothing fails the source rather than
 	// holding its readers.
@@ -70,11 +80,12 @@ const noEnd = math.MaxInt64
 type conn struct {
 	// Guarded by the source's lock: next is the block it reads next, or is
 	// to connect at, -1 when it has none; end the first block of its
-	// stretch it is not to read. connected tells it has a body, idle that
-	// it lingers, dropped that it is to read nothing more. runStart is when
-	// it last started reading without a pause, runBytes and runBlocks what
-	// it read since, and rate how fast.
-	next, end           int64
+	// stretch it is not to read; until the first block its request did not
+	// ask, noEnd for an open-ended one. connected tells it has a body, idle
+	// that it lingers, dropped that it is to read nothing more. runStart is
+	// when it last started reading without a pause, runBytes and runBlocks
+	// what it read since, and rate how fast.
+	next, end, until    int64
 	connected, idle     bool
 	dropped             bool
 	cancel              context.CancelFunc
@@ -103,7 +114,7 @@ type conn struct {
 
 // newConn returns a connection to open.
 func newConn() *conn {
-	return &conn{next: -1, nudge: make(chan struct{}, 1)}
+	return &conn{next: -1, until: noEnd, nudge: make(chan struct{}, 1)}
 }
 
 // drop stops the connection: its reads fail at once, and its wait for a
@@ -356,7 +367,7 @@ func (s *Source) assign(c *conn) (target int64, ok, reconnect, done bool) {
 		c.idle = false
 		c.runStart, c.runBytes, c.runBlocks = time.Now(), 0, 0
 	}
-	if c.connected && (target < c.next || target-c.next > skipLimit && !s.rangeless) {
+	if c.connected && (target < c.next || target >= c.until || target-c.next > skipLimit && !s.rangeless) {
 		c.connected, reconnect = false, true
 	}
 	if !c.connected {
@@ -430,11 +441,11 @@ func (s *Source) pickBlock(c *conn, block int64) (target, end int64, split *conn
 	if !s.missing(block) {
 		return 0, 0, nil, false
 	}
-	if c.connected && c.next <= block && (block-c.next <= skipLimit || s.rangeless) {
+	if c.connected && s.reaches(c, block) {
 		return block, max(c.end, block+1), nil, true
 	}
 	for _, o := range s.conns {
-		if o != c && !o.dropped && o.next >= 0 && o.next <= block && (block-o.next <= skipLimit || s.rangeless) {
+		if o != c && !o.dropped && s.reaches(o, block) {
 			return 0, 0, nil, false
 		}
 	}
@@ -443,6 +454,44 @@ func (s *Source) pickBlock(c *conn, block int64) (target, end int64, split *conn
 		end, split = owner.end, owner
 	}
 	return block, end, split, true
+}
+
+// reaches reports whether connection c reaches block shortly, reading
+// through from its next block, within what its request asked. The
+// source's lock is held.
+func (s *Source) reaches(c *conn, block int64) bool {
+	return c.next >= 0 && c.next <= block && (block-c.next <= skipLimit || s.rangeless) && (!c.connected || block < c.until)
+}
+
+// askedUntil is where the request connection c makes from block ends, the
+// first block it does not ask for: noEnd, open-ended, for the window a
+// streaming reader reads ahead of, and for a file read through its own
+// protocol (see FileOpener), which sends nothing it was not asked to
+// read; else the end of the spans warmed that hold block, or, for a reader
+// waiting, as many blocks from there as the cache holds in a row before
+// it, from one to maxAsked: a read going on in order asks twice as much
+// each time, a read elsewhere, as of a file's index, one block. It never
+// goes past the connection's stretch. The source's lock is held.
+func (s *Source) askedUntil(c *conn, block int64) int64 {
+	if _, file := s.origin.Opener.(FileOpener); file || s.inWindow(block) {
+		return noEnd
+	}
+	until := block + 1
+	for _, warm := range s.warms {
+		for _, span := range warm.spans {
+			if block >= span[0] && block < span[1] {
+				until = max(until, span[1])
+			}
+		}
+	}
+	if s.wanted[block] != nil {
+		held := int64(0)
+		for held < maxAsked && block > held && s.has(block-held-1) {
+			held++
+		}
+		until = max(until, block+max(held, 1))
+	}
+	return min(until, max(c.end, block+1))
 }
 
 // pickSpan finds the first block from first to last, excluded, that is not
@@ -894,14 +943,15 @@ func (s *Source) unpinFrom(via *pin) {
 
 // connect opens a connection yielding block for c, which holds a slot of
 // its host, from skip bytes into it: past those an answer cut short sent
-// (see c.skip). An expired link goes back to the origin, then is renewed,
-// once. An answer of another size than the file is asked again once, at
-// the origin, after a renewal when the file was known: a link answering
-// another file does not fix itself. A source asking to wait is waited for,
-// longer when it asks to slow down (429, 503), which also gives its host
-// fewer connections. A connection more is not retried: its failure is the
-// host's refusal. A source that served ranges answering one with the whole
-// file is asked again: it ignores ranges only once it keeps doing so.
+// (see c.skip), up to what it is for (see askedUntil). An expired link
+// goes back to the origin, then is renewed, once. An answer of another
+// size than the file is asked again once, at the origin, after a renewal
+// when the file was known: a link answering another file does not fix
+// itself. A source asking to wait is waited for, longer when it asks to
+// slow down (429, 503), which also gives its host fewer connections. A
+// connection more is not retried: its failure is the host's refusal. A
+// source that served ranges answering one with the whole file is asked
+// again: it ignores ranges only once it keeps doing so.
 func (s *Source) connect(c *conn, block int64, skip int) error {
 	offset := block*blockSize + int64(skip)
 	renewed, retried := false, false
@@ -916,9 +966,14 @@ func (s *Source) connect(c *conn, block int64, skip int) error {
 		alone := s.alone(c)
 		t := s.target0()
 		c.host = t.host
+		until := s.askedUntil(c, block)
 		s.mu.Unlock()
 		header := t.header
-		header.Set("Range", "bytes="+strconv.FormatInt(offset, 10)+"-")
+		asked := "bytes=" + strconv.FormatInt(offset, 10) + "-"
+		if until != noEnd {
+			asked += strconv.FormatInt(until*blockSize-1, 10)
+		}
+		header.Set("Range", asked)
 		ctx, cancel := context.WithCancel(c.slot.ctx)
 		timer := time.AfterFunc(timeout, cancel)
 		response, err := t.opener.Open(ctx, http.MethodGet, t.url, header, t.confined)
@@ -957,7 +1012,7 @@ func (s *Source) connect(c *conn, block int64, skip int) error {
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))
 				c.skip = skip
-				s.connected(c, response.Body, cancel, block, t.pinned)
+				s.connected(c, response.Body, cancel, block, until, t.pinned)
 				return nil
 			}
 			response.Body.Close()
@@ -991,7 +1046,7 @@ func (s *Source) connect(c *conn, block int64, skip int) error {
 				s.answered(t, response)
 				s.cache.rehome(c.slot, answerHost(t, response))
 				c.skip = 0
-				s.connected(c, response.Body, cancel, 0, t.pinned)
+				s.connected(c, response.Body, cancel, 0, noEnd, t.pinned)
 				return nil
 			}
 			response.Body.Close()
@@ -1091,11 +1146,12 @@ func respondent(response *http.Response) string {
 	return ""
 }
 
-// connected records connection c's body, which yields next, read from via.
-func (s *Source) connected(c *conn, body io.ReadCloser, cancel context.CancelFunc, next int64, via *pin) {
+// connected records connection c's body, which yields next, then the
+// blocks before until, read from via.
+func (s *Source) connected(c *conn, body io.ReadCloser, cancel context.CancelFunc, next, until int64, via *pin) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	c.body, c.cancel, c.next, c.connected, c.via = body, cancel, next, true, via
+	c.body, c.cancel, c.next, c.until, c.connected, c.via = body, cancel, next, until, true, via
 	c.runStart, c.runBytes, c.runBlocks = time.Now(), 0, 0
 	if c.dropped {
 		cancel()
