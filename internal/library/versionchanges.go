@@ -58,6 +58,9 @@ type versionTracking struct {
 	// swept is when saved lists past keeping were last deleted, in Unix
 	// nanoseconds.
 	swept atomic.Int64
+	// owners are the owners of versions waiting to be saved (see
+	// keepOwners).
+	owners ownerSaves
 }
 
 // tracked returns s's version tracking, ready.
