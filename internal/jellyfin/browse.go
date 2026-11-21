@@ -607,6 +607,11 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	genre, ok := h.genreFilter(r, user, parent)
 	if !ok {
+		// Genres its catalog does not offer narrow a library's first
+		// titles by their own genres (see titleGenreListing).
+		if names.genresOnly() && h.titleGenreListing(w, r, user, parent, names, fields, keep, start, limit) {
+			return
+		}
 		// The library cannot be narrowed to the requested genre, studio or
 		// year.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
@@ -1048,9 +1053,10 @@ func (h *Handler) episodes(w http.ResponseWriter, r *http.Request) {
 }
 
 // libraryGenres returns the genres a library's catalog offers, with the
-// user and the folder asked, zero for none. Other folders have none,
-// Polyfin's own among them; a folder that does not exist is refused, as
-// Jellyfin does.
+// user and the folder asked, zero for none; a library whose catalog
+// offers none has those of its first titles (see titleGenres). Other
+// folders have none, Polyfin's own among them; a folder that does not
+// exist is refused, as Jellyfin does.
 func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]string, accounts.User, accounts.ID, bool) {
 	b := bindErrors{}
 	id, hasParent := b.guid(r, "parentId")
@@ -1073,6 +1079,12 @@ func (h *Handler) libraryGenres(w http.ResponseWriter, r *http.Request) ([]strin
 		}
 		processingError(w, http.StatusBadRequest)
 		return nil, user, id, false
+	}
+	if err == nil && len(genres) == 0 {
+		if genres, err = h.titleGenres(r, user, id); err != nil {
+			h.browseError(w, r, err)
+			return nil, user, id, false
+		}
 	}
 	if err != nil {
 		h.internalError(w, r, err)
