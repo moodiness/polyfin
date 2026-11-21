@@ -229,6 +229,10 @@ type Service struct {
 	// addons that accept other identifiers than a title's (see
 	// streamids.go); nil, it maps nothing.
 	anime *anime.Service
+	// streamNumberings pins the pairs of each series' episodes its stream
+	// requests by IMDb or TMDB identifier are numbered by (see
+	// streamnumbering.go).
+	streamNumberings streamNumberings
 	// virtual answers for the channels Polyfin airs itself (see
 	// UseVirtual).
 	virtual Virtual

@@ -399,6 +399,14 @@ type alignmentRow struct {
 	askedAt        time.Time
 }
 
+// pairs reports whether the alignment kept, nil for none, pairs the
+// episodes of the series of TMDB identifier tmdbID, 0 when unknown, of
+// which the addon gives episodes, 0 when unknown: it was made for that
+// identifier, and as many episodes.
+func (row *alignmentRow) pairs(tmdbID, episodes int) bool {
+	return row != nil && (tmdbID == 0 || tmdbID == row.tmdb) && (episodes == 0 || episodes == row.episodes)
+}
+
 // keptAlignment loads the alignment kept of a series, nil for none.
 func (s *Service) keptAlignment(ctx context.Context, series string) (*alignmentRow, error) {
 	var row alignmentRow
@@ -417,7 +425,8 @@ func (s *Service) keptAlignment(ctx context.Context, series string) (*alignmentR
 	return &row, nil
 }
 
-// keepAlignment keeps the alignment of a series.
+// keepAlignment keeps the alignment of a series, and forgets the pairs
+// its stream requests pinned (see streamnumbering.go).
 func (s *Service) keepAlignment(ctx context.Context, series string, row alignmentRow) error {
 	// null for a series numbered alike.
 	raw, err := json.Marshal(row.places)
@@ -427,7 +436,23 @@ func (s *Service) keepAlignment(ctx context.Context, series string, row alignmen
 	_, err = s.db.Exec(ctx, `INSERT INTO episode_alignments (series, tmdb_id, episodes, places, asked_at) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (series) DO UPDATE SET tmdb_id = excluded.tmdb_id, episodes = excluded.episodes, places = excluded.places,
 			asked_at = excluded.asked_at`, series, row.tmdb, row.episodes, raw, row.askedAt)
+	s.streamNumberings.forget(series)
 	return err
+}
+
+// exactNumbering returns the numbering of the episodes of the series
+// Polyfin names by the Stremio identifier series, of which listed are the
+// episodes Polyfin listed, when it is known without asking or reading
+// anything: alike for a series named by TMDB's identifier, and as the
+// video identifiers name them when they are TMDB's.
+func exactNumbering(series string, listed episodeList) (EpisodeNumbering, bool) {
+	if strings.HasPrefix(series, "tmdb:") {
+		return EpisodeNumbering{sourced: true}, true
+	}
+	if places, ok := tmdbVideoPlaces(listed); ok {
+		return numberingOf(places), true
+	}
+	return EpisodeNumbering{}, false
 }
 
 // errUnaligned reports that the sources of TMDB's numbering failed to
@@ -445,19 +470,15 @@ var errUnaligned = errors.New("TMDB's numbering of a series' episodes could not 
 // error wrapping errUnaligned.
 func (s *Service) numbering(ctx context.Context, server func() (view, error), series string, tmdbID int, imdb string,
 	listed episodeList) (EpisodeNumbering, error) {
-	if strings.HasPrefix(series, "tmdb:") {
-		return EpisodeNumbering{sourced: true}, nil
-	}
-	if places, ok := tmdbVideoPlaces(listed); ok {
-		return numberingOf(places), nil
+	if n, ok := exactNumbering(series, listed); ok {
+		return n, nil
 	}
 	addon := listedEpisodes(listed)
 	kept, err := s.keptAlignment(ctx, series)
 	if err != nil {
 		return EpisodeNumbering{}, err
 	}
-	if kept != nil && (tmdbID == 0 || tmdbID == kept.tmdb) && s.now().Sub(kept.askedAt) < alignmentFresh &&
-		(len(addon) == 0 || len(addon) == kept.episodes) {
+	if kept.pairs(tmdbID, len(addon)) && s.now().Sub(kept.askedAt) < alignmentFresh {
 		return numberingOf(kept.places), nil
 	}
 	if tmdbID == 0 && kept != nil {
