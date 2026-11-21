@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/bandwidth"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/container"
+	"github.com/moodiness/polyfin/internal/database"
 	"github.com/moodiness/polyfin/internal/hls"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
@@ -661,13 +662,73 @@ func (s *Service) Signer() Signer {
 	return s.signer
 }
 
+// analysisOf reads a version's analysis, as listings read it (see
+// database.Listing).
+var analysisOf = database.Listing("SELECT analysis FROM media_analyses WHERE version_id = $1")
+
+// analysesOf reads the analyses of versions, as listings read them (see
+// AnalyzedAhead).
+var analysesOf = database.Listing("SELECT version_id, analysis FROM media_analyses WHERE version_id = ANY($1::uuid[])")
+
+// unanalyzedAheadKey holds the versions a listing found no analysis of in
+// the database (see AnalyzedAhead).
+type unanalyzedAheadKey struct{}
+
+// AnalyzedAhead reads, in one statement, the analyses of versions, the
+// versions a listing shows, that are not kept in memory, as Analyzed
+// would read each of them: those found are kept in memory; the context
+// returned holds those the database has none of, which Analyzed then does
+// not look for again under it. A failure leaves each version to be read
+// on its own.
+func (s *Service) AnalyzedAhead(ctx context.Context, versions []accounts.ID) context.Context {
+	versions = slices.DeleteFunc(slices.Clone(versions), func(version accounts.ID) bool {
+		_, kept := s.analyses.Get(version)
+		return kept
+	})
+	if len(versions) == 0 {
+		return ctx
+	}
+	rows, err := s.db.Query(ctx, analysesOf, versions)
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Warn("Reading media analyses failed", "error", err)
+		}
+		return ctx
+	}
+	unanalyzed := make(map[accounts.ID]bool, len(versions))
+	for _, version := range versions {
+		unanalyzed[version] = true
+	}
+	var (
+		version accounts.ID
+		data    []byte
+	)
+	if _, err := pgx.ForEachRow(rows, []any{&version, &data}, func() error {
+		delete(unanalyzed, version)
+		var analysis media.Analysis
+		if json.Unmarshal(data, &analysis) == nil {
+			s.analyses.Put(version, analysis)
+		}
+		return nil
+	}); err != nil {
+		if ctx.Err() == nil {
+			s.logger.Warn("Reading media analyses failed", "error", err)
+		}
+		return ctx
+	}
+	return context.WithValue(ctx, unanalyzedAheadKey{}, unanalyzed)
+}
+
 // Analyzed returns the analysis of a version if it was analyzed before.
 func (s *Service) Analyzed(ctx context.Context, version accounts.ID) (media.Analysis, bool) {
 	if analysis, ok := s.analyses.Get(version); ok {
 		return analysis, true
 	}
+	if unanalyzed, _ := ctx.Value(unanalyzedAheadKey{}).(map[accounts.ID]bool); unanalyzed[version] {
+		return media.Analysis{}, false
+	}
 	var data []byte
-	err := s.db.QueryRow(ctx, "SELECT analysis FROM media_analyses WHERE version_id = $1", version).Scan(&data)
+	err := s.db.QueryRow(ctx, analysisOf, version).Scan(&data)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("Reading a media analysis failed", "error", err)
