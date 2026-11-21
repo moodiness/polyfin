@@ -99,8 +99,10 @@ func TestTheLogOfSlowStatementsIsBounded(t *testing.T) {
 }
 
 // The pool Polyfin opens logs its slow statements and batch queries,
-// without their arguments. The test's clock moves a second at each
-// reading, so that every statement is slow.
+// without their arguments. The test's clock is the real one plus an hour
+// more at each reading, so that every statement is slow: pgx times a
+// batch's queries from its own reading of the real clock, which this one
+// is always hours past, whatever the date.
 func TestThePoolLogsSlowStatements(t *testing.T) {
 	t.Parallel()
 	url := testdb.CopyURL(t, testdb.Empty(t))
@@ -113,9 +115,8 @@ func TestThePoolLogsSlowStatements(t *testing.T) {
 	if !ok {
 		t.Fatalf("the pool's tracer is %T", config.ConnConfig.Tracer)
 	}
-	var seconds atomic.Int64
-	start := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
-	tracer.now = func() time.Time { return start.Add(time.Duration(seconds.Add(1)) * time.Second) }
+	var hours atomic.Int64
+	tracer.now = func() time.Time { return time.Now().Add(time.Duration(hours.Add(1)) * time.Hour) }
 	pool, err := pgxpool.NewWithConfig(t.Context(), config)
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +132,7 @@ func TestThePoolLogsSlowStatements(t *testing.T) {
 		t.Fatal(err)
 	}
 	logged := out.String()
-	for _, want := range []string{`msg="A database statement was slow" duration=1s sql="SELECT $1::text"`, `sql="SELECT length($1::text)"`} {
+	for _, want := range []string{`msg="A database statement was slow" duration=1h`, `sql="SELECT $1::text"`, `sql="SELECT length($1::text)"`} {
 		if !strings.Contains(logged, want) {
 			t.Errorf("did not log %s: %s", want, logged)
 		}
