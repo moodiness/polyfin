@@ -5,6 +5,7 @@ package logs
 
 import (
 	"bytes"
+	"io"
 	"net/url"
 	"regexp"
 	"strings"
@@ -51,12 +52,26 @@ type Ring struct {
 	now      func() time.Time
 	// redact is Redact, which tests replace.
 	redact func(string) string
+	// echo, when set, is written each line kept, as it is kept; echoing
+	// keeps its writes whole and in order.
+	echo    io.Writer
+	echoing sync.Mutex
 }
 
 // NewRing returns an empty ring keeping up to capacity bytes.
 func NewRing(capacity int) *Ring {
 	now := time.Now()
 	return &Ring{capacity: capacity, created: now, modified: now, now: time.Now, redact: Redact}
+}
+
+// NewEchoingRing returns an empty ring keeping up to capacity bytes, which
+// also writes each line to echo as it keeps it, redacted and cut alike:
+// the server's standard error, which then reads as System › Logs does.
+// A line is redacted once for both.
+func NewEchoingRing(capacity int, echo io.Writer) *Ring {
+	r := NewRing(capacity)
+	r.echo = echo
+	return r
 }
 
 // Write keeps p's lines, redacted, each cut to a fraction of the ring's
@@ -69,6 +84,14 @@ func (r *Ring) Write(p []byte) (int, error) {
 	var lines [][]byte
 	for line := range strings.SplitSeq(text, "\n") {
 		lines = append(lines, r.bounded(line, limit))
+	}
+	if r.echo != nil {
+		r.echoing.Lock()
+		for _, line := range lines {
+			// A line standard error refuses is kept all the same.
+			_, _ = r.echo.Write(line)
+		}
+		r.echoing.Unlock()
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

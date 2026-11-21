@@ -178,34 +178,34 @@ func main() {
 func runServe(ctx context.Context, getenv func(string) string, environ []string) (code int, again bool) {
 	cfg, err := config.Load(getenv)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "polyfin:", err)
+		fmt.Fprintln(os.Stderr, "polyfin:", logs.Redact(err.Error()))
 		return 1, false
 	}
+	log := newServerLog(os.Stderr)
 	// The configuration is read: the variables that hold Polyfin's
 	// credentials leave its environment before it runs any program, so
 	// that FFmpeg, ffprobe and Tesseract, which read what sources send,
 	// and every other program it runs, inherit none of them.
 	forgetCredentials(environ)
 	if carried, err := carryPassword(cfg.DatabaseURL, environ); err != nil {
-		slog.New(slog.NewTextHandler(os.Stderr, nil)).Warn("PGPASSWORD stays in the environment of the programs Polyfin runs", "error", err)
+		log.logger.Warn("PGPASSWORD stays in the environment of the programs Polyfin runs", "error", err)
 	} else {
 		cfg.DatabaseURL = carried
 	}
 	if cfg.Embedded {
-		logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-		db, err := startEmbedded(ctx, getenv("PATH"), cfg.DataDir, logger)
+		db, err := startEmbedded(ctx, getenv("PATH"), cfg.DataDir, log.logger)
 		if err != nil {
 			if ctx.Err() != nil && errors.Is(err, context.Canceled) {
 				return 0, false
 			}
-			fmt.Fprintln(os.Stderr, "polyfin:", err)
+			fmt.Fprintln(os.Stderr, "polyfin:", logs.Redact(err.Error()))
 			return 1, false
 		}
 		defer db.stop()
 		cfg.DatabaseURL = db.url()
 	}
 	var restore pendingRestore
-	err = serve(ctx, cfg, environ, &restore)
+	err = serve(ctx, cfg, environ, &restore, log)
 	// A restart from the admin app exits once Polyfin has stopped, as
 	// on a signal, with exitRestart: Docker's restart policies, on-failure
 	// included, systemd's Restart=on-failure and Polyfin Desktop start a
@@ -224,7 +224,7 @@ func runServe(ctx context.Context, getenv func(string) string, environ []string)
 		restart = ctx.Err() == nil
 	}
 	if err != nil && !interrupted {
-		fmt.Fprintln(os.Stderr, "polyfin:", err)
+		fmt.Fprintln(os.Stderr, "polyfin:", logs.Redact(err.Error()))
 		return 1, false
 	}
 	return 0, restart
@@ -239,23 +239,36 @@ func forgetCredentials(environ []string) {
 	}
 }
 
+// serverLog is the server's log: its records, at level, which follows the
+// settings' detailed log once they are loaded, go to standard error and
+// to recent, the lines administrators read in System › Logs and from
+// Jellyfin apps, both redacted alike (see logs.NewEchoingRing).
+type serverLog struct {
+	logger *slog.Logger
+	level  *slog.LevelVar
+	recent *logs.Ring
+}
+
+// newServerLog makes the server's log, at the info level, writing to
+// stderr.
+func newServerLog(stderr io.Writer) serverLog {
+	level := new(slog.LevelVar)
+	recent := logs.NewEchoingRing(logs.Capacity, stderr)
+	return serverLog{logger: slog.New(slog.NewTextHandler(recent, &slog.HandlerOptions{Level: level})), level: level, recent: recent}
+}
+
 // serve runs Polyfin until ctx ends, until an administrator restores a
 // backup, or restarts Polyfin: restore then holds what Restore needs, once
 // every part of Polyfin has stopped, and errRestart tells a restart.
 // environ is the environment this process was started with, which the
 // admin app lists the variables of.
-func serve(ctx context.Context, cfg config.Config, environ []string, restore *pendingRestore) error {
+func serve(ctx context.Context, cfg config.Config, environ []string, restore *pendingRestore, log serverLog) error {
 	started := time.Now()
 	// Everything Polyfin runs in the background ends with ctx, or when it
 	// stops to restore a backup.
 	ctx, stopAll := context.WithCancel(ctx)
 	defer stopAll()
-	// The level is info, and follows the settings' detailed log once they
-	// are loaded. The recent lines are also kept, redacted, for
-	// administrators to read from Jellyfin apps.
-	level := new(slog.LevelVar)
-	recent := logs.NewRing(logs.Capacity)
-	logger := slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, recent), &slog.HandlerOptions{Level: level}))
+	level, recent, logger := log.level, log.recent, log.logger
 	for _, warning := range cfg.Warnings {
 		logger.Warn("A variable copied into the settings has a value that is not valid: it is not copied", "error", warning)
 	}
@@ -368,7 +381,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	// happens to them.
 	secure := newHTTPS(cfg, store, pool, box, logger)
 	addonClient := stremio.NewClient(version)
-	addonStore := addons.New(pool, addonClient)
+	addonStore := addons.New(pool, addonClient, addons.Sealing(box))
 	// Addons and libraries are answered from memory while their changes
 	// are followed.
 	go addonStore.Watch(ctx, logger)
