@@ -40,9 +40,19 @@ func pieceBytes(key pieceKey, size int) []byte {
 	return data
 }
 
-// isPiece tells whether a file is one of the piece of key.
+// isPiece tells whether a file is one of the piece of key, in its
+// torrent's folder.
 func isPiece(name string, key pieceKey) bool {
-	return strings.HasPrefix(filepath.Base(name), fmt.Sprintf("%s-%d-", key.hash, key.index))
+	return filepath.Base(filepath.Dir(name)) == key.hash.String() && strings.HasPrefix(filepath.Base(name), fmt.Sprintf("%d-", key.index))
+}
+
+// relName is a file's name within the store's folder, as onDisk gives it.
+func relName(s *store, name string) string {
+	rel, err := filepath.Rel(s.dir, name)
+	if err != nil {
+		return name
+	}
+	return rel
 }
 
 func mustPut(t *testing.T, s *store, key pieceKey, size int) {
@@ -66,8 +76,8 @@ func kept(t *testing.T, s *store, key pieceKey, size int) bool {
 	return found
 }
 
-// onDisk is the size of each file of the store's folder. It may run in
-// any goroutine.
+// onDisk is the size of each file of the store's folder, by its name
+// within it: in the folder of a torrent. It may run in any goroutine.
 func onDisk(t *testing.T, dir string) map[string]int64 {
 	t.Helper()
 	files := map[string]int64{}
@@ -80,8 +90,21 @@ func onDisk(t *testing.T, dir string) map[string]int64 {
 		if entry.Name() == workfolder.Marker {
 			continue
 		}
-		if info, err := entry.Info(); err == nil {
-			files[entry.Name()] = info.Size()
+		if !entry.IsDir() {
+			if info, err := entry.Info(); err == nil {
+				files[entry.Name()] = info.Size()
+			}
+			continue
+		}
+		// A torrent's folder may be removed meanwhile.
+		inside, err := os.ReadDir(filepath.Join(dir, entry.Name()))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Error(err)
+		}
+		for _, file := range inside {
+			if info, err := file.Info(); err == nil {
+				files[filepath.Join(entry.Name(), file.Name())] = info.Size()
+			}
 		}
 	}
 	return files
@@ -269,6 +292,9 @@ func TestAStoreKeepsItsBoundWhileAPieceIsRead(t *testing.T) {
 	}
 	if files := onDisk(t, s.dir); len(files) != 0 || s.usage() != 0 {
 		t.Fatalf("after the stop, the disk holds %v, the store counts %d bytes", files, s.usage())
+	}
+	if _, err := os.Stat(filepath.Join(s.dir, hash.String())); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the stopped torrent's folder is left: %v", err)
 	}
 }
 
@@ -458,8 +484,9 @@ func TestAStoreOnAFullDiskKeepsNothingOfThePiece(t *testing.T) {
 
 // Torrents that write and read at once read the bytes written, while the
 // pieces on disk stay within the budget and the files open within their
-// bound, a few reads under way aside. Once they end, the store counts
-// what the disk holds, and closing it closes every file.
+// bound, a few reads under way aside. A file is never deleted while open,
+// which Windows refuses. Once they end, the store counts what the disk
+// holds, and closing it closes every file.
 func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 	t.Parallel()
 	const (
@@ -470,23 +497,49 @@ func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 	)
 	s := newTestStore(t, budget)
 	s.files = 3
-	var over atomic.Value
+	// disk counts the bytes of the files on disk as the store makes and
+	// deletes them: a listing of the torrents' folders, one after the
+	// other, is no snapshot.
+	var disk struct {
+		sync.Mutex
+		sizes map[string]int64
+		total int64
+		over  string
+	}
+	disk.sizes = map[string]int64{}
 	s.write = func(name string, data []byte) error {
-		if files := onDisk(t, s.dir); total(files)+int64(len(data)) > budget {
-			over.Store(fmt.Sprintf("%s written beside %v", filepath.Base(name), files))
+		disk.Lock()
+		disk.sizes[name] = int64(len(data))
+		if disk.total += int64(len(data)); disk.total > budget && disk.over == "" {
+			disk.over = fmt.Sprintf("%s written with %d bytes on disk", relName(s, name), disk.total-int64(len(data)))
 		}
+		disk.Unlock()
 		return writeFile(name, data)
 	}
-	var open, most atomic.Int32
+	handles := &openFiles{names: map[string]int{}}
 	s.open = func(name string) (pieceFile, error) {
 		file, err := openFile(name)
 		if err != nil {
 			return nil, err
 		}
-		n := open.Add(1)
-		for m := most.Load(); n > m && !most.CompareAndSwap(m, n); m = most.Load() {
+		handles.opened(name)
+		return countedFile{file, name, handles}, nil
+	}
+	// As on Windows, a file still open is not deleted.
+	var deletedOpen atomic.Value
+	s.unlink = func(name string) error {
+		if handles.isOpen(name) {
+			deletedOpen.Store(relName(s, name))
+			return &fs.PathError{Op: "remove", Path: name, Err: errors.New("the file is open")}
 		}
-		return countedFile{file, &open}, nil
+		if err := os.Remove(name); err != nil {
+			return err
+		}
+		disk.Lock()
+		disk.total -= disk.sizes[name]
+		delete(disk.sizes, name)
+		disk.Unlock()
+		return nil
 	}
 	var told atomic.Int32
 	s.evicted = func(pieceKey) { told.Add(1) }
@@ -532,8 +585,11 @@ func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 		}
 	}
 	wg.Wait()
-	if v := over.Load(); v != nil {
-		t.Errorf("over the budget: %v", v)
+	if disk.over != "" {
+		t.Errorf("over the budget: %s", disk.over)
+	}
+	if v := deletedOpen.Load(); v != nil {
+		t.Errorf("%v deleted while open", v)
 	}
 	if wrong.Load() > 0 {
 		t.Errorf("%d reads of %d got wrong bytes", wrong.Load(), found.Load())
@@ -541,10 +597,10 @@ func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 	if found.Load() == 0 || told.Load() == 0 {
 		t.Errorf("%d reads found their piece, %d pieces removed for room", found.Load(), told.Load())
 	}
-	if m := most.Load(); m > int32(s.files+torrents*readers) {
+	if m := handles.mostOpen(); m > s.files+torrents*readers {
 		t.Errorf("%d files open at once, over the bound of %d and the %d readers", m, s.files, torrents*readers)
 	}
-	if n := open.Load(); n > int32(s.files) {
+	if n := handles.open(); n > s.files {
 		t.Errorf("%d files open once the reads ended, over the bound of %d", n, s.files)
 	}
 	files := onDisk(t, s.dir)
@@ -552,8 +608,8 @@ func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 	var index int64
 	for _, piece := range s.pieces {
 		index += piece.size
-		if files[filepath.Base(piece.name)] != piece.size {
-			t.Errorf("piece %v: %d bytes on disk", piece.key, files[filepath.Base(piece.name)])
+		if files[relName(s, piece.name)] != piece.size {
+			t.Errorf("piece %v: %d bytes on disk", piece.key, files[relName(s, piece.name)])
 		}
 	}
 	used := s.used
@@ -562,18 +618,64 @@ func TestAStoreUnderConcurrentPutsAndReads(t *testing.T) {
 		t.Errorf("the disk holds %d bytes, the index %d, the store counts %d", total(files), index, used)
 	}
 	s.close()
-	if n := open.Load(); n != 0 {
+	if n := handles.open(); n != 0 {
 		t.Errorf("%d files open once the store closed", n)
 	}
+}
+
+// openFiles counts the files of pieces open, by name.
+type openFiles struct {
+	mu          sync.Mutex
+	names       map[string]int
+	count, most int
+}
+
+func (o *openFiles) opened(name string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.names[name]++
+	o.count++
+	o.most = max(o.most, o.count)
+}
+
+func (o *openFiles) closed(name string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.names[name]--; o.names[name] == 0 {
+		delete(o.names, name)
+	}
+	o.count--
+}
+
+func (o *openFiles) isOpen(name string) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.names[name] > 0
+}
+
+func (o *openFiles) open() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.count
+}
+
+func (o *openFiles) mostOpen() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.most
 }
 
 // countedFile is a piece's file that counts the files open.
 type countedFile struct {
 	pieceFile
-	open *atomic.Int32
+	name  string
+	files *openFiles
 }
 
+// Close closes the file, then counts it closed: a deletion that finds it
+// still counted open came before its closing ended.
 func (f countedFile) Close() error {
-	f.open.Add(-1)
-	return f.pieceFile.Close()
+	err := f.pieceFile.Close()
+	f.files.closed(f.name)
+	return err
 }

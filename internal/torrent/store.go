@@ -39,10 +39,11 @@ type store struct {
 	logger *slog.Logger
 	// files bounds the files kept open between reads (see storeFiles).
 	files int
-	// write makes a piece's file, and open opens one for reads: on disk,
-	// but in tests.
-	write func(name string, data []byte) error
-	open  func(name string) (pieceFile, error)
+	// write makes a piece's file, open opens one for reads, and unlink
+	// deletes one: on disk, but in tests.
+	write  func(name string, data []byte) error
+	open   func(name string) (pieceFile, error)
+	unlink func(name string) error
 
 	mu sync.Mutex
 	// changed is signalled as bytes leave the disk, a write ends or the
@@ -98,14 +99,18 @@ func newStore(dir string, budget func() int64, logger *slog.Logger) (*store, err
 	if err := workfolder.Torrents.Empty(dir); err != nil {
 		return nil, err
 	}
-	s := &store{dir: dir, budget: budget, logger: logger, files: storeFiles, write: writeFile, open: openFile,
+	s := &store{dir: dir, budget: budget, logger: logger, files: storeFiles, write: writeFile, open: openFile, unlink: os.Remove,
 		pieces: map[pieceKey]*storedPiece{}, recent: pieceList{which: recentList}, opened: pieceList{which: openedList},
 		writing: map[Hash]int{}, runs: map[Hash]uint64{}}
 	s.changed.L = &s.mu
 	return s, nil
 }
 
+// writeFile writes a piece's file, in its torrent's folder.
 func writeFile(name string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
+		return err
+	}
 	return os.WriteFile(name, data, 0o600)
 }
 
@@ -160,7 +165,7 @@ func (s *store) put(key pieceKey, data []byte) error {
 	s.writing[key.hash]++
 	s.named++
 	piece := &storedPiece{key: key, size: size,
-		name: filepath.Join(s.dir, key.hash.String()+"-"+strconv.Itoa(key.index)+"-"+strconv.FormatUint(s.named, 10))}
+		name: filepath.Join(s.dir, key.hash.String(), strconv.Itoa(key.index)+"-"+strconv.FormatUint(s.named, 10))}
 	s.mu.Unlock()
 	s.tell(told)
 	err := s.write(piece.name, data)
@@ -252,7 +257,7 @@ func (s *store) remove(doomed []*storedPiece) {
 }
 
 func (s *store) deleteFile(name string) {
-	if err := os.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := s.unlink(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		s.logger.Warn("A torrent's piece could not be removed", "error", err)
 	}
 }
@@ -291,34 +296,52 @@ func (s *store) read(key pieceKey, p []byte, off int64) (bool, error) {
 // piece had none open, stays open for the next reads, as long as the
 // files open stay within the bound: the least recently read that no read
 // uses is closed for it, if need be. The last read of a piece removed
-// from the index deletes its file.
+// from the index deletes its file. A file closes before its piece's file
+// may be deleted, as Windows deletes no file still open: its piece stays
+// held as by a read until then.
 func (s *store) release(piece *storedPiece, opened pieceFile) {
-	var unused, idle pieceFile
-	s.mu.Lock()
-	piece.readers--
-	if opened != nil {
-		kept := false
-		if piece.file == nil && !piece.gone {
-			kept, idle = s.roomToOpenLocked()
-		}
-		if kept {
-			piece.file = opened
-			s.opened.push(piece)
-		} else {
-			unused = opened
-		}
+	if opened == nil {
+		s.unpin(piece)
+		return
 	}
-	last := piece.gone && piece.readers == 0
-	if last && piece.file != nil {
-		s.opened.remove(piece)
+	var unused, idleFile pieceFile
+	var idle *storedPiece
+	s.mu.Lock()
+	kept := false
+	if piece.file == nil && !piece.gone {
+		kept, idle = s.roomToOpenLocked()
+	}
+	if kept {
+		piece.file = opened
+		s.opened.push(piece)
+	} else {
+		unused = opened
+	}
+	if idle != nil {
+		idleFile, idle.file = idle.file, nil
+		idle.readers++
 	}
 	s.mu.Unlock()
 	if unused != nil {
 		_ = unused.Close()
 	}
 	if idle != nil {
-		_ = idle.Close()
+		_ = idleFile.Close()
+		s.unpin(idle)
 	}
+	s.unpin(piece)
+}
+
+// unpin ends a read of a piece, or the closing of one of its files. The
+// last of a piece removed from the index deletes its file.
+func (s *store) unpin(piece *storedPiece) {
+	s.mu.Lock()
+	piece.readers--
+	last := piece.gone && piece.readers == 0
+	if last && piece.file != nil {
+		s.opened.remove(piece)
+	}
+	s.mu.Unlock()
 	if last {
 		s.remove([]*storedPiece{piece})
 	}
@@ -326,17 +349,15 @@ func (s *store) release(piece *storedPiece, opened pieceFile) {
 
 // roomToOpenLocked tells whether one more file may stay open: the files
 // open are under the bound, or the least recently read that no read uses
-// is given up, returned for the caller to close.
-func (s *store) roomToOpenLocked() (bool, pieceFile) {
+// is given up, returned for the caller to close, its file still set.
+func (s *store) roomToOpenLocked() (bool, *storedPiece) {
 	if s.opened.length < s.files {
 		return true, nil
 	}
 	for piece := s.opened.oldest; piece != nil; piece = piece.links[openedList].newer {
 		if piece.readers == 0 {
-			file := piece.file
 			s.opened.remove(piece)
-			piece.file = nil
-			return true, file
+			return true, piece
 		}
 	}
 	return false, nil
@@ -356,7 +377,8 @@ func (s *store) started(hash Hash) uint64 {
 // drop removes the pieces of a torrent whose run stopped, unless a later
 // run of the torrent started meanwhile: they are that run's. The pieces
 // being written are kept first, then removed with the others, and drop
-// returns once their files are deleted, the reads under way ended.
+// returns once their files are deleted, the reads under way ended, and
+// the torrent's folder with them when no write of it started since.
 func (s *store) drop(hash Hash, run uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -387,6 +409,10 @@ func (s *store) drop(hash Hash, run uint64) {
 		for !piece.deleted {
 			s.changed.Wait()
 		}
+	}
+	// A write that starts later makes the folder again.
+	if s.writing[hash] == 0 {
+		_ = os.Remove(filepath.Join(s.dir, hash.String()))
 	}
 }
 
