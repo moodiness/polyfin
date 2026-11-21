@@ -490,10 +490,16 @@ func (s *Service) storeArtwork(ctx context.Context, id accounts.ID, kind, root s
 }
 
 // artworkChanged counts a change to the artwork kept, to the titles of
-// its units or to a folder's UseArtwork: Artwork reads them again.
+// its units or to a folder's UseArtwork: Artwork reads them again, and
+// the orders of the folders' titles are sorted again (see Changes).
 func (s *Service) artworkChanged() {
 	s.artworkChanges.Add(1)
 }
+
+// Changes counts the changes to what the folders list: their scans, each
+// counted once it stored its files, the matches and links of their units,
+// and their options (see artworkChanged). It only grows.
+func (s *Service) Changes() uint64 { return s.artworkChanges.Load() }
 
 // artworkSet is the artwork Artwork answers, as it was read once the
 // folders' artwork and the server's addons had changed the counted times.

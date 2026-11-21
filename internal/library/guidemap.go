@@ -199,8 +199,11 @@ func (s *Service) automap(ctx context.Context, c addons.LiveCatalog, mode string
 }
 
 // LineupChanged maps an IPTV source's channels to its guides again, after
-// its line-up changed (see iptv.Service.OnChange).
+// its line-up changed (see iptv.Service.OnChange): a refresh of its lists,
+// its movies and series among them, or new options. Those count as a
+// change of what the stored libraries list (see StoredChanges).
 func (s *Service) LineupChanged(ctx context.Context, source accounts.ID) {
+	s.storedChanges.Add(1)
 	catalogs, err := s.addons.LiveCatalogs(ctx, false)
 	if err != nil {
 		return

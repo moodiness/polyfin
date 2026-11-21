@@ -95,6 +95,22 @@ func (s *Service) Stores(ctx context.Context, user accounts.User, parent account
 	return ok && l.stored(), nil
 }
 
+// StoredChanges counts the changes to what the libraries Polyfin stores
+// list, those NamePool reads: their local folders' scans, links and
+// options (see Local.Changes), their IPTV sources' lists and options (see
+// LineupChanged), the addons and their libraries (see
+// addons.Store.Changes), and administrators' edits (see changeOverrides).
+// It is a sum of counts that only grow: it moves whenever one does, so
+// that an order of a stored library's titles kept at one count is sorted
+// again once it moved.
+func (s *Service) StoredChanges() uint64 {
+	changes := s.storedChanges.Load() + s.addons.Changes()
+	if s.local != nil {
+		changes += s.local.Changes()
+	}
+	return changes
+}
+
 // WithLengths gives the movies of items, titles of parent, one of user's
 // libraries, that have no length the one their file plays, when parent
 // is a local folder (see localLengths): a listing by length sorts them

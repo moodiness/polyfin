@@ -10,11 +10,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/localfiles"
@@ -31,6 +33,14 @@ type sortedMovie struct {
 // sortingProvider is an Xtream account (user / secret) of movies.
 func sortingProvider(t *testing.T, movies []sortedMovie) string {
 	t.Helper()
+	address, _ := changingProvider(t, movies)
+	return address
+}
+
+// changingProvider is sortingProvider, whose movies set changes.
+func changingProvider(t *testing.T, movies []sortedMovie) (address string, set func([]sortedMovie)) {
+	t.Helper()
+	var mu sync.Mutex
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		if r.URL.Path != "/player_api.php" || query.Get("username") != "user" || query.Get("password") != "secret" {
@@ -44,8 +54,11 @@ func sortingProvider(t *testing.T, movies []sortedMovie) string {
 		case "get_vod_categories":
 			answer = []any{map[string]any{"category_id": "1", "category_name": "Action"}}
 		case "get_vod_streams":
-			list := make([]any, len(movies))
-			for i, m := range movies {
+			mu.Lock()
+			listed := movies
+			mu.Unlock()
+			list := make([]any, len(listed))
+			for i, m := range listed {
 				list[i] = map[string]any{"name": m.name, "stream_id": 100 + i, "category_id": "1", "container_extension": "mkv",
 					"added": m.added, "year": m.year, "rating": m.rating}
 			}
@@ -56,7 +69,11 @@ func sortingProvider(t *testing.T, movies []sortedMovie) string {
 		_ = json.NewEncoder(w).Encode(answer)
 	}))
 	t.Cleanup(server.Close)
-	return server.URL
+	return server.URL, func(changed []sortedMovie) {
+		mu.Lock()
+		defer mu.Unlock()
+		movies = changed
+	}
 }
 
 // pageNames lists the names of a page of a listing, and its total.
@@ -137,6 +154,70 @@ func TestStoredLibrariesPageInTheSortAsked(t *testing.T) {
 		if want := []string{"Movie 003", "Movie 004", "Movie 005"}; !slices.Equal(names, want) {
 			t.Errorf("an addon's catalog by %s: %v, want %v", sortBy, names, want)
 		}
+	}
+}
+
+// An order kept for a stored library holds while what the library lists
+// stays as it was: once its IPTV source's list is refreshed with a movie
+// renamed, or an administrator renames one, the next listing by name sorts
+// them again, at once. A listing without a sort keeps the provider's
+// order, the movies added last first.
+func TestStoredLibraryOrdersFollowItsChanges(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	s.user("member", nil)
+	s.user("boss", func(c *accounts.UserChanges) { c.IsAdministrator = new(true) })
+	token, admin := s.signIn("member", "tv"), s.signIn("boss", "dashboard")
+	on, off := true, false
+	movies := []sortedMovie{{"Alpha", "1700000300", "2001", "7"}, {"Bravo", "1700000100", "2002", "7"}, {"Charlie", "1700000200", "2003", "7"}}
+	address, set := changingProvider(t, movies)
+	source, err := s.iptv.Add(t.Context(), addons.Shared(), iptv.NewSource{Name: "Box", Account: iptv.Account{Kind: addons.KindXtream,
+		Server: address, Username: "user", Password: "secret"}, Options: &iptv.OptionsPatch{Movies: &on, LiveTv: &off}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := s.viewsByType(t, token)["movies"]
+	listing := func(sorted bool) QueryResult {
+		t.Helper()
+		query := url.Values{"ParentId": {library}, "IncludeItemTypes": {"Movie"}, "Recursive": {"true"}}
+		if sorted {
+			query.Set("SortBy", "SortName")
+			query.Set("SortOrder", "Ascending")
+		}
+		var page QueryResult
+		if status := s.get(t, "/Items?"+query.Encode(), token, &page); status != http.StatusOK {
+			t.Fatalf("listing: %d", status)
+		}
+		return page
+	}
+	if got := itemNames(listing(true).Items); !slices.Equal(got, []string{"Alpha", "Bravo", "Charlie"}) {
+		t.Fatalf("by name: %v", got)
+	}
+
+	// The provider renames Alpha.
+	set([]sortedMovie{{"Zulu", "1700000300", "2001", "7"}, movies[1], movies[2]})
+	if err := s.iptv.Refresh(t.Context(), addons.Shared(), source.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	byName := listing(true)
+	if got := itemNames(byName.Items); !slices.Equal(got, []string{"Bravo", "Charlie", "Zulu"}) {
+		t.Errorf("by name once the list is refreshed: %v", got)
+	}
+
+	// An administrator renames Charlie.
+	charlie := slices.IndexFunc(byName.Items, func(item BaseItemDto) bool { return item.Name == "Charlie" })
+	if charlie < 0 {
+		t.Fatalf("no Charlie in %v", itemNames(byName.Items))
+	}
+	if status, body := s.call(http.MethodPost, "/Items/"+byName.Items[charlie].Id, app("dashboard", admin),
+		map[string]any{"Name": "Able"}); status != http.StatusNoContent {
+		t.Fatalf("renaming Charlie: %d %s", status, body)
+	}
+	if got := itemNames(listing(true).Items); !slices.Equal(got, []string{"Able", "Bravo", "Zulu"}) {
+		t.Errorf("by name once Charlie is renamed: %v", got)
+	}
+	if got := itemNames(listing(false).Items); !slices.Equal(got, []string{"Zulu", "Able", "Bravo"}) {
+		t.Errorf("without a sort: %v", got)
 	}
 }
 

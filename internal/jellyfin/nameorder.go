@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,10 +29,12 @@ import (
 // series or a local folder, is read whole from the database: Polyfin
 // sorts it as library.NamePool lists it, with what the user may see only,
 // and keeps the order for drawLife, so that the pages of one listing, and
-// its letters, follow it. An addon's catalog, and a library of
-// collections, keep their catalog's order, as in Jellyfin apps: reading
-// one whole could take thousands of requests, and Silo's Apple app opens
-// every library in title order.
+// its letters, follow it, unless what the library lists changes meanwhile:
+// a scan, a link, a refresh of its source or an edit sorts it again (see
+// storedOrder). An addon's catalog, and a library of collections, keep
+// their catalog's order, as in Jellyfin apps: reading one whole could
+// take thousands of requests, and Silo's Apple app opens every library in
+// title order.
 //
 // /Items lists a stored library's titles through its folders in the
 // orders of storedSortKeys (see storedListing), each sorted from the
@@ -384,9 +387,14 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 // storedOrder returns the order sort asks for of every title of library
 // parent that user may see, narrowed to genre and by rating, ascending:
 // the one kept, else one sorted for the listings that ask for it
-// meanwhile (see nameBuilds).
+// meanwhile (see nameBuilds). An order is kept while what the stored
+// libraries list stays as it was (see library.Service.StoredChanges): a
+// scan, a link, a refresh of an IPTV source or an edit sorts again.
 func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
 	sort titleSort) (nameOrder, error) {
+	// The count is read before the titles: a change stored while they are
+	// sorted sorts them again at the next listing.
+	changes := strconv.FormatUint(h.Library.StoredChanges(), 10)
 	byName, err := h.newDrawKey(r, user, parent, genre)
 	if err != nil {
 		return nameOrder{}, err
@@ -402,9 +410,9 @@ func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accoun
 	// One order holds every kind; hiding a title sorts again, so that
 	// positions follow at once.
 	byName.kinds = ""
-	byName.order = "name|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	byName.order = "name|" + changes + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
 	key := byName
-	key.order = sort.name() + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	key.order = sort.name() + "|" + changes + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
 	if order, ok := h.nameOrders.Get(key); ok {
 		return order, nil
 	}

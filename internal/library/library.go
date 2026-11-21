@@ -282,6 +282,9 @@ type Service struct {
 	// (see overridesNow); overridesMu orders their loading and changes.
 	overrides   atomic.Pointer[overrideSet]
 	overridesMu sync.Mutex
+	// storedChanges counts the changes to the IPTV sources' lists and to
+	// the overrides (see StoredChanges).
+	storedChanges atomic.Uint64
 
 	// warmed tells when Warm read the libraries' first pages, and opened
 	// the users' own libraries opened lately (see warmedposters.go).
@@ -407,6 +410,9 @@ type Local interface {
 	// HeldTitles reports which of the Stremio identifiers ids the
 	// catalogs of folders list as titles (see skiplocal.go).
 	HeldTitles(ctx context.Context, folders []accounts.ID, ids []string) (map[string]bool, error)
+	// Changes counts the changes to what the folders list, their scans,
+	// links and options; it only grows (see StoredChanges).
+	Changes() uint64
 }
 
 // UseLocal sets what answers for local folders; it is called before the
