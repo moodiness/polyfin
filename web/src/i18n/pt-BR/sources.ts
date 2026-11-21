@@ -413,6 +413,9 @@ const sources: typeof en = {
     readExtras: 'Ler extras e mídias de tema',
     readExtrasHelp:
       'Extras, trailers locais e músicas de tema ao lado dos títulos, nomeados como no Jellyfin, como Extras/Making of.mkv, Filme (2001)-trailer.mkv ou theme.mp3, aparecem nos recursos especiais dos títulos, são reproduzidos pelo botão Trailer ou ao fundo das páginas. Desativado, o próximo rastreamento os ignora.',
+    followLinks: 'Seguir os links que saem da pasta',
+    followLinksHelp:
+      'Links simbólicos para arquivos e pastas em outro lugar do servidor, como os que gerenciadores de download criam para uma unidade montada, são lidos como arquivos desta pasta e reproduzidos para os usuários dela. Um link para outra pasta do servidor só é seguido quando todo usuário desta pasta também usa aquela. Desativado, só os links para arquivos desta pasta são seguidos.',
     add: 'Adicionar a pasta',
     added: (name: string) => `${name} foi adicionada. O primeiro rastreamento foi iniciado.`,
     edit: 'Editar a pasta',
@@ -470,6 +473,12 @@ const sources: typeof en = {
       unreadable:
         'A pasta existe, mas o Polyfin não consegue listá-la: dê à conta com a qual ele é executado (usuário 65532 no Docker) permissão para lê-la e abrir suas pastas.',
       not_folder: 'Este caminho é um arquivo, não uma pasta.',
+      too_deep:
+        'As pastas alcançadas pelos links da pasta têm mais de 32 níveis de profundidade, e o Polyfin parou aí. Aponte os links para as pastas que contêm os arquivos, ou desative Seguir os links que saem da pasta.',
+      too_many_folders:
+        'Pelos links, a pasta contém mais de 1.000.000 de pastas, mais do que o Polyfin lê em um rastreamento. Aponte os links para as pastas que contêm os arquivos, ou adicione partes delas como pastas separadas.',
+      too_many_files:
+        'Pelos links, a pasta contém mais de 4.000.000 de arquivos, mais do que o Polyfin lê em um rastreamento. Aponte os links para as pastas que contêm os arquivos, ou adicione partes delas como pastas separadas.',
     } as Record<string, string>,
     shareErrors: {
       missing: 'O compartilhamento, ou a pasta nele, não existe: verifique o endereço.',
@@ -598,6 +607,19 @@ const sources: typeof en = {
       count === 1 ? '1 episódio está só nos arquivos' : `${figure} episódios estão só nos arquivos`,
     unlistedHelp:
       'O addon de metadados que descreve as séries deles não os lista, como quando numera de outra forma as temporadas ou os especiais. Eles aparecem mesmo assim, com o nome do arquivo, e são reproduzidos. As séries e os números deles estão em Episódios só nos arquivos.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'O último rastreamento ignorou 1 link simbólico' : `O último rastreamento ignorou ${figure} links simbólicos`}: ${parts.join('; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} saindo da pasta`,
+      fenced: (figure: string) => `${figure} levando a uma pasta que alguns usuários dela não usam`,
+      broken: (figure: string) =>
+        `${figure} levando a lugar nenhum, em círculo ou de volta a uma pasta já lida`,
+      unreadable: (figure: string) => `${figure} levando ao que o Polyfin não consegue ler`,
+    },
+    skippedLinksOutHelp:
+      'Para ler os arquivos aos quais eles levam, ative Seguir os links que saem da pasta em Editar a pasta.',
+    skippedLinksUnreadableHelp:
+      'Dê à conta com a qual o Polyfin é executado (usuário 65532 no Docker) permissão para ler aquilo a que eles levam. O que foi encontrado por eles fica enquanto isso.',
     unlistedListTitle: 'Episódios só nos arquivos',
     unlistedListHelp:
       'Um arquivo só vira uma versão de um episódio do catálogo quando a temporada e o número do episódio dele são os do catálogo. Estes arquivos são numerados de outra forma, então cada um é um episódio à parte, ao lado dos do catálogo. Renomeie-os com os números do catálogo e depois escaneie. Ou escolha como os arquivos da série são numerados: eles passam a ser versões dos episódios do catálogo sem renomear.',

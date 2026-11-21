@@ -283,20 +283,30 @@ func (s *Service) watchable(ctx context.Context) ([]watchFolder, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.Query(ctx, "SELECT addon_id, poll_minutes FROM local_folders WHERE poll_minutes IS NOT NULL")
+	rows, err := s.db.Query(ctx, "SELECT addon_id, poll_minutes, follow_links FROM local_folders WHERE poll_minutes IS NOT NULL OR follow_links")
 	if err != nil {
 		return nil, err
 	}
 	polls := map[accounts.ID]int{}
+	follows := map[accounts.ID]bool{}
 	var id accounts.ID
-	var minutes int
-	if _, err := pgx.ForEachRow(rows, []any{&id, &minutes}, func() error {
-		polls[id] = minutes
+	var minutes *int
+	var follow bool
+	if _, err := pgx.ForEachRow(rows, []any{&id, &minutes, &follow}, func() error {
+		if minutes != nil {
+			polls[id] = *minutes
+		}
+		follows[id] = follow
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	return watchable(settings, installed, polls), nil
+	folders := watchable(settings, installed, polls)
+	for i := range folders {
+		// A share is listed by Polyfin itself: it follows no link.
+		folders[i].follow = follows[folders[i].id] && shareKind(folders[i].root) == ""
+	}
+	return folders, nil
 }
 
 // watchScan scans a folder that changed, once a scan of it under way
@@ -344,8 +354,9 @@ func (s *Service) Close() {
 // key and secret key; an SFTP folder a private key, with its passphrase
 // when it has one; an rclone remote the remote's name. PollMinutes is how
 // often such a folder is listed again for changes, 0 only at its scans,
-// nil for its kind's default (see defaultPollMinutes). UsedBy is who uses
-// it (see addons.UsedBy).
+// nil for its kind's default (see defaultPollMinutes). FollowLinks tells
+// whether a folder in the container follows the symbolic links leading
+// out of it, nil for no. UsedBy is who uses it (see addons.UsedBy).
 type NewFolder struct {
 	Name        string
 	Path        string
@@ -360,6 +371,7 @@ type NewFolder struct {
 	PrivateKey  string
 	Passphrase  string
 	PollMinutes *int
+	FollowLinks *bool
 	UsedBy      addons.UsedBy
 }
 
@@ -467,6 +479,12 @@ type Folder struct {
 	// Unmapped counts its shows' files their numbering could not place,
 	// each an episode of its own (see numbering.go), which Shows lists.
 	Unmapped int
+	// FollowLinks tells whether the scans, the watch and the files served
+	// of a folder in the container follow the symbolic links leading out
+	// of it (see linkRule); SkippedLinks counts those its last scan
+	// skipped.
+	FollowLinks  bool
+	SkippedLinks LinkCounts
 }
 
 // Matches counts a folder's matched files by how they were matched: by an
@@ -516,6 +534,7 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 	share := shareKind(location)
 	useArtwork := folder.UseArtwork == nil || *folder.UseArtwork
 	readExtras := folder.ReadExtras == nil || *folder.ReadExtras
+	followLinks := folder.FollowLinks != nil && *folder.FollowLinks
 	user, password := "", ""
 	if share != "" {
 		if user, err = validCredentials(folder.User, folder.Password); err != nil {
@@ -540,10 +559,10 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 				checked, failure = &at, readable(location)
 			}
 			_, err := tx.Exec(ctx, `INSERT INTO local_folders (addon_id, kind, checked_at, error, share_user, share_password, use_artwork,
-					read_extras, share_endpoint, share_region, share_remote, share_private_key, share_passphrase, poll_minutes)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, addon.ID, folder.Kind, checked, failure, user,
+					read_extras, share_endpoint, share_region, share_remote, share_private_key, share_passphrase, poll_minutes, follow_links)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`, addon.ID, folder.Kind, checked, failure, user,
 				s.box.Seal(password), useArtwork, readExtras, extra.endpoint, extra.region, extra.remote, s.box.Seal(extra.privateKey),
-				s.box.Seal(extra.passphrase), extra.pollMinutes)
+				s.box.Seal(extra.passphrase), extra.pollMinutes, followLinks)
 			if err != nil || !folder.UsedBy.Listed {
 				return err
 			}
@@ -562,7 +581,8 @@ func (s *Service) Add(ctx context.Context, folder NewFolder) (addons.Addon, erro
 // Changes are what Update changes of a folder: its name, its path or
 // address, a share's user, its password, removed when empty, whether its
 // titles show the artwork beside their files, whether its scans read the
-// extras beside them, and what it holds.
+// extras beside them, whether it follows the symbolic links leading out
+// of it, and what it holds.
 //
 // An S3 bucket's endpoint and region, an rclone remote's name, an SFTP
 // folder's private key and passphrase, removed when empty, and how often
@@ -576,6 +596,7 @@ type Changes struct {
 	Password      *string
 	UseArtwork    *bool
 	ReadExtras    *bool
+	FollowLinks   *bool
 	Kind          *string
 	Endpoint      *string
 	Region        *string
@@ -589,7 +610,9 @@ type Changes struct {
 // Update changes a folder's name, path or address, a share's user or
 // password, whether its titles show the artwork beside their files, which
 // applies at once, whether its scans read the extras beside them, which
-// applies at the next scan, or what it holds. A new path or address forgets the
+// applies at the next scan, whether it follows the symbolic links leading
+// out of it, which applies at once to the files served and has it scanned
+// and watched again, or what it holds. A new path or address forgets the
 // files found in the former one, their links included, and is scanned at
 // once, as a share whose user or password changed is. A path in the
 // container keeps no user nor password. A share moved to another server,
@@ -683,6 +706,7 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 	}
 	moved := location != current.Addon.ManifestURL
 	retyped := kind != current.Kind
+	relinked := changes.FollowLinks != nil && *changes.FollowLinks != current.FollowLinks
 	credentials := user != current.User || changes.Password != nil || !extra.same(stored) || changes.AcceptHostKey != ""
 	// A folder on another server forgets the host key of the former, and
 	// saves none of the new one without its acceptance.
@@ -700,6 +724,11 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		}
 		if changes.ReadExtras != nil {
 			if _, err := tx.Exec(ctx, "UPDATE local_folders SET read_extras = $2 WHERE addon_id = $1", id, *changes.ReadExtras); err != nil {
+				return err
+			}
+		}
+		if relinked {
+			if _, err := tx.Exec(ctx, "UPDATE local_folders SET follow_links = $2 WHERE addon_id = $1", id, *changes.FollowLinks); err != nil {
 				return err
 			}
 		}
@@ -797,8 +826,9 @@ func (s *Service) Update(ctx context.Context, id accounts.ID, changes Changes) (
 		s.retry(id)
 	}
 	s.artworkChanged()
-	if moved || retyped || share != "" && credentials {
-		// The watch reads again how often a share is listed.
+	if moved || retyped || relinked || share != "" && credentials {
+		// The watch reads again how often a share is listed, and whether
+		// a folder follows its links.
 		s.StartScan(id)
 		s.watch.kick()
 	}
@@ -821,7 +851,8 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 	}
 	f := Folder{Addon: addon, Share: shareKind(addon.ManifestURL)}
 	var password, hostKey, offeredKey string
-	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras,
+	err = s.db.QueryRow(ctx, `SELECT kind, checked_at, scanned_at, error, share_user, share_password, use_artwork, read_extras, follow_links,
+			links_out, links_fenced, links_broken, links_unreadable,
 			share_endpoint, share_region, share_remote, share_private_key <> '', share_passphrase <> '', share_host_key, share_offered_key,
 			share_host_key_forgotten, poll_minutes, search_retry_at, search_retries,
 			(SELECT count(*) FROM local_extras WHERE addon_id = $1),
@@ -834,7 +865,8 @@ func (s *Service) Folder(ctx context.Context, id accounts.ID) (Folder, error) {
 			(SELECT count(*) FROM local_tracks WHERE addon_id = $1 AND reason = '' AND loudness IS NOT NULL),
 			`+unlistedCount+`
 		FROM local_folders WHERE addon_id = $1`, id, loudness.Silence).Scan(&f.Kind, &f.CheckedAt, &f.ScannedAt, &f.Error, &f.User, &password,
-		&f.UseArtwork, &f.ReadExtras, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey, &f.HostKeyForgotten,
+		&f.UseArtwork, &f.ReadExtras, &f.FollowLinks, &f.SkippedLinks.Out, &f.SkippedLinks.Fenced, &f.SkippedLinks.Broken,
+		&f.SkippedLinks.Unreadable, &f.Endpoint, &f.Region, &f.Remote, &f.PrivateKeySet, &f.PassphraseSet, &hostKey, &offeredKey, &f.HostKeyForgotten,
 		&f.PollMinutes, &f.SearchRetryAt, &f.SearchRetries, &f.Extras, &f.Files, &f.Matched, &f.Albums, &f.Artists, &f.Gained, &f.Measured,
 		&f.Unlisted)
 	f.PasswordSet = password != ""

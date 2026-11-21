@@ -419,6 +419,9 @@ const sources: typeof en = {
     readExtras: 'Lire les bonus et les thèmes',
     readExtrasHelp:
       'Les bonus, bandes-annonces locales et musiques de thème à côté des titres, nommés comme pour Jellyfin, comme Extras/Making of.mkv, Film (2001)-trailer.mkv ou theme.mp3, s’affichent dans les bonus de leurs titres, se lisent avec le bouton Bande-annonce ou en fond de leurs pages. Désactivé, la prochaine analyse les ignore.',
+    followLinks: 'Suivre les liens qui sortent du dossier',
+    followLinksHelp:
+      'Les liens symboliques vers des fichiers et des dossiers situés ailleurs sur le serveur, comme ceux que les gestionnaires de téléchargement créent vers un disque monté, sont lus comme des fichiers de ce dossier, et ses utilisateurs peuvent les lire. Un lien vers un autre dossier du serveur n’est suivi que si chaque utilisateur de ce dossier utilise aussi celui-là. Désactivé, seuls les liens vers les fichiers de ce dossier sont suivis.',
     add: 'Ajouter le dossier',
     added: (name: string) => `${name} a été ajouté. Sa première analyse a commencé.`,
     edit: 'Modifier le dossier',
@@ -476,6 +479,12 @@ const sources: typeof en = {
       unreadable:
         'Le dossier existe mais Polyfin ne peut pas le lister\u202f: donnez au compte sous lequel il tourne, l’utilisateur 65532 sous Docker, le droit de le lire et d’ouvrir ses dossiers.',
       not_folder: 'Ce chemin est un fichier, pas un dossier.',
+      too_deep:
+        'Les dossiers atteints par les liens du dossier s’emboîtent sur plus de 32 niveaux, et Polyfin s’est arrêté là. Faites pointer les liens vers les dossiers qui contiennent les fichiers, ou désactivez Suivre les liens qui sortent du dossier.',
+      too_many_folders:
+        'Par ses liens, le dossier contient plus de 1 000 000 de dossiers, plus que Polyfin n’en lit en une analyse. Faites pointer les liens vers les dossiers qui contiennent les fichiers, ou ajoutez-en des parties comme dossiers séparés.',
+      too_many_files:
+        'Par ses liens, le dossier contient plus de 4 000 000 de fichiers, plus que Polyfin n’en lit en une analyse. Faites pointer les liens vers les dossiers qui contiennent les fichiers, ou ajoutez-en des parties comme dossiers séparés.',
     } as Record<string, string>,
     shareErrors: {
       missing: 'Le partage, ou le dossier qu’il contient, n’existe pas\u202f: vérifiez l’adresse.',
@@ -608,6 +617,20 @@ const sources: typeof en = {
         : `${figure} épisodes ne sont que dans les fichiers`,
     unlistedHelp:
       'L’addon de métadonnées qui décrit leurs séries ne les liste pas, comme lorsqu’il numérote autrement les saisons ou les épisodes spéciaux. Ils sont listés quand même, sous le nom de leur fichier, et se lisent. Leurs séries et leurs numéros sont sous Épisodes seulement dans les fichiers.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'La dernière analyse a ignoré 1 lien symbolique' : `La dernière analyse a ignoré ${figure} liens symboliques`}\u202f: ${parts.join('\u202f; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} sortant du dossier`,
+      fenced: (figure: string) =>
+        `${figure} menant à un dossier que certains de ses utilisateurs n’utilisent pas`,
+      broken: (figure: string) =>
+        `${figure} ne menant nulle part, tournant en boucle ou revenant à un dossier déjà lu`,
+      unreadable: (figure: string) => `${figure} menant à ce que Polyfin ne peut pas lire`,
+    },
+    skippedLinksOutHelp:
+      'Pour lire les fichiers vers lesquels ils mènent, activez Suivre les liens qui sortent du dossier dans Modifier le dossier.',
+    skippedLinksUnreadableHelp:
+      'Donnez au compte sous lequel tourne Polyfin, l’utilisateur 65532 sous Docker, le droit de lire ce vers quoi ils mènent. Ce qui a été trouvé par eux reste en attendant.',
     unlistedListTitle: 'Épisodes seulement dans les fichiers',
     unlistedListHelp:
       'Un fichier ne devient une version d’un épisode du catalogue que si sa saison et son numéro d’épisode sont ceux du catalogue. Ces fichiers sont numérotés autrement\u202f: chacun est donc un épisode à part, à côté de ceux du catalogue. Renommez-les avec les numéros du catalogue, puis analysez le dossier. Ou choisissez comment les fichiers de la série sont numérotés\u202f: ils deviennent alors des versions des épisodes du catalogue sans être renommés.',

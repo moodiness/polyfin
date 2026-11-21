@@ -97,7 +97,8 @@ type found struct {
 // found in them before is not gone. open opens one of the files found for
 // reading, seekable; root is a folder's real path in the container, empty
 // for a share. prints are a share's folders listed, by path, "" for its
-// root, with their print (see folderPrint).
+// root, with their print (see folderPrint). links counts the symbolic
+// links a walk of a folder in the container skipped.
 type listing struct {
 	files   map[string]found
 	sides   map[string]found
@@ -105,86 +106,31 @@ type listing struct {
 	open    func(ctx context.Context, rel string) (io.ReadCloser, error)
 	root    string
 	prints  map[string]uint64
+	links   LinkCounts
 }
 
 // walk lists the files a scan of a folder of kind reads under root, disc
 // images, the files of DVDs and Blu-ray discs' playlists among them, and
-// their side files. It follows no symbolic link to a folder, and none to a
-// file out of root.
-func walk(ctx context.Context, root, kind string) (listing, error) {
+// their side files. It follows the symbolic links to files of the folder,
+// none to a folder of it, and those leading out of it as rule allows (see
+// localWalk.link); a walk that follows them is bounded as a share's is.
+func walk(ctx context.Context, root, kind string, rule linkRule) (listing, error) {
 	real, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return listing{}, err
 	}
 	list := listing{files: map[string]found{}, sides: map[string]found{}, root: real, open: func(_ context.Context, rel string) (io.ReadCloser, error) {
-		target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
+		target, err := rule.resolve(real, rel)
 		if err != nil {
 			return nil, err
 		}
-		if !within(real, target) {
-			return nil, fs.ErrNotExist
-		}
 		return os.Open(target)
 	}}
-	err = filepath.WalkDir(real, func(path string, d fs.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		rel, relErr := filepath.Rel(real, path)
-		if relErr != nil {
-			return relErr
-		}
-		rel = filepath.ToSlash(rel)
-		if err != nil {
-			if path == real {
-				return err
-			}
-			// A folder it cannot list keeps what was found in it.
-			list.skipped = append(list.skipped, rel)
-			if d != nil && d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		var info fs.FileInfo
-		file, side := false, false
-		if !d.IsDir() {
-			file, side = walked(kind, rel)
-		}
-		switch {
-		case path == real:
-			return nil
-		case d.IsDir():
-			if skippedIn(kind, d.Name()) {
-				return fs.SkipDir
-			}
-			return nil
-		case !file && !side:
-			return nil
-		case d.Type()&fs.ModeSymlink != 0:
-			target, err := filepath.EvalSymlinks(path)
-			if err != nil || !within(real, target) {
-				return nil
-			}
-			if info, err = os.Stat(target); err != nil || !info.Mode().IsRegular() {
-				return nil
-			}
-		case d.Type().IsRegular():
-			if info, err = d.Info(); err != nil {
-				list.skipped = append(list.skipped, rel)
-				return nil
-			}
-		default:
-			return nil
-		}
-		f := found{size: info.Size(), modified: info.ModTime().UTC().Truncate(time.Microsecond)}
-		if !file {
-			list.sides[rel] = f
-		} else {
-			list.files[rel] = f
-		}
-		return nil
-	})
+	w := localWalk{ctx: ctx, real: real, kind: kind, rule: rule, list: &list, count: walkCount{bounds: shareWalk}}
+	if rule.follow {
+		w.seen = map[string]bool{}
+	}
+	err = w.tree(real, "")
 	return list, err
 }
 
@@ -502,12 +448,27 @@ func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder)
 		}
 	} else if failure = readable(root); failure != "" {
 		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.LogName(), "path", root, "reason", failure)
-	} else if list, err = walk(ctx, root, folder.Kind); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
+	} else {
+		rule, err := s.linkRule(ctx, id, folder.FollowLinks)
+		if err != nil {
+			return err
 		}
-		s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.LogName(), "path", root, "error", err)
-		failure = errUnreadable
+		var bound *shareBound
+		switch list, err = walk(ctx, root, folder.Kind, rule); {
+		case err == nil:
+			s.logLinks(folder, list.links)
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case errors.As(err, &bound):
+			// Only a folder following the links leading out of it is
+			// bounded.
+			s.logger.Warn("A local folder holds more than a scan reads through its links", "folder", folder.Addon.LogName(), "path", root,
+				"error", err)
+			failure = bound.failure
+		default:
+			s.logger.Warn("A local folder cannot be read", "folder", folder.Addon.LogName(), "path", root, "error", err)
+			failure = errUnreadable
+		}
 	}
 	if failure != "" {
 		if metBound(failure) {
@@ -758,13 +719,16 @@ func (s *Service) tellScanned(ctx context.Context, id accounts.ID, paths []strin
 	s.found(videos)
 }
 
-// finish marks a folder scanned at at, keeps the prints of a share's
-// folders its listing has (see Service.shareSeen), forgets what was read
-// in the audio of files gone or changed (see forgetAudio), and gives what
-// users did with the titles its files were before what it holds changed to
-// those they are now (see follow).
+// finish marks a folder scanned at at, with the links its walk skipped,
+// keeps the prints of a share's folders its listing has (see
+// Service.shareSeen), forgets what was read in the audio of files gone or
+// changed (see forgetAudio), and gives what users did with the titles its
+// files were before what it holds changed to those they are now (see
+// follow).
 func (s *Service) finish(ctx context.Context, id accounts.ID, at time.Time, list listing) error {
-	if _, err := s.db.Exec(ctx, "UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '' WHERE addon_id = $1", id, at); err != nil {
+	if _, err := s.db.Exec(ctx, `UPDATE local_folders SET checked_at = $2, scanned_at = $2, error = '', links_out = $3, links_fenced = $4,
+		links_broken = $5, links_unreadable = $6 WHERE addon_id = $1`, id, at, list.links.Out, list.links.Fenced, list.links.Broken,
+		list.links.Unreadable); err != nil {
 		return err
 	}
 	if list.prints != nil {

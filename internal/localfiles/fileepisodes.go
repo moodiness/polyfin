@@ -384,10 +384,12 @@ func framed(rel string) bool {
 // made, answers ErrGone; a file whose frame could not be made answers so
 // without trying again for frameRetry, unless it changed.
 func (s *Service) episodeFrame(ctx context.Context, id accounts.ID) (io.ReadSeekCloser, time.Time, error) {
+	var folder accounts.ID
 	var root, rel string
+	var follow bool
 	var modified time.Time
-	err := s.db.QueryRow(ctx, `SELECT a.manifest_url, f.path, f.modified FROM local_files f JOIN addons a ON a.id = f.addon_id
-		JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.id = $1 AND l.kind = $2`, id, KindShows).Scan(&root, &rel, &modified)
+	err := s.db.QueryRow(ctx, `SELECT f.addon_id, a.manifest_url, f.path, f.modified, l.follow_links FROM local_files f JOIN addons a ON a.id = f.addon_id
+		JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.id = $1 AND l.kind = $2`, id, KindShows).Scan(&folder, &root, &rel, &modified, &follow)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && !framed(rel) {
 		return nil, time.Time{}, ErrGone
 	}
@@ -400,9 +402,9 @@ func (s *Service) episodeFrame(ctx context.Context, id accounts.ID) (io.ReadSeek
 		if err != nil {
 			return nil, time.Time{}, ErrGone
 		}
-		target, err := filepath.EvalSymlinks(filepath.Join(real, filepath.FromSlash(rel)))
-		if err != nil || !within(real, target) {
-			return nil, time.Time{}, ErrGone
+		target, err := s.resolve(ctx, folder, follow, real, rel)
+		if err != nil {
+			return nil, time.Time{}, err
 		}
 		if info, err := os.Stat(target); err != nil || !info.Mode().IsRegular() {
 			return nil, time.Time{}, ErrGone

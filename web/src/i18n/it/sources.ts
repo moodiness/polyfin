@@ -415,6 +415,9 @@ const sources: typeof en = {
     readExtras: 'Leggi extra e contenuti a tema',
     readExtrasHelp:
       'Extra, trailer locali e musiche a tema accanto ai titoli, con i nomi usati da Jellyfin, come Extras/Making of.mkv, Film (2001)-trailer.mkv o theme.mp3, vengono mostrati tra i contenuti speciali dei rispettivi titoli, riprodotti dal pulsante Trailer o in sottofondo alle loro pagine. Se disattivato, la scansione successiva li esclude.',
+    followLinks: 'Segui i collegamenti che escono dalla cartella',
+    followLinksHelp:
+      'I collegamenti simbolici a file e cartelle che si trovano altrove sul server, come quelli che i gestori di download creano verso un’unità montata, vengono letti come file di questa cartella e si riproducono per i suoi utenti. Un collegamento a un’altra cartella del server viene seguito solo se ogni utente di questa cartella usa anche quella. Se disattivato, vengono seguiti solo i collegamenti ai file di questa cartella.',
     add: 'Aggiungi la cartella',
     added: (name: string) => `${name} è stata aggiunta. La sua prima scansione è iniziata.`,
     edit: 'Modifica la cartella',
@@ -473,6 +476,12 @@ const sources: typeof en = {
       unreadable:
         'La cartella esiste ma Polyfin non riesce a elencarne il contenuto: concedi all’account con cui è in esecuzione (l’utente 65532 in Docker) il permesso di leggerla e di aprirne le cartelle.',
       not_folder: 'Questo percorso è un file, non una cartella.',
+      too_deep:
+        'Le cartelle raggiunte dai collegamenti della cartella sono annidate per più di 32 livelli, e Polyfin si è fermato lì. Fai puntare i collegamenti alle cartelle che contengono i file, oppure disattiva Segui i collegamenti che escono dalla cartella.',
+      too_many_folders:
+        'Tramite i suoi collegamenti, la cartella contiene più di 1.000.000 di cartelle, più di quante Polyfin ne legga in una scansione. Fai puntare i collegamenti alle cartelle che contengono i file, oppure aggiungine alcune parti come cartelle separate.',
+      too_many_files:
+        'Tramite i suoi collegamenti, la cartella contiene più di 4.000.000 di file, più di quanti Polyfin ne legga in una scansione. Fai puntare i collegamenti alle cartelle che contengono i file, oppure aggiungine alcune parti come cartelle separate.',
     } as Record<string, string>,
     shareErrors: {
       missing: 'La condivisione, o la cartella al suo interno, non esiste: verifica l’indirizzo.',
@@ -602,6 +611,20 @@ const sources: typeof en = {
       count === 1 ? '1 episodio è solo nei file' : `${figure} episodi sono solo nei file`,
     unlistedHelp:
       'L’addon di metadati che descrive le loro serie non li elenca, come quando numera in altro modo le stagioni o gli speciali. Sono elencati comunque, con il nome del loro file, e si riproducono. Le loro serie e i loro numeri sono in Episodi solo nei file.',
+    skippedLinksTitle: (count: number, figure: string, parts: string[]) =>
+      `${count === 1 ? 'L’ultima scansione ha ignorato 1 collegamento simbolico' : `L’ultima scansione ha ignorato ${figure} collegamenti simbolici`}: ${parts.join('; ')}`,
+    skippedLinks: {
+      out: (figure: string) => `${figure} che escono dalla cartella`,
+      fenced: (figure: string) =>
+        `${figure} verso una cartella che alcuni dei suoi utenti non usano`,
+      broken: (figure: string) =>
+        `${figure} che non portano da nessuna parte, girano in tondo o tornano a una cartella già letta`,
+      unreadable: (figure: string) => `${figure} verso qualcosa che Polyfin non può leggere`,
+    },
+    skippedLinksOutHelp:
+      'Per leggere i file a cui portano, attiva Segui i collegamenti che escono dalla cartella in Modifica la cartella.',
+    skippedLinksUnreadableHelp:
+      'Concedi all’account con cui è in esecuzione Polyfin (l’utente 65532 in Docker) il permesso di leggere ciò a cui portano. Quanto trovato tramite essi resta nel frattempo.',
     unlistedListTitle: 'Episodi solo nei file',
     unlistedListHelp:
       'Un file diventa una versione di un episodio del catalogo solo quando la sua stagione e il suo numero di episodio sono quelli del catalogo. Questi file sono numerati in altro modo, quindi ognuno è un episodio a sé, accanto a quelli del catalogo. Rinominali con i numeri del catalogo, poi esegui la scansione. Oppure scegli come sono numerati i file della serie: diventano allora versioni degli episodi del catalogo senza rinominarli.',
