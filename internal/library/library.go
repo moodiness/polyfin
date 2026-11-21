@@ -2434,6 +2434,34 @@ func (s *Service) describedMeta(ctx context.Context, v view, r record, shared bo
 	return stremio.Meta{}, installed{}, false
 }
 
+// withDescribedFacts lays over the movies and series items lists, which
+// records found, the facts their item page takes from their description
+// (see withFacts): their provider identifiers, status and end date, so
+// that a listing or a search tells what the page does. Only descriptions
+// kept in memory count, as describedMeta finds them with inMemory, its
+// local folders' episodes aside: it asks no addon and reads no database.
+func (s *Service) withDescribedFacts(v view, items []Item, records []record) {
+	for i := range records {
+		r := records[i]
+		if r.Meta == nil || items[i].Kind != KindMovie && items[i].Kind != KindSeries {
+			continue
+		}
+		for _, candidate := range describers(v, r, false) {
+			if own(candidate.addon) {
+				if r.Addon != nil && candidate.addon.ID == *r.Addon {
+					break
+				}
+				continue
+			}
+			if kept, ok := s.metas.Get(metaKey{candidate.addon.ID, r.Meta.Type, r.Meta.ID}); ok {
+				_, last := parseYears(string(kept.value.ReleaseInfo))
+				s.withFacts(&items[i], kept.value, last)
+				break
+			}
+		}
+	}
+}
+
 // TitleMeta returns the description the server's addons give of a title by
 // its Stremio type and identifier, from the first of them that describes
 // it, Polyfin's own sources left out: local folders name the files linked

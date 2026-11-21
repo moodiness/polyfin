@@ -530,25 +530,11 @@ func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 		date := time.Date(first, time.January, 1, 0, 0, 0, 0, time.UTC)
 		item.PremiereDate = &date
 	}
-	if last > 0 {
-		end := time.Date(last, time.December, 31, 0, 0, 0, 0, time.UTC)
-		item.EndDate = &end
-	}
 	item.Runtime = parseRuntime(string(meta.Runtime))
 	item.Language = strings.TrimSpace(meta.Language)
 	item.CommunityRating = parseRating(string(meta.ImdbRating))
 	item.OfficialRating = certification(meta, country)
-	switch strings.ToLower(meta.Status) {
-	case "ended", "canceled", "cancelled":
-		item.Status = "Ended"
-	case "":
-	default:
-		item.Status = "Continuing"
-	}
-	item.ProviderIDs, item.sourceIDs, item.TMDBFromMoviedb = sourceIDs(meta), nil, meta.TmdbFromMoviedb
-	if item.Kind == KindMovie || item.Kind == KindSeries {
-		s.overridesNow().fields[item.ID].identify(item, meta)
-	}
+	s.withFacts(item, meta, last)
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
 	item.PosterShape = meta.Shape()
 	item.People = people(meta)
@@ -563,6 +549,34 @@ func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 		item.Trailers = append(item.Trailers, Trailer{Name: name, URL: "https://www.youtube.com/watch?v=" + trailer.Source})
 	}
 	item.StremioType, item.StremioID = meta.Type, meta.ID
+}
+
+// withFacts fills an item with what a title's metadata tells of its run
+// and identity: its end date, of the last year of its release, last, its
+// status, and a movie's or series' provider identifiers with what
+// administrators set of them (see providerIDs). Those are what listings
+// take from a kept description (see withDescribedFacts).
+func (s *Service) withFacts(item *Item, meta stremio.Meta, last int) {
+	if last > 0 {
+		end := time.Date(last, time.December, 31, 0, 0, 0, 0, time.UTC)
+		item.EndDate = &end
+	}
+	// A series whose release closes, "2001-2004", has ended when its
+	// description gives no status.
+	switch strings.ToLower(meta.Status) {
+	case "ended", "canceled", "cancelled":
+		item.Status = "Ended"
+	case "":
+		if last > 0 && item.Kind == KindSeries {
+			item.Status = "Ended"
+		}
+	default:
+		item.Status = "Continuing"
+	}
+	item.ProviderIDs, item.sourceIDs, item.TMDBFromMoviedb = sourceIDs(meta), nil, meta.TmdbFromMoviedb
+	if item.Kind == KindMovie || item.Kind == KindSeries {
+		s.overridesNow().fields[item.ID].identify(item, meta)
+	}
 }
 
 // people are the people a description credits, by name, with the TMDB
@@ -596,10 +610,18 @@ func released(video stremio.Video, now time.Time) bool {
 }
 
 // releasedOn is released for an episode released on date, its Released
-// as read (see parseDate).
+// as read (see parseDate). A Released without a time of day, such as
+// "2024-03-05", tells the day only: the episode counts as out at the end
+// of that day (UTC), not at its first instant.
 func releasedOn(video stremio.Video, date *time.Time, now time.Time) bool {
 	if video.Available != nil {
 		return *video.Available
 	}
-	return date == nil || !date.After(now)
+	if date == nil {
+		return true
+	}
+	if len(strings.TrimSpace(video.Released)) == len(time.DateOnly) {
+		return !date.AddDate(0, 0, 1).After(now)
+	}
+	return !date.After(now)
 }

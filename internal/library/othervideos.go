@@ -179,8 +179,11 @@ const (
 // series what it holds. The descriptions kept answer; the others are
 // asked for, waiting at most shapeWait, unless the listing asks no addon.
 // It returns the places of the titles whose descriptions are still
-// unknown, whose kind is a guess.
+// unknown, whose kind is a guess. Every listing goes through it: shaped,
+// its movies and series take the facts of their kept descriptions too
+// (see withDescribedFacts).
 func (s *Service) shapeOthers(ctx context.Context, v view, items []Item, records []record) []int {
+	defer s.withDescribedFacts(v, items, records)
 	var unknown []int
 	for i := range records {
 		if !records[i].shapedTitle() {
