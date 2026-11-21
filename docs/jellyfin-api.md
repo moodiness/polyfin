@@ -296,8 +296,9 @@ Libraries come from addons' catalogs, read a page at a time. Listings, search an
 
 ### Library menu visibility for apps
 
-- `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>}]}`.
-- Polyfin's own Live TV, Playlists and Collections views are never left out. The Watchlist is a playlist, not a view: `/UserViews` does not list it. Every user has a Watchlist playlist from the start, so `/UserViews` lists the Playlists view for everyone.
+- `GET /Polyfin/UserViews` lists the views `/UserViews` gives the caller, in the same order, as `{"Items": [{"Id": <the view's Id>, "HideInMenus": <true when the web player's menus leave it out>, "Catalog": <true for a library that lists an addon's catalog whose titles Polyfin does not store>}]}`.
+- Polyfin's own Live TV, Playlists and Collections views are never left out, and never `Catalog`. Libraries of collections, of music, of local folders and of IPTV sources are not `Catalog` either. The Watchlist is a playlist, not a view: `/UserViews` does not list it. Every user has a Watchlist playlist from the start, so `/UserViews` lists the Playlists view for everyone.
+- The web player's Polyfin script opens a `Catalog` library on its default screen, not on Suggestions, from the title of its home row (see [Libraries and home page](web-client.md#libraries-and-home-page)).
 
 ### Libraries shown as movies and shows for apps
 

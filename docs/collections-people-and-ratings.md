@@ -55,7 +55,7 @@ The change applies at once.
 - Polyfin's collection libraries get a home row; a Jellyfin library of collections does not. Polyfin tells apps they are libraries of mixed content, so that they get one. The apps chosen in **Apps that show collection libraries by collection** are told they hold collections, as Jellyfin's Collections view. Opening one shows its collections.
 - Without an image, a collection library's tile shows the icon of a mixed library. Set its image to **Generated** to show its first collections' posters (see [Library images](artwork-and-editing.md#library-images)).
 - Polyfin draws an image for a collection without one. Jellyfin draws none: apps show their placeholder.
-- Polyfin's [web player script](web-client.md#dashboard-links-and-single-sign-on) opens a collection library on its default screen from its row's title, as such a library has no suggestions of its own. jellyfin-web opens a library's Suggestions from there, whatever its default screen.
+- Polyfin's [web player script](web-client.md#dashboard-links-and-single-sign-on) opens a collection library on its default screen from its row's title, as such a library has no suggestions of its own. jellyfin-web opens a library's Suggestions from there, whatever its default screen. The script does the same for a library that lists an addon's catalog of movies or shows: its row is the catalog's first titles, not recent additions, so its title opens the default screen, Movies or Shows unless the user chose another in the web player's **Settings › Home**.
 
 API details: [Collections from addons](jellyfin-api.md#collections-from-addons-for-apps).
 
