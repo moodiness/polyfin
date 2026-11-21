@@ -265,6 +265,7 @@ For a Matroska file, Polyfin reads the track whole through the file's index, whi
 
 - Polyfin fetches little more than those lines, many in one request when the host allows it.
 - It keeps the track, so reading takes seconds the first time and nothing after.
+- A track no playback used for 60 days is deleted by the **Clean the kept subtitle tracks** task, unless its version was analysed in that time. The next playback that shows it reads it again through the index.
 - With [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, Polyfin finds where the subtitle tracks sit before playback starts.
 
 ### Hosts that answer one range at a time
