@@ -13,21 +13,76 @@ import (
 
 // With Settings › Playback › Prefer versions the app plays without
 // conversion, a title's versions are ordered for the app asking when its
-// device profile is known (see knownPlay): the versions Polyfin knows the
-// app plays without conversion, as they are or repackaged with their
-// tracks copied, and in the user's languages as well as the first version
-// of the order known (see playedLanguages), come before the others, after
-// the other steps of the order but Play local files first, whose local
-// files stay first for its users (see ordered). Item details, PlaybackInfo
-// and every request naming the title's own identifier for its first
-// version follow it, so that the version menu shows first the version
-// Play prefers, and the identifier the app sends for it picks it (see
-// playbackInfo). Polyfin knows how a version plays as its name says it
-// (see listedDecision), reading nothing:
-// a version neither analyzed nor described by RemuxDB stays among those
-// that need a conversion. Without the profile, before a device's first
-// play since the server started, the order is the server's, and Play
-// prefers a version among them as it does for a play picking none.
+// device profile is known (see knownPlay): the versions Polyfin knows
+// cost the app's play least (see playCost), among those in the user's
+// languages as well as the first version of the order known (see
+// playedLanguages), come before the others, after the other steps of the
+// order but Play local files first, whose local files stay first for its
+// users (see ordered). Item details, PlaybackInfo and every request
+// naming the title's own identifier for its first version follow it, so
+// that the version menu shows first the version Play prefers, and the
+// identifier the app sends for it picks it (see playbackInfo). Polyfin
+// knows how a version plays as its name says it (see listedDecision),
+// reading nothing: a version neither analyzed nor described by RemuxDB
+// ranks with those whose video is converted within the app's bitrate
+// cap. Without the profile, before a device's first play since the server
+// started, the order is the server's, and Play prefers a version among
+// them as it does for a play picking none.
+
+// playCost ranks how a version plays on an app, the cheapest first: as it
+// is, then repackaged with its tracks copied, then with its audio alone
+// converted, then with its video converted, from a source within the
+// app's bitrate cap, then from one above it, which the conversion must
+// bring down. A version known not to play on the app, or to play other
+// languages than the first known, ranks with the last.
+type playCost int
+
+const (
+	costDirect playCost = iota
+	costCopied
+	costAudioConverted
+	costVideoConverted
+	costOverCap
+)
+
+// unknownCost is the rank of a version whose play on the app is not known:
+// it may need anything, and comes after those known to need no video
+// conversion, before those known to need one above the app's cap.
+const unknownCost = costVideoConverted
+
+// playCostOf ranks how decision plays a source of the given bitrate for
+// request. A source above the user's bitrate limit plays only with its
+// video converted down to it; for a user who has their sound converted,
+// every version's audio is, and a version whose video is copied counts as
+// copied.
+func playCostOf(request playbackInfoRequest, bitrate int64, decision playback.Decision) playCost {
+	switch {
+	case beyondUserLimit(request, bitrate, decision):
+		return costOverCap
+	case decision.DirectPlay:
+		return costDirect
+	case !decision.Streamed():
+		return costOverCap
+	case decision.Video == nil && (decision.Audio == nil || request.convertSound):
+		return costCopied
+	case decision.Video == nil:
+		return costAudioConverted
+	case overAppCap(request, bitrate):
+		return costOverCap
+	}
+	return costVideoConverted
+}
+
+// overAppCap reports whether a source's bitrate is known and above the
+// most the app takes: its PlaybackInfo's MaxStreamingBitrate, lowered to
+// the user's limit (see limitBitrate), else its device profile's.
+func overAppCap(request playbackInfoRequest, bitrate int64) bool {
+	limit := request.MaxStreamingBitrate.value
+	if limit <= 0 && request.DeviceProfile != nil && request.DeviceProfile.MaxStreamingBitrate != nil {
+		limit = *request.DeviceProfile.MaxStreamingBitrate
+	}
+	return limit > 0 && bitrate > limit
+}
 
 // appOrder orders versions for an app: its device, the request a
 // PlaybackInfo of it would make, limited for the user, and the conversions
@@ -83,18 +138,19 @@ func (h *Handler) mediaContext(r *http.Request, route mediaRoute, user accounts.
 	return context.WithValue(ctx, callerKey{}, caller{User: user, Device: device, Token: token})
 }
 
-// appPlay is how the app plays a version, as far as Polyfin knows it: with
-// or without conversion, and in which languages.
+// appPlay is how the app plays a version, as far as Polyfin knows it: at
+// which cost, and in which languages.
 type appPlay struct {
-	unconverted bool
-	languages   playedLanguages
+	cost      playCost
+	languages playedLanguages
 }
 
-// playsUnconverted tells how the app plays those of item's versions whose
+// appPlays tells how the app plays those of item's versions whose
 // analysis or RemuxDB's description Polyfin has, with the user's track
-// preferences and the subtitle files listed lately: without conversion or
-// not, and the languages of the tracks it plays. The others are left out.
-func (h *Handler) playsUnconverted(ctx context.Context, a *appOrder, user accounts.User, item library.Item, versions []library.Version) map[accounts.ID]appPlay {
+// preferences and the subtitle files listed lately: at which cost, last
+// for a version it does not play, and the languages of the tracks it
+// plays. The others are left out.
+func (h *Handler) appPlays(ctx context.Context, a *appOrder, user accounts.User, item library.Item, versions []library.Version) map[accounts.ID]appPlay {
 	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	p.subtitles, _ = h.keptSubtitles(user, item.ID)
 	result := make(map[accounts.ID]appPlay, len(versions))
@@ -112,10 +168,11 @@ func (h *Handler) playsUnconverted(ctx context.Context, a *appOrder, user accoun
 			streams = h.withTextCopies(ctx, p, version, analysis, streams)
 		}
 		decision, plays := h.listedDecision(p, version, streams, analysis, a.request, a.allowed)
-		result[version.ID] = appPlay{
-			unconverted: plays && (decision.DirectPlay || decision.Streamed() && decision.Video == nil && decision.Audio == nil),
-			languages:   languagesPlayed(p.tracks, streams, decision),
+		cost := costOverCap
+		if plays {
+			cost = playCostOf(a.request, analysis.Bitrate, decision)
 		}
+		result[version.ID] = appPlay{cost: cost, languages: languagesPlayed(p.tracks, streams, decision)}
 	}
 	return result
 }
@@ -125,10 +182,10 @@ func (h *Handler) playsUnconverted(ctx context.Context, a *appOrder, user accoun
 // (see trackPreferences.audioRank), and its subtitle's when one shows.
 //
 // Prefer versions the app plays without conversion never trades them for
-// a conversion saved: a version the app plays without conversion comes
-// before the one the order would play only when its languages are as good
-// (see asGoodAs). The user's languages, the server's default ones and the
-// choices remembered on the title thus come first, then fewer conversions.
+// a conversion saved: a version cheaper for the app to play comes before
+// the one the order would play only when its languages are as good (see
+// asGoodAs). The user's languages, the server's default ones and the
+// choices remembered on the title thus come first, then the cheapest play.
 type playedLanguages struct {
 	audio     string
 	audioRank int

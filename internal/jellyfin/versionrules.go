@@ -584,12 +584,13 @@ func rangeRank(hdr, first library.DynamicRange) int {
 // the quality group, leaving out the versions taller than it while one
 // fits or has an unknown height, else keeping them all, the closest to the
 // group first; then the criteria, ties keeping the addons' order. Then, for
-// the app asking, the versions it plays without conversion come first,
-// those playing the user's languages as well as the first known does (see
-// appOrder); last, Play local files first puts the local files before the
-// others for the users given it (see localfirst.go), each side keeping
-// the order above. With criteria or an order for the app, a page of the
-// title open keeps the versions it shows in place (see keptInPlace).
+// the app asking, the versions it plays at the least cost come first (see
+// playCost), among those playing the user's languages as well as the first
+// known does (see appOrder); last, Play local files first puts the local
+// files before the others for the users given it (see localfirst.go), each
+// side keeping the order above. With criteria or an order for the app, a
+// page of the title open keeps the versions it shows in place (see
+// keptInPlace).
 func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.Item, versions []library.Version) []library.Version {
 	rules := h.rulesFor(ctx, user)
 	var sources map[accounts.ID]int
@@ -621,7 +622,7 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.
 		}
 	}
 	app := h.appOrderFor(ctx, user)
-	var unconverted map[accounts.ID]bool
+	var costs map[accounts.ID]playCost
 	place := make(map[accounts.ID]int, len(kept))
 	for i, version := range kept {
 		place[version.ID] = i
@@ -632,7 +633,7 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.
 				return c
 			}
 		}
-		if c := cmp.Compare(convertedRank(unconverted[a.ID]), convertedRank(unconverted[b.ID])); c != 0 {
+		if c := cmp.Compare(costRank(costs, a.ID), costRank(costs, b.ID)); c != 0 {
 			return c
 		}
 		fa, fb := facts[a.ID], facts[b.ID]
@@ -648,12 +649,12 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.
 	}
 	slices.SortFunc(kept, compare)
 	if app != nil {
-		// The versions the app plays without conversion move first, those
+		// The versions the app plays at the least cost move first, those
 		// whose languages are as good as the first version's known in the
 		// order above, on each side of Play local files first.
-		played := h.playsUnconverted(ctx, app, user, item, kept)
+		played := h.appPlays(ctx, app, user, item, kept)
 		firsts := map[int]playedLanguages{}
-		unconverted = make(map[accounts.ID]bool, len(played))
+		costs = make(map[accounts.ID]playCost, len(played))
 		for _, version := range kept {
 			side := 0
 			if user.LocalFirst {
@@ -667,7 +668,10 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.
 			if !found {
 				first, firsts[side] = plays.languages, plays.languages
 			}
-			unconverted[version.ID] = plays.unconverted && plays.languages.asGoodAs(first)
+			costs[version.ID] = plays.cost
+			if !plays.languages.asGoodAs(first) {
+				costs[version.ID] = costOverCap
+			}
 		}
 		slices.SortFunc(kept, compare)
 	}
@@ -679,13 +683,13 @@ func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.
 	return kept
 }
 
-// convertedRank is 0 for a version the app plays without conversion, 1
-// for another (see appOrder).
-func convertedRank(unconverted bool) int {
-	if unconverted {
-		return 0
+// costRank is how a version ranks for the app (see appOrder): its cost
+// among costs, else unknownCost.
+func costRank(costs map[accounts.ID]playCost, id accounts.ID) playCost {
+	if cost, ok := costs[id]; ok {
+		return cost
 	}
-	return 1
+	return unknownCost
 }
 
 // keptInPlace keeps the versions of shown, those an open page lists, in

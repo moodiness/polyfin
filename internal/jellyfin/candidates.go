@@ -13,14 +13,15 @@ import (
 )
 
 // A play chooses among a title's versions, in their order: the first that
-// plays on the app (see decide), or with PreferDirectPlay the first that
-// plays without conversion. The first versions, VersionAttempts of them,
-// are analyzed if they were not before; the others are tried only when
-// they were, which costs nothing. Up to parallelAttempts of them are read
-// at once, a version found unreadable making room for the next: a version
-// whose host never answers holds up the play only for versionPatience once
-// a later one is ready, rather than for the whole analysis timeout. Each
-// analysis runs to its end all the same, and is kept for the next play.
+// plays on the app (see decide), or with PreferDirectPlay the one that
+// plays at the least cost (see playCost). The first versions,
+// VersionAttempts of them, are analyzed if they were not before; the
+// others are tried only when they were, which costs nothing. Up to
+// parallelAttempts of them are read at once, a version found unreadable
+// making room for the next: a version whose host never answers holds up
+// the play only for versionPatience once a later one is ready, rather than
+// for the whole analysis timeout. Each analysis runs to its end all the
+// same, and is kept for the next play.
 
 const (
 	// endedTorrentWait is how long a play at Torrents at once waits for a
@@ -85,22 +86,22 @@ type chosen struct {
 	late       bool
 }
 
-// tried is what trying a candidate gave: whether it plays, and plays
-// without conversion, with the languages of the tracks it plays;
-// unreadable when it could not be analyzed, unstarted when it is a
-// torrent that could not start.
+// tried is what trying a candidate gave: whether it plays, and at which
+// cost, with the languages of the tracks it plays; unreadable when it
+// could not be analyzed, unstarted when it is a torrent that could not
+// start.
 type tried struct {
-	n           int
-	decided     decided
-	plays       bool
-	unconverted bool
-	languages   playedLanguages
-	unreadable  bool
-	unstarted   bool
+	n          int
+	decided    decided
+	plays      bool
+	cost       playCost
+	languages  playedLanguages
+	unreadable bool
+	unstarted  bool
 }
 
 // choose tries the candidates of p for a play, and returns the version
-// chosen. prefer looks for a version that plays without conversion among
+// chosen. prefer looks for the version that plays at the least cost among
 // those analyzed now, else takes the first that plays; for a user given
 // Play local files first, among the local files while one plays (see
 // pick).
@@ -230,7 +231,7 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			return tried{n: n}
 		}
 		outcomes.note(n, TryPlays, nil)
-		return tried{n: n, decided: d, plays: true, unconverted: prefer && h.unconverted(detached.Context(), d, request),
+		return tried{n: n, decided: d, plays: true, cost: playCostOf(request, d.analysis.Bitrate, d.decision),
 			languages: languagesPlayed(p.tracks, d.source.MediaStreams, d.decision)}
 	}
 
@@ -277,8 +278,9 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 			if n >= 0 {
 				result.decided = &states[n].decided
 				if n > 0 && states[0] != nil && states[0].plays {
-					h.Logger.Info("Prefer versions the app plays without conversion passed over the first version, which the app plays only converted",
-						"item", p.item.ID, "passed", p.versions[c.order[0]].AddonLog, "addon", states[n].decided.version.AddonLog)
+					h.Logger.Info("Prefer versions the app plays without conversion passed over the first version for one that costs the app less to play",
+						"item", p.item.ID, "passed", p.versions[c.order[0]].AddonLog, "passedPlays", delivery(states[0].decided.decision),
+						"addon", states[n].decided.version.AddonLog, "plays", delivery(states[n].decided.decision))
 				}
 			}
 			break
@@ -343,31 +345,40 @@ func (h *Handler) choose(r *http.Request, user accounts.User, p playable, opened
 
 // pick picks among the candidates tried, in order, the one a play
 // chooses, and reports whether it is done: the first that plays, or with
-// prefer the first that plays without conversion and the user's languages
-// as well as the first that plays (see playedLanguages), else the first
-// that plays. sides parts the candidates, by their index: prefer looks no
-// further than the side of the first that plays, so that, for a user given
-// Play local files first, a local file that plays at all comes before a
-// remote stream. Until patient ends, it waits for each candidate before the
-// one it would pick; then those still being tried are passed over.
+// prefer the one that plays at the least cost (see playCost) among those
+// playing the user's languages as well as the first that plays (see
+// playedLanguages), the first of them on a tie. sides parts the
+// candidates, by their index: prefer looks no further than the side of
+// the first that plays, so that, for a user given Play local files first,
+// a local file that plays at all comes before a remote stream. Until
+// patient ends, it waits for each candidate before the first that plays,
+// and, while the cheapest found needs a conversion, for those after it;
+// then those still being tried are passed over. A version that needs no
+// conversion, repackaged, is not held up for one that might play as it
+// is: only those already tried may replace it.
 func pick(states []*tried, sides []int, prefer, patient bool) (int, bool) {
-	first := -1
+	first, best := -1, -1
 	for n, t := range states {
 		switch {
 		case t == nil:
-			if patient {
+			if patient && (first < 0 || states[best].cost > costCopied) {
 				return -1, false
 			}
 		case !t.plays:
 		case first >= 0 && sides[n] != sides[first]:
-			return first, true
-		case !prefer || t.unconverted && (first < 0 || t.languages.asGoodAs(states[first].languages)):
+			return best, true
+		case !prefer:
 			return n, true
 		case first < 0:
-			first = n
+			first, best = n, n
+		case t.cost < states[best].cost && t.languages.asGoodAs(states[first].languages):
+			best = n
+		}
+		if best >= 0 && states[best].cost == costDirect {
+			return best, true
 		}
 	}
-	return first, true
+	return best, true
 }
 
 // playableToPlay gathers a title's versions and subtitles for a play. It

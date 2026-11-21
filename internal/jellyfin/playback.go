@@ -844,27 +844,6 @@ type decided struct {
 	lowerable, lowerOverHLS bool
 }
 
-// unconverted reports whether the app plays a version without conversion:
-// as it is, or repackaged with its tracks copied, which needs its keyframe
-// index. A version above the user's bitrate limit never does: decide
-// refuses it unless its video is converted down to the limit. For a user
-// who has their sound converted, audio converted with the video copied
-// counts as copied: their every version converts it.
-func (h *Handler) unconverted(ctx context.Context, d decided, request playbackInfoRequest) bool {
-	switch {
-	case beyondUserLimit(request, d.analysis.Bitrate, d.decision):
-		return false
-	case d.decision.DirectPlay:
-		return true
-	case !d.decision.Streamed() || d.decision.Video != nil || d.decision.Audio != nil && !request.convertSound:
-		return false
-	case d.decision.Progressive:
-		return true
-	}
-	_, err := h.Playback.Plan(ctx, d.version)
-	return err == nil
-}
-
 // decide decides how the version at index plays on the app, for its device
 // profile. Only the conversions allowed are planned: it reports false when
 // the version would need another to play on the app. named tells whether

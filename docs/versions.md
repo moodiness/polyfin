@@ -46,7 +46,7 @@ flowchart TD
 8. **Hide rules:** **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**. All are off by default, and none ever hides every version (see [Version order](#version-order)).
 9. **Quality group:** the user's group leaves out taller versions while one fits. Default: **Original (no limit)** (see [Quality groups](user-limits.md#quality-groups)).
 10. **The order:** the addons' order, unless **Order versions by** under **Settings › Playback** has criteria (none by default). Ties keep the addons' order. Then:
-    - **Prefer versions the app plays without conversion**, on by default, puts those first, once Polyfin knows how the app plays (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)).
+    - **Prefer versions the app plays without conversion**, on by default, puts the versions cheapest for the app to play first, once Polyfin knows how the app plays (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)).
     - **Play local files first**, off by default, puts a user's local folder and network share versions first (see [Local files first for some users](#local-files-first-for-some-users)).
 11. **Plays without a pick:** `PlaybackInfo` leaves out versions passed over: unreadable, unplayable on the app, or torrents that did not start lately.
 
@@ -276,7 +276,7 @@ Three more settings change how Polyfin picks a version; two more, about converte
 |---|---|---|---|
 | **Maximum time to analyze a version** | **Settings › Playback** | 20 seconds (5 to 120) | Bounds every ffprobe analysis, of files and live streams. |
 | **Versions tried when one does not work** | **Settings › Playback** | 3 (1 to 10) | How many versions Polyfin analyzes when the app picked none. |
-| **Prefer versions the app plays without conversion** | **Settings › Playback** | On | Lists first, in each app's version menu, the versions it plays without conversion. |
+| **Prefer versions the app plays without conversion** | **Settings › Playback** | On | Lists first, in each app's version menu, the versions cheapest for it to play: as they are, then repackaged, then with their audio converted, then with their video converted. |
 
 - A torrent's analysis is not bounded: it waits for its pieces, as its play does (see [Torrents](torrents.md#deadlines)).
 - A channel is analyzed for 8 seconds at most.
@@ -298,16 +298,30 @@ Version order, pins, blocks and the 15 minutes a failed version is left out appl
 
 ### Prefer versions the app plays without conversion
 
-The setting, on by default, orders each app's version menu for that app, so **Play** starts the version the menu shows. "Without conversion" means played as it is, or repackaged with tracks copied. Turn it off under **Settings › Playback** to give every app the server's order.
+The setting, on by default, orders each app's version menu for that app, cheapest to play first, so **Play** starts the version the menu shows. Turn it off under **Settings › Playback** to give every app the server's order.
+
+From the cheapest to the costliest:
+
+| Rank | How the app plays the version |
+|---|---|
+| 1 | As it is (direct play) |
+| 2 | Repackaged with its tracks copied (direct stream) |
+| 3 | With its audio alone converted |
+| 4 | With its video converted, from a source within the app's bitrate limit |
+| 5 | With its video converted, from a source above that limit, which the conversion brings down |
+
+- Versions of the same rank keep the order of the steps before.
+- The app's bitrate limit is the one its `PlaybackInfo` sends, lowered to the user's **Maximum quality**, else its device profile's.
+- For a user given louder sound (see [Louder sound for one user](loudness.md#louder-sound-for-one-user)), every version's audio is converted: a version whose video is copied ranks 2.
 
 A server set up before the setting was on by default turns it on as it updates: nothing told an administrator's choice of off apart from the old default. One that had it on keeps it, and off chosen since stays off.
 
-- Item details and `PlaybackInfo` list these versions first, after the other steps of the [version order](#version-order).
+- Item details and `PlaybackInfo` list the versions in this order, after the other steps of the [version order](#version-order).
 - Polyfin learns how the app plays from the device's last `PlaybackInfo` profile, or its session capabilities. It keeps this across restarts until the device signs out or goes 30 days unused.
-- It judges each version as [version names](#version-names) do, reading nothing. A version neither analyzed nor described by RemuxDB counts as needing conversion.
+- It judges each version as [version names](#version-names) do, reading nothing. A version neither analyzed nor described by RemuxDB ranks 4: it may need anything. A version known not to play on the app ranks 5.
 - Each app gets its own order: two devices of a user may list versions differently. The title's own identifier stands for the asking device's first version.
-- A version above the user's **Maximum quality** never counts as playing without conversion.
-- **Languages come first.** A version that plays without conversion comes before the one the order puts first only when it plays the user's languages as well. Its audio must be in a language the user prefers more, or in the first version's language. When the first shows a subtitle, it must show one too, in the same language and of the same kind, forced or full. A version whose audio states no language, such as one labeled MULTI, never replaces one in a stated language. The languages are those the user would get: their own, else the server's default ones (**Settings › Playback**), and the tracks they chose on the title. When the first version's audio states no language, any language counts as well.
+- A version above the user's **Maximum quality** plays only with its video converted down to it: it ranks 5.
+- **Languages come first.** A version cheaper to play comes before the one the order puts first only when it plays the user's languages as well. Its audio must be in a language the user prefers more, or in the first version's language. When the first shows a subtitle, it must show one too, in the same language and of the same kind, forced or full. A version whose audio states no language, such as one labeled MULTI, never replaces one in a stated language. The languages are those the user would get: their own, else the server's default ones (**Settings › Playback**), and the tracks they chose on the title. When the first version's audio states no language, any language counts as well. A version playing other languages ranks 5.
 - A title's first play may analyze more versions; nothing changes once they are known.
 
 **Play** on the title's page starts the menu's first version, even when it needs conversion. jellyfin-web, and apps like it, send the title's own identifier for it, and Polyfin takes it as picked.
@@ -315,13 +329,14 @@ A server set up before the setting was on by default turns it on as it updates: 
 - The next versions are tried only when it cannot be read or does not play at all.
 - A version picked further down the menu plays too.
 
-A play that picks no version, from a card such as Next Up, a resumed play, or an app that never names one, checks the first versions analyzed at once. It plays one needing no conversion in the user's languages as above, else the first that plays at all.
+A play that picks no version, from a card such as Next Up, a resumed play, or an app that never names one, checks the first versions analyzed at once. It plays the cheapest in the user's languages as above, the first of them on a tie.
 
-- Each time it passes over the first version, the log says at Info level: "Prefer versions the app plays without conversion passed over the first version, which the app plays only converted".
+- It waits for the versions still being analyzed only while the cheapest found needs a conversion, and at most 3 seconds once one plays. A version repackaged without conversion is not held up for one that might play as it is.
+- Each time it passes over the first version, the log says at Info level: "Prefer versions the app plays without conversion passed over the first version for one that costs the app less to play", with how each plays.
 
-Before Polyfin knows the app, after a restart and until its first play, the app gets the server's order. **Play** then passes over a first version needing conversion, as a play picking no version does. Open the title again after a first play to get the app's order.
+Before Polyfin knows the app, after a restart and until its first play, the app gets the server's order. **Play** then passes over a first version costlier to play, as a play picking no version does. Open the title again after a first play to get the app's order.
 
-**Play local files first** wins: for its users, a local file that plays at all comes before a stream that plays without conversion. Among local files, those playing without conversion come first (see [Local files first for some users](#local-files-first-for-some-users)).
+**Play local files first** wins: for its users, a local file that plays at all comes before a stream that plays without conversion. Among local files, the cheapest to play come first (see [Local files first for some users](#local-files-first-for-some-users)).
 
 **Compared with Jellyfin**
 
@@ -430,7 +445,7 @@ These follow steps 1 to 5 of [Which streams become versions](#which-streams-beco
 | 2 | Hide rules apply, [label rules](#label-rules) last; [another title's](#versions-of-another-title) versions are always hidden |
 | 3 | The user's [quality group](user-limits.md#quality-groups) leaves out taller versions |
 | 4 | The criteria order the rest |
-| 5 | Versions the app plays without conversion move first, once known (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)) |
+| 5 | Versions cheapest for the app to play move first, once known (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)) |
 | 6 | For **Play local files first** users, local folders and network shares move first (see [Local files first for some users](#local-files-first-for-some-users)) |
 
 - If step 2 would hide every version, none is hidden.
