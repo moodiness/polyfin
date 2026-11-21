@@ -3,6 +3,7 @@ package jellyfin
 import (
 	"cmp"
 	"context"
+	"errors"
 	"maps"
 	"math/rand/v2"
 	"net/http"
@@ -499,7 +500,12 @@ func (h *Handler) nextUpItems(ctx context.Context, user accounts.User, oneSeries
 
 // upcoming lists the episodes airing from yesterday on, UTC, of the series
 // the user watches or marked favorite, soonest first, but those of the
-// series they hid.
+// series they hid or dropped. Under a parent, it keeps those within it and
+// also lists those of the parent's first series, followed or not, as
+// Jellyfin lists every coming episode of a library: those of its first
+// catalog page whose episodes are known without asking any addon. The
+// others are described in the background, so that the tab answers at once
+// and fills as their descriptions arrive (see library.Service.KnownSeries).
 func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	start, limit := b.paging(r, -1)
@@ -533,6 +539,8 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var candidates []accounts.ID
+	// The parent's own series, which need no check that they are within it.
+	owned := map[accounts.ID]bool{}
 	// The hidden series, and those dropped on a tracking service, count
 	// as seen, so that none is a candidate.
 	seen := maps.Clone(hidden)
@@ -553,6 +561,33 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 		if e.Series == (accounts.ID{}) && !seen[e.Item] {
 			seen[e.Item] = true
 			candidates = append(candidates, e.Item)
+		}
+	}
+	// The parent's own series come after the followed ones. They need no
+	// check that they are within it, as the parent listed them. A parent
+	// that is no library lists its children, such as a series' seasons,
+	// which add nothing.
+	if hasParent {
+		page, err := h.Library.Latest(ctx, user, parent, watchedSeriesLimit)
+		if err != nil && !errors.Is(err, library.ErrNotFound) {
+			h.internalError(w, r, err)
+			return
+		}
+		var others []accounts.ID
+		for _, item := range page.Items {
+			if item.Kind == library.KindSeries && !seen[item.ID] {
+				seen[item.ID] = true
+				others = append(others, item.ID)
+			}
+		}
+		known, err := h.Library.KnownSeries(ctx, user, others)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		for _, series := range known {
+			candidates = append(candidates, series)
+			owned[series] = true
 		}
 	}
 	now := time.Now().UTC()
@@ -576,7 +611,7 @@ func (h *Handler) upcoming(w http.ResponseWriter, r *http.Request) {
 			defer logPanic(h.Logger, "Listing a series' upcoming episodes ended on a panic")
 			limiter <- struct{}{}
 			defer func() { <-limiter }()
-			if hasParent {
+			if hasParent && !owned[candidate] {
 				series, err := h.Library.Item(ctx, user, candidate)
 				if err != nil || !h.within(ctx, user, series, parent) {
 					return

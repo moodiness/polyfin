@@ -628,9 +628,11 @@ func TestUpcomingListsComingEpisodesOfWatchedAndFavoriteSeries(t *testing.T) {
 	if got := upcoming(""); !slices.Equal(got, all) {
 		t.Errorf("with Alpha a favorite: %v, want %v", got, all)
 	}
-	// Only libraries narrow the list down: a series does not.
-	if got := upcoming("parentId=" + tr.views["Tonight"]); !slices.Equal(got, all) {
-		t.Errorf("in the series library: %v", got)
+	// In the series library, its unfollowed series Charlie comes too; a
+	// series does not widen the list.
+	inLibrary := named("Bravo hours ago", "Bravo special", "Bravo tomorrow", "Charlie tomorrow", "Alpha next week", "Bravo next week")
+	if got := upcoming("parentId=" + tr.views["Tonight"]); !slices.Equal(got, inLibrary) {
+		t.Errorf("in the series library: %v, want %v", got, inLibrary)
 	}
 	for _, parent := range []string{tr.views["Movies"], series["Bravo"]} {
 		if got := upcoming("parentId=" + parent); len(got) != 0 {
