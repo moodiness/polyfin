@@ -541,13 +541,31 @@ func walkShare(ctx context.Context, r remote, root []remoteEntry, kind string) (
 // go deeper, or which holds more folders or files, fails it, as does a
 // folder listing more than is read of one. Folders nested without end, as
 // a link to a folder above it makes them where the server follows it, end
-// the walk so rather than never.
+// the walk so rather than never. A share that lists its folder deep in
+// one answer is read so (see walkDeep), and folder by folder when it
+// cannot.
 func (b walkBounds) walk(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
-	list := listing{files: map[string]found{}, sides: map[string]found{}, prints: map[string]uint64{},
-		open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
-			file, _, err := r.open(ctx, rel)
-			return file, err
-		}}
+	deep, ok := r.(deepRemote)
+	if ok && deep.deepLists().worth(time.Now()) {
+		list, err := b.walkDeep(ctx, deep, root, kind)
+		if !errors.Is(err, errFlat) {
+			return list, err
+		}
+	} else {
+		ok = false
+	}
+	list, err := b.walkFolders(ctx, r, root, kind)
+	if ok && err == nil {
+		// The share answers, but not deep: it is walked folder by folder
+		// for a while.
+		deep.deepLists().failed(time.Now())
+	}
+	return list, err
+}
+
+// walkFolders walks a share as walk does, one folder after the other.
+func (b walkBounds) walkFolders(ctx context.Context, r remote, root []remoteEntry, kind string) (listing, error) {
+	list := newShareListing(r)
 	type pending struct {
 		rel     string
 		depth   int
@@ -582,36 +600,55 @@ func (b walkBounds) walk(ctx context.Context, r remote, root []remoteEntry, kind
 		}
 		list.prints[next.rel] = folderPrint(kind, next.rel, entries)
 		for _, e := range entries {
-			rel := e.name
-			if next.rel != "" {
-				rel = next.rel + "/" + e.name
+			rel, enter, err := list.add(&count, kind, next.rel, next.depth, e)
+			if err != nil {
+				return listing{}, err
 			}
-			if e.folder {
-				if !skippedIn(kind, e.name) {
-					if err := count.folder(rel, next.depth+1); err != nil {
-						return listing{}, err
-					}
-					// Listed once its turn comes, so that one folder's
-					// entries at most are held at once.
-					queue = append(queue, pending{rel: rel, depth: next.depth + 1})
-				}
-				continue
-			}
-			file, side := walked(kind, rel)
-			if file || side {
-				if err := count.file(rel); err != nil {
-					return listing{}, err
-				}
-			}
-			switch {
-			case file:
-				list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
-			case side:
-				list.sides[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
+			if enter {
+				// Listed once its turn comes, so that one folder's entries
+				// at most are held at once.
+				queue = append(queue, pending{rel: rel, depth: next.depth + 1})
 			}
 		}
 	}
 	return list, nil
+}
+
+// newShareListing is the listing of a walk of a share, empty, whose files
+// are read from the share.
+func newShareListing(r remote) listing {
+	return listing{files: map[string]found{}, sides: map[string]found{}, prints: map[string]uint64{},
+		open: func(ctx context.Context, rel string) (io.ReadCloser, error) {
+			file, _, err := r.open(ctx, rel)
+			return file, err
+		}}
+}
+
+// add adds an entry of the share's folder at dir, depth folders under the
+// folder walked, to what a walk of kind found: a file or side file it
+// reads is kept, a folder it enters is counted, and enter tells it, at
+// rel.
+func (list *listing) add(count *walkCount, kind, dir string, depth int, e remoteEntry) (rel string, enter bool, err error) {
+	rel = joinRel(dir, e.name)
+	if e.folder {
+		if skippedIn(kind, e.name) {
+			return rel, false, nil
+		}
+		return rel, true, count.folder(rel, depth+1)
+	}
+	file, side := walked(kind, rel)
+	if file || side {
+		if err := count.file(rel); err != nil {
+			return rel, false, err
+		}
+	}
+	switch {
+	case file:
+		list.files[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
+	case side:
+		list.sides[rel] = found{size: e.size, modified: e.modified.UTC().Truncate(time.Microsecond)}
+	}
+	return rel, false, nil
 }
 
 // folderPrint sums what a scan of a folder of kind reads of a share's
@@ -621,30 +658,35 @@ func (b walkBounds) walk(ctx context.Context, r remote, root []remoteEntry, kind
 // have the same print, in whatever order they list it, unless one of
 // those changed; the other entries count for nothing.
 func folderPrint(kind, rel string, entries []remoteEntry) uint64 {
-	h := fnv.New64a()
 	var sum uint64
-	var number [8]byte
 	for _, e := range entries {
-		h.Reset()
-		switch file, side := walked(kind, path.Join(rel, e.name)); {
-		case e.folder:
-			if skippedIn(kind, e.name) {
-				continue
-			}
-			h.Write([]byte{'d'})
-		case file || side:
-			h.Write([]byte{'f'})
-			binary.LittleEndian.PutUint64(number[:], uint64(e.size))
-			h.Write(number[:])
-			binary.LittleEndian.PutUint64(number[:], uint64(e.modified.UTC().Truncate(time.Microsecond).UnixMicro()))
-			h.Write(number[:])
-		default:
-			continue
-		}
-		h.Write([]byte(e.name))
-		sum += h.Sum64()
+		sum += entryPrint(kind, rel, e)
 	}
 	return sum
+}
+
+// entryPrint is what an entry of the share's folder at rel adds to the
+// folder's print (see folderPrint), 0 for one that counts for nothing.
+func entryPrint(kind, rel string, e remoteEntry) uint64 {
+	h := fnv.New64a()
+	var number [8]byte
+	switch file, side := walked(kind, path.Join(rel, e.name)); {
+	case e.folder:
+		if skippedIn(kind, e.name) {
+			return 0
+		}
+		h.Write([]byte{'d'})
+	case file || side:
+		h.Write([]byte{'f'})
+		binary.LittleEndian.PutUint64(number[:], uint64(e.size))
+		h.Write(number[:])
+		binary.LittleEndian.PutUint64(number[:], uint64(e.modified.UTC().Truncate(time.Microsecond).UnixMicro()))
+		h.Write(number[:])
+	default:
+		return 0
+	}
+	h.Write([]byte(e.name))
+	return h.Sum64()
 }
 
 // shareFiles lists a share's files for a folder of kind, or tells why it

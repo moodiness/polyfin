@@ -34,7 +34,8 @@ import (
 // interface, each serving a folder of the test's disk.
 
 // fakeS3 serves dir as the bucket of its name, path-style, to requests
-// signed with key, and keeps the ranges of the objects' reads.
+// signed with key, and keeps the ranges of the objects' reads and counts
+// its listings' pages, by delimiter.
 type fakeS3 struct {
 	dir, bucket string
 	key         sigv4.Key
@@ -46,6 +47,7 @@ type fakeS3 struct {
 
 	mu     sync.Mutex
 	ranges []string
+	pages  map[string]int
 }
 
 func serveS3(t *testing.T, dir, bucket, access, secret string) (*fakeS3, *httptest.Server) {
@@ -122,10 +124,18 @@ func (w okRanges) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// list answers ListObjectsV2, pageSize entries a page.
+// list answers ListObjectsV2, pageSize entries a page: the objects in
+// the prefix and the folders, with the delimiter "/", or every object
+// under it, without.
 func (f *fakeS3) list(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	prefix := query.Get("prefix")
+	f.mu.Lock()
+	if f.pages == nil {
+		f.pages = map[string]int{}
+	}
+	f.pages[query.Get("delimiter")]++
+	f.mu.Unlock()
 	type entry struct {
 		key, prefix string
 		size        int64
@@ -143,7 +153,7 @@ func (f *fakeS3) list(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return nil
 		}
-		if folder, _, nested := strings.Cut(rest, "/"); nested {
+		if folder, _, nested := strings.Cut(rest, "/"); nested && query.Get("delimiter") == "/" {
 			if !seen[folder] {
 				seen[folder] = true
 				entries = append(entries, entry{prefix: prefix + folder + "/"})

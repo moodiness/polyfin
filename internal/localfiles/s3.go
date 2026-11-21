@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,6 +44,8 @@ type s3Share struct {
 	// bounds bound what is read and kept of one folder's listing, answer
 	// being a page of it.
 	bounds listBounds
+	// deep tells whether the bucket is listed deep (see deepRemote).
+	deep deepLists
 }
 
 func newS3(u *url.URL, access shareAccess) (*s3Share, error) {
@@ -279,6 +282,115 @@ func (c *s3Share) list(ctx context.Context, rel string) ([]remoteEntry, error) {
 	}
 	return nil, fmt.Errorf("%w: more than %d pages in one folder", errShareUnreachable, maxListPages)
 }
+
+// listDeep lists every object under the prefix in pages without a
+// delimiter: a request per thousand objects, where a walk asks one at
+// least per folder. A bucket holds no folders but the paths of its keys:
+// each folder a key names is given before the first object in it, the
+// empty object some tools make for a folder gives the folder, and a key
+// naming a folder without a name, as "a//b" does, is left out, as a walk
+// leaves it. An object listed again just after itself, as a storage may
+// list one, is given once.
+func (c *s3Share) listDeep(ctx context.Context, each func(dir string, e remoteEntry) error) error {
+	prefix := c.objectKey("")
+	if prefix != "" {
+		prefix += "/"
+	}
+	given := map[string]bool{"": true}
+	// folder gives the folder at rel after those it is in, unless given.
+	var folder func(rel string) error
+	folder = func(rel string) error {
+		if given[rel] {
+			return nil
+		}
+		dir, name := splitRel(rel)
+		if err := folder(dir); err != nil {
+			return err
+		}
+		given[rel] = true
+		return each(dir, remoteEntry{name: name, folder: true})
+	}
+	entries, last := 0, ""
+	object := func(o s3Object) error {
+		if entries++; entries > deepBounds.entries {
+			return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("more than %d entries in a deep listing", deepBounds.entries)}
+		}
+		rest, ok := strings.CutPrefix(o.Key, prefix)
+		if !ok || rest == "" || o.Key == last {
+			return nil
+		}
+		last = o.Key
+		rel, marker := strings.CutSuffix(rest, "/")
+		names := strings.Split(rel, "/")
+		if slices.Contains(names, "") {
+			return nil
+		}
+		if slices.ContainsFunc(names, func(name string) bool { return len(name) > c.bounds.name }) {
+			return &shareBound{failure: errBoundListing, detail: fmt.Sprintf("a name of more than %d bytes", c.bounds.name)}
+		}
+		if marker {
+			return folder(rel)
+		}
+		dir, name := splitRel(rel)
+		if err := folder(dir); err != nil {
+			return err
+		}
+		modified, _ := time.Parse(time.RFC3339Nano, o.LastModified)
+		return each(dir, remoteEntry{name: name, size: o.Size, modified: modified})
+	}
+	tokens := map[[sha256.Size]byte]bool{}
+	token := ""
+	for range maxListPages {
+		query := url.Values{"list-type": {"2"}, "prefix": {prefix}}
+		if token != "" {
+			query.Set("continuation-token", token)
+		}
+		// Each page within the time of a folder's listing.
+		truncated, next, err := func() (truncated bool, next string, err error) {
+			ctx, cancel := context.WithTimeout(ctx, listTimeout)
+			defer cancel()
+			response, err := c.send(ctx, http.MethodGet, c.url("", query), nil)
+			if err != nil {
+				return false, "", err
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				return false, "", s3Failure(response)
+			}
+			err = eachElement(response.Body, c.bounds, func(decoder *xml.Decoder, start xml.StartElement) error {
+				switch start.Name.Local {
+				case "Contents":
+					var o s3Object
+					if err := decoder.DecodeElement(&o, &start); err != nil {
+						return err
+					}
+					return object(o)
+				case "IsTruncated":
+					return decoder.DecodeElement(&truncated, &start)
+				case "NextContinuationToken":
+					return decoder.DecodeElement(&next, &start)
+				}
+				return decoder.Skip()
+			})
+			return truncated, next, err
+		}()
+		switch {
+		case err != nil:
+			return err
+		case !truncated || next == "":
+			return nil
+		}
+		sum := sha256.Sum256([]byte(next))
+		if tokens[sum] {
+			return errors.New("the storage lists the same objects again")
+		}
+		tokens[sum] = true
+		token = next
+	}
+	return fmt.Errorf("more than %d pages in a deep listing", maxListPages)
+}
+
+func (c *s3Share) deepLists() *deepLists { return &c.deep }
 
 // notFolder tells why the prefix lists nothing: errIsFile when it names
 // an object, nil for an empty folder, which a bucket cannot tell from a
