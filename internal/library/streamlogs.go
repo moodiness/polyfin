@@ -10,10 +10,19 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-// noticeLogLife is how long the line of an addon's answer of notices
-// alone is logged once at its level for the same addon, title and text:
-// the repeats within it are logged at Debug.
-const noticeLogLife = 24 * time.Hour
+const (
+	// noticeLogEvery is how often at most the line of an addon's answer of
+	// notices alone is logged at its level for the same addon, title and
+	// text (see noticeLine): 4 times a day at most, the repeats in between
+	// logged at Debug, and counted on the next line. System › Health
+	// counts every answer that carried a notice.
+	noticeLogEvery = 6 * time.Hour
+	// noticeLogLife is how long a line is remembered after the latest
+	// answer that repeated it, past background work's longest wait (see
+	// nothingAnswer): a title asked once a day stays at Debug. A line not
+	// seen again within it is new again.
+	noticeLogLife = nothingLife
+)
 
 // streamLogs keeps what the log lines of the requests for addons' streams
 // need: the requests a user waits for, and the notices logged.
@@ -22,15 +31,23 @@ type streamLogs struct {
 	// waited are the requests under way that a user waits for, by flight
 	// key (see streamsFlight).
 	waited map[string]bool
-	// notices are the answers of notices alone logged within
-	// noticeLogLife.
-	notices *cache.Cache[noticeLine, struct{}]
+	// notices are the answers of notices alone logged, kept noticeLogLife.
+	notices *cache.Cache[noticeLine, noticeLogged]
 }
 
-// noticeLine is what an answer of notices alone is logged once for.
+// noticeLine is what an answer of notices alone is logged once for: the
+// addon, the title, and the text of the notices with each run of digits
+// one '#', as Health tells notices apart (see stremio.NoticeForm).
 type noticeLine struct {
 	key  streamKey
 	text string
+}
+
+// noticeLogged is when a line was last logged, and how many answers
+// repeated it since.
+type noticeLogged struct {
+	at      time.Time
+	repeats int
 }
 
 // waits marks the request flight as one a user waits for, unless ctx is
@@ -58,10 +75,19 @@ func (l *streamLogs) ended(flight string) bool {
 	return waited
 }
 
-// first reports whether line is logged for the first time within
-// noticeLogLife, and remembers it.
-func (l *streamLogs) first(line noticeLine) bool {
-	return l.notices.Update(line, func(_ struct{}, ok bool) (struct{}, bool) { return struct{}{}, !ok })
+// due tells, for an answer of notices alone at now, whether its line is
+// logged, at most once within noticeLogEvery, whether it was before
+// (again), and how many answers repeated it since; it counts the answer.
+func (l *streamLogs) due(line noticeLine, now time.Time) (due, again bool, repeats int) {
+	l.notices.Update(line, func(kept noticeLogged, ok bool) (noticeLogged, bool) {
+		if ok && now.Sub(kept.at) < noticeLogEvery {
+			kept.repeats++
+			return kept, true
+		}
+		due, again, repeats = true, ok, kept.repeats
+		return noticeLogged{at: now}, true
+	})
+	return due, again, repeats
 }
 
 // streamsFailed logs a request for an addon's streams for a title that
@@ -78,24 +104,32 @@ func (s *Service) streamsFailed(ctx context.Context, entry installed, key stream
 		"id", key.id, "error", err)
 }
 
-// noticesLogged logs an addon's answer of notices alone with message: a
-// warning when they refuse the request for its rate, else information,
-// and Debug for the same addon, title and text again within
-// noticeLogLife. The line tells the notices' text (see noticeText) and
-// counts their shapes (see noticeShapes).
-func (s *Service) noticesLogged(ctx context.Context, entry installed, key streamKey, message string, notices []stremio.Stream) {
+// noticesLogged logs an addon's answer of notices alone with message,
+// once within noticeLogEvery for the same addon, title and text (see
+// noticeLine), and at Debug in between: a warning when they refuse the
+// request for its rate (limited), else information. A line logged again
+// tells the answers that repeated it since (repeats), at Debug unless a
+// user waited for the answer (userWaited): System › Health counts
+// background work's notices. The line tells the notices' text (see
+// noticeText) and counts their shapes (see noticeShapes).
+func (s *Service) noticesLogged(ctx context.Context, entry installed, key streamKey, message string, userWaited, limited bool,
+	notices []stremio.Stream) {
 	text := noticeText(notices)
+	due, again, repeats := s.streamLogs.due(noticeLine{key, stremio.NoticeForm(text)}, s.now())
 	level := slog.LevelInfo
 	switch {
-	case !s.streamLogs.first(noticeLine{key, text}):
+	case !due, again && !userWaited:
 		level = slog.LevelDebug
-	case refusedNotices(notices):
+	case limited:
 		level = slog.LevelWarn
 	}
 	if !s.logger.Enabled(ctx, level) {
 		return
 	}
 	attrs := []any{"addon", entry.addon.LogName(), "type", key.contentType, "id", key.id, "notice", text}
+	if again {
+		attrs = append(attrs, "repeats", repeats)
+	}
 	s.logger.Log(ctx, level, message, append(attrs, noticeShapes(notices)...)...)
 }
 

@@ -529,6 +529,8 @@ After a refusal for its rate, an addon's server gets no background request for a
 - **The log:** it says once per pause, at Info, `An addon refused a request for its rate: Polyfin's background requests to its server pause`, with the addon and the wait.
 - **Health:** **System › Health › Addons** shows the pause until it ends, the notices the addon's answers carried, rate limits marked, and its requests of the last hour and day by origin, so that a limit background work reaches shows at a glance (see [What Health shows](health.md#what-health-shows)).
 
+An addon that answers a title with nothing to play, an empty answer or notices that are no refusal, such as the summary of an addon that gathers other addons, gets no background request for that title for an hour, then 2, 4, 8, 16 and 24 hours after each further such answer. Opening or playing the title starts the waits again (see [Title pages](versions.md#title-pages)).
+
 There is nothing to set. An addon without limits only has Polyfin's background work spread over a few more seconds. A home page with 20 titles of Continue Watching and Next Up has them listed within about half a minute from one such addon, with their follow-ups after.
 
 ### Addons that do not answer in time
