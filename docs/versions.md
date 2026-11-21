@@ -57,13 +57,13 @@ Polyfin keeps no maximum of versions, and ignores seeders, source, size and lang
 | Cause | Log line | Level | Also logged |
 |---|---|---|---|
 | Addon failed or timed out | `An addon could not list streams` | Warn when a user waits (a title opened, a play), Info for background work alone | Addon, title type and identifier, error |
-| Addon answered only notices | `An addon answered only notices, nothing to play` | Warn for a refusal for its rate, Info otherwise | Addon, title type and identifier, notices' text, counts of entries |
+| Addon answered only notices | `An addon answered only notices, nothing to play` | Warn for a refusal for its rate, Info otherwise; Debug for repeats (see below) | Addon, title type and identifier, notices' text, counts of entries, repeats since the line before |
 | Version could not be analyzed | `A version could not be analyzed` | Info | Addon, why |
 | Stream names another title | `A version names another title` | Debug | Addon, marker (`S01E03`, `S02`, `1998`) |
 
 - **System › Health › Addons** shows an addon's last failure.
 - The failure line comes once per request, however many waited for it. Background work is the watchlist checks, home rows listed ahead and playback prepared in advance; when a user waits for the same request too, it is a warning. A re-asking that fails (see below) is logged at Debug only, as `An addon asked again for a list failed`: the list stays.
-- The notices line comes once a day for the same addon, title and notices' text; repeats within the day are at Debug. Addresses and keys are hidden, links never logged.
+- The notices line comes at most once in 6 hours for the same addon, title and notices' text, its digits aside, as an addon's summary changes its counts and timings from one answer to the next. Repeats in between are at Debug. The next line counts them (`repeats`): at Info, or Warn for a refusal, when a user waited (a title opened, a play), else at Debug, as **System › Health › Addons** counts every notice anyway. Addresses and keys are hidden, links never logged.
 - The notices line counts the answer's entries (`entries`), and those of each shape Polyfin cannot play: no link, as a notice, a web page or a YouTube video (`no_link`); Usenet downloads (`usenet`); archives' files (`archives`); links of another scheme than `http` or `https` (`other_schemes`); torrents whose info hash is not 40 hexadecimal digits, or whose file index is negative (`invalid_info_hash`). Polyfin plays none of these: when they outnumber the addon's notices, set the addon to send `http` links.
 - A source failing later in a play logs why, never its address. A torrent route failing mid-play logs `the route for torrents does not answer`, without an addon.
 - `A torrent did not start in time` is logged, and **System › Health** lists it under **To look at**, as it does a torrent its route stopped mid-play.
@@ -140,7 +140,16 @@ After that, a reopened title shows old versions at once while addons are re-aske
 - [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) drops old lists. Addon subtitles are kept the same way.
 - **Replace the address** and the task "Forget the version lists" drop them for every title at once (see [Forgetting the version lists](#forgetting-the-version-lists)).
 - An empty answer replaces the list: the addon has nothing for the title any more.
-- A notices-only answer is not kept: an addon limiting requests often answers this way, and some addons answer only their own summary once their filters left nothing. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. The next request after it asks again; **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it once a day (see [Which streams become versions](#which-streams-become-versions)).
+- A notices-only answer is not kept as a list. Polyfin tells two kinds apart, as **System › Health** marks them:
+  - **A refusal for its rate**, with "rate limit", "too many requests", 429 or "retry after": an addon limiting requests often answers this way. For a minute the addon is not asked for the title: its earlier versions stay, or it gives none. Background requests to its server pause too (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)).
+  - **Any other notices**, such as the summary of an addon that gathers other addons once its filters left nothing, or "no streams found": the addon has nothing for the title now. They count as an empty answer would, for **Keep version lists for (minutes)**: its earlier versions stay, or it gives none, and opening the title again meanwhile asks nothing.
+  - **Try again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once. The log tells it at most once in 6 hours (see [Which streams become versions](#which-streams-become-versions)).
+- **Addons with nothing for a title:** after an empty answer, or notices that are not a refusal, background work leaves that addon unasked for that title for an hour, then 2, 4, 8 and 16 hours after each further such answer, and 24 hours at most. Background work is preloading, watchlist checks, home rows listed ahead and playback prepared in advance; it uses the answer it has meanwhile.
+  - Opening or playing the title asks as before once the answer is older than **Keep version lists for (minutes)**, and starts the waits again from an hour.
+  - An answer with something to play ends the wait, as do **Try again**, [Refresh metadata](jellyfin-compatibility.md#refresh-metadata), **Refresh everything** on the addon's page, **Replace the address**, removing it, and the task "Forget the version lists".
+  - The addon's manifest read again, by **Refresh** on its page or the daily task "Refresh the sources", has background work ask it once more, the waits growing on.
+  - Polyfin remembers this in memory, for up to 20,000 titles: after a restart, the first background request for each title asks again.
+  - Preloading, every 15 minutes all night, asked an addon answering only notices for an episode up to 96 times a day; it now asks it 5 times the first day, then once a day.
 - A failed request is remembered for 3 minutes: opening the title, and its versions page, list the addon's earlier versions, or none, without asking it again, and the page counts it as answered. Play, **Try again**, **Ask addons again** and [Refresh metadata](jellyfin-compatibility.md#refresh-metadata) ask at once.
 
 Gathering addons answer first with what arrived within their own time limit, and get the rest moments later. So Polyfin re-asks an addon 10 seconds after its first answer for a title, and again 30 seconds later if that answer listed more playable streams.

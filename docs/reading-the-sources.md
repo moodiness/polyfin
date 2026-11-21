@@ -123,6 +123,7 @@ Preloading reads ahead each user's next episodes, so they start from disk, even 
 - **Whose:** the first 5 Next Up series, latest first, of users who played or started an episode in 14 days.
 - **Which version:** the one Play would pick, under the user's parental control, hidden titles, [version order](versions.md#version-order) and quality group. Never a torrent, or a version that failed lately.
 - **Addons asked:** only for an episode whose versions are not known, or whose version known cannot be read, its link having expired. Otherwise a pass picks from the versions known, an expired list's too, as Play does, so passes do not ask the addons for the same episodes again every 15 minutes.
+- **Addons with nothing for it:** an addon that answered the episode with nothing to play, notices alone included, such as the summary of an addon that gathers other addons whose filters left every stream out, is not asked again for an hour, then 2, 4, 8 and 16 hours after each further such answer, 24 hours at most: 5 times the first day at most, then once a day. Notices alone keep no list, so every pass asked again before. Opening or playing the episode starts the waits again (see [Title pages](versions.md#title-pages)).
 - **How much:** the first 128 MiB and last 4 MiB (where many files keep their index), or the whole file. Per pass, at most a quarter of **Disk space for files being read (GB)**, so played parts stay.
 
 A starting playback stops it within 8 MiB. Its reads are background reads, and are kept like any part, so repeating asks nothing.

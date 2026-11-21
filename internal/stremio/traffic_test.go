@@ -202,26 +202,27 @@ func TestADescriptionOfANoticeIsRecorded(t *testing.T) {
 func TestNoticesAreBounded(t *testing.T) {
 	t.Parallel()
 	start := time.Date(2026, 11, 20, 1, 0, 0, 0, time.UTC)
+	named := func(prefix string, i int) string { return fmt.Sprintf("%s %c", prefix, 'a'+i) }
 	var notices []Notice
 	for i := range noticesKept {
-		notices = note(notices, []string{fmt.Sprintf("notice %d", i)}, OriginApps, start.Add(time.Duration(i)*time.Minute))
+		notices = note(notices, []string{named("notice", i)}, OriginApps, start.Add(time.Duration(i)*time.Minute))
 	}
 	// The first notice is seen again, by background work, before 4 new
 	// ones come: the 4 seen least lately since are forgotten.
-	notices = note(notices, []string{"notice 0"}, OriginOther, start.Add(30*time.Minute))
+	notices = note(notices, []string{"notice a"}, OriginOther, start.Add(30*time.Minute))
 	for i := range 4 {
-		notices = note(notices, []string{fmt.Sprintf("new %d", i)}, OriginApps, start.Add(time.Duration(31+i)*time.Minute))
+		notices = note(notices, []string{named("new", i)}, OriginApps, start.Add(time.Duration(31+i)*time.Minute))
 	}
 	if len(notices) != noticesKept {
 		t.Fatalf("%d notices kept, want %d", len(notices), noticesKept)
 	}
 	kept := recent(notices, start.Add(time.Hour))
-	if kept[0].Text != "new 3" || kept[4].Text != "notice 0" || kept[4].Answers != 2 || kept[4].Background != 1 ||
+	if kept[0].Text != "new d" || kept[4].Text != "notice a" || kept[4].Answers != 2 || kept[4].Background != 1 ||
 		!kept[4].First.Equal(start) {
 		t.Errorf("kept: %+v", kept)
 	}
 	for _, n := range kept {
-		if slices.Contains([]string{"notice 1", "notice 2", "notice 3", "notice 4"}, n.Text) {
+		if slices.Contains([]string{"notice b", "notice c", "notice d", "notice e"}, n.Text) {
 			t.Errorf("%q kept, seen least lately", n.Text)
 		}
 	}
@@ -242,10 +243,48 @@ func TestNoticesAreBounded(t *testing.T) {
 	}
 	streams := make([]Stream, 0, 2*noticesKept)
 	for i := range 2 * noticesKept {
-		streams = append(streams, Stream{Name: fmt.Sprintf("Sub %d", i), Description: "failed"})
+		streams = append(streams, Stream{Name: named("Sub", i), Description: "failed"})
 	}
 	if texts := noticesOf(streams); len(texts) != noticesKept {
 		t.Errorf("an answer of %d notices: %d kept", len(streams), len(texts))
+	}
+}
+
+// Notices alike but for their digits, such as the summaries of an addon
+// that gathers other addons whose timings change on every answer, are one
+// notice: it tells the latest text, counts every answer that carried one,
+// and leaves the other places to other notices. A refusal for the rate
+// stays a notice of its own, even beside a summary that counts 429 of
+// something.
+func TestNoticesAlikeButForTheirDigitsAreOne(t *testing.T) {
+	t.Parallel()
+	start := time.Date(2026, 11, 20, 1, 0, 0, 0, time.UTC)
+	var notices []Notice
+	for i, text := range []string{
+		"Scrape summary: 10 streams, 10 removed, 1.2s",
+		"Rate limit exceeded",
+		"Scrape summary: 12 streams, 12 removed, 0.8s",
+		"Scrape summary: 429 streams, 429 removed, 3s",
+	} {
+		notices = note(notices, []string{text}, OriginPreload, start.Add(time.Duration(i)*time.Minute))
+	}
+	kept := recent(notices, start.Add(time.Hour))
+	if len(kept) != 3 {
+		t.Fatalf("%d notices, want 3: %+v", len(kept), kept)
+	}
+	if n := kept[0]; n.Text != "Scrape summary: 429 streams, 429 removed, 3s" || !n.RateLimited || n.Answers != 1 {
+		t.Errorf("the summary that counts 429: %+v", n)
+	}
+	if n := kept[1]; n.Text != "Scrape summary: 12 streams, 12 removed, 0.8s" || n.RateLimited || n.Answers != 2 || n.Background != 2 ||
+		!n.First.Equal(start) || !n.Last.Equal(start.Add(2*time.Minute)) {
+		t.Errorf("the summaries: %+v", n)
+	}
+	if n := kept[2]; n.Text != "Rate limit exceeded" || !n.RateLimited || n.Answers != 1 {
+		t.Errorf("the refusal: %+v", n)
+	}
+	answer := []Stream{{Name: "Sub 1", Description: "failed"}, {Name: "Sub 2", Description: "failed"}, {Name: "Other", Description: "failed"}}
+	if texts := noticesOf(answer); !slices.Equal(texts, []string{"Sub 1: failed", "Other: failed"}) {
+		t.Errorf("an answer's notices: %q", texts)
 	}
 }
 
@@ -271,7 +310,7 @@ func TestNoticeTextsAreRedacted(t *testing.T) {
 		"No streams found for 4290 Mb": false,
 		"23 streams hidden by filters": false,
 	} {
-		if saysRateLimitedText(text) != limited {
+		if NoticeRateLimited(text) != limited {
 			t.Errorf("%q: rate limited %v, want %v", text, !limited, limited)
 		}
 	}

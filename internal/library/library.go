@@ -138,8 +138,8 @@ type Service struct {
 	streamLists   *cache.Cache[streamKey, list[stremio.Stream]]
 	subtitleLists *cache.Cache[streamKey, list[stremio.Subtitle]]
 	versions      *cache.Cache[accounts.ID, Version]
-	// noticed are the addons' answers of notices alone for each title,
-	// kept noticeLife (see noticedAnswer).
+	// noticed are the addons' answers of notices alone refusing requests
+	// for their rate, kept noticeLife (see rememberedAnswer).
 	noticed *cache.Cache[streamKey, []stremio.Stream]
 	// failedLately are the addons' lists for titles they failed to give,
 	// kept failedFor (see gatherStreams).
@@ -500,7 +500,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.warmed.opened = cache.New[accounts.ID, struct{}](openedLibraries, openedFor)
 	s.releaseStatuses = cache.NewLasting[string, ReleaseStatus](20000, func() time.Duration { return releaseStatusLife }, clock)
 	s.refreshes.pace, s.refreshes.wait = LibraryRefreshPace, waitFor
-	s.streamLogs.notices = cache.NewLasting[noticeLine, struct{}](2000, func() time.Duration { return noticeLogLife }, clock)
+	s.streamLogs.notices = cache.NewLasting[noticeLine, noticeLogged](2000, func() time.Duration { return noticeLogLife }, clock)
 	return s
 }
 
