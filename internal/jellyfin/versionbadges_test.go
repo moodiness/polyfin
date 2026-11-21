@@ -197,20 +197,21 @@ func TestShortVersionNamesNeverRepeat(t *testing.T) {
 }
 
 // Short names put the audio format with its channels and the languages
-// together, then the size and the addon, those unknown left out; sizes,
-// stereo and mono read as the server language writes them, and MULTI
-// shows only when no language is named.
+// together, then the size, Cached for a version ready on its debrid
+// service, and the addon, those unknown left out; sizes, stereo, mono and
+// Cached read as the server language writes them, and MULTI shows only
+// when no language is named.
 func TestShortVersionNameParts(t *testing.T) {
 	t.Parallel()
 	version := library.Version{Height: 2160, Labels: library.ReadLabels("Movie", "4K DV HEVC IMAX 🇫🇷 🇬🇧 Multi")}
 	version.Labels.Tier, version.Labels.Audio, version.Labels.Edition = library.ReadRelease([]string{"Movie"}, "TrueHD Atmos 7.1 IMAX")
-	if got := shortVersionName(library.VersionBadges(version, "en"), 58_200_000_000, "Addon", "en"); got != "4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon" {
+	if got := shortVersionName(library.VersionBadges(version, "en"), 58_200_000_000, true, "Addon", "en"); got != "4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Cached · Addon" {
 		t.Errorf("a full name: %q", got)
 	}
 	stereo := library.Version{Height: 1080, Labels: library.ReadLabels("Movie", "1080p x264 MULTi")}
 	stereo.Labels.Tier, stereo.Labels.Audio, stereo.Labels.Edition = library.ReadRelease([]string{"Movie"}, "AAC 2.0")
 	for language, want := range map[string]string{"en": "1080p · H.264 · Stereo · MULTI · 4.7 GB · Addon", "fr": "1080p · H.264 · Stéréo · MULTI · 4,7 Go · Addon"} {
-		if got := shortVersionName(library.VersionBadges(stereo, language), 4_700_000_000, "Addon", language); got != want {
+		if got := shortVersionName(library.VersionBadges(stereo, language), 4_700_000_000, false, "Addon", language); got != want {
 			t.Errorf("stereo in %s: %q, want %q", language, got, want)
 		}
 	}
@@ -229,7 +230,10 @@ func TestShortVersionNameParts(t *testing.T) {
 			t.Errorf("%d in %s: %q, want %q", tc.size, tc.language, got, tc.want)
 		}
 	}
-	if got := shortVersionName(nil, 0, " ", "en"); got != "" {
+	if got := shortVersionName(nil, 0, false, " ", "en"); got != "" {
 		t.Errorf("nothing known: %q", got)
+	}
+	if got := shortVersionName(nil, 0, true, "", "fr"); got != "En cache" {
+		t.Errorf("cached alone in French: %q", got)
 	}
 }

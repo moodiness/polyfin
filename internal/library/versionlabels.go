@@ -1,7 +1,9 @@
 package library
 
 import (
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -239,6 +241,24 @@ func ReadLabels(title string, labels ...string) Labels {
 		read.Range = StandardRange
 	}
 	return read
+}
+
+// seedersPattern finds the seeders a label writes: a person icon, of one
+// person or two, followed by their number ("👤 42"), or "Seeders: 42" in
+// any letter case, with or without the colon.
+var seedersPattern = regexp.MustCompile(`(?i)(?:[\x{1F464}\x{1F465}]\x{FE0F}?|\bseeders\s*:?)\s*(\d{1,9})\b`)
+
+// LabelSeeders is the number of seeders the labels of a stream write, the
+// first that one does, from an addon's name, title, description or file
+// name; 0 when they write none.
+func LabelSeeders(labels ...string) int {
+	for _, label := range labels {
+		if found := seedersPattern.FindStringSubmatch(label); found != nil {
+			seeders, _ := strconv.Atoi(found[1])
+			return seeders
+		}
+	}
+	return 0
 }
 
 // labelWords splits a label into its words of letters and digits, in their

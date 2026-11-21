@@ -272,7 +272,7 @@ const settings: typeof en = {
       'Cuando una aplicación reproduce una versión tal cual y puede acceder a su fuente, Polyfin envía la aplicación a la dirección de la fuente en lugar de hacer pasar la transmisión por el servidor. Esto se aplica a todos los usuarios y a todas las fuentes, IPTV incluida, y ahorra ancho de banda del servidor. Los usuarios que reproducen desde una fuente ven entonces su dirección, con la clave, el nombre de cuenta o la contraseña que contenga. Si está desactivado, las transmisiones de las fuentes IPTV pasan siempre por el servidor, igual que las de las extensiones del servidor cuando el usuario no es administrador: cada una de esas reproducciones usa el ancho de banda del servidor, de entrada y de salida. Los administradores que reproducen desde las extensiones del servidor, y los usuarios que reproducen desde sus propias extensiones, se envían a la fuente en ambos casos. Desactivado de forma predeterminada.',
     versionNames: 'Nombres de las versiones',
     versionNamesHelp:
-      'Polyfin escribe los nombres cortos a partir de lo que sabe de cada versión, iguales en todas las aplicaciones, como «4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Extensión»: resolución, HDR, códec de vídeo, audio, edición, idiomas de audio, tamaño y extensión. Dos versiones nunca comparten nombre.',
+      'Polyfin escribe los nombres cortos a partir de lo que sabe de cada versión, iguales en todas las aplicaciones, como «4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Extensión»: resolución, HDR, códec de vídeo, audio, edición, idiomas de audio, tamaño, «En caché» cuando la extensión dice que su proveedor tiene el archivo listo, y extensión. Dos versiones nunca comparten nombre.',
     versionNameChoices: { addon: 'Como los escribe la extensión', short: 'Cortos' },
     nameHowVersionsPlay: 'Indicar en el nombre de las versiones cómo se reproducen',
     nameHowVersionsPlayHelp:
@@ -280,8 +280,8 @@ const settings: typeof en = {
     versionOrderGroup: 'Orden de las versiones',
     versionOrder: {
       label: 'Ordenar las versiones por',
-      help: 'Cada criterio agrupa las versiones de una película o un episodio, y el siguiente las ordena dentro de cada grupo; las versiones empatadas conservan el orden de las extensiones. La primera versión es la que inicia «Reproducir», y a continuación van las versiones que se prueban cuando esta no funciona. Polyfin se basa en lo que sabe de una versión sin leer el archivo: su análisis una vez reproducida, si no, la descripción de RemuxDB, y si no, las palabras de sus etiquetas. Una versión de la que un criterio no sabe nada va detrás de las demás. El idioma de audio preferido es el de cada usuario, configurado en su aplicación, o si no el Idioma de audio predeterminado: primero van las versiones que se sabe que están en ese idioma, luego las etiquetadas como MULTI o DUAL y después las de idioma desconocido. En Mi cuenta, un usuario también puede preferir una región de audio, como el francés de Quebec: entre las versiones en su idioma, primero van las de esa región y luego las de región desconocida. Mientras la página de un título está abierta, las versiones que muestra conservan su posición.',
-      none: 'Ninguno: las versiones conservan el orden de las extensiones.',
+      help: 'Cada criterio agrupa las versiones de una película o un episodio, y el siguiente las ordena dentro de cada grupo; las versiones empatadas conservan el orden de las extensiones. La primera versión es la que inicia «Reproducir», y a continuación van las versiones que se prueban cuando esta no funciona. Polyfin se basa en lo que sabe de una versión sin leer el archivo: su análisis una vez reproducida, si no, la descripción de RemuxDB, y si no, las palabras de sus etiquetas. Una versión de la que un criterio no sabe nada va detrás de las demás. El idioma de audio preferido es el de cada usuario, configurado en su aplicación, o si no el Idioma de audio predeterminado: primero van las versiones que se sabe que están en ese idioma, luego las etiquetadas como MULTI o DUAL y después las de idioma desconocido. En Mi cuenta, un usuario también puede preferir una región de audio, como el francés de Quebec: entre las versiones en su idioma, primero van las de esa región y luego las de región desconocida. «En caché en el proveedor primero» y «Más seeders primero» se basan en lo que la extensión dice de cada versión: si su proveedor tiene el archivo listo, y los seeders que indica o escribe en las etiquetas. Sin criterios, las versiones que una extensión indica que no están en caché van detrás de las demás. Mientras la página de un título está abierta, las versiones que muestra conservan su posición.',
+      none: 'Ninguno: las versiones conservan el orden de las extensiones, y las que una extensión indica que no están en caché van al final.',
       add: 'Añadir un criterio',
       remove: (name: string) => `Eliminar «${name}»`,
       criterion: (position: number) => `Criterio ${position}`,
@@ -302,6 +302,8 @@ const settings: typeof en = {
         audio: 'Audio: sin pérdida y Atmos primero, luego más canales',
         edition: 'Edición, en el orden de abajo',
         labels: 'Puntuación de las reglas de etiquetas, la más alta primero',
+        cached: 'En caché en el proveedor primero',
+        seeders: 'Más seeders primero',
       },
     },
     versionCodecOrder: {

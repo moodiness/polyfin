@@ -95,7 +95,7 @@ func (m *Meta) bound() {
 // its addresses past MaxURL, and its trackers and subtitles with one. A
 // stream left with no address and no text tells nothing (see tells).
 func (s *Stream) bound() {
-	for _, name := range []*string{&s.Name, &s.Title, &s.BehaviorHints.BingeGroup, &s.BehaviorHints.Filename} {
+	for _, name := range []*string{&s.Name, &s.Title, &s.BehaviorHints.BingeGroup, &s.BehaviorHints.Filename, &s.Data.Service.ID} {
 		*name = Cut(*name, MaxName)
 	}
 	s.Description = Cut(s.Description, MaxOverview)

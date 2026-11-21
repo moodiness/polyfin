@@ -54,6 +54,10 @@ type versionRules struct {
 	perMinute int64
 	// labels are the label rules, in the settings' order.
 	labels []labelRule
+	// set tells criteria are set: without, the versions known not to be
+	// ready on their debrid service come last (see compare). Label rules
+	// that score alone add the labels criterion, but set none.
+	set bool
 }
 
 // labelRule is a label rule with its word in lower case, or its regular
@@ -81,7 +85,7 @@ const maxLabelBytes = 4096
 func newVersionRules(settings accounts.Settings) versionRules {
 	rules := versionRules{order: settings.VersionOrder, codecs: settings.VersionCodecOrder, sources: settings.VersionSourceOrder,
 		larger: int64(settings.HideVersionsLargerGB) * 1e9, hiddenCodecs: settings.HiddenVersionCodecs, releases: settings.HiddenReleases,
-		editions: settings.VersionEditionOrder, perMinute: int64(settings.VersionMBPerMinute) * 1e6}
+		editions: settings.VersionEditionOrder, perMinute: int64(settings.VersionMBPerMinute) * 1e6, set: len(settings.VersionOrder) > 0}
 	for _, word := range settings.HiddenVersionWords {
 		rules.words = append(rules.words, strings.ToLower(word))
 	}
@@ -119,10 +123,10 @@ func (h *Handler) rulesFor(ctx context.Context, user accounts.User) versionRules
 	return rules
 }
 
-// key names what orders versions under the rules: the criteria, the
-// order of the codecs, that of the sources, the language and region the
-// user prefers, the order of the editions, the size a minute aimed at and
-// the label rules.
+// key names what orders versions under the rules: the criteria, and
+// whether they are set, the order of the codecs, that of the sources, the
+// language and region the user prefers, the order of the editions, the
+// size a minute aimed at and the label rules.
 func (r versionRules) key() string {
 	sources := make([]string, len(r.sources))
 	for i, source := range r.sources {
@@ -132,8 +136,9 @@ func (r versionRules) key() string {
 	for i, rule := range r.labels {
 		labels[i] = fmt.Sprintf("%t:%d:%t:%s", rule.Regex, rule.Score, rule.Hide, rule.Text)
 	}
-	return strings.Join(r.order, ",") + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") + "|" + r.language +
-		"|" + r.region + "|" + strings.Join(r.editions, ",") + "|" + strconv.FormatInt(r.perMinute, 10) + "|" + strings.Join(labels, "\n")
+	return strings.Join(r.order, ",") + "|" + strconv.FormatBool(r.set) + "|" + strings.Join(r.codecs, ",") + "|" + strings.Join(sources, ",") +
+		"|" + r.language + "|" + r.region + "|" + strings.Join(r.editions, ",") + "|" + strconv.FormatInt(r.perMinute, 10) + "|" +
+		strings.Join(labels, "\n")
 }
 
 // orderKey names what orders a user's versions of a title (see ordered):
@@ -238,6 +243,8 @@ func (h *Handler) hiddenVersion(ctx context.Context, user accounts.User, version
 // accounts.VersionEditions, empty, zero or empty when unknown, and
 // perMinute its size in bytes a minute of its runtime, 0 when either is
 // unknown; score is its score under the label rules (see labelScore).
+// cache is its rank for the cached criterion (see cacheRank), and seeders
+// its torrent's seeders, 0 when unknown.
 type versionFacts struct {
 	height    int
 	size      int64
@@ -252,6 +259,8 @@ type versionFacts struct {
 	edition   string
 	perMinute int64
 	score     int
+	cache     int
+	seeders   int
 }
 
 // versionFacts finds what is known of a version without reading it: each
@@ -312,6 +321,7 @@ func (h *Handler) versionFacts(ctx context.Context, version library.Version) ver
 		facts.audio = labels.Audio
 	}
 	runtime = cmp.Or(runtime, version.Runtime)
+	facts.cache, facts.seeders = cacheRank(version.Cached), version.Seeders
 	if facts.size > 0 && runtime >= time.Minute {
 		facts.perMinute = int64(float64(facts.size) / runtime.Minutes())
 	}
@@ -396,8 +406,16 @@ func (r versionRules) hiddenBy(version library.Version, facts versionFacts) (rul
 }
 
 // compare orders two versions by the criteria, each grouping them and the
-// next sorting within them; 0 when they tie on all of them.
+// next sorting within them; 0 when they tie on all of them. With no
+// criterion set, the versions known not to be ready on their debrid
+// service come after the others, which keep the addons' order.
 func (r versionRules) compare(a, b versionFacts) int {
+	if ua, ub := a.cache == cacheUnready, b.cache == cacheUnready; !r.set && ua != ub {
+		if ua {
+			return 1
+		}
+		return -1
+	}
 	for _, criterion := range r.order {
 		if c := r.criterion(criterion, a, b); c != 0 {
 			return c
@@ -441,6 +459,10 @@ func (r versionRules) criterion(criterion string, a, b versionFacts) int {
 		return cmp.Compare(r.editionRank(a.edition), r.editionRank(b.edition))
 	case "labels":
 		return cmp.Compare(b.score, a.score)
+	case "cached":
+		return cmp.Compare(a.cache, b.cache)
+	case "seeders":
+		return knownFirst(a.seeders, b.seeders, -1)
 	}
 	return 0
 }
@@ -533,6 +555,33 @@ func (r versionRules) languageRank(facts versionFacts) int {
 	return 5
 }
 
+// The ranks of a version for the cached criterion, by what its addon says
+// of its file on the debrid service (see library.Version.Cached): ready,
+// unknown, not ready.
+const (
+	cacheReady = iota
+	cacheUnknown
+	cacheUnready
+)
+
+// cacheRank ranks a version for the cached criterion.
+func cacheRank(cached *bool) int {
+	switch {
+	case cached == nil:
+		return cacheUnknown
+	case *cached:
+		return cacheReady
+	}
+	return cacheUnready
+}
+
+// uncached reports whether a version's addon says its debrid service does
+// not hold its file ready. With no criterion set, such versions come after
+// the others (see versionRules.compare).
+func uncached(version library.Version) bool {
+	return cacheRank(version.Cached) == cacheUnready
+}
+
 // codecRank ranks a video codec in the order of the codec criterion: the
 // codecs it does not list after those it lists, unknown last.
 func (r versionRules) codecRank(codec string) int {
@@ -583,14 +632,15 @@ func rangeRank(hdr, first library.DynamicRange) int {
 // rules first, keeping every version when they would hide them all; then
 // the quality group, leaving out the versions taller than it while one
 // fits or has an unknown height, else keeping them all, the closest to the
-// group first; then the criteria, ties keeping the addons' order. Then, for
-// the app asking, the versions it plays at the least cost come first (see
-// playCost), among those playing the user's languages as well as the first
-// known does (see appOrder); last, Play local files first puts the local
-// files before the others for the users given it (see localfirst.go), each
-// side keeping the order above. With criteria or an order for the app, a
-// page of the title open keeps the versions it shows in place (see
-// keptInPlace).
+// group first; then the criteria, ties keeping the addons' order, or with
+// none set the versions known not to be ready on their provider last (see
+// versionRules.compare). Then, for the app asking, the versions it plays at
+// the least cost come first (see playCost), among those playing the user's
+// languages as well as the first known does (see appOrder); last, Play
+// local files first puts the local files before the others for the users
+// given it (see localfirst.go), each side keeping the order above. With
+// criteria or an order for the app, a page of the title open keeps the
+// versions it shows in place (see keptInPlace).
 func (h *Handler) ordered(ctx context.Context, user accounts.User, item library.Item, versions []library.Version) []library.Version {
 	rules := h.rulesFor(ctx, user)
 	var sources map[accounts.ID]int

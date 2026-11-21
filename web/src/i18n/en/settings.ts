@@ -270,7 +270,7 @@ const settings = {
       'When an app plays a version as it is and can reach its source, Polyfin sends the app to the source’s address instead of passing the stream through the server. This applies to every user and every source, IPTV included, and saves the server’s bandwidth. Users who play from a source then see its address, with any key, account name or password in it. When off, the streams of IPTV sources always pass through the server, and so do those of the server’s addons when the user is not an administrator: each of those plays uses the server’s bandwidth, in and out. Administrators playing from the server’s addons, and users playing from their own addons, are sent to the source either way. Off by default.',
     versionNames: 'Version names',
     versionNamesHelp:
-      'Short names are written by Polyfin from what it knows of each version, the same in every app, such as “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon”: resolution, HDR, video codec, audio, edition, audio languages, size and addon. Two versions never share a name.',
+      'Short names are written by Polyfin from what it knows of each version, the same in every app, such as “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon”: resolution, HDR, video codec, audio, edition, audio languages, size, “Cached” when the addon says its provider holds the file ready, and addon. Two versions never share a name.',
     versionNameChoices: { addon: 'As the addon writes them', short: 'Short' },
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
@@ -278,8 +278,8 @@ const settings = {
     versionOrderGroup: 'Version order',
     versionOrder: {
       label: 'Order versions by',
-      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. Under My account, a user may also prefer an audio region, such as French for Quebec: among the versions in its language, those of that region come first, then those of no known region. While a title’s page is open, the versions it shows keep their places.',
-      none: 'None: versions keep the addons’ order.',
+      help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. Under My account, a user may also prefer an audio region, such as French for Quebec: among the versions in its language, those of that region come first, then those of no known region. “Cached by the provider first” and “Most seeders first” go by what the addon tells of each version: whether its provider holds the file ready, and the seeders it gives or writes in the labels. With no criterion, the versions an addon says are not cached come after the others. While a title’s page is open, the versions it shows keep their places.',
+      none: 'None: versions keep the addons’ order, those an addon says are not cached last.',
       add: 'Add a criterion',
       remove: (name: string) => `Remove ${name}`,
       criterion: (position: number) => `Criterion ${position}`,
@@ -300,6 +300,8 @@ const settings = {
         audio: 'Audio: lossless and Atmos first, then most channels',
         edition: 'Edition, in the order below',
         labels: 'Score of the label rules, highest first',
+        cached: 'Cached by the provider first',
+        seeders: 'Most seeders first',
       },
     },
     versionCodecOrder: {

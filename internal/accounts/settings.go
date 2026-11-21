@@ -329,10 +329,11 @@ var ConversionHeights = []int{0, 480, 720, 1080, 1440, 2160}
 // Settings.VersionSourceOrder, the source tier, a disc's full copy
 // first, then a Blu-ray encode, web, DVD and TV, the audio format,
 // lossless and object-based first, then by channels, the edition, in the
-// order of Settings.VersionEditionOrder, and the score of the label rules
-// (see Settings.VersionLabelRules), highest first.
+// order of Settings.VersionEditionOrder, the score of the label rules
+// (see Settings.VersionLabelRules), highest first, the file ready on the
+// debrid service first, and the most seeders first.
 var VersionCriteria = []string{"language", "resolution-high", "resolution-low", "size-large", "size-small", "size-per-minute", "codec",
-	"hdr-first", "hdr-last", "source", "tier", "audio", "edition", "labels"}
+	"hdr-first", "hdr-last", "source", "tier", "audio", "edition", "labels", "cached", "seeders"}
 
 // VersionCodecs are the video codecs the version rules know, by FFmpeg's
 // names, in the default order of Settings.VersionCodecOrder: the most

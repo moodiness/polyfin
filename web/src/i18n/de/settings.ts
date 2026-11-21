@@ -273,7 +273,7 @@ const settings: typeof en = {
       'Wenn eine App eine Version unverändert abspielt und ihre Quelle erreichen kann, schickt Polyfin die App zur Adresse der Quelle, statt den Stream über den Server zu leiten. Das gilt für alle Benutzer und alle Quellen, auch IPTV, und spart Bandbreite des Servers. Benutzer, die von einer Quelle abspielen, sehen dann deren Adresse, samt Schlüssel, Kontoname oder Passwort darin. Ist dies ausgeschaltet, laufen die Streams von IPTV-Quellen immer über den Server, ebenso die der Add-ons des Servers, wenn der Benutzer kein Administrator ist: Jede dieser Wiedergaben beansprucht die Bandbreite des Servers, eingehend wie ausgehend. Administratoren, die von den Add-ons des Servers abspielen, und Benutzer, die von ihren eigenen Add-ons abspielen, werden in beiden Fällen zur Quelle geschickt. Standardmäßig aus.',
     versionNames: 'Versionsnamen',
     versionNamesHelp:
-      'Kurze Namen schreibt Polyfin aus dem, was es über jede Version weiß, gleich in jeder App, etwa „4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Add-on“: Auflösung, HDR, Videocodec, Audio, Edition, Audiosprachen, Größe und Add-on. Zwei Versionen haben nie denselben Namen.',
+      'Kurze Namen schreibt Polyfin aus dem, was es über jede Version weiß, gleich in jeder App, etwa „4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Add-on“: Auflösung, HDR, Videocodec, Audio, Edition, Audiosprachen, Größe, „Im Cache“, wenn das Add-on sagt, dass sein Anbieter die Datei bereithält, und Add-on. Zwei Versionen haben nie denselben Namen.',
     versionNameChoices: { addon: 'Wie das Add-on sie schreibt', short: 'Kurz' },
     nameHowVersionsPlay: 'In Versionsnamen angeben, wie sie abgespielt werden',
     nameHowVersionsPlayHelp:
@@ -281,8 +281,8 @@ const settings: typeof en = {
     versionOrderGroup: 'Versionsreihenfolge',
     versionOrder: {
       label: 'Versionen sortieren nach',
-      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App, sonst die Standard-Audiosprache: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Unter Mein Konto kann ein Benutzer außerdem eine Audioregion bevorzugen, etwa Französisch aus Québec: Unter den Versionen in ihrer Sprache kommen die dieser Region zuerst, dann die ohne bekannte Region. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
-      none: 'Keine: Die Versionen behalten die Reihenfolge der Add-ons.',
+      help: 'Jedes Kriterium gruppiert die Versionen eines Films oder einer Folge, und das nächste sortiert sie innerhalb jeder Gruppe; gleichrangige Versionen behalten die Reihenfolge der Add-ons. Die erste Version ist die, die „Abspielen“ startet, und die Versionen, die versucht werden, wenn sie nicht funktioniert, folgen danach. Polyfin richtet sich nach dem, was es über eine Version weiß, ohne die Datei zu lesen: nach ihrer Analyse, sobald sie abgespielt wurde, sonst nach der Beschreibung von RemuxDB, sonst nach den Wörtern ihrer Bezeichnungen. Eine Version, über die ein Kriterium nichts weiß, kommt nach den anderen. Die bevorzugte Audiosprache ist die jedes einzelnen Benutzers, eingestellt in seiner App, sonst die Standard-Audiosprache: Versionen, die bekanntermaßen in dieser Sprache sind, kommen zuerst, dann solche mit MULTI oder DUAL, dann solche mit unbekannter Sprache. Unter Mein Konto kann ein Benutzer außerdem eine Audioregion bevorzugen, etwa Französisch aus Québec: Unter den Versionen in ihrer Sprache kommen die dieser Region zuerst, dann die ohne bekannte Region. „Im Cache des Anbieters zuerst“ und „Meiste Seeder zuerst“ richten sich nach dem, was das Add-on über jede Version sagt: ob ihr Anbieter die Datei bereithält, und die Seeder, die es angibt oder in die Bezeichnungen schreibt. Ohne Kriterium kommen die Versionen, die laut Add-on nicht im Cache sind, nach den anderen. Solange die Seite eines Titels geöffnet ist, behalten die dort angezeigten Versionen ihre Plätze.',
+      none: 'Keine: Die Versionen behalten die Reihenfolge der Add-ons; Versionen, die laut Add-on nicht im Cache sind, kommen zuletzt.',
       add: 'Kriterium hinzufügen',
       remove: (name: string) => `${name} entfernen`,
       criterion: (position: number) => `Kriterium ${position}`,
@@ -303,6 +303,8 @@ const settings: typeof en = {
         audio: 'Audio: verlustfrei und Atmos zuerst, dann die meisten Kanäle',
         edition: 'Fassung, in der Reihenfolge unten',
         labels: 'Punkte der Bezeichnungsregeln, höchste zuerst',
+        cached: 'Im Cache des Anbieters zuerst',
+        seeders: 'Meiste Seeder zuerst',
       },
     },
     versionCodecOrder: {

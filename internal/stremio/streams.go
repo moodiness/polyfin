@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/moodiness/polyfin/internal/drm"
@@ -31,6 +33,9 @@ type Stream struct {
 	Sources       []string       `json:"sources,omitempty"`
 	Subtitles     []Subtitle     `json:"subtitles,omitempty"`
 	BehaviorHints StreamBehavior `json:"behaviorHints,omitzero"`
+	// Data is what some addons add of their own about the stream, read
+	// leniently (see StreamData).
+	Data StreamData `json:"streamData,omitzero"`
 	// Usenet is a Usenet download's NZB link, and RARs to Tars archives'
 	// files: streams Polyfin does not play. They are decoded only to count
 	// them in a log line, never asked for.
@@ -79,6 +84,82 @@ type StreamBehavior struct {
 type ProxyHeaders struct {
 	Request  map[string]string `json:"request,omitempty"`
 	Response map[string]string `json:"response,omitempty"`
+}
+
+// StreamData is the streamData some addons add to a stream: the debrid
+// service holding its file and whether the file is ready there (cached),
+// and the seeders of its torrent. It is read leniently: a value of
+// another type than expected reads as unknown, and never fails the
+// stream; cached may be a boolean, a string or a number. Cached counts
+// only with a service named.
+type StreamData struct {
+	Service StreamService `json:"service,omitzero"`
+	Torrent StreamTorrent `json:"torrent,omitzero"`
+}
+
+// StreamService is the debrid service a stream's file is on: its
+// identifier, and whether it has the file ready, nil when unknown.
+type StreamService struct {
+	ID     string `json:"id,omitempty"`
+	Cached *bool  `json:"cached,omitempty"`
+}
+
+// StreamTorrent is what an addon tells of a stream's torrent: its
+// seeders, 0 when unknown.
+type StreamTorrent struct {
+	Seeders Number `json:"seeders,omitempty"`
+}
+
+func (d *StreamData) UnmarshalJSON(data []byte) error {
+	*d = StreamData{}
+	var fields struct {
+		Service json.RawMessage `json:"service"`
+		Torrent json.RawMessage `json:"torrent"`
+	}
+	if json.Unmarshal(data, &fields) != nil {
+		return nil
+	}
+	var service struct {
+		ID     Text            `json:"id"`
+		Cached json.RawMessage `json:"cached"`
+	}
+	if json.Unmarshal(fields.Service, &service) == nil {
+		d.Service.ID = strings.TrimSpace(string(service.ID))
+		if d.Service.ID != "" {
+			d.Service.Cached = looseBool(service.Cached)
+		}
+	}
+	var torrent struct {
+		Seeders Number `json:"seeders"`
+	}
+	if json.Unmarshal(fields.Torrent, &torrent) == nil {
+		d.Torrent.Seeders = max(torrent.Seeders, 0)
+	}
+	return nil
+}
+
+// looseBool reads a JSON boolean, a string saying true or false, yes or
+// no, in any letter case, or a number, 0 being false; nil for anything
+// else.
+func looseBool(data json.RawMessage) *bool {
+	var value bool
+	if json.Unmarshal(data, &value) == nil {
+		return &value
+	}
+	var text Text
+	_ = text.UnmarshalJSON(data)
+	switch written := strings.ToLower(strings.TrimSpace(string(text))); written {
+	case "true", "yes":
+		value = true
+	case "false", "no":
+	default:
+		number, err := strconv.ParseFloat(written, 64)
+		if err != nil || math.IsNaN(number) {
+			return nil
+		}
+		value = number != 0
+	}
+	return &value
 }
 
 // Playable reports whether the stream is a direct link to a video.

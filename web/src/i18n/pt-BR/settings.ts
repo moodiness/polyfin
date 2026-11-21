@@ -272,7 +272,7 @@ const settings: typeof en = {
       'Quando um aplicativo reproduz uma versão como ela é e consegue acessar a fonte, o Polyfin envia o aplicativo para o endereço da fonte em vez de fazer a stream passar pelo servidor. Isso vale para todos os usuários e todas as fontes, inclusive IPTV, e economiza a banda do servidor. Os usuários que reproduzem de uma fonte passam a ver o endereço dela, com a chave, o nome da conta ou a senha que ele contém. Desativado, as streams das fontes IPTV sempre passam pelo servidor, assim como as dos complementos do servidor quando o usuário não é administrador: cada uma dessas reproduções usa a banda do servidor, de entrada e de saída. Os administradores que reproduzem dos complementos do servidor, e os usuários que reproduzem dos próprios complementos, são enviados para a fonte nos dois casos. Desativado por padrão.',
     versionNames: 'Nomes das versões',
     versionNamesHelp:
-      'Os nomes curtos são escritos pelo Polyfin a partir do que ele sabe de cada versão, iguais em todos os aplicativos, como “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Complemento”: resolução, HDR, codec de vídeo, áudio, edição, idiomas do áudio, tamanho e complemento. Duas versões nunca têm o mesmo nome.',
+      'Os nomes curtos são escritos pelo Polyfin a partir do que ele sabe de cada versão, iguais em todos os aplicativos, como “4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Complemento”: resolução, HDR, codec de vídeo, áudio, edição, idiomas do áudio, tamanho, “Em cache” quando o complemento diz que o provedor dele tem o arquivo pronto, e complemento. Duas versões nunca têm o mesmo nome.',
     versionNameChoices: { addon: 'Como o complemento os escreve', short: 'Curtos' },
     nameHowVersionsPlay: 'Indicar no nome das versões como elas são reproduzidas',
     nameHowVersionsPlayHelp:
@@ -280,8 +280,8 @@ const settings: typeof en = {
     versionOrderGroup: 'Ordem das versões',
     versionOrder: {
       label: 'Ordenar versões por',
-      help: 'Cada critério agrupa as versões de um filme ou episódio, e o seguinte as ordena dentro de cada grupo; versões empatadas mantêm a ordem dos complementos. A primeira versão é a que “Reproduzir” inicia, e as versões tentadas quando ela não funciona vêm em seguida. O Polyfin se baseia no que sabe de uma versão sem ler o arquivo: sua análise depois de reproduzida, senão a descrição do RemuxDB, senão as palavras dos seus rótulos. Uma versão sobre a qual um critério não sabe nada fica depois das outras. O idioma de áudio preferido é o de cada usuário, definido no aplicativo dele, ou então o Idioma de áudio padrão: primeiro as versões conhecidas nesse idioma, depois as marcadas como MULTI ou DUAL, depois as de idioma desconhecido. Em Minha conta, um usuário também pode preferir uma região de áudio, como o francês do Québec: entre as versões no idioma dela, primeiro as dessa região, depois as de região desconhecida. Enquanto a página de um título estiver aberta, as versões exibidas mantêm suas posições.',
-      none: 'Nenhum: as versões mantêm a ordem dos complementos.',
+      help: 'Cada critério agrupa as versões de um filme ou episódio, e o seguinte as ordena dentro de cada grupo; versões empatadas mantêm a ordem dos complementos. A primeira versão é a que “Reproduzir” inicia, e as versões tentadas quando ela não funciona vêm em seguida. O Polyfin se baseia no que sabe de uma versão sem ler o arquivo: sua análise depois de reproduzida, senão a descrição do RemuxDB, senão as palavras dos seus rótulos. Uma versão sobre a qual um critério não sabe nada fica depois das outras. O idioma de áudio preferido é o de cada usuário, definido no aplicativo dele, ou então o Idioma de áudio padrão: primeiro as versões conhecidas nesse idioma, depois as marcadas como MULTI ou DUAL, depois as de idioma desconhecido. Em Minha conta, um usuário também pode preferir uma região de áudio, como o francês do Québec: entre as versões no idioma dela, primeiro as dessa região, depois as de região desconhecida. “Em cache no provedor primeiro” e “Mais seeders primeiro” se baseiam no que o complemento diz de cada versão: se o provedor dele tem o arquivo pronto, e os seeders que ele informa ou escreve nos rótulos. Sem critérios, as versões que um complemento diz não estarem em cache ficam depois das outras. Enquanto a página de um título estiver aberta, as versões exibidas mantêm suas posições.',
+      none: 'Nenhum: as versões mantêm a ordem dos complementos, e as que um complemento diz não estarem em cache ficam por último.',
       add: 'Adicionar critério',
       remove: (name: string) => `Remover ${name}`,
       criterion: (position: number) => `Critério ${position}`,
@@ -302,6 +302,8 @@ const settings: typeof en = {
         audio: 'Áudio: sem perdas e Atmos primeiro, depois mais canais',
         edition: 'Edição, na ordem abaixo',
         labels: 'Pontuação das regras de rótulos, a mais alta primeiro',
+        cached: 'Em cache no provedor primeiro',
+        seeders: 'Mais seeders primeiro',
       },
     },
     versionCodecOrder: {

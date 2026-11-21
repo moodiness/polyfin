@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -20,8 +21,9 @@ import (
 // With Settings › Playback › Version names on Short, Polyfin writes the
 // names of a movie's or an episode's versions itself, the same for every
 // app, from what it knows of each (see library.VersionBadges): its
-// badges, its size and its addon, such as "4K · DV · HEVC · Atmos 7.1 ·
-// IMAX · FR EN · 58 GB · Addon". The names follow the server language,
+// badges, its size, Cached when its addon says its debrid service holds
+// it ready, and its addon, such as "4K · DV · HEVC · Atmos 7.1 · IMAX ·
+// FR EN · 58 GB · Cached · Addon". The names follow the server language,
 // and change as a version is analyzed. Rules on version names still read
 // the addon's own (see versionRules).
 
@@ -44,7 +46,8 @@ func (h *Handler) versionNames(ctx context.Context, item library.Item, versions 
 		if len(known) > 0 && known[0].Size > 0 {
 			size = known[0].Size
 		}
-		name := shortVersionName(library.VersionBadges(version, settings.Language, known...), size, version.Addon, settings.Language)
+		name := shortVersionName(library.VersionBadges(version, settings.Language, known...), size, cacheRank(version.Cached) == cacheReady,
+			version.Addon, settings.Language)
 		unique := name
 		for n := 2; taken[unique]; n++ {
 			unique = name + " · " + strconv.Itoa(n)
@@ -56,11 +59,12 @@ func (h *Handler) versionNames(ctx context.Context, item library.Item, versions 
 }
 
 // shortVersionName writes a version's short name from its badges, its size in
-// bytes, 0 when unknown, and its addon's name, in language: its badges
-// apart, but its audio format with its channels ("Atmos 7.1") and its
-// languages together ("FR EN"), then its size and its addon, those
-// unknown left out.
-func shortVersionName(badges []library.Badge, size int64, addon, language string) string {
+// bytes, 0 when unknown, whether its addon says its debrid service holds
+// it ready, and its addon's name, in language: its badges apart, but its
+// audio format with its channels ("Atmos 7.1") and its languages together
+// ("FR EN"), then its size, "Cached" and its addon, those unknown left
+// out.
+func shortVersionName(badges []library.Badge, size int64, cached bool, addon, language string) string {
 	var parts []string
 	previous := ""
 	for _, badge := range badges {
@@ -75,6 +79,9 @@ func shortVersionName(badges []library.Badge, size int64, addon, language string
 	}
 	if size > 0 {
 		parts = append(parts, sizeName(size, language))
+	}
+	if cached {
+		parts = append(parts, i18n.Text{"Cached", "En cache", "Im Cache", "En caché", "In cache", "Em cache"}.In(language))
 	}
 	if addon = strings.TrimSpace(addon); addon != "" {
 		parts = append(parts, addon)

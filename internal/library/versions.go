@@ -1,6 +1,7 @@
 package library
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -67,6 +68,12 @@ type Version struct {
 	// dynamic range and audio languages (see ReadLabels); its analysis,
 	// once there, is what counts.
 	Labels Labels
+	// Cached is whether the debrid service the addon names holds the file
+	// ready, nil when the addon does not say (see stremio.StreamData).
+	// Seeders are its torrent's seeders, as the addon's stream data, else
+	// its labels, tell them (see LabelSeeders); 0 when they do not.
+	Cached  *bool
+	Seeders int
 	// Expires is when the link stops working, zero when the addon does
 	// not say; Audio is what a music addon tells of a track's stream.
 	Expires time.Time
@@ -890,6 +897,9 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 		Runtime:    t.runtime,
 		Height:     LabelHeight(stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
 		Labels:     ReadLabels(t.name, stream.Name, stream.Title, stream.Description, stream.BehaviorHints.Filename),
+		Cached:     stream.Data.Service.Cached,
+		Seeders: cmp.Or(int(stream.Data.Torrent.Seeders), LabelSeeders(stream.Name, stream.Title, stream.Description,
+			stream.BehaviorHints.Filename)),
 		// A replay holds one of its provider's connections, as a channel does.
 		HoldsConnection: t.kind == KindReplay,
 	}

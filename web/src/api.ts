@@ -919,6 +919,8 @@ export type VersionCriterion =
   | 'audio'
   | 'edition'
   | 'labels'
+  | 'cached'
+  | 'seeders'
 /** A movie's editions: the theatrical cut, an extended cut, the director's cut, an IMAX cut. */
 export type VersionEdition = 'theatrical' | 'extended' | 'directors' | 'imax'
 /**

@@ -45,7 +45,7 @@ flowchart TD
 7. **Another title:** streams whose labels name another episode, a season without the episode, or another movie of the same name are left out. There is no setting, and like hide rules it never leaves out every version (see [Versions of another title](#versions-of-another-title)).
 8. **Hide rules:** **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**. All are off by default, and none ever hides every version (see [Version order](#version-order)).
 9. **Quality group:** the user's group leaves out taller versions while one fits. Default: **Original (no limit)** (see [Quality groups](user-limits.md#quality-groups)).
-10. **The order:** the addons' order, unless **Order versions by** under **Settings › Playback** has criteria (none by default). Ties keep the addons' order. Then:
+10. **The order:** the addons' order, unless **Order versions by** under **Settings › Playback** has criteria (none by default). Ties keep the addons' order. With no criterion, the versions an addon says are not cached by its provider come after the others, which keep the addons' order (see [What the rules know of a version](#what-the-rules-know-of-a-version)). Then:
     - **Prefer versions the app plays without conversion**, on by default, puts the versions cheapest for the app to play first, once Polyfin knows how the app plays (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)).
     - **Play local files first**, off by default, puts a user's local folder and network share versions first (see [Local files first for some users](#local-files-first-for-some-users)).
 11. **Plays without a pick:** `PlaybackInfo` leaves out versions passed over: unreadable, unplayable on the app, or torrents that did not start lately.
@@ -345,7 +345,7 @@ Before Polyfin knows the app, after a restart and until its first play, the app 
 
 ### Version order
 
-The **Version order** group of **Settings › Playback** orders and hides a movie's or episode's versions. By default it changes nothing: versions keep the addons' order.
+The **Version order** group of **Settings › Playback** orders and hides a movie's or episode's versions. By default it changes almost nothing: versions keep the addons' order, those an addon says are not cached by its provider last.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
@@ -360,8 +360,8 @@ The **Version order** group of **Settings › Playback** orders and hides a movi
 | **Hide low-quality releases** | **Settings › Playback** | None | Hides versions tagged as a kind ticked. |
 | **Label rules** | **Settings › Playback** | None (up to 40 rules) | Hide versions or score them (see [Label rules](#label-rules)). |
 
-- Each criterion groups versions, and the next sorts within them. Ties keep the addons' order.
-- The criteria: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first**, **File size, smallest first** or **Size per minute of runtime, as set below**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**; **Source: disc copy, Blu-ray, web, DVD, then TV**; **Audio: lossless and Atmos first, then most channels**; **Edition, in the order below**; **Score of the label rules, highest first**.
+- Each criterion groups versions, and the next sorts within them. Ties keep the addons' order. With no criterion, the versions an addon says are not cached come after the others; with criteria, only **Cached by the provider first** reads it.
+- The criteria: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first**, **File size, smallest first** or **Size per minute of runtime, as set below**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**; **Source: disc copy, Blu-ray, web, DVD, then TV**; **Audio: lossless and Atmos first, then most channels**; **Edition, in the order below**; **Score of the label rules, highest first**; **Cached by the provider first**, then those it says nothing of, then those not cached; **Most seeders first**.
 - **Order of sources** lists the server's addons and folders giving movie and episode versions; reorder by drag or arrows.
 - Size per minute counts megabytes of 10^6 bytes; 0 puts the largest a minute first.
 - **Hide versions whose labels contain** reads name, description and file name, one word a line, any letter case. It serves addons whose labels say a file is not ready yet.
@@ -382,6 +382,8 @@ Nothing is read from the source. Each property comes from the version's analysis
 | Audio format, best track | Lossless: `TrueHD`, `DTS-HD MA`, `FLAC`, `LPCM`. Object-based: `Atmos`, `DTS-X`, `DTS:X`. Channels: `5.1`, `7.1`, `DDP5.1`, `AAC2.0` |
 | Edition, first named | `Theatrical`, `Extended`, `Director's Cut` or `Directors.Cut`, `IMAX`; none named is theatrical |
 | Size per minute | Size divided by runtime: the analysis's, else the title's |
+| Cached by the provider | Not read from labels: the addon's `streamData`, `service.cached` with `service.id` naming the provider; a boolean, `"true"` or `"false"`, `"yes"` or `"no"`, or a number, 0 being false |
+| Seeders | The addon's `streamData`, `torrent.seeders`, else a person icon followed by the number (`👤 42`), or `Seeders: 42` in any letter case; 0 counts as unknown |
 
 - Languages include regional variants (see [Regional audio](audio-and-subtitle-tracks.md#regional-audio)). MULTI and DUAL mean several languages.
 - Subtitle languages (`Sub ITA`, `French Subs`) are not audio. A word of the movie's or series' name is never a language.
@@ -389,6 +391,7 @@ Nothing is read from the source. Each property comes from the version's analysis
 - A DVD's full copy is a disc's full copy: the tier tells the source, not the height. Of several tiers named, the best counts, so `BluRay` with a full copy's word is a full copy.
 - Lossless means Dolby TrueHD, DTS-HD Master Audio, FLAC, ALAC or PCM; object-based means Dolby Atmos or DTS:X. `DTS-HD` without `MA` is lossy.
 - An analysis reads audio from the tracks; ffprobe names Atmos and DTS:X in a track's profile.
+- `streamData` is what some addons add to each stream. It is read leniently: a value of another type reads as unknown, and never leaves out the stream. A version cached is named `Cached` in **Short** names (see [Version names](#version-names)).
 - A version a criterion knows nothing of comes after known ones; hide rules never hide it.
 
 #### Low-quality tags
@@ -520,11 +523,11 @@ With **Prefer versions the app plays without conversion** on, apps still list an
 | **Version names** | **Settings › Playback** | **As the addon writes them** | **Short** names each version from its [badges](#badges), size and addon. |
 | **Say in version names how they play** | **Settings › Playback** | On | Adds how each version plays. Off, names are as **Version names** writes them. |
 
-**Short** names give the version's badges in their order (resolution, HDR kind, video codec, audio format with its channels, edition, audio languages as codes, never flags), then its size and its addon, those unknown left out:
+**Short** names give the version's badges in their order (resolution, HDR kind, video codec, audio format with its channels, edition, audio languages as codes, never flags), then its size, `Cached` when its addon says its provider holds the file ready (see [What the rules know of a version](#what-the-rules-know-of-a-version)), and its addon, those unknown left out:
 
-`4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Addon`
+`4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 GB · Cached · Addon`
 
-- Sizes are in decimal units: whole gigabytes from 10 GB (`58 GB`), one decimal from 1 GB (`4.7 GB`), megabytes below (`700 MB`). They follow **Language of generated names**, as do Stereo and Mono ("Stéréo" in French) (see [Getting started](getting-started.md#language-of-generated-names)): `Go` and `Mo` in French, and a decimal comma in every language but English.
+- Sizes are in decimal units: whole gigabytes from 10 GB (`58 GB`), one decimal from 1 GB (`4.7 GB`), megabytes below (`700 MB`). They follow **Language of generated names**, as do Stereo, Mono and Cached ("Stéréo" and "En cache" in French) (see [Getting started](getting-started.md#language-of-generated-names)): `Go` and `Mo` in French, and a decimal comma in every language but English.
 - The analysis, else the [RemuxDB](#tracks-from-remuxdb) description, wins over the addon's labels, so a name changes once its version is analyzed.
 - Two versions listed together never share a name: the later one ends with ` · 2`, then ` · 3` and so on.
 - Only movies and episodes get short names. They are the same in item details, listings and `PlaybackInfo`, for every app.

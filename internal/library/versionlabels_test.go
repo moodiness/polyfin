@@ -174,3 +174,31 @@ func TestOtherTitleReadsSeasonsEpisodesAndYears(t *testing.T) {
 		}
 	}
 }
+
+// Labels write a torrent's seeders after a person icon, or after
+// "Seeders", the first label writing them counting; a number of another
+// thing, such as a height, is none.
+func TestLabelSeedersReadTheSeedersLabelsWrite(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		labels []string
+		want   int
+	}{
+		{[]string{"Addon\n1080p", "Movie.2008.1080p.mkv\n👤 42 💾 4.2 GB"}, 42},
+		{[]string{"👤42"}, 42},
+		{[]string{"👥 7"}, 7},
+		{[]string{"\U0001F464\uFE0F 9"}, 9},
+		{[]string{"Size: 4 GB | Seeders: 120 | Source: tracker"}, 120},
+		{[]string{"SEEDERS 3"}, 3},
+		{[]string{"seeders:0"}, 0},
+		{[]string{"👤 12", "Seeders: 30"}, 12},
+		{[]string{"Seeders 2160p"}, 0},
+		{[]string{"Movie.2008.1080p.mkv", "🔍 Seeders"}, 0},
+		{[]string{"Overseeders: 5"}, 0},
+		{nil, 0},
+	} {
+		if got := LabelSeeders(tc.labels...); got != tc.want {
+			t.Errorf("%q: %d, want %d", tc.labels, got, tc.want)
+		}
+	}
+}

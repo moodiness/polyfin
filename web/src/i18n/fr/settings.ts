@@ -274,7 +274,7 @@ const settings: typeof en = {
       'Quand une application lit une version telle quelle et peut joindre sa source, Polyfin envoie l’application à l’adresse de la source au lieu de faire passer le flux par le serveur. Cela vaut pour tous les utilisateurs et toutes les sources, IPTV comprise, et économise la bande passante du serveur. Les utilisateurs qui lisent depuis une source voient alors son adresse, avec la clé, le nom de compte ou le mot de passe qu’elle contient. Désactivé, les flux des sources IPTV passent toujours par le serveur, comme ceux des addons du serveur quand l’utilisateur n’est pas administrateur\u202f: chacune de ces lectures utilise la bande passante du serveur, en entrée comme en sortie. Les administrateurs qui lisent depuis les addons du serveur, et les utilisateurs qui lisent depuis leurs propres addons, sont envoyés vers la source dans les deux cas. Désactivé par défaut.',
     versionNames: 'Nom des versions',
     versionNamesHelp:
-      'Les noms courts sont écrits par Polyfin d’après ce qu’il sait de chaque version, les mêmes dans toutes les applis, comme «\u202f4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 Go · Addon\u202f»\u202f: résolution, HDR, codec vidéo, audio, édition, langues audio, taille et addon. Deux versions n’ont jamais le même nom.',
+      'Les noms courts sont écrits par Polyfin d’après ce qu’il sait de chaque version, les mêmes dans toutes les applis, comme «\u202f4K · DV · HEVC · Atmos 7.1 · IMAX · FR EN · 58 Go · Addon\u202f»\u202f: résolution, HDR, codec vidéo, audio, édition, langues audio, taille, «\u202fEn cache\u202f» quand l’addon dit que son fournisseur a le fichier prêt, et addon. Deux versions n’ont jamais le même nom.',
     versionNameChoices: { addon: 'Tels que l’addon les écrit', short: 'Courts' },
     nameHowVersionsPlay: 'Dire dans le nom des versions comment elles se lisent',
     nameHowVersionsPlayHelp:
@@ -282,8 +282,8 @@ const settings: typeof en = {
     versionOrderGroup: 'Ordre des versions',
     versionOrder: {
       label: 'Trier les versions par',
-      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe\u202f; les versions à égalité gardent l’ordre des addons. La première version est celle que lance «\u202fLire\u202f», et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier\u202f: son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli, sinon la Langue audio par défaut\u202f: les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Dans Mon compte, un utilisateur peut aussi préférer une région audio, comme le français du Québec\u202f: parmi les versions dans sa langue, celles de cette région d’abord, puis celles de région inconnue. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
-      none: 'Aucun\u202f: les versions gardent l’ordre des addons.',
+      help: 'Chaque critère regroupe les versions d’un film ou d’un épisode, et le suivant les trie dans chaque groupe\u202f; les versions à égalité gardent l’ordre des addons. La première version est celle que lance «\u202fLire\u202f», et les versions essayées quand elle ne marche pas viennent ensuite. Polyfin se fie à ce qu’il sait d’une version sans lire le fichier\u202f: son analyse une fois lue, sinon la description de RemuxDB, sinon les mots de ses libellés. Une version dont un critère ne sait rien passe après les autres. La langue audio préférée est celle de chaque utilisateur, réglée dans son appli, sinon la Langue audio par défaut\u202f: les versions connues dans cette langue d’abord, puis celles marquées MULTI ou DUAL, puis celles de langue inconnue. Dans Mon compte, un utilisateur peut aussi préférer une région audio, comme le français du Québec\u202f: parmi les versions dans sa langue, celles de cette région d’abord, puis celles de région inconnue. «\u202fEn cache chez le fournisseur d’abord\u202f» et «\u202fLe plus de seeders d’abord\u202f» se fient à ce que l’addon dit de chaque version\u202f: si son fournisseur a le fichier prêt, et les seeders qu’il donne ou écrit dans les libellés. Sans critère, les versions qu’un addon dit absentes du cache passent après les autres. Tant que la page d’un titre est ouverte, les versions qu’elle affiche gardent leur place.',
+      none: 'Aucun\u202f: les versions gardent l’ordre des addons, celles qu’un addon dit absentes du cache en dernier.',
       add: 'Ajouter un critère',
       remove: (name: string) => `Retirer «\u202f${name}\u202f»`,
       criterion: (position: number) => `Critère ${position}`,
@@ -304,6 +304,8 @@ const settings: typeof en = {
         audio: 'Audio\u202f: sans perte et Atmos d’abord, puis le plus de canaux',
         edition: 'Édition, dans l’ordre ci-dessous',
         labels: 'Score des règles de libellés, le plus haut d’abord',
+        cached: 'En cache chez le fournisseur d’abord',
+        seeders: 'Le plus de seeders d’abord',
       },
     },
     versionCodecOrder: {
