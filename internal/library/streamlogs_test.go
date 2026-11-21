@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -62,20 +63,24 @@ func (e logEnv) listed(ctx context.Context) {
 }
 
 // An answer of notices alone that refuses nothing is information, logged
-// once a day for the same addon, title and text, at Debug in between; a
-// refusal for the rate is a warning. The line counts the entries, and
-// those of each shape Polyfin cannot play.
-func TestNoticesAreLoggedOnceADayAtTheirLevel(t *testing.T) {
+// once in six hours for the same addon, title and text, whatever its
+// digits, at Debug in between; logged again, it counts the answers that
+// repeated it, at Debug for background work alone. A refusal for the rate
+// is a warning. The line counts the entries, and those of each shape
+// Polyfin cannot play.
+func TestNoticesAreLoggedOnceInSixHoursWithTheirRepeats(t *testing.T) {
 	t.Parallel()
 	e := newLogEnv(t)
-	const summary = `{"streams":[
-		{"name":"Summary","description":"12 results filtered out"},
+	summary := func(filtered int) string {
+		return fmt.Sprintf(`{"streams":[
+		{"name":"Summary","description":"%d results filtered out"},
 		{"name":"Usenet","nzbUrl":"https://downloads.example/a.nzb","servers":["nntps://news.example:563"]},
 		{"name":"Rar","rarUrls":[{"url":"https://downloads.example/a.rar","bytes":10}]},
 		{"name":"Seven","7zipUrls":[{"url":"https://downloads.example/a.7z"}]},
 		{"name":"Ftp","url":"ftp://downloads.example/a.mkv"},
 		{"name":"Hash","infoHash":"abc"},
-		{"name":"Clip","ytId":"abc123"}]}`
+		{"name":"Clip","ytId":"abc123"}]}`, filtered)
+	}
 	const message = "An addon answered only notices, nothing to play"
 	level := func(what string, skipped int, want string) string {
 		t.Helper()
@@ -85,7 +90,7 @@ func TestNoticesAreLoggedOnceADayAtTheirLevel(t *testing.T) {
 		}
 		return lines[0]
 	}
-	e.bodies <- summary
+	e.bodies <- summary(12)
 	e.listed(t.Context())
 	line := level("a summary", 0, "INFO")
 	for _, field := range []string{"type=movie", "id=ttm000", "entries=7", "no_link=2", "usenet=1", "archives=2", "other_schemes=1",
@@ -94,21 +99,30 @@ func TestNoticesAreLoggedOnceADayAtTheirLevel(t *testing.T) {
 			t.Errorf("no %s: %s", field, line)
 		}
 	}
-	if strings.Contains(line, "minute") || strings.Contains(line, "downloads.example") {
+	if strings.Contains(line, "minute") || strings.Contains(line, "downloads.example") || strings.Contains(line, "repeats=") {
 		t.Errorf("line: %s", line)
 	}
-	e.wait(noticeLife + time.Second)
-	e.bodies <- summary
+	// Past the answer's freshness, a user's request asks again.
+	e.wait(11 * time.Minute)
+	e.bodies <- summary(13)
 	e.listed(t.Context())
-	level("the same summary within the day", 1, "DEBUG")
-	e.wait(noticeLogLife)
-	e.bodies <- summary
+	level("the same summary within six hours", 1, "DEBUG")
+	e.wait(noticeLogEvery)
+	e.bodies <- summary(14)
 	e.listed(t.Context())
-	level("the same summary a day later", 2, "INFO")
-	e.wait(noticeLife + time.Second)
+	if line := level("the same summary six hours later", 2, "INFO"); !strings.Contains(line, "repeats=1 ") {
+		t.Errorf("no repeats=1: %s", line)
+	}
+	e.wait(noticeLogEvery)
+	e.bodies <- summary(15)
+	e.listed(Background(t.Context()))
+	if line := level("background work's six hours later", 3, "DEBUG"); !strings.Contains(line, "repeats=0 ") {
+		t.Errorf("no repeats=0: %s", line)
+	}
+	e.wait(11 * time.Minute)
 	e.bodies <- `{"streams":[{"name":"Notice","description":"Rate limit exceeded"}]}`
 	e.listed(t.Context())
-	level("a refusal", 3, "WARN")
+	level("a refusal", 4, "WARN")
 }
 
 // A failed request for an addon's streams is logged once, however many

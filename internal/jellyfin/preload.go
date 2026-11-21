@@ -128,7 +128,11 @@ func (h *Handler) episodesToPreload(ctx context.Context, user accounts.User, cut
 // night, their lists expiring between two passes. Known lists offering no
 // version leave nothing to preload. The addons are asked, waiting for
 // their answers, only when a list is not known, or when the version known
-// cannot be read, its link having expired.
+// cannot be read, its link having expired. An addon that answered the
+// episode with nothing to play, notices alone included, which keep no
+// list, is asked again only after a wait that grows from an hour to a day
+// with each such answer, as for any background work (see
+// library.Background): the passes meanwhile get its answer again.
 func (h *Handler) preloadEpisode(ctx context.Context, user accounts.User, episode library.Item, whole bool, limits source.Preloading) (int64, error) {
 	// Through Library.Item, as details, for parental control.
 	item, err := h.Library.Item(ctx, user, episode.ID)

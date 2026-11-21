@@ -241,8 +241,9 @@ The checks follow the addons' wait rules:
 - An addon whose server asked to wait is not asked (see [Addons that ask to wait](addons.md#addons-that-ask-to-wait)).
 - An addon that answers a check "too many requests" (429, or 503 with `Retry-After`) starts its server's wait, as a refused catalog page does.
 - The checks are paced background work. An addon whose background requests pause after a refusal is not asked either (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)).
-- A title some addon was not asked for, or failed on, keeps what it had. It is checked again at the next hour. So is a title an addon refused with notices alone saying it limits requests.
+- A title some addon was not asked for, or failed on, keeps what it had. It is checked again at the next hour. So is a title an addon refused with notices alone saying it limits requests, as **System › Health** marks them: "rate limit", "too many requests", 429 or "retry after".
 - An addon that answers only other notices, such as its own summary of the streams its filters left out, counts as answered: with the list it gave before, if Polyfin still keeps one, else with nothing to play. The title is recorded, waits in **Still waiting** when no addon has versions, and is checked again after the hours set (see [Title pages](versions.md#title-pages)).
+- An addon that had nothing for the title, an empty answer or such notices, is not asked again by the checks for an hour, then 2, 4, 8, 16 and 24 hours after each further such answer: its answer counts again meanwhile. Opening or playing the title starts the waits again (see [Title pages](versions.md#title-pages)).
 - A version list an addon gave within **Keep version lists for (minutes)**, in **Settings › Catalogs**, is used as it is.
 
 Each check records whether versions were found, and the first time they were. This survives a restart. Two [home rows](home-rows.md#home-rows) list the results:
