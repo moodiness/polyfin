@@ -46,8 +46,8 @@ var (
 	// channel's identifier, or by what the conversion is and a number; and
 	// the files joined for a download, named "joined-" and a number.
 	Segments = Kind{regexp.MustCompile(`^(?:(?:live-)?[0-9a-f]{24}|playout-[0-9a-f-]{32,36}|(?:audio|burn|encoding|joined|live|measure|tone-mapping)-[0-9]+)$`)}
-	// Torrents is the folder of the torrents' pieces: a folder for each
-	// torrent, named by the 40 hexadecimal digits of its hash.
+	// Torrents is the folder of the torrents' pieces. It held a folder for
+	// each torrent, named by the 40 hexadecimal digits of its hash.
 	Torrents = Kind{regexp.MustCompile(`^[0-9a-f]{40}$`)}
 	// Guides is the folder of the guides being read: each a file named
 	// "guide-", a number and ".zip".
