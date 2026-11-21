@@ -17,6 +17,7 @@ import (
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // MediaSegmentDto is a part of an item that apps offer to skip.
@@ -139,33 +140,82 @@ func (h *Handler) openedSegments(w http.ResponseWriter, r *http.Request) (accoun
 		h.browseError(w, r, err)
 		return opened, nil, false
 	}
+	segments, err := h.titleSegments(r.Context(), user, item, opened)
+	if err != nil {
+		h.browseError(w, r, err)
+		return opened, nil, false
+	}
+	return opened, segments, true
+}
+
+// titleSegments are the segments of a title, item, opened by its own
+// identifier or by one of its versions', as mediaSegments describes them:
+// the databases' (or a recording's commercial breaks), shaped for the
+// version, with those its chapters name, those found in its audio and its
+// credits split around their scenes. With the skip buttons turned off
+// there are none. It fails only when the series of an episode cannot be
+// read to identify it to the databases.
+func (h *Handler) titleSegments(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) ([]mediasegments.Segment, error) {
 	if !h.Accounts.Settings().SkipButtons {
-		return opened, nil, true
+		return nil, nil
 	}
 	var segments []mediasegments.Segment
 	if item.Kind == library.KindRecording {
-		segments = h.Commercials.Segments(r.Context(), item.ID)
+		segments = h.Commercials.Segments(ctx, item.ID)
 	} else if h.Segments.Asks() {
-		title, err := h.segmentTitle(r.Context(), user, item)
+		title, err := h.segmentTitle(ctx, user, item)
 		if err != nil {
-			h.browseError(w, r, err)
-			return opened, nil, false
+			return nil, err
 		}
-		segments = h.Segments.Segments(r.Context(), title)
+		segments = h.Segments.Segments(ctx, title)
 	}
-	if version, ok := h.segmentVersion(r.Context(), user, item, opened); ok {
-		analysis, analyzed := h.Playback.Analyzed(r.Context(), version)
+	if version, ok := h.segmentVersion(ctx, user, item, opened); ok {
+		analysis, analyzed := h.Playback.Analyzed(ctx, version)
 		if analyzed {
 			segments = versionSegments(segments, analysis, item.Runtime)
 		}
 		if item.Kind == library.KindEpisode {
-			segments = h.audioSegments(r.Context(), segments, version, analysis.Duration, item.Runtime)
+			segments = h.audioSegments(ctx, segments, version, analysis.Duration, item.Runtime)
 		}
 		if analyzed {
-			segments = h.splitAtStingers(r.Context(), segments, version, analysis, item.Runtime)
+			segments = h.splitAtStingers(ctx, segments, version, analysis, item.Runtime)
 		}
 	}
-	return opened, segments, true
+	return segments, nil
+}
+
+// creditsStart is where the end credits of an episode start in the version
+// a stop report names, mediaSource, the title's own identifier standing
+// for its first version (see segmentVersion), or 0 when unknown: the start
+// of the first of its credits (see titleSegments) that count as its end
+// credits against runtime, the version's (see userdata.Thresholds
+// EndCredits). A stop there marks the episode played (see track). Nothing
+// is fetched that GET /MediaSegments/{itemId} would not fetch: the
+// databases' answers are read from the database, and only answers grown
+// stale are asked again. Other titles, movies included, have none: their
+// scenes after the credits are part of them.
+func (h *Handler) creditsStart(ctx context.Context, user accounts.User, item library.Item, mediaSource string,
+	runtime time.Duration, thresholds userdata.Thresholds) time.Duration {
+	if item.Kind != library.KindEpisode {
+		return 0
+	}
+	opened, ok := parseGUID(mediaSource)
+	if !ok {
+		opened = item.ID
+	}
+	// Without the series to identify the episode by, there are no
+	// credits to go by, and the percentage rule decides.
+	segments, err := h.titleSegments(ctx, user, item, opened)
+	if err != nil {
+		return 0
+	}
+	var first time.Duration
+	for _, segment := range segments {
+		if segment.Type == mediasegments.Outro && thresholds.EndCredits(segment.Start, runtime) && (first == 0 || segment.Start < first) {
+			first = segment.Start
+		}
+	}
+	return first
 }
 
 // segmentVersion is the version a movie's or an episode's segments are

@@ -104,6 +104,55 @@ func TestThresholdsChooseWhatIsKeptAndPlayed(t *testing.T) {
 	}
 }
 
+// A stop at or past an episode's end credits plays it as a stop past the
+// played threshold would, and ReachesCredits agrees with what ReachCredits
+// records; credits too early to be the end ones, or unknown, leave the
+// percentage rule.
+func TestEndCreditsPlayAnEpisode(t *testing.T) {
+	t.Parallel()
+	const runtime = 45 * time.Minute
+	credits := 38 * time.Minute
+	for _, tc := range []struct {
+		name              string
+		thresholds        Thresholds
+		position, credits time.Duration
+		want              Data
+	}{
+		{"at the credits", jellyfin, credits, credits, Data{Played: true, Runtime: runtime}},
+		{"in the credits", jellyfin, credits + time.Minute, credits, Data{Played: true, Runtime: runtime}},
+		{"just before the credits", jellyfin, credits - time.Second, credits,
+			Data{Position: credits - time.Second, Runtime: runtime}},
+		{"unknown credits keep the resume point", jellyfin, credits, 0, Data{Position: credits, Runtime: runtime}},
+		{"opening credits do not count", jellyfin, 20 * time.Minute, 2 * time.Minute,
+			Data{Position: 20 * time.Minute, Runtime: runtime}},
+		{"credits in the first half do not count", jellyfin, 22 * time.Minute, 22 * time.Minute,
+			Data{Position: 22 * time.Minute, Runtime: runtime}},
+		{"from the middle on they count", jellyfin, runtime / 2, runtime / 2, Data{Played: true, Runtime: runtime}},
+		{"credits before the resume threshold do not count", Thresholds{Resume: 60, Played: 90}, 28 * time.Minute, 25 * time.Minute,
+			Data{Position: 28 * time.Minute, Runtime: runtime}},
+		{"past the played threshold before the credits", Thresholds{Resume: 5, Played: 80}, 37 * time.Minute, credits,
+			Data{Played: true, Runtime: runtime}},
+		{"before the resume threshold nothing is kept", jellyfin, time.Minute, credits, Data{Runtime: runtime}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data := Data{Position: 10 * time.Minute, Runtime: runtime}
+			completed := data.ReachCredits(tc.position, runtime, tc.credits, tc.thresholds)
+			if data != tc.want || completed != tc.want.Played {
+				t.Errorf("got %+v completed %v, want %+v", data, completed, tc.want)
+			}
+			if reaches := tc.thresholds.ReachesCredits(tc.position, runtime, tc.credits); reaches != completed {
+				t.Errorf("ReachesCredits says %v, ReachCredits %v", reaches, completed)
+			}
+		})
+	}
+	// Without a runtime there is no second half, and the position is kept.
+	var data Data
+	if data.ReachCredits(credits, 0, credits, jellyfin) || data.Played || data.Position != credits {
+		t.Errorf("without a runtime: %+v", data)
+	}
+}
+
 func TestPlayedPercentage(t *testing.T) {
 	t.Parallel()
 	if percent, ok := (Data{Position: 90 * time.Second, Runtime: 6 * time.Minute}).PlayedPercentage(); !ok || percent != 25 {

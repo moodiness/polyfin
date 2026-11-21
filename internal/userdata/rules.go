@@ -25,6 +25,23 @@ func (t Thresholds) Reaches(position, runtime time.Duration) bool {
 	return percent >= float64(t.Resume) && (percent > float64(t.Played) || runtime < MinResumeDuration)
 }
 
+// EndCredits reports whether credits starting at start, against runtime,
+// may be the end credits of an episode for ReachCredits: they start in
+// the second half of it, and past the Resume threshold. Opening credits
+// a chapter or a database names as credits by mistake start earlier, and
+// do not count.
+func (t Thresholds) EndCredits(start, runtime time.Duration) bool {
+	return runtime > 0 && start > 0 && start >= runtime/2 && float64(start)/float64(runtime)*100 >= float64(t.Resume)
+}
+
+// ReachesCredits reports whether position, against runtime, is far enough
+// into an episode whose end credits start at credits (0 when unknown) for
+// ReachCredits to mark it played: at or past the credits, when they count
+// as end credits (see EndCredits), else as Reaches has it.
+func (t Thresholds) ReachesCredits(position, runtime, credits time.Duration) bool {
+	return t.EndCredits(credits, runtime) && position >= credits || t.Reaches(position, runtime)
+}
+
 // Start records that playback began at now: one more play. As in Jellyfin
 // 12.2, a played item that keeps a resume point (resumable: a video or an
 // audiobook) is not dated by the start, only once a position gets past
@@ -71,6 +88,23 @@ func (d *Data) Reach(position, runtime time.Duration, thresholds Thresholds) boo
 		d.Position = position
 	}
 	return false
+}
+
+// ReachCredits records the position a player reported as it stopped an
+// episode whose end credits start at credits, 0 when unknown: a stop at
+// or past the credits (see EndCredits) marks the episode played, with
+// nothing to resume, as a stop past the Played threshold does, since the
+// user watched the story to its end; any other stop is recorded as Reach
+// has it. Movies are left to Reach, as many have scenes after their
+// credits. It reports whether the position completed the episode.
+func (d *Data) ReachCredits(position, runtime, credits time.Duration, thresholds Thresholds) bool {
+	if !thresholds.EndCredits(credits, runtime) || position < credits {
+		return d.Reach(position, runtime, thresholds)
+	}
+	d.Runtime = runtime
+	d.Position = 0
+	d.Played = true
+	return true
 }
 
 // AudiobookResume is how far into an audiobook a position must be to keep

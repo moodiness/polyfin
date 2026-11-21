@@ -137,12 +137,15 @@ Two settings decide when a title counts as played and when a resume point is kep
 - A stop that gives no position was at the last position the app's progress reports gave for that title. An app that never reported its progress plays the title through: it is marked played, with one more play.
 - A stop the app reports as failed changes nothing: the played mark, resume point and plays stay as they were, and tracking services hear nothing of it.
 
+An episode stopped once its end credits begin is marked played, with no resume point, even under **Marked played after (%)**: the next episode shows in Next Up and this one leaves Continue Watching, and tracking services count the play. The credits are those [Skip intro and credits buttons](skip-segments.md) gives apps for the version played: from its chapters, the segment databases, or the episode's audio. Only credits starting in the second half of the episode and past **Resume point kept after (%)** count, so opening credits named as credits by mistake do not. Progress reports, and stops before the credits, follow the percentage rule as usual. With the skip buttons off, or no credits known, the percentage rule alone decides. Movies always follow the percentage rule, as many have scenes after their credits. Looking the credits up reads what Polyfin already stores; a segment database is asked again only when its stored answer has gone stale, as when an app asks for the segments.
+
 **Compared with Jellyfin**
 
 - These replace Jellyfin's `MaxResumePct` and `MinResumePct`, with the same defaults, 90 and 5.
 - Jellyfin takes any values; Polyfin keeps them in the ranges above.
 - Jellyfin marks a title played on any stop without a position. Polyfin does so only for apps that never reported a position during the playback: an app that stops without one leaves the title at its last reported position, and tracking services get no false play.
 - A failed stop (`Failed` in `PlaybackStopInfo`) leaves the watch state alone in both.
+- Jellyfin marks a title played only by the percentage. Polyfin also marks an episode played when it stops in its end credits (see above).
 
 ### Playlists
 

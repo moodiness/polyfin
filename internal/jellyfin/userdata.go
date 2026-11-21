@@ -557,7 +557,9 @@ const (
 // track applies a playback report to the user's data of the title played,
 // as Jellyfin does: a start counts a play, positions move the resume point
 // or mark the title played, and a stop without a position plays it
-// through. playing is what the device was known to play before the report.
+// through. Beyond Jellyfin, an episode stopped in its end credits is
+// played too. playing is what the device was known to play before the
+// report.
 // Every report, channels' too, goes to the playbacks Polyfin follows.
 func (h *Handler) track(ctx context.Context, user accounts.User, device accounts.Device, event playbackEvent, state playback.PlayState, positionKnown bool, playing playback.NowPlaying) {
 	deviceID := device.ID
@@ -617,6 +619,12 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	now := time.Now().UTC()
 	settings := h.Accounts.Settings()
 	thresholds := userdata.Thresholds{Resume: settings.ResumePercent, Played: settings.PlayedPercent}
+	// An episode stopped at or past its end credits is played (see
+	// userdata.Data.ReachCredits); only its stops look its credits up.
+	var credits time.Duration
+	if event == playbackStopped && positionKnown {
+		credits = h.creditsStart(ctx, user, item, mediaSource, runtime, thresholds)
+	}
 	_, err = h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
 		switch {
 		case event == playbackStarted:
@@ -627,7 +635,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 		case positionKnown && item.Kind == library.KindAudiobook:
 			d.Reached(d.ReachAudiobook(state.Position, runtime), now)
 		case positionKnown:
-			d.Reached(d.Reach(state.Position, runtime, thresholds), now)
+			d.Reached(d.ReachCredits(state.Position, runtime, credits, thresholds), now)
 		case event == playbackStopped:
 			d.Finish(now)
 		}
@@ -652,7 +660,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 			Paused:        state.Paused,
 			// As the change above decides.
 			Played: event == playbackStopped && !positionKnown ||
-				event != playbackStarted && positionKnown && thresholds.Reaches(state.Position, runtime),
+				event != playbackStarted && positionKnown && thresholds.ReachesCredits(state.Position, runtime, credits),
 			Title: func(ctx context.Context) (trackers.Title, bool) {
 				titles := h.trackedTitles(user, []library.Item{item})(ctx)
 				if len(titles) == 0 {
