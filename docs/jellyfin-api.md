@@ -508,6 +508,18 @@ The web player's TV shows tab sorts a series library by "Date Episode Added" and
 
 - Jellyfin lists a library's episodes from its database, all of them, sorted as asked. Polyfin reads them from the addons, a few series at a time.
 
+### Library genres without a genre filter for apps
+
+A library's genres are the options of its catalog's genre filter, which its addon narrows the catalog to. A library whose catalog offers none is narrowed by its titles' own genres (see [Genres within a library](addons-and-libraries.md#genres-within-a-library)):
+
+- `/Genres`, `/Items/Filters` and `/Items/Filters2` with `ParentId`, such a library, list the genres of its first 100 titles that `IncludeItemTypes` keeps, each once, by name.
+- `/Items` with `ParentId`, a library, and `Genres` or `GenreIds` its catalog does not offer, lists its titles that have any of them, among its first 100, or as many as the listing asks for from its first title, up to 500. They come in the catalog's order, or as `SortBy` asks, `Random` shuffling them. `TotalRecordCount` is their number.
+- With `Studios`, `StudioIds` or `Years` its catalog does not offer, a listing lists nothing, as before.
+
+**Compared with Jellyfin**
+
+- Jellyfin narrows the whole library by its titles' genres, any of those asked ([`ItemsController.cs`, lines 425 to 429](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/ItemsController.cs#L425-L429), Jellyfin 12.4); Polyfin its first titles, as for titles at random, since a remote catalog is read a page at a time.
+
 ### Live TV in item search
 
 - `/Items` with `searchTerm` finds channels asked as `TvChannel` or `LiveTvChannel`, and programmes asked as `LiveTvProgram`, `Program` or `TvProgram`, filtered by `isMovie`, `isSeries`, `isNews`, `isKids` and `isSports`. It finds at most `limit` of each.

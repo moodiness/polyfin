@@ -220,7 +220,7 @@ They apply to catalogs of titles and of collections. Live TV catalogs and music 
 
 A library narrowed to a genre:
 
-- offers that genre alone in apps' genre filters, and lists nothing for another;
+- offers that genre alone in apps' genre filters; another genre keeps those of its first titles that also have it (see [Genres within a library](#genres-within-a-library));
 - adds its titles to that genre's page only (see [Genre, studio and year pages](#genre-studio-and-year-pages));
 - finds its automatic image among that genre's titles.
 
@@ -399,6 +399,19 @@ How it runs:
 - Polyfin starts no second refresh of a library already refreshing or waiting. Jellyfin queues any item an administrator refreshes, a second time too when asked again. Polyfin has nothing to refresh in a library that does not offer it.
 
 API details: [Library description refresh](jellyfin-api.md#library-description-refresh-for-apps).
+
+## Genres within a library
+
+In jellyfin-web, a library's **Genres** tab and the genres of its filter menu are those its catalog offers in its genre filter, and the addon narrows the catalog to the genre chosen.
+
+A catalog without a genre filter, as lists users keep often are, is narrowed by its titles' own genres instead:
+
+- **Genres offered:** those of the library's first 100 titles, each once, by name.
+- **Titles listed:** those among its first 100 titles that have one of the genres chosen, or among as many as an app asks for from its first title, up to 500. They come in the catalog's order, or in the order the library's sort asks.
+- A genre the catalog's filter does not offer, such as one a title's page links to, narrows the library's first titles the same way.
+- Jellyfin narrows a whole library by its titles' genres. Polyfin reads a catalog a page at a time from its addon, so it looks at the library's first titles only.
+
+API details: [Library genres without a genre filter](jellyfin-api.md#library-genres-without-a-genre-filter-for-apps).
 
 ## Genre, studio and year pages
 
