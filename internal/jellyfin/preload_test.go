@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -146,11 +147,18 @@ func TestTheNextEpisodesArePreloaded(t *testing.T) {
 // the member played the first episode, so a pass preloads the second.
 func preloadingOn(t *testing.T) (tracking, *readEpisodes, *atomic.Int64) {
 	t.Helper()
+	episodes, manifest := newReadEpisodes(t)
+	tr, elapsed := preloadingFrom(t, manifest)
+	return tr, episodes, elapsed
+}
+
+// preloadingFrom is preloadingOn with the addon manifest installs.
+func preloadingFrom(t *testing.T, manifest string) (tracking, *atomic.Int64) {
+	t.Helper()
 	s := newTestServer(t, 10)
 	elapsed := new(atomic.Int64)
 	s.library.SetClock(func() time.Time { return time.Now().Add(time.Duration(elapsed.Load())) })
 	tr := trackingOn(t, s)
-	episodes, manifest := newReadEpisodes(t)
 	if _, err := tr.addons.Install(t.Context(), addons.Shared(), manifest, false); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +166,7 @@ func preloadingOn(t *testing.T) (tracking, *readEpisodes, *atomic.Int64) {
 	tr.setting(t, func(s *accounts.Settings) {
 		s.PreloadNextEpisodes, s.PreloadEpisodes, s.PreloadReserveGB = true, 1, accounts.MinPreloadReserveGB
 	})
-	return tr, episodes, elapsed
+	return tr, elapsed
 }
 
 // A pass lists, every preloadEvery all night, the next episodes of the
@@ -202,4 +210,55 @@ func TestPreloadingAsksAgainWhenTheKnownVersionCannotBeRead(t *testing.T) {
 	if asked := episodes.streamsAsked(); asked != 2 {
 		t.Errorf("the pass after: the addon asked %d times, want twice", asked)
 	}
+}
+
+// An addon that gathers other addons, its own filters having left out
+// every stream of the episode, answers only its summary: no list is kept,
+// and a pass every preloadEvery all night would ask it again each time.
+// The passes ask it again an hour after its answer, then two hours after
+// the next one; a user's request asks it as soon as the answer is no
+// longer fresh, and has the passes wait an hour again after it.
+func TestPreloadingLeavesAnAddonWithNothingAloneLonger(t *testing.T) {
+	t.Parallel()
+	var asked atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch path := r.URL.Path; {
+		case path == "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "gathering", Name: "Gathering", Version: "1", Types: []string{"series"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
+		case strings.HasPrefix(path, "/stream/series/"):
+			n := asked.Add(1)
+			_, _ = fmt.Fprintf(w, `{"streams":[{"name":"Summary","description":"Streams: 10, removed: %d by season and episode"}]}`, 10+n)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	tr, elapsed := preloadingFrom(t, server.URL+"/manifest.json")
+	background := library.Background(t.Context())
+	pass := func(what string, after time.Duration, want int32) {
+		t.Helper()
+		elapsed.Add(int64(after))
+		tr.handler.preloadNext(background)
+		if got := asked.Load(); got != want {
+			t.Fatalf("%s: the addon asked %d times, want %d", what, got, want)
+		}
+	}
+	pass("the first pass", 0, 1)
+	for range 3 {
+		pass("a pass within the hour", preloadEvery+time.Second, 1)
+	}
+	pass("the pass after the hour", time.Hour-3*(preloadEvery+time.Second)+time.Second, 2)
+	pass("a pass within the two hours", 2*time.Hour-time.Minute, 2)
+	pass("the pass after the two hours", time.Minute+time.Second, 3)
+	member, _ := tr.store.Authenticate(t.Context(), "member", "correct horse")
+	elapsed.Add(int64(11 * time.Minute))
+	if _, _, err := tr.library.VersionsToPlay(t.Context(), member, mustID(t, tr.episodes[1])); err != nil {
+		t.Fatal(err)
+	}
+	if got := asked.Load(); got != 4 {
+		t.Fatalf("a play: the addon asked %d times, want 4", got)
+	}
+	pass("a pass within the hour after the play", 59*time.Minute, 4)
+	pass("a pass after the hour after the play", time.Minute+time.Second, 5)
 }
