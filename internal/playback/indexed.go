@@ -421,16 +421,25 @@ func (s *Service) PrefetchSubtitle(version library.Version, analysis media.Analy
 	}()
 }
 
-// keptTrack reads a track read whole before from the database.
+// keptTrack reads a track read whole before from the database. A use
+// keeps it TrackKeepDays more (see SweepSubtitleTracks): its read_at is
+// set again, once a day at most.
 func (s *Service) keptTrack(ctx context.Context, key trackKey) (Track, bool) {
 	var track Track
-	err := s.db.QueryRow(ctx, "SELECT format, data FROM media_subtitle_tracks WHERE version_id = $1 AND stream = $2",
-		key.version, key.stream).Scan(&track.Format, &track.Data)
+	var stale bool
+	err := s.db.QueryRow(ctx, "SELECT format, data, read_at < now() - interval '1 day' FROM media_subtitle_tracks WHERE version_id = $1 AND stream = $2",
+		key.version, key.stream).Scan(&track.Format, &track.Data, &stale)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
 			s.logger.Warn("Reading a subtitle track failed", "error", err)
 		}
 		return Track{}, false
+	}
+	if stale {
+		if _, err := s.db.Exec(ctx, "UPDATE media_subtitle_tracks SET read_at = now() WHERE version_id = $1 AND stream = $2",
+			key.version, key.stream); err != nil && ctx.Err() == nil {
+			s.logger.Warn("Saving a subtitle track's use failed", "error", err)
+		}
 	}
 	s.tracks.Put(key, track)
 	return track, true

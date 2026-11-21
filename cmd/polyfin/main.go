@@ -562,6 +562,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	}
 	registerLocalFoldersTask(registry, folders)
 	registerCleanupTask(registry, lib, folders, logger)
+	registry.Register(subtitleTracksTask(player, logger))
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
 	player.LiveSources(channels.Connections, func(ctx context.Context, v library.Version, failure string) {
