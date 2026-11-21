@@ -81,7 +81,7 @@ func newImageSearch(t *testing.T) *imageSearch {
 			"posters": []any{poster("/en.png", "en", 5, 1000, 1500), poster("/fr.png", "fr", 8, 1000, 1500),
 				poster("/none.png", nil, 6, 1000, 1500), poster("/de.png", "de", 9, 1000, 1500)},
 			"backdrops": []any{poster("/back.png", nil, 4, 1920, 1080)},
-			"logos":     []any{poster("/logo.svg", "en", 7, 500, 200), poster("/logo.png", "en", 3, 500, 200)},
+			"logos":     []any{poster("/mark.SVG", "en", 7, 500, 200), poster("/logo.png", "en", 3, 500, 200)},
 		},
 		"/3/tv/77/season/1/episode/1/images": map[string]any{"stills": []any{poster("/still.png", nil, 6, 1920, 1080)}},
 		// Identify's lookups: Show's IMDb identifier, and its TVDB one.
@@ -355,8 +355,14 @@ func TestRemoteImagesSearchTMDBWithAKey(t *testing.T) {
 		strings.Join(names(page.Images), ",") != "TMDB Primary ,Alpha Primary " {
 		t.Errorf("page: %d %v", page.TotalRecordCount, names(page.Images))
 	}
-	if logos := s.remote(t, s.admin, s.movie, "type=Logo&providerName=TMDB&includeAllLanguages=true"); len(logos.Images) != 1 {
-		t.Errorf("logos, SVG left out: %v", names(logos.Images))
+	// TMDB's SVG logo comes as the PNG its image server renders of it.
+	logos := s.remote(t, s.admin, s.movie, "type=Logo&providerName=TMDB&includeAllLanguages=true")
+	if len(logos.Images) != 2 {
+		t.Fatalf("logos: %v", names(logos.Images))
+	}
+	if status, contentType, _ := s.width(t, logos.Images[0].ThumbnailUrl); status != http.StatusOK || contentType != "image/png" ||
+		s.hits(s.imageHits, "/t/p/w300/mark.png") != 1 || s.hits(s.imageHits, "/t/p/w300/mark.SVG") != 0 {
+		t.Errorf("SVG logo: %d %s %v", status, contentType, s.imageHits)
 	}
 	if backdrops := s.remote(t, s.admin, s.movie, "type=Thumb&providerName=TMDB"); strings.Join(names(backdrops.Images), ",") != "TMDB Thumb " {
 		t.Errorf("wide images: %v", names(backdrops.Images))

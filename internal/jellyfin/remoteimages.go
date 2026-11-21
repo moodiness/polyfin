@@ -231,16 +231,22 @@ func (h *Handler) tmdbImages(r *http.Request, item accounts.ID, sources library.
 		return 2
 	}
 	found = slices.DeleteFunc(slices.Clone(found), func(i tmdb.Image) bool {
-		// TMDB gives some logos as SVG files, which cannot be kept.
-		return i.Path == "" || strings.HasSuffix(strings.ToLower(i.Path), ".svg") || !allLanguages && rank(i) == 2
+		return i.Path == "" || !allLanguages && rank(i) == 2
 	})
 	slices.SortStableFunc(found, func(a, b tmdb.Image) int {
 		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(b.Rating, a.Rating), cmp.Compare(b.Votes, a.Votes), cmp.Compare(b.Width, a.Width))
 	})
 	images := make([]RemoteImageInfo, 0, len(found))
 	for _, i := range found {
-		image := remoteImage{Provider: tmdbProvider, Type: imageType, URL: h.TMDB.ImageURL(i.Path, "original")}
-		thumbnail := remoteImage{Provider: tmdbProvider, Type: imageType, URL: h.TMDB.ImageURL(i.Path, thumbnailSize), Width: remoteThumbnailWidth}
+		// TMDB gives some logos as SVG files, which cannot be kept: its
+		// image server renders each as a PNG under the same name ending in
+		// .png, at every size.
+		path := i.Path
+		if base, ok := strings.CutSuffix(strings.ToLower(path), ".svg"); ok {
+			path = path[:len(base)] + ".png"
+		}
+		image := remoteImage{Provider: tmdbProvider, Type: imageType, URL: h.TMDB.ImageURL(path, "original")}
+		thumbnail := remoteImage{Provider: tmdbProvider, Type: imageType, URL: h.TMDB.ImageURL(path, thumbnailSize), Width: remoteThumbnailWidth}
 		info := RemoteImageInfo{ProviderName: tmdbProvider, Url: h.remoteImageURL(r, item, image), ThumbnailUrl: h.remoteImageURL(r, item, thumbnail),
 			Language: i.Language, Type: imageType, RatingType: "Score", CommunityRating: new(i.Rating), VoteCount: new(i.Votes)}
 		if i.Width > 0 && i.Height > 0 {

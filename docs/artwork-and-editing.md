@@ -433,7 +433,7 @@ In an order:
 - They follow the language of the user who searches: their [metadata language](watch-state.md#metadata-language), else the server's.
 - Unless jellyfin-web's All languages box is ticked, they are those in that language and those without text.
 - With it ticked, every language, that language first, then by votes.
-- TMDB's logos given as SVG files are left out, since they cannot be kept.
+- TMDB's logos given as SVG files are offered as the PNG TMDB's image server renders of each, since an SVG cannot be kept.
 
 **Relaying and downloading:**
 
