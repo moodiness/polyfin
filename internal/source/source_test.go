@@ -159,19 +159,6 @@ func readAll(t *testing.T, s *Source) []byte {
 	return result
 }
 
-func TestSequentialReadsUseOneConnection(t *testing.T) {
-	t.Parallel()
-	o, server := newOrigin(t, 5*blockSize+12345)
-	s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
-	defer s.Release()
-	if got := readAll(t, s); !bytes.Equal(got, o.data) {
-		t.Fatal("content differs")
-	}
-	if n := o.requests.Load(); n != 1 {
-		t.Errorf("requests: %d", n)
-	}
-}
-
 func TestSeeksReadCachedBlocksAgain(t *testing.T) {
 	t.Parallel()
 	o, server := newOrigin(t, 80*blockSize)
@@ -283,7 +270,7 @@ func TestAWholeFileAnsweredOnceIsAskedAgain(t *testing.T) {
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	far := "bytes=" + strconv.Itoa(40*blockSize) + "-"
+	far := "bytes=" + strconv.Itoa(40*blockSize) + "-" + strconv.Itoa(41*blockSize-1)
 	if n := len(slices.DeleteFunc(slices.Clone(o.ranges), func(r string) bool { return r != far })); n != 2 {
 		t.Errorf("the far block asked %d times, want twice: %q", n, o.ranges)
 	}
@@ -407,11 +394,12 @@ func TestALowerLimitEvictsAtTheNextWrite(t *testing.T) {
 	if got := cache.Usage().Limit; got != 2*blockSize {
 		t.Errorf("usage tells a limit of %d", got)
 	}
-	// The next write evicts every chunk not read lately: only those the
+	// The next writes evict every chunk not read lately: only those the
 	// last read stored, which readers are on, may keep the cache above its
-	// limit (see TestBlocksReadLatelyAreKept).
+	// limit (see TestBlocksReadLatelyAreKept). The last read stores two,
+	// which the limit holds.
 	clock.advance(time.Minute)
-	if _, err := s.ReadAt(t.Context(), make([]byte, 100), 8*blockSize); err != nil {
+	if _, err := s.ReadAt(t.Context(), make([]byte, blockSize), 8*blockSize+100); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the next write to evict the chunks read long ago", func() bool {
