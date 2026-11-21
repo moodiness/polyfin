@@ -21,6 +21,19 @@ Apps get seven kinds of subtitles:
 - Polyfin keeps the text of the subtitle files it read lately, 32 MiB in all. A file whose text alone takes more is not served either.
 - Apps can save the user's subtitle language and subtitle mode, which choose the default track (see [Playback](playback.md#versions-and-analysis)).
 - A user who chose no language gets the server's **Default subtitle language**, under their own mode (see [Default audio and subtitle languages](audio-and-subtitle-tracks.md#default-audio-and-subtitle-languages)).
+- Between subtitle files in the same language, the default is one a user added or one of the version's own (beside a local file, listed with its stream, inside its torrent) rather than an addon's for the title: those were made for the video.
+- Each user's files of a title keep the index their app was given. Files the addons list later come after them, so the app's subtitle requests, which name a file by its index, get the file it was shown. A file an addon no longer lists keeps its place until the title's list is forgotten: 12 hours after its last play, at a refresh of the title, or when a user adds or deletes a file.
+
+## Subtitles asked for the version played
+
+When a movie or an episode plays, Polyfin asks the subtitle addons for the version played, as Stremio does. It sends the file's name, its size and its video hash (`filename`, `videoSize` and `videoHash`), each when known. An addon can then list the subtitles timed for that file first.
+
+- The title's subtitles are asked too. The version's come first, then the title's others.
+- The video hash is the file's size plus each 8-byte word of its first and last 64 KiB.
+- Polyfin computes it from the bytes a play or an analysis read. Until then, it reads those 128 KiB of a link or a local file once, in the background, for the next play.
+- It never reads a torrent's for the hash, as only a play joins its swarm, nor a replay's, which would take one of its provider's connections. A disc has none.
+- The hash is kept for each version for a day.
+- Each addon's answer for a file is kept as its answer for the title is (see [Addons and libraries](addons-and-libraries.md#catalog-limits-and-refresh)). An addon that cannot answer for the file gives the title's subtitles.
 
 ## Addon subtitles synced to the version
 

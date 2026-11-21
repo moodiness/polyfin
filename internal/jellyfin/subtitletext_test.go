@@ -130,7 +130,7 @@ func TestASubtitleFileRefusedForItsSizeIsNotReadAgain(t *testing.T) {
 	user := s.user("member", nil)
 	token := s.signIn("member", "tv")
 	item := accounts.ID{9}
-	s.handler.subtitleFiles.Put(item, listedSubtitles{User: user.ID, Files: []library.ExternalSubtitle{
+	s.handler.subtitleFiles.Put(listedKey{user.ID, item}, listedSubtitles{Files: []library.ExternalSubtitle{
 		source.file(1, "/events.ass"), source.file(2, "/page.srt")}})
 	for range 2 {
 		for index, path := range []string{"/events.ass", "/page.srt"} {
@@ -497,7 +497,7 @@ func TestRefreshingATitleForgetsItsRefusedSubtitleFiles(t *testing.T) {
 		return http.StatusOK, events
 	})
 	file := source.file(1, "/events.ass")
-	s.handler.subtitleFiles.Put(item, listedSubtitles{Files: []library.ExternalSubtitle{file}})
+	s.handler.subtitleFiles.Put(listedKey{Item: item}, listedSubtitles{Files: []library.ExternalSubtitle{file}})
 	for _, replace := range []bool{false, true} {
 		replaced.Store(replace)
 		if _, err := s.handler.subtitleFile(t.Context(), file); !errors.Is(err, subtitles.ErrTooManyCues) {

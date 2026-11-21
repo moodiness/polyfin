@@ -328,7 +328,7 @@ func (t trackPreferences) rememberedSubtitle(subtitles []playback.MediaStream, a
 		}
 		r := t.subtitleRank(s, audioLanguage)
 		if s.IsHearingImpaired == chosen.HearingImpaired {
-			r |= 1 << 7
+			r |= 1 << subtitleRankBits
 		}
 		return r
 	})

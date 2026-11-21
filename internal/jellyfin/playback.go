@@ -475,7 +475,7 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	defer func() { start.answer(picked) }()
 	// A stale list is played as it is, while its addon is asked again: the
 	// new answers are waited for only when none of its versions plays.
-	p, complete, err := h.playableToPlay(r.Context(), user, item)
+	p, complete, err := h.playableToPlay(r.Context(), user, item, opened, request.MediaSourceId)
 	if err != nil {
 		h.browseError(w, r, err)
 		return

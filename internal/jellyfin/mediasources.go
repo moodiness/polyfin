@@ -104,7 +104,7 @@ func (h *Handler) playable(ctx context.Context, user accounts.User, item library
 	})
 	wg.Wait()
 	h.offer(ctx, user, &p, p.versions)
-	h.keepSubtitles(user, item.ID, p.subtitles)
+	p.subtitles = h.keepSubtitles(user, item.ID, p.subtitles)
 	return p, versionsErr
 }
 
@@ -130,10 +130,7 @@ func (h *Handler) knownPlayable(ctx context.Context, user accounts.User, item li
 		h.watched.show(user.ID, item.ID, p.versions, h.pageKey(ctx, user))
 	}
 	if subtitles, listed, err := h.Library.SubtitlesNow(ctx, user, item.ID); err == nil {
-		p.subtitles = subtitles
-		if listed {
-			h.keepSubtitles(user, item.ID, subtitles)
-		}
+		p.subtitles = h.shownSubtitles(user, item.ID, subtitles, listed)
 	}
 	return p, complete, err
 }
@@ -199,9 +196,16 @@ func (h *Handler) pinnedFirst(ctx context.Context, versions []library.Version) [
 }
 
 // externals are the subtitle files a version offers as streams: its
-// title's, then its own (see versionFiles).
+// title's, then its own (see versionFiles). Those a user added and the
+// version's own are marked as made for the video, which ranks them before
+// the addons' files for the title (see trackPreferences.subtitle).
 func (h *Handler) externals(ctx context.Context, p playable, version library.Version) []playback.ExternalSubtitle {
-	return externalStreams(h.versionFiles(ctx, p.subtitles, version))
+	files := h.versionFiles(ctx, p.subtitles, version)
+	streams := externalStreams(files)
+	for i := range streams {
+		streams[i].Own = i >= len(p.subtitles) || files[i].Uploaded
+	}
+	return streams
 }
 
 // versionFiles lists the subtitle files of a version, which come first

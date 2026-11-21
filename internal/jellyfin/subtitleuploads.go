@@ -131,7 +131,7 @@ func (h *Handler) uploadSubtitle(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 	default:
 		// The title's subtitle files are listed again when next played.
-		h.subtitleFiles.Delete(item)
+		h.forgetSubtitles(item)
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -166,7 +166,7 @@ func (h *Handler) deleteSubtitle(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		h.internalError(w, r, err)
 	default:
-		h.subtitleFiles.Delete(item)
+		h.forgetSubtitles(item)
 		h.subtitleCache.Delete(deleted)
 		w.WriteHeader(http.StatusNoContent)
 	}

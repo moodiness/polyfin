@@ -373,16 +373,69 @@ func pick(states []*tried, sides []int, prefer, patient bool) (int, bool) {
 // playableToPlay gathers a title's versions and subtitles for a play. It
 // lists the versions as VersionsToPlay does: stale lists as they are, so
 // complete is false when one was, for the caller to wait for the addons'
-// new answers when none of their versions plays. The subtitles the addons
-// have not given by then are waited for at most subtitleGrace more: those
-// known now stand for them, the others reaching the next PlaybackInfo, as a
-// track switch asks.
-func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item library.Item) (playable, bool, error) {
+// new answers when none of their versions plays. The subtitles are asked
+// for the title and, once the versions are in, for the version the play
+// starts with as the request names it (see playedIndex), with what
+// describes it to subtitle addons (see playback.Service.SubtitleHints):
+// the files given for the version come first, then the title's others, as
+// an addon may give only those matching the video. The subtitles the
+// addons have not given by then are waited for at most subtitleGrace
+// more: the title's known now stand for its list when it did not come,
+// the others reaching the next PlaybackInfo, as a track switch asks. The
+// files listed are kept for user, after those described before (see
+// keepSubtitles).
+func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID,
+	mediaSource string) (playable, bool, error) {
 	p := playable{item: item, tracks: h.titleTracks(ctx, user, item)}
 	if item.Kind == library.KindRecording {
 		p.versions = h.recordingVersions(ctx, item)
 		return p, true, nil
 	}
+	title := h.listSubtitles(ctx, user, item, library.SubtitleHints{})
+	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
+	// Before offered, which leaves the failed out of versions in place.
+	p.unstarted = h.unstartedTorrent(versions)
+	h.offer(ctx, user, &p, versions)
+	var hinted <-chan []library.ExternalSubtitle
+	if len(p.versions) > 0 {
+		played := p.versions[playedIndex(p.versions, opened, mediaSource)]
+		if hints := h.Playback.SubtitleHints(ctx, played); hints != (library.SubtitleHints{}) {
+			hinted = h.listSubtitles(ctx, user, item, hints)
+		}
+	}
+	grace := time.NewTimer(subtitleGrace)
+	defer grace.Stop()
+	fromHints, fromTitle, titleCame := awaitSubtitles(grace.C, hinted, title)
+	if !titleCame {
+		fromTitle, _, _ = h.Library.KnownSubtitles(ctx, user, item.ID)
+	}
+	p.subtitles = h.keepSubtitles(user, item.ID, appendNewFiles(fromHints, fromTitle))
+	return p, complete, err
+}
+
+// awaitSubtitles waits until the lists hinted and title send, or until
+// grace, and returns them, and whether title came. A nil hinted is not
+// waited for.
+func awaitSubtitles(grace <-chan time.Time, hinted, title <-chan []library.ExternalSubtitle) (fromHints, fromTitle []library.ExternalSubtitle,
+	titleCame bool) {
+	for hinted != nil || title != nil {
+		select {
+		case fromHints = <-hinted:
+			hinted = nil
+		case fromTitle = <-title:
+			title, titleCame = nil, true
+		case <-grace:
+			hinted, title = nil, nil
+		}
+	}
+	return fromHints, fromTitle, titleCame
+}
+
+// listSubtitles lists in the background the subtitle files of item for
+// user, asked with hints (see library.Service.SubtitlesFor), and sends
+// them, none when they could not be listed.
+func (h *Handler) listSubtitles(ctx context.Context, user accounts.User, item library.Item,
+	hints library.SubtitleHints) <-chan []library.ExternalSubtitle {
 	listed := make(chan []library.ExternalSubtitle, 1)
 	go func() {
 		var subtitles []library.ExternalSubtitle
@@ -392,29 +445,24 @@ func (h *Handler) playableToPlay(ctx context.Context, user accounts.User, item l
 			}
 			listed <- subtitles
 		}()
-		subtitles, err := h.Library.Subtitles(ctx, user, item.ID)
+		subtitles, err := h.Library.SubtitlesFor(ctx, user, item.ID, hints)
 		if err != nil {
 			subtitles = nil
 		}
 	}()
-	versions, complete, err := h.Library.VersionsToPlay(ctx, user, item.ID)
-	// Before offered, which leaves the failed out of versions in place.
-	p.unstarted = h.unstartedTorrent(versions)
-	h.offer(ctx, user, &p, versions)
-	grace := time.NewTimer(subtitleGrace)
-	defer grace.Stop()
-	select {
-	case p.subtitles = <-listed:
-		h.keepSubtitles(user, item.ID, p.subtitles)
-	case <-grace.C:
-		if subtitles, all, err := h.Library.KnownSubtitles(ctx, user, item.ID); err == nil {
-			p.subtitles = subtitles
-			if all {
-				h.keepSubtitles(user, item.ID, subtitles)
-			}
+	return listed
+}
+
+// playedIndex is the index, among versions, of the version a play starts
+// with, as PlaybackInfo tries them: the version mediaSource names, else
+// the one the item was opened as (see openedIndex).
+func playedIndex(versions []library.Version, opened accounts.ID, mediaSource string) int {
+	if id, ok := parseGUID(mediaSource); ok {
+		if i := slices.IndexFunc(versions, func(v library.Version) bool { return v.ID == id }); i >= 0 {
+			return i
 		}
 	}
-	return p, complete, err
+	return openedIndex(opened, versions)
 }
 
 // subtitleGrace is how long a play waits for the addons' subtitles once

@@ -1212,7 +1212,7 @@ func serves(entry installed, resource, metaType, id string) bool {
 // stale lists' included, asking no addon. complete reports whether every
 // addon's list was known.
 func (s *Service) KnownSubtitles(ctx context.Context, user accounts.User, id accounts.ID) (subtitles []ExternalSubtitle, complete bool, err error) {
-	return s.subtitlesOf(ctx, user, id, knownOnly)
+	return s.subtitlesOf(ctx, user, id, SubtitleHints{}, knownOnly)
 }
 
 // shared runs fetch once for every caller asking for key at the same time,
@@ -1639,7 +1639,7 @@ func versionName(stream stremio.Stream) string {
 // then those the user's addons offer for it, in addon order, waiting for
 // every addon.
 func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts.ID) ([]ExternalSubtitle, error) {
-	subtitles, _, err := s.subtitlesOf(ctx, user, id, waitAll)
+	subtitles, _, err := s.subtitlesOf(ctx, user, id, SubtitleHints{}, waitAll)
 	return subtitles, err
 }
 
@@ -1649,10 +1649,10 @@ func (s *Service) Subtitles(ctx context.Context, user accounts.User, id accounts
 // listed meanwhile. complete reports whether every addon's list was known,
 // none asked again.
 func (s *Service) SubtitlesNow(ctx context.Context, user accounts.User, id accounts.ID) (subtitles []ExternalSubtitle, complete bool, err error) {
-	return s.subtitlesOf(ctx, user, id, askLater)
+	return s.subtitlesOf(ctx, user, id, SubtitleHints{}, askLater)
 }
 
-func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accounts.ID, mode listing) ([]ExternalSubtitle, bool, error) {
+func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accounts.ID, hints SubtitleHints, mode listing) ([]ExternalSubtitle, bool, error) {
 	t, v, err := s.target(ctx, user, id)
 	if err != nil {
 		return nil, false, err
@@ -1669,7 +1669,10 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 		var wg sync.WaitGroup
 		for i, entry := range serving {
 			wg.Go(func() {
-				subtitles, err := s.subtitleList(ctx, entry, t)
+				subtitles, err := s.subtitleList(ctx, entry, t, hints)
+				if err != nil && hints != (SubtitleHints{}) && ctx.Err() == nil {
+					subtitles, err = s.subtitleList(ctx, entry, t, SubtitleHints{})
+				}
 				if err != nil && ctx.Err() == nil {
 					s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.LogName(), "error", err)
 				}
@@ -1688,7 +1691,7 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 					go func() {
 						detached, done := s.detached(ctx)
 						defer done()
-						if _, err := s.subtitleList(detached, entry, t); err != nil && detached.Err() == nil {
+						if _, err := s.subtitleList(detached, entry, t, SubtitleHints{}); err != nil && detached.Err() == nil {
 							s.logger.Warn("An addon could not list subtitles", "addon", entry.addon.LogName(), "error", err)
 						}
 					}()
@@ -1718,14 +1721,15 @@ func (s *Service) subtitlesOf(ctx context.Context, user accounts.User, id accoun
 	return result, complete, nil
 }
 
-// subtitleList lists an addon's subtitles for a title: those remembered
-// while fresh, else its answer, which every caller asking meanwhile shares.
-// An answer stored is followed up; until the follow-ups end, it is listed
-// with the items it lacks of the stale list it replaced (see followUpList).
-// A refresh of the title while the addon is asked leaves its answer out:
-// the addon is asked again (see forgetLists).
-func (s *Service) subtitleList(ctx context.Context, entry installed, t target) ([]stremio.Subtitle, error) {
-	key := streamKey{entry.addon.ID, t.metaType, t.id}
+// subtitleList lists an addon's subtitles for a title, asked with hints
+// (see subtitlesKey): those remembered while fresh, else its answer, which
+// every caller asking meanwhile shares. An answer stored is followed up;
+// until the follow-ups end, it is listed with the items it lacks of the
+// stale list it replaced (see followUpList). A refresh of the title while
+// the addon is asked leaves its answer out: the addon is asked again (see
+// forgetLists).
+func (s *Service) subtitleList(ctx context.Context, entry installed, t target, hints SubtitleHints) ([]stremio.Subtitle, error) {
+	key := subtitlesKey(entry.addon.ID, t, hints)
 	if l, fresh, _ := listOf(s, s.subtitleLists, key); fresh {
 		return l.items, nil
 	}
@@ -1733,7 +1737,7 @@ func (s *Service) subtitleList(ctx context.Context, entry installed, t target) (
 		subtitles, err := shared(ctx, s, subtitlesFlight(key), func(ctx context.Context) ([]stremio.Subtitle, error) {
 			asked, done := s.ask(followKey{listSubtitles, key})
 			defer done()
-			subtitles, err := s.fetchSubtitles(ctx, entry, t.metaType, t.id)
+			subtitles, err := s.fetchSubtitles(ctx, entry, key.contentType, key.id)
 			if err != nil {
 				return nil, err
 			}
@@ -1764,7 +1768,9 @@ func subtitleIdentity(subtitle stremio.Subtitle) string {
 	return string(subtitle.ID) + "|" + subtitle.URL
 }
 
-// fetchSubtitles asks an addon for the subtitles of a title.
+// fetchSubtitles asks an addon for the subtitles of a title, with the
+// hints its list is kept under (see subtitlesKey).
 func (s *Service) fetchSubtitles(ctx context.Context, entry installed, contentType, id string) ([]stremio.Subtitle, error) {
-	return s.client.Subtitles(ctx, entry.addon.ManifestURL, contentType, id, nil, entry.confined)
+	id, extra := subtitlesAsked(id)
+	return s.client.Subtitles(ctx, entry.addon.ManifestURL, contentType, id, extra, entry.confined)
 }

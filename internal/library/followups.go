@@ -492,6 +492,7 @@ func (s *Service) forgetLists(ctx context.Context, key streamKey) {
 	s.stopFollowUps(key, listSubtitles)
 	s.flight.Forget(subtitlesFlight(key))
 	s.subtitleLists.Delete(key)
+	s.forgetHintedSubtitles(key)
 	s.forgetStreams(ctx, key)
 }
 

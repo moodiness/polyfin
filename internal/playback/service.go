@@ -88,6 +88,10 @@ type Service struct {
 	// (see LearnMasteringDisplay).
 	unmastered *cache.Cache[accounts.ID, error]
 	live       *cache.Cache[accounts.ID, struct{}]
+	// hashes are the video hashes of versions' files, and unhashed
+	// the versions whose ends could not be read for it (see SubtitleHints).
+	hashes   *cache.Cache[accounts.ID, hashedVideo]
+	unhashed *cache.Cache[accounts.ID, error]
 	// silent are the versions whose analysis was logged as finding video
 	// and no audio, so that it is logged once (see keepAnalysis).
 	silent sync.Map
@@ -206,6 +210,8 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		failures:    cache.New[accounts.ID, versionFailure](2000, failureTTL),
 		unmastered:  cache.New[accounts.ID, error](2000, failureTTL),
 		live:        cache.New[accounts.ID, struct{}](2000, liveTTL),
+		hashes:      cache.New[accounts.ID, hashedVideo](4000, 24*time.Hour),
+		unhashed:    cache.New[accounts.ID, error](2000, failureTTL),
 		hosts:       cache.New[string, bool](500, 5*time.Minute),
 		indexes:     cache.New[accounts.ID, []time.Duration](200, time.Hour).Sized(maxKeptIndexes, indexBytes),
 		unindexed:   cache.New[accounts.ID, error](2000, failureTTL),

@@ -31,6 +31,9 @@ type ExternalSubtitle struct {
 	// Forced and HearingImpaired are the flags a user gave a file they
 	// added, or a local file's name gives, with Default.
 	Forced, HearingImpaired, Default bool
+	// Own marks a file made for the video: one a user added, or the
+	// version's own, rather than one an addon found for the title.
+	Own bool
 }
 
 // MediaStreams describes an analyzed version's tracks as Jellyfin does: the
@@ -244,6 +247,7 @@ func appendExternals(streams []MediaStream, externals []ExternalSubtitle, w *wor
 			IsHearingImpaired:      external.HearingImpaired,
 			IsTextSubtitleStream:   !imageSubtitle(external.Codec),
 			SupportsExternalStream: true,
+			OwnFile:                external.Own,
 		}
 		finishSubtitle(&stream, w)
 		streams = append(streams, stream)

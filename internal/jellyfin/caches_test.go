@@ -66,12 +66,12 @@ func TestSubtitleListsAreKeptUpTo16MB(t *testing.T) {
 			URL: "https://subtitles.test/" + strings.Repeat("x", 1000)}
 	}
 	for n := range 20 {
-		s.handler.subtitleFiles.Put(accounts.ID{byte(n + 1)}, listedSubtitles{Files: files})
+		s.handler.subtitleFiles.Put(listedKey{Item: accounts.ID{byte(n + 1)}}, listedSubtitles{Files: files})
 	}
-	if _, ok := s.handler.subtitleFiles.Get(accounts.ID{1}); ok {
+	if _, ok := s.handler.subtitleFiles.Get(listedKey{Item: accounts.ID{1}}); ok {
 		t.Error("the list stored first was kept past 16 MB")
 	}
-	if _, ok := s.handler.subtitleFiles.Get(accounts.ID{20}); !ok {
+	if _, ok := s.handler.subtitleFiles.Get(listedKey{Item: accounts.ID{20}}); !ok {
 		t.Error("the list stored last was not kept")
 	}
 	if kept := s.handler.subtitleFiles.Bytes(); kept > 16<<20 || kept < 8<<20 {

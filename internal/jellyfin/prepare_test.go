@@ -198,7 +198,7 @@ func TestNextEpisodeIsPreparedNearTheEnd(t *testing.T) {
 	if len(versions) != 2 {
 		t.Fatalf("8 minutes left: next episode's versions %+v", versions)
 	}
-	if _, ok := tr.handler.subtitleFiles.Get(next); !ok {
+	if _, ok := tr.handler.keptSubtitles(member, next); !ok {
 		t.Error("the next episode's subtitles were not listed")
 	}
 	if _, ok := tr.handler.Playback.Analyzed(t.Context(), versions[0].ID); !ok || probe.runs() != 1 {

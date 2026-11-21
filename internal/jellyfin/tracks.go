@@ -193,11 +193,14 @@ func (t trackPreferences) audioRank(stream playback.MediaStream) int {
 // files next to a video before any embedded track, as somebody put them
 // there for it. Addons find files for the title, not for the version, so
 // Polyfin offers them but shows one only when it is in the preferred
-// language (Always, Smart) and no embedded track is. Among equal tracks, a
-// text one in the same language is preferred to an image one, as an app
-// may only take an image one burned into converted video. audio is the
-// audio track that plays. The subtitle is absent when there are no
-// subtitles at all, as Jellyfin reports it.
+// language (Always, Smart) and no embedded track is. Among files equal
+// otherwise, those made for the video come first: those users added, and
+// the version's own, beside a local file, listed with its stream or inside
+// its torrent (see playback.MediaStream.OwnFile), before the addons' files
+// for the title. Among equal tracks, a text one in the same language is
+// preferred to an image one, as an app may only take an image one burned
+// into converted video. audio is the audio track that plays. The subtitle
+// is absent when there are no subtitles at all, as Jellyfin reports it.
 //
 // The text copy of a picture subtitle (see playback.TextCopy) counts as
 // its original: the original is chosen, and gives way to its copy only on
@@ -237,10 +240,10 @@ func (t trackPreferences) subtitle(streams []playback.MediaStream, audio *int) *
 			}
 			r := t.subtitleRank(s, audioLanguage)
 			if undetermined {
-				r |= 1 << 7
+				r |= 1 << subtitleRankBits
 			}
 			if matches {
-				r |= 1 << 8
+				r |= 1 << (subtitleRankBits + 1)
 			}
 			return r
 		})
@@ -279,11 +282,15 @@ func (t trackPreferences) matches(s playback.MediaStream) bool {
 	return t.subtitleLanguage == "" || localization.SameLanguage(s.Language, t.subtitleLanguage)
 }
 
+// subtitleRankBits is how many bits subtitleRank's ranks fit in.
+const subtitleRankBits = 8
+
 // subtitleRank places a subtitle in Jellyfin 12.2's order, higher first:
 // embedded before files (Polyfin's, see subtitle), flagged default, full
 // in the preferred language, forced in the preferred language, forced of
-// no stated language, forced. Last comes a forced track in the audio's
-// language, where Jellyfin keeps the tracks' order. It fits in 7 bits.
+// no stated language, forced, then a forced track in the audio's language,
+// where Jellyfin keeps the tracks' order. Last comes a file made for the
+// video before an addon's for the title (Polyfin's, see subtitle).
 func (t trackPreferences) subtitleRank(s playback.MediaStream, audioLanguage string) int {
 	matches := t.matches(s)
 	r := 0
@@ -295,6 +302,7 @@ func (t trackPreferences) subtitleRank(s playback.MediaStream, audioLanguage str
 		s.IsForced && localization.Undetermined(s.Language),
 		s.IsForced,
 		s.IsForced && localization.SameLanguage(s.Language, audioLanguage),
+		s.OwnFile,
 	} {
 		r <<= 1
 		if criterion {

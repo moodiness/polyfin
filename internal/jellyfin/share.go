@@ -626,7 +626,7 @@ func (h *Handler) planGuest(r *http.Request, user accounts.User, item library.It
 	request := playbackInfoRequest{DeviceProfile: &guestProfile, EnableDirectPlay: new(false)}
 	limitBitrate(&request, user)
 	h.limitHeight(&request, user)
-	p, complete, err := h.playableToPlay(ctx, user, item)
+	p, complete, err := h.playableToPlay(ctx, user, item, item.ID, "")
 	if err != nil {
 		return guestPlan{}, shareRefusedUnavailable
 	}

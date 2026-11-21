@@ -382,7 +382,7 @@ type dlnaChosen struct {
 func (h *Handler) chooseDLNA(w http.ResponseWriter, r *http.Request, play dlna.Play) (dlnaChosen, bool) {
 	ctx := r.Context()
 	request := h.dlnaRequest(play.User, play.Profile, play.Converted)
-	p, complete, err := h.playableToPlay(ctx, play.User, play.Item)
+	p, complete, err := h.playableToPlay(ctx, play.User, play.Item, play.Item.ID, "")
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return dlnaChosen{}, false

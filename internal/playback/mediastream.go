@@ -79,6 +79,9 @@ type MediaStream struct {
 	// CopyOf is, for a picture subtitle's text copy, its original's Index
 	// (see AppendTextCopies): Polyfin's own, never sent.
 	CopyOf *int `json:"-"`
+	// OwnFile marks a subtitle file made for the video (see
+	// ExternalSubtitle.Own): Polyfin's own, never sent.
+	OwnFile bool `json:"-"`
 	// KnownRefFrames is a remote video's reference frame count, from its
 	// analysis, which RefFrames leaves out as Jellyfin does: the decision
 	// reads it in RefFrames' place. Polyfin's own, never sent.
