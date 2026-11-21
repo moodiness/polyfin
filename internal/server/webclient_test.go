@@ -3168,6 +3168,7 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 		tv          bool
 		drops       []row
 		storage     string
+		lazy        int
 		steps       []string
 		want        []string
 	}
@@ -3175,12 +3176,22 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 		"rows at their places": {answers: [][]row{all}, steps: []string{"home", "wait 100", "show"}, want: []string{ask, byDefault}},
 		"cards as jellyfin-web draws them": {answers: [][]row{all}, steps: []string{"home", "wait 100", "cards"}, want: []string{ask,
 			"Trending → #/list?parentId=r1&serverId=srv: " +
-				"Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 407x272 taga1\"), played) " +
-				"Bravo(#/details?id=b2&serverId=srv, url(\"img b2 Primary 407x272 tagb2\"), progress 40.5%)",
+				"Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 408x272 taga1\"), played) " +
+				"Bravo(#/details?id=b2&serverId=srv, url(\"img b2 Primary 408x272 tagb2\"), progress 40.5%)",
 			"Picks → #/list?parentId=r2&serverId=srv: Charlie(#/details?id=c3&serverId=srv, icon movie)",
-			"Because you watched Alpha → #/list?parentId=r3&serverId=srv: Delta(#/details?id=s4&serverId=srv, url(\"img s4 Primary 407x272 t\"), 3 unplayed)",
-			"New → #/list?parentId=r4&serverId=srv: Echo(#/details?id=e5&serverId=srv, url(\"img e5 Primary 407x272 tage5\"))",
+			"Because you watched Alpha → #/list?parentId=r3&serverId=srv: Delta(#/details?id=s4&serverId=srv, url(\"img s4 Primary 408x272 t\"), 3 unplayed)",
+			"New → #/list?parentId=r4&serverId=srv: Echo(#/details?id=e5&serverId=srv, url(\"img e5 Primary 408x272 tage5\"))",
 		}},
+		// Where the browser tells what comes near the screen, a poster
+		// loads only then, at the width its card shows it at (126 pixels
+		// here, as on a phone), half as tall again.
+		"posters as their cards come near the screen": {answers: [][]row{{trending}}, lazy: 126,
+			steps: []string{"home", "wait 100", "cards", "near", "cards"}, want: []string{ask,
+				"Trending → #/list?parentId=r1&serverId=srv: Alpha(#/details?id=a1&serverId=srv, no poster yet, played) " +
+					"Bravo(#/details?id=b2&serverId=srv, no poster yet, progress 40.5%)",
+				"Trending → #/list?parentId=r1&serverId=srv: Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 189x126 taga1\"), played) " +
+					"Bravo(#/details?id=b2&serverId=srv, url(\"img b2 Primary 189x126 tagb2\"), progress 40.5%)",
+			}},
 		// Continue Watching first, Next Up left out: its rows take the
 		// place before, after those of Continue Watching.
 		"the user's own sections": {
@@ -3278,8 +3289,8 @@ func TestTheHomePageGetsTheServersRows(t *testing.T) {
 			}},
 			{"Id": "r9", "Name": "Friday night", "Kind": "Playlist", "PlaylistId": "p2", "Place": "Bottom", "Items": []row{item("b2", "Bravo", row{}, false)}},
 		}}, steps: []string{"home", "wait 100", "cards"}, want: []string{ask,
-			"Mine → #/details?id=p1&serverId=srv: Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 407x272 taga1\")) " +
-				"Show(#/details?id=e6&serverId=srv, url(\"img s9 Primary 407x272 st\"), S1:E2 - Pilot) " +
+			"Mine → #/details?id=p1&serverId=srv: Alpha(#/details?id=a1&serverId=srv, url(\"img a1 Primary 408x272 taga1\")) " +
+				"Show(#/details?id=e6&serverId=srv, url(\"img s9 Primary 408x272 st\"), S1:E2 - Pilot) " +
 				"Show(#/details?id=e7&serverId=srv, icon tv, Special)",
 			"Friday night → #/details?id=p2&serverId=srv: Bravo(#/details?id=b2&serverId=srv, icon movie)",
 		}},
@@ -3341,7 +3352,7 @@ async function run(scenario) {
     toggle: () => {},
   })
   class Element {
-    constructor(tag, className) { this.tagName = tag; this.className = className || ''; this.children = []; this.parentNode = null; this.style = {}; this.text = ''; this.attributes = {} }
+    constructor(tag, className) { this.tagName = tag; this.className = className || ''; this.children = []; this.parentNode = null; this.style = {}; this.text = ''; this.attributes = {}; this.offsetWidth = scenario.lazy || 0 }
     get classList() { return classList(this) }
     set textContent(text) { this.text = text; this.children = []; changed() }
     get textContent() { return this.text + this.children.map((child) => child.textContent).join('') }
@@ -3400,7 +3411,7 @@ async function run(scenario) {
       const described = items.children.map((card) => {
         const image = card.querySelector('.cardImageContainer')
         const marks = [image.getAttribute('href')]
-        marks.push(image.style.backgroundImage || 'icon ' + image.querySelector('.cardImageIcon').className.split(' ').pop())
+        marks.push(image.style.backgroundImage || (image.querySelector('.cardImageIcon') ? 'icon ' + image.querySelector('.cardImageIcon').className.split(' ').pop() : 'no poster yet'))
         if (image.querySelector('.playedIndicator')) marks.push('played')
         const count = image.querySelector('.countIndicator')
         if (count) marks.push(count.textContent + ' unplayed')
@@ -3470,8 +3481,18 @@ async function run(scenario) {
   }
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init && init.detail } }
   class Event { constructor(type) { this.type = type } }
+  // What the browser tells of the cards that come near the screen, where
+  // the scenario has it: "near" brings every card watched.
+  const watched = []
+  class IntersectionObserver {
+    constructor(callback) { this.callback = callback }
+    observe(target) { watched.push({ observer: this, target }) }
+    unobserve(target) { const i = watched.findIndex((w) => w.target === target); if (i >= 0) watched.splice(i, 1) }
+  }
+  const near = () => { for (const w of [...watched]) w.observer.callback([{ target: w.target, isIntersecting: true }]) }
   runScript(script, {
     location, history, URL, URLSearchParams, document, CustomEvent, Event, MutationObserver, window: { ApiClient, sessionStorage },
+    ...(scenario.lazy ? { IntersectionObserver } : {}),
     Date: { now: () => now },
     setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
     clearTimeout: (id) => { if (id) timers[id - 1] = null },
@@ -3483,6 +3504,7 @@ async function run(scenario) {
     else if (step.startsWith('hide ')) hide(step.slice(5).split(' '))
     else if (step.startsWith('unlist ')) unlist(step.slice(7).split(' '))
     else if (step === 'cards') cards()
+    else if (step === 'near') near()
     else if (step === 'render') render()
     else if (step === 'empty') for (const child of [...container.children]) container.removeChild(child)
     else if (step === 'home') { history.pushState(null, '', '#/home'); page.classList.remove('hide') }
@@ -3523,11 +3545,12 @@ async function run(scenario) {
 		TV          bool     `json:"tv"`
 		Drops       []row    `json:"drops,omitempty"`
 		Storage     string   `json:"storage,omitempty"`
+		Lazy        int      `json:"lazy,omitempty"`
 		Steps       []string `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.answers, s.preferences, s.tv, s.drops, s.storage, s.steps}
+		inputs[name] = input{s.answers, s.preferences, s.tv, s.drops, s.storage, s.lazy, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)
