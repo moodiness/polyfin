@@ -873,8 +873,8 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 				err = answeredWith(ctx, src, err)
 			}
 		}
-		if err == nil && standIn(analysis, version.Runtime) {
-			err = fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
+		if err == nil && standIn(analysis, version) {
+			err = standInError(analysis, version)
 		}
 		if err != nil {
 			if !rateLimited(src, started, err) {
@@ -1114,11 +1114,42 @@ func (s *Service) sharedRead(ctx context.Context, key string, version library.Ve
 	}
 }
 
-// standIn reports whether an analysis is of a clip too short to be the
-// title: under a tenth of its runtime, which leaves room for runtimes that
-// addons round or give per series rather than per episode.
-func standIn(analysis media.Analysis, runtime time.Duration) bool {
-	return analysis.Duration > 0 && runtime > 0 && analysis.Duration*10 < runtime
+// Error clips: a debrid service answers a release it does not hold, or
+// failed to fetch, with a short video saying so. Told from the title by
+// its length, against the title's runtime; or, the runtime unknown, by its
+// file, too small for a video and far under the release its addon
+// announced: a clip under clipLongest, whose file is at most clipLargest
+// and under a tenth of the size announced. The bounds are the host error
+// files' (see source.ErrorFiles), which no analyzed video was under: such
+// an answer for a single release is no coincidence once it is a clip.
+const (
+	clipLongest = 2 * time.Minute
+	clipLargest = 50_000_000
+)
+
+// standIn reports whether an analysis of version is of a clip standing in
+// for the title (see ErrStandIn): under a tenth of its runtime, which
+// leaves room for runtimes that addons round or give per series rather
+// than per episode; or an error clip far smaller than the release its
+// addon announced (see clipLongest).
+func standIn(analysis media.Analysis, version library.Version) bool {
+	switch {
+	case analysis.Duration <= 0:
+		return false
+	case version.Runtime > 0 && analysis.Duration*10 < version.Runtime:
+		return true
+	}
+	return analysis.Duration < clipLongest && analysis.Size > 0 && analysis.Size <= clipLargest && analysis.Size*10 < version.Size
+}
+
+// standInError tells why an analysis of version is taken for a clip (see
+// standIn).
+func standInError(analysis media.Analysis, version library.Version) error {
+	if version.Runtime > 0 && analysis.Duration*10 < version.Runtime {
+		return fmt.Errorf("%w: %s long, where the title lasts %s", ErrStandIn, analysis.Duration.Round(time.Second), version.Runtime)
+	}
+	return fmt.Errorf("%w: %s long, a file of %d bytes, where its addon announced %d", ErrStandIn, analysis.Duration.Round(time.Second),
+		analysis.Size, version.Size)
 }
 
 // Failed reports whether a version recently failed to be analyzed or

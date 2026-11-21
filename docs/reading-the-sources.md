@@ -145,6 +145,7 @@ A starting playback stops it within 8 MiB. Its reads are background reads, and a
 | Announced size off by over 1%, once the addon's sizes proved right | Another file: fails at once. Within 1%, the real size is used. Addons wrong more often than right are not checked. |
 | Source fails during analysis or playback | Skips the version for 15 minutes; analysis stops at once and the next version is tried within seconds. |
 | Answers but not with video | Fails analysis the same way. An empty answer fails at once. |
+| A short clip in place of the title, such as the video a provider answers for a release it does not hold or failed to fetch | Fails analysis the same way, and the next version is tried: the clip never plays. A clip is under a tenth of the title's runtime, or under 2 minutes from a file of 50 MB at most and under a tenth of the size the addon announced, which tells it when the runtime is unknown. The log says `the source is a short clip, not the title`. |
 | Slow-down during analysis, keyframe index, playback or direct-play check, or an analysis timing out on it | Never skips; retried next play. |
 | Keyframe index not served | Retried at the next play. |
 | Link renewal fails | Not the file's failure. |

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -406,6 +407,49 @@ func TestShortClipsStandingInForTheTitleAreRefused(t *testing.T) {
 	} {
 		if _, err := s.Analyze(t.Context(), version); err != nil {
 			t.Errorf("runtime %s: %v", version.Runtime, err)
+		}
+	}
+}
+
+// A title of unknown runtime is told from a debrid service's error clip by
+// the file: a short clip whose file is too small for a video, and under a
+// tenth of the release its addon announced, is refused as one. A clip of
+// the size announced, of no size announced, or a longer video, is what it
+// is.
+func TestErrorClipsFarUnderTheAnnouncedSizeAreRefused(t *testing.T) {
+	t.Parallel()
+	probed := func(duration, size string) string {
+		t.Helper()
+		path, _ := fakeProbe(t, `{"format": {"filename": "http://127.0.0.1/x", "format_name": "mov,mp4", "duration": "`+duration+`", "size": "`+size+`"},
+			"streams": [{"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720}]}`, false)
+		return path
+	}
+	// Each version on its own host: a host answering one size for two
+	// files is a host error file (see source.ErrorFiles).
+	version := func(id byte, size int64) library.Version {
+		return library.Version{ID: accounts.ID{id}, URL: fmt.Sprintf("https://93.184.216.%d/release.mkv", id), Size: size}
+	}
+	for _, tc := range []struct {
+		name     string
+		duration string
+		size     string
+		version  library.Version
+		refused  bool
+	}{
+		{"an 8 s clip for an 8 GB release", "8.000000", "1822520", version(10, 8_350_994_751), true},
+		{"a clip of the size announced", "8.000000", "1822520", version(11, 1_822_520), false},
+		{"a clip of no size announced", "8.000000", "1822520", version(12, 0), false},
+		{"a clip a fifth of the size announced", "8.000000", "1822520", version(13, 9_000_000), false},
+		{"a 10 min video for an 8 GB release", "600.000000", "40000000", version(14, 8_350_994_751), false},
+		{"a 60 MB clip for an 8 GB release", "8.000000", "60000000", version(15, 8_350_994_751), false},
+	} {
+		s := newService(t, &fileSource{data: make([]byte, 1000)}, probed(tc.duration, tc.size), nil)
+		_, err := s.Analyze(t.Context(), tc.version)
+		if refused := errors.Is(err, ErrStandIn); refused != tc.refused || !refused && err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+		if refused := s.Failed(tc.version.ID); refused != tc.refused {
+			t.Errorf("%s: failed %v", tc.name, refused)
 		}
 	}
 }
