@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tmdb"
@@ -39,6 +42,7 @@ import (
 //     opened asks nothing;
 //   - for a title a local folder holds, how long its file plays, as the
 //     folder's scan probed it (see TitleDurations and EpisodeDurations).
+//     A server without a local folder reads none (see localFolders).
 //
 // A version's analysis tells how long that version plays, which its media
 // source gives and players use as they play it, but never the title's: a
@@ -84,6 +88,16 @@ type episodeLengthsMemory struct {
 	known *cache.Cache[string, *keptEpisodeLengths]
 	// writes counts the writes.
 	writes uint64
+	// local remembers whether the server has a local folder, and when the
+	// addons counted how many changes (see localFolders).
+	local atomic.Pointer[localFolderCount]
+}
+
+// localFolderCount is whether the server has a local folder, as its
+// addons were after changes changes (see addons.Store.Changes).
+type localFolderCount struct {
+	changes uint64
+	has     bool
 }
 
 // localLengths gives the movies of titles that have no length yet the
@@ -98,7 +112,7 @@ func (s *Service) localLengths(ctx context.Context, titles []*Item) {
 			ids = append(ids, title.StremioID)
 		}
 	}
-	if len(ids) == 0 {
+	if len(ids) == 0 || !s.localFolders(ctx) {
 		return
 	}
 	durations, err := s.local.TitleDurations(ctx, ids)
@@ -141,7 +155,7 @@ func (s *Service) episodeLengthsOf(ctx context.Context, series string, episodes 
 			}
 		}
 	}
-	if s.local == nil || !missing() {
+	if s.local == nil || !missing() || !s.localFolders(ctx) {
 		return
 	}
 	durations, err := s.local.EpisodeDurations(ctx, series)
@@ -154,6 +168,23 @@ func (s *Service) episodeLengthsOf(ctx context.Context, series string, episodes 
 			episodes[i].Runtime = durations[[2]int{episode.ParentIndexNumber, episode.IndexNumber}]
 		}
 	}
+}
+
+// localFolders reports whether the server has a local folder, whose files
+// may give titles their lengths: without one, their lengths are not looked
+// for there. An addon list that cannot be read counts as one.
+func (s *Service) localFolders(ctx context.Context) bool {
+	changes := s.addons.Changes()
+	if known := s.episodeLengths.local.Load(); known != nil && known.changes == changes {
+		return known.has
+	}
+	all, err := s.addons.All(ctx)
+	if err != nil {
+		return true
+	}
+	has := slices.ContainsFunc(all, addons.Addon.Local)
+	s.episodeLengths.local.Store(&localFolderCount{changes, has})
+	return has
 }
 
 // AwaitEpisodeLengths has the lengths of a series' episodes read on TMDB
