@@ -30,7 +30,8 @@ var gzipWriters = sync.Pool{New: func() any {
 // compress gzips the answers that gain from it, for clients that accept
 // gzip: JSON, text, JavaScript, CSS and XML of at least minCompressed
 // bytes. Range requests, HEAD requests, the WebSocket and HLS playlists and
-// segments pass untouched, as do answers that are already encoded, media
+// segments pass untouched, but for a channel's media playlist (see
+// hlsPath), as do answers that are already encoded, media
 // and binary answers, and 204, 206 and 304 answers. Compressible answers
 // get Vary: Accept-Encoding whether compressed or not, and a strong ETag
 // gets a -gzip suffix when compressed, so that caches tell the two apart.
@@ -57,12 +58,19 @@ func socketPath(path string) bool {
 // Jellyfin API: any .m3u8 file, and the files under hls1/, hls/ and live/
 // of /Videos/{itemId} and /Audio/{itemId}, whatever their type. Players
 // fetch them as they play; WebVTT segments are text, yet stay as they are.
+// A channel's media playlist, live.m3u8, is not one of them: it lists the
+// channel's buffer for pause and rewind, up to hundreds of segments each
+// named with the play's query, reloaded every few seconds, which
+// compression makes over ten times smaller.
 func hlsPath(path string) bool {
 	first, rest, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
 	if !strings.EqualFold(first, "videos") && !strings.EqualFold(first, "audio") {
 		return false
 	}
 	last := rest[strings.LastIndexByte(rest, '/')+1:]
+	if _, file, _ := strings.Cut(rest, "/"); strings.EqualFold(file, "live.m3u8") {
+		return false
+	}
 	if len(last) >= len(".m3u8") && strings.EqualFold(last[len(last)-len(".m3u8"):], ".m3u8") {
 		return true
 	}
@@ -121,7 +129,8 @@ func accepts(header http.Header, name, alias string) bool {
 
 // compressibleType reports whether answers of contentType gain from
 // compression: text but event streams, which are sent as they come, JSON,
-// JavaScript, XML and SVG, and WebAssembly.
+// JavaScript, XML and SVG, WebAssembly, and HLS playlists, of which only
+// a channel's media playlist gets here (see hlsPath).
 func compressibleType(contentType string) bool {
 	mediaType, _, _ := strings.Cut(contentType, ";")
 	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
@@ -133,7 +142,7 @@ func compressibleType(contentType string) bool {
 	}
 	switch mediaType {
 	case "application/json", "application/javascript", "application/x-javascript", "application/ecmascript",
-		"application/xml", "application/wasm":
+		"application/xml", "application/wasm", "application/vnd.apple.mpegurl":
 		return true
 	}
 	return false

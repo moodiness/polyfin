@@ -231,6 +231,7 @@ func TestHLSPlaylistsAndSegmentsAreNotCompressed(t *testing.T) {
 		"/Audio/" + id + "/hls1/main/0.ts",
 		"/Videos/" + id + "/hls/live/7.ts",
 		"/Videos/" + id + "/live/index.vtt",
+		"/Videos/" + id + "/live/live.m3u8",
 		"/Videos/" + id + "/Trickplay/320/tiles.m3u8",
 	} {
 		response := fetch(answering(fixed("text/vtt", text)), http.MethodGet, target, "Accept-Encoding", "gzip")
@@ -242,6 +243,30 @@ func TestHLSPlaylistsAndSegmentsAreNotCompressed(t *testing.T) {
 	response := fetch(answering(fixed("text/vtt", text)), http.MethodGet, "/Videos/"+id+"/"+id+"/Subtitles/0/Stream.vtt", "Accept-Encoding", "gzip")
 	if response.Header().Get("Content-Encoding") != "gzip" {
 		t.Errorf("subtitle file: not compressed")
+	}
+}
+
+// A channel's media playlist, which lists its buffer for pause and rewind,
+// each segment named with the play's query, is compressed.
+func TestAChannelsPlaylistIsCompressed(t *testing.T) {
+	t.Parallel()
+	var playlist strings.Builder
+	playlist.WriteString("#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-TARGETDURATION:3\n#EXT-X-MEDIA-SEQUENCE:0\n")
+	for n := range 600 {
+		playlist.WriteString("#EXTINF:3.000000,\nhls/live/" + strconv.Itoa(n) + ".ts?DeviceId=abc&MediaSourceId=0123&PlaySessionId=def&api_key=0123456789\n")
+	}
+	body := []byte(playlist.String())
+	id := "0123456789abcdef0123456789abcdef"
+	response := fetch(answering(fixed("application/vnd.apple.mpegurl", body)), http.MethodGet, "/videos/"+id+"/live.m3u8?PlaySessionId=def",
+		"Accept-Encoding", "gzip")
+	if response.Header().Get("Content-Encoding") != "gzip" || response.Body.Len() > len(body)/10 {
+		t.Fatalf("a channel's playlist: Content-Encoding %q, %d bytes for %d", response.Header().Get("Content-Encoding"), response.Body.Len(), len(body))
+	}
+	if got := gunzip(t, response.Body.Bytes()); !bytes.Equal(got, body) {
+		t.Error("the decoded playlist differs")
+	}
+	if response := fetch(answering(fixed("application/vnd.apple.mpegurl", body)), http.MethodGet, "/videos/"+id+"/live.m3u8"); response.Header().Get("Content-Encoding") != "" {
+		t.Error("compressed for a client that accepts no gzip")
 	}
 }
 
