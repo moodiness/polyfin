@@ -184,8 +184,9 @@ In apps:
   - Tracks found during a play show on return to the page, and so do [version names](#version-names) that now say how each version plays. Nothing changes during a video or with a menu open.
   - A page is told for 2 minutes after it opened or last asked for versions.
 - In the web player, a movie's or episode's Play, Resume and Play from the start buttons wait for a version.
-  - While none is known and addons are asked, they are greyed and disabled, with a small spinner and the tooltip "Looking for sources…". They return with the first version, without reload.
-  - The page asks Polyfin on opening; until it answers, the buttons wait whenever only the placeholder is listed.
+  - While none is known and addons are asked, they are greyed and disabled, with a small spinner and the tooltip "Looking for sources…". They return with the first version, without reload: Polyfin tells the page as soon as an addon gives one.
+  - The page asks Polyfin as it opens, which has Polyfin ask the title's addons at once, alongside the title's description. Until Polyfin answers, the buttons wait from the page's first render whenever only the placeholder is listed, so Play is never shown pressable before a version is known.
+  - They wait 30 seconds at most, the time an addon is given, and not at all when Polyfin does not answer: then they return, and Play waits for the addons itself.
   - If every addon answered without a version, they stay disabled above "No source is available for this title." and a **Try again** button.
   - **Try again** drops the title's lists for the user's addons and re-asks; the buttons wait meanwhile. Once every 20 seconds per title.
   - Text follows the web player's language: English, French, German, Spanish, Italian or Portuguese; else English.

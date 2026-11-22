@@ -35,7 +35,7 @@
 // part then looks at the page once a frame, before it is drawn, and only
 // while it listens: the menus' entry (the eighth) and the home page's rows
 // (the eleventh) always, the play buttons (the third) on a title's page
-// until the first answer, the reminders (the thirteenth) on a title's
+// while they are or may be held, the reminders (the thirteenth) on a title's
 // page, which may be a programme's, the recent searches (the fifteenth)
 // on the search page, and the version badges (the twenty-first) on a
 // title's page once its badges came, and while a video plays. The other
@@ -122,15 +122,23 @@
 // the tooltip "Looking for sources…"; as soon as one is known, they are given
 // back as jellyfin-web made them. Until the first answer, they are held as
 // searching when the version menu lists only the placeholder, a single
-// source under the title's own identifier; the first answer may come before
-// the title's details asked any addon, so it never tells that no source is
-// available. Once no addon is left to ask, they stay disabled and a line
-// under them says that no source is available, with a
-// "Try again" button: it posts to /Polyfin/Items/{id}/Versions/Search, which
-// has Polyfin ask the title's addons again, then follows the versions anew;
-// asked too soon, Polyfin answers 429 with Retry-After, and the button waits
-// that long. A MutationObserver on the page holds the buttons again when
-// jellyfin-web renders it anew. Its words follow jellyfin-web's language, the
+// source under the title's own identifier, from the page's first render:
+// the script follows jellyfin-web's renders from the route's change, so
+// that Play is never drawn enabled before a version is known. The first
+// answer may come before the title's details asked any addon, so it never
+// tells that no source is available. Polyfin's answer to that first
+// request has it ask the title's addons, so the stream lists come with
+// the details' metadata rather than after it. Once no addon is left to
+// ask, they stay disabled and a line under them says that no source is
+// available, with a "Try again" button: it posts to
+// /Polyfin/Items/{id}/Versions/Search, which has Polyfin ask the title's
+// addons again, then follows the versions anew; asked too soon, Polyfin
+// answers 429 with Retry-After, and the button waits that long. A
+// MutationObserver on the page holds the buttons again when jellyfin-web
+// renders it anew. The buttons wait 30 seconds at most, as long as Polyfin
+// asks an addon, and not at all when Polyfin fails to answer before any
+// answer: they are given back while searching, and jellyfin-web's play
+// waits for the addons itself. Its words follow jellyfin-web's language, the
 // document's lang (English, French, German, Spanish, Italian or Brazilian
 // Portuguese, which any Portuguese gets; English otherwise). It never changes
 // the page during a video, and gives everything back when the route leaves
@@ -1575,10 +1583,14 @@
     unsure = false
     take(progress)
   }
-  // take brings the page to an answer.
+  // take brings the page to an answer. One that no longer searches ends
+  // the wait for a version (see holdFor).
   function take(progress) {
     latest = progress
-    followEarly(false)
+    if (waiting(null) !== 'searching') {
+      clearTimeout(lateTimer)
+      lateTimer = null
+    }
     hold()
     update(progress)
     dueTracks()
@@ -1829,10 +1841,18 @@
   var note = null
   var watched = null
   var watcher = null
-  var early = false
+  var following = false
   var unsure = false
+  var late = false
+  var lateTimer = null
   var againAt = 0
   var againTimer = null
+  // holdFor is how long the play buttons wait for a version: an addon is
+  // asked 30 seconds at most, so Polyfin knows by then. Past it, or once
+  // Polyfin fails to answer before any answer, they are given back while
+  // searching, as jellyfin-web made them: its play then waits for the
+  // addons itself.
+  var holdFor = 30000
   // waiting tells what the play buttons of page wait for: "searching" while
   // no version is known and addons are asked, "none" once none is left to
   // ask, "" when a version is known or the item is not a movie or an
@@ -1844,9 +1864,10 @@
   // known: a single source under the title's own identifier.
   function waiting(page) {
     var progress = latest
-    if (!progress) return placeholder(page) ? 'searching' : ''
+    if (!progress) return !late && page && placeholder(page) ? 'searching' : ''
     if (!(progress.Count >= 1) || typeof progress.Known !== 'number' || progress.Known > 0) return ''
-    return progress.Pending > 0 || unsure ? 'searching' : 'none'
+    if (progress.Pending > 0 || unsure) return late ? '' : 'searching'
+    return 'none'
   }
   function placeholder(page) {
     var menu = page.querySelector('.selectSource')
@@ -1856,11 +1877,14 @@
   // answer: disabled, with a tooltip, greyed and a spinner while addons are
   // searched; disabled, with a line under them and a button to search again,
   // when no source is available; as jellyfin-web made them otherwise. It
-  // watches the page, so that jellyfin-web's renders find them held again,
-  // and changes only what differs. It never changes the page during a video.
+  // follows jellyfin-web's renders while the buttons may be held, from the
+  // page's first render, so that they are never drawn enabled before a
+  // version is known, and changes only what differs. It never changes the
+  // page during a video.
   function hold() {
     try {
       var page = shownPage()
+      followPage(!latest ? !late : !!waiting(page))
       if (!page) return
       var state = waiting(page)
       if (!state && !held.length && !note) return
@@ -1973,6 +1997,7 @@
       function (progress) {
         if (title !== id) return
         unsure = false
+        wait()
         take(progress)
         poll(id, 1000)
       },
@@ -1986,6 +2011,23 @@
       }
     )
   }
+  // wait has the play buttons wait for a version for holdFor from now.
+  function wait() {
+    late = false
+    clearTimeout(lateTimer)
+    lateTimer = setTimeout(giveBack, holdFor)
+  }
+  // giveBack gives the play buttons back while addons are searched.
+  function giveBack() {
+    late = true
+    clearTimeout(lateTimer)
+    lateTimer = null
+    try {
+      hold()
+    } catch (error) {
+      release()
+    }
+  }
   // watch has jellyfin-web's renders of the page shown find its buttons held.
   function watch(page) {
     if (watched === page) return
@@ -1995,11 +2037,11 @@
     var changes = { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'disabled', 'class'] }
     watcher.observe(page, changes)
   }
-  // followEarly follows the page's changes, or stops, so that the page is
-  // found as jellyfin-web renders it until the first answer.
-  function followEarly(on) {
-    if (on === early) return
-    early = on
+  // followPage follows the page's changes, or stops, so that jellyfin-web's
+  // renders find the play buttons held as soon as they are drawn.
+  function followPage(on) {
+    if (on === following) return
+    following = on
     if (on) document.addEventListener('polyfinpagechange', hold)
     else document.removeEventListener('polyfinpagechange', hold)
   }
@@ -2035,8 +2077,11 @@
     if (watcher) watcher.disconnect()
     watcher = null
     watched = null
-    followEarly(false)
+    followPage(false)
     unsure = true
+    late = false
+    clearTimeout(lateTimer)
+    lateTimer = null
     clearTimeout(againTimer)
     againTimer = null
     againAt = 0
@@ -2053,9 +2098,9 @@
     chosen = {}
     stopKeeping()
     if (!id) return
-    // Until the first answer, the page is looked for as jellyfin-web renders
-    // it, in case it lists only the placeholder.
-    followEarly(true)
+    // From the route's change, the page is followed as jellyfin-web renders
+    // it, so that its play buttons are held from its first render.
+    wait()
     hold()
     poll(id, 0)
   }
@@ -2086,7 +2131,10 @@
           // answers may come before Polyfin asks any addon.
           if (progress.Pending > 0 || answers < 3) next()
         })
-        .catch(function () {})
+        .catch(function () {
+          // Without an answer, the buttons wait for nothing.
+          if (title === id && round === polls && !latest) giveBack()
+        })
     }
     function next() {
       timer = setTimeout(attempt, pushed ? 10000 : 1000)

@@ -254,6 +254,80 @@ func TestDetailsAnswerBeforeTheAddons(t *testing.T) {
 	}
 }
 
+// The Versions answer asks the title's addons, as details do: Polyfin's
+// script asks it as the route changes, before jellyfin-web asks for the
+// details, whose metadata comes first. The details then join the request
+// under way.
+func TestTheVersionsAnswerAsksTheAddons(t *testing.T) {
+	t.Parallel()
+	addon := newHeldAddon(t, "Alpha", false)
+	h := heldOn(t, newTestServer(t, 10), addon.url)
+	if got := h.progress(t); got != (VersionProgress{Pending: 1, Count: 1, Known: 0}) {
+		t.Errorf("asked before the details: %+v", got)
+	}
+	eventually(t, "the addon to be asked", func() bool { return addon.asked.Load() == 1 })
+	if sources := h.sources(t); len(sources) != 1 || sources[0].Id != h.movie {
+		t.Fatalf("details while the addon is asked: %+v", sources)
+	}
+	addon.answer()
+	h.reaches(t, VersionProgress{Pending: 0, Count: 2, Known: 2}, "Alpha", "Alpha")
+	if n := addon.asked.Load(); n != 1 {
+		t.Errorf("addon asked %d times", n)
+	}
+}
+
+// The first version is pushed to the title page at once, as it gives the
+// page's play buttons back; the changes after it gather for pushDelay,
+// lengthened here to an hour.
+func TestTheFirstVersionIsPushedAtOnce(t *testing.T) {
+	t.Parallel()
+	addon := newHeldAddon(t, "Alpha", false)
+	h := heldOn(t, newTestServer(t, 10), addon.url)
+	h.handler.watched.mu.Lock()
+	h.handler.watched.gather = time.Hour
+	h.handler.watched.mu.Unlock()
+	socket := h.openWebSocket(t, "member")
+	h.sources(t)
+	// next is the next push within wait, if any.
+	next := func(wait time.Duration) (versionsPush, bool) {
+		deadline := time.After(wait)
+		for {
+			select {
+			case message := <-socket.messages:
+				if message.MessageType != versionsMessage {
+					continue
+				}
+				data, _ := json.Marshal(message.Data)
+				var pushed versionsPush
+				if err := json.Unmarshal(data, &pushed); err != nil {
+					t.Fatal(err)
+				}
+				return pushed, true
+			case <-deadline:
+				return versionsPush{}, false
+			}
+		}
+	}
+	addon.answer()
+	for {
+		pushed, ok := next(5 * time.Second)
+		if !ok {
+			t.Fatal("the first version was not pushed at once")
+		}
+		if pushed.Known > 0 {
+			if pushed.ItemId != h.movie || pushed.Known != 2 {
+				t.Errorf("pushed %+v", pushed)
+			}
+			break
+		}
+	}
+	title, _ := accounts.ParseID(h.movie)
+	h.handler.tracksChanged(title)
+	if pushed, ok := next(500 * time.Millisecond); ok {
+		t.Errorf("pushed at once after the first version: %+v", pushed)
+	}
+}
+
 func TestAFailingAddonLeavesNothingPending(t *testing.T) {
 	t.Parallel()
 	first, broken := newHeldAddon(t, "First", false), newHeldAddon(t, "Broken", true)

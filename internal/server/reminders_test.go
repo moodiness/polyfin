@@ -98,6 +98,7 @@ async function run(scenario) {
   const log = []
   let now = 0
   const timers = []
+  let timerIds = 0
   const listeners = {}
   const observers = new Set()
   let queued = false
@@ -218,8 +219,10 @@ async function run(scenario) {
   runScript(script, {
     location, history, document, MutationObserver, window: { ApiClient }, Object, JSON, String, Date,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail } },
-    setTimeout: (run, delay) => timers.push({ run, at: now + delay }),
-    clearTimeout: (id) => { if (id) timers[id - 1] = null },
+    // Each timer keeps its id, so that one cleared is dropped whichever
+    // timers ran before it.
+    setTimeout: (run, delay) => { timers.push({ id: ++timerIds, run, at: now + delay }); return timerIds },
+    clearTimeout: (id) => { const i = timers.findIndex((timer) => timer.id === id); if (i >= 0) timers.splice(i, 1) },
     addEventListener: (type, listener) => { (listeners[type] ||= []).push(listener) },
   })
   await flush()
@@ -240,7 +243,12 @@ async function run(scenario) {
     else if (step === 'click every') click(page.querySelector('.polyfinReminderEvery'))
     else if (step.startsWith('wait ')) {
       const until = now + Number(step.slice(5))
-      for (const timer of timers.slice().sort((a, b) => a.at - b.at)) if (timer.at <= until) { now = timer.at; timer.run(); await flush() }
+      for (const timer of timers.filter((each) => each.at <= until).sort((a, b) => a.at - b.at)) {
+        if (!timers.includes(timer)) continue
+        now = timer.at
+        timer.run()
+        await flush()
+      }
       timers.splice(0, timers.length, ...timers.filter((timer) => timer.at > until))
       now = until
     } else {

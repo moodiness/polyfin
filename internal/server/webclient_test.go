@@ -1118,10 +1118,13 @@ async function run(scenario) {
 // has Polyfin search again. The first answer, asked as the route changes,
 // never says no source; before it, the buttons wait only when the version
 // menu lists the placeholder alone. jellyfin-web's renders find them held
-// again; a video is never touched, and leaving the page gives everything
-// back. It runs in Node.js, in a context that stands for the browser: a
-// small document holding the title page, whose buttons jellyfin-web titled
-// "Resume" and "Play", a clock and timers the harness moves on.
+// again, the page's first render included when the first answer came
+// before it; a video is never touched, and leaving the page gives
+// everything back. They wait 30 seconds at most, and not at all when
+// Polyfin fails to answer. It runs in Node.js, in a context that stands
+// for the browser: a small document holding the title page, whose buttons
+// jellyfin-web titled "Resume" and "Play", a clock and timers the harness
+// moves on.
 func TestPlayButtonsWaitForASource(t *testing.T) {
 	t.Parallel()
 	node, err := exec.LookPath("node")
@@ -1150,6 +1153,9 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		// menu lists the version menu's options at first, "t" standing for
 		// the title's own identifier; none without it.
 		menu []string
+		// hidden has the title page hidden, as before jellyfin-web shows
+		// it, until an "open" step.
+		hidden bool
 		// steps: a route the router moves to; "tick" runs the next timer,
 		// logging "idle" when there is none; "answer" gives the oldest
 		// deferred answer; "push <pending> <count> <known>" has Polyfin push
@@ -1157,7 +1163,8 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		// "held", "+spin" with a spinner, then its tooltip, and the line
 		// under them, "+wait" when its button waits; "render" has
 		// jellyfin-web title the buttons again, as it does when it shows the
-		// page, and "rebuild" replace them; "list <option>…" has it list the
+		// page, "rebuild" replace them, and "open" show the hidden page with
+		// its buttons made anew; "list <option>…" has it list the
 		// version menu's options; "again" clicks the line's button; "video"
 		// and "end video" start and end a video.
 		steps []string
@@ -1227,6 +1234,25 @@ func TestPlayButtonsWaitForASource(t *testing.T) {
 		"untouched while real versions are listed": {deferred: true, menu: []string{"t", "v1"}, answers: []progress{found},
 			steps: []string{title, "show", "list v1", "show", "answer", "show"},
 			want:  []string{ask, free, free, free}},
+		// The first answer came before jellyfin-web showed the page: its
+		// first render finds the buttons held.
+		"held from the first render after the answer": {deferred: true, hidden: true, answers: []progress{empty, looking},
+			steps: []string{title, "answer", "open", "show", "tick", "answer", "show"},
+			want:  []string{ask, searching, ask, searching}},
+		"held from the first render before the answer": {deferred: true, hidden: true, answers: []progress{looking},
+			steps: []string{title, "open", "list t", "show", "answer", "show"},
+			want:  []string{ask, searching, searching}},
+		// Pushes slow the asks to one every 10 seconds; 30 seconds after
+		// the route changed, the buttons are given back.
+		"given back after 30 seconds of searching": {answers: []progress{looking, looking, looking, looking},
+			steps: []string{title, "push 1 1 0", "tick", "tick", "tick", "show", "tick", "show", "push 1 1 0", "render", "show"},
+			want:  []string{ask, ask, ask, ask, searching, free, `show play free "Play" replay free "Play"`}},
+		"a version stops the 30 seconds": {answers: []progress{looking, found, found},
+			steps: []string{title, "tick", "tick", "tick"},
+			want:  []string{ask, ask, ask, "idle"}},
+		"given back when Polyfin fails to answer": {menu: []string{"t"}, answers: []progress{},
+			steps: []string{title, "show", "render", "show"},
+			want:  []string{ask, free, `show play free "Play" replay free "Play"`}},
 	}
 
 	const harness = scriptRunner + `
@@ -1326,7 +1352,7 @@ async function run(scenario) {
   root.lang = scenario.lang || 'en-US'
   const head = element('head', '', root)
   const body = element('body', '', root)
-  const page = element('div', 'page itemDetailPage', body)
+  const page = element('div', 'page itemDetailPage' + (scenario.hidden ? ' hide' : ''), body)
   const detail = element('div', 'detailPagePrimaryContainer', page)
   // The buttons share the ribbon with the title's name; the line goes
   // under the ribbon.
@@ -1443,7 +1469,10 @@ async function run(scenario) {
       page.querySelector('.btnPlay').setAttribute('title', 'Play')
       page.querySelector('.btnReplay').classList.toggle('hide', false)
     } else if (step === 'rebuild') build()
-    else if (step === 'again') {
+    else if (step === 'open') {
+      page.classList.remove('hide')
+      build()
+    } else if (step === 'again') {
       const again = body.querySelector('.polyfinAgain')
       if (again) again.click()
       else log.push('no button')
@@ -1485,11 +1514,12 @@ async function run(scenario) {
 		Searches []searchAnswer `json:"searches,omitempty"`
 		Deferred bool           `json:"deferred"`
 		Menu     []string       `json:"menu,omitempty"`
+		Hidden   bool           `json:"hidden"`
 		Steps    []string       `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.lang, s.answers, s.searches, s.deferred, s.menu, s.steps}
+		inputs[name] = input{s.lang, s.answers, s.searches, s.deferred, s.menu, s.hidden, s.steps}
 	}
 	data, _ := json.Marshal(map[string]any{"script": string(webScriptBody), "scenarios": inputs})
 	command := exec.CommandContext(t.Context(), node, "-e", harness)

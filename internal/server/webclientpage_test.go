@@ -33,7 +33,7 @@ const runScript = (script, context) => {
 
 // Six parts of the script follow the whole page as jellyfin-web renders
 // it (see the start of the header of webclient.js): the menus' entry, the
-// home page's rows, the play buttons until the first answer, the
+// home page's rows, the play buttons while they may be held, the
 // reminders, the recent searches and the version badges, these once a
 // title's badges were answered or while a video plays. One observer of
 // the body serves them all, whatever the route, rather than one each; each

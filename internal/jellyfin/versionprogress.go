@@ -47,8 +47,11 @@ const (
 	// seconds at most.
 	watchedFor = 2 * time.Minute
 	// pushDelay is how long the changes to a title's versions gather
-	// before they are pushed: an addon's answer comes with the end of its
-	// request.
+	// before they are pushed, once its pages were told of a version:
+	// an addon's answer tells twice, as its list is stored then as its
+	// request ends, and a play's analysis follows it. Until then each
+	// change is pushed at once, as the first version releases the
+	// pages' play buttons (see schedulePush).
 	pushDelay = 250 * time.Millisecond
 	// maxWatched is how many titles are watched before those no longer
 	// watched are forgotten.
@@ -88,12 +91,16 @@ func (h *Handler) writeProgress(w http.ResponseWriter, progress VersionProgress)
 // watchedPages are the title pages users opened lately, by title, then by
 // user, each with the identifiers it was opened with, the versions it
 // lists and until when it is watched; scheduled holds the titles whose
-// push is due, and tracks those whose push tells their tracks changed.
+// push is due, pushing those whose push is under way, and tracks those
+// whose push tells their tracks changed. gather is how long changes gather
+// once the pages were told of a version, pushDelay but in tests.
 type watchedPages struct {
 	mu        sync.Mutex
 	titles    map[accounts.ID]map[accounts.ID]*pageWatch
 	scheduled map[accounts.ID]bool
+	pushing   map[accounts.ID]bool
 	tracks    map[accounts.ID]bool
+	gather    time.Duration
 }
 
 type pageWatch struct {
@@ -105,10 +112,15 @@ type pageWatch struct {
 	listed []accounts.ID
 	rules  string
 	until  time.Time
+	// told is whether a push told the page of a version: its play
+	// buttons are given back, so later pushes may gather (see
+	// schedulePush).
+	told bool
 }
 
 func newWatchedPages() *watchedPages {
-	return &watchedPages{titles: map[accounts.ID]map[accounts.ID]*pageWatch{}, scheduled: map[accounts.ID]bool{}, tracks: map[accounts.ID]bool{}}
+	return &watchedPages{titles: map[accounts.ID]map[accounts.ID]*pageWatch{}, scheduled: map[accounts.ID]bool{}, pushing: map[accounts.ID]bool{},
+		tracks: map[accounts.ID]bool{}, gather: pushDelay}
 }
 
 // watch has a user's page of a title, opened as opened, told of the
@@ -187,8 +199,12 @@ func (h *Handler) tracksChanged(title accounts.ID) {
 }
 
 // schedulePush has the pages that watch a title told their progress, and
-// with tracks that its tracks changed, after pushDelay: the changes that
-// come meanwhile join the same push.
+// with tracks that its tracks changed: at once while one of them was told
+// of no version yet, so that the first answer releases its play buttons
+// without a wait, after pushDelay otherwise, the changes that come
+// meanwhile joining the same push. Pushes of a title never overlap, so
+// that a page is told its progress in order: a change during a push is
+// pushed after it.
 func (h *Handler) schedulePush(title accounts.ID, tracks bool) {
 	w := h.watched
 	w.mu.Lock()
@@ -203,7 +219,22 @@ func (h *Handler) schedulePush(title accounts.ID, tracks bool) {
 		return
 	}
 	w.scheduled[title] = true
-	time.AfterFunc(pushDelay, func() { h.pushVersions(title) })
+	if !w.pushing[title] {
+		h.startPush(title)
+	}
+}
+
+// startPush starts the push due for title, at once while one of its pages
+// was told of no version, after pushDelay otherwise. w.mu is held.
+func (h *Handler) startPush(title accounts.ID) {
+	delay := h.watched.gather
+	for _, page := range h.watched.titles[title] {
+		if !page.told {
+			delay = 0
+			break
+		}
+	}
+	time.AfterFunc(delay, func() { h.pushVersions(title) })
 }
 
 // pushVersions tells the pages that watch a title their progress, on their
@@ -215,6 +246,7 @@ func (h *Handler) pushVersions(title accounts.ID) {
 	now := time.Now()
 	w.mu.Lock()
 	delete(w.scheduled, title)
+	w.pushing[title] = true
 	tracks := w.tracks[title]
 	delete(w.tracks, title)
 	type page struct {
@@ -237,6 +269,20 @@ func (h *Handler) pushVersions(title accounts.ID) {
 		delete(w.titles, title)
 	}
 	w.mu.Unlock()
+	var told []accounts.ID
+	defer func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		for _, user := range told {
+			if watch := w.titles[title][user]; watch != nil {
+				watch.told = true
+			}
+		}
+		delete(w.pushing, title)
+		if w.scheduled[title] {
+			h.startPush(title)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), socketWrite)
 	defer cancel()
 	settings := h.Accounts.Settings()
@@ -246,9 +292,12 @@ func (h *Handler) pushVersions(title accounts.ID) {
 			continue
 		}
 		offered := h.offered(ctx, p.user, library.Item{ID: title}, versions)
+		progress := newProgress(pending, offered)
+		if progress.Known > 0 {
+			told = append(told, p.user.ID)
+		}
 		conns := h.webSockets(p.user.ID)
 		for _, opened := range p.opened {
-			progress := newProgress(pending, offered)
 			payload := socketPayload(versionsMessage, versionsPush{ItemId: opened.String(), Pending: progress.Pending, Count: progress.Count, Known: progress.Known,
 				AddVersions: settings.AddVersionsToOpenPage, Tracks: tracks})
 			for _, conn := range conns {
@@ -284,6 +333,13 @@ func (h *Handler) webSockets(user accounts.ID) []*websocket.Conn {
 // whose details the user opened lately is answered from what is kept in
 // memory (see library.Service.FollowedProgress). The page asking is told of
 // the changes from then on (see versionsChanged).
+//
+// Another title has its addons asked for their streams in the background
+// first, as item details do (see library.Service.VersionsNow), which
+// checks that the user may see it: Polyfin's script asks as the route
+// changes, before jellyfin-web asks for the details, and the item's own
+// checks below may wait for its metadata addon, so the stream lists are
+// asked alongside the description rather than after it.
 func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	id := b.pathID(r, "itemId")
@@ -295,6 +351,13 @@ func (h *Handler) versionProgress(w http.ResponseWriter, r *http.Request) {
 		h.writeProgress(w, progress)
 		return
 	}
+	title := id
+	if owner, ok := h.Library.VersionOwner(id); ok {
+		title = owner
+	}
+	// Any other item, or one the user may not see, asks nothing: its
+	// error is answered below.
+	_, _, _ = h.Library.VersionsNow(r.Context(), user, title)
 	item, ok := h.versionedItem(w, r, user, id)
 	if !ok {
 		return
