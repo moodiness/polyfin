@@ -262,26 +262,30 @@ func (h *Handler) userDataItem(w http.ResponseWriter, r *http.Request, b bindErr
 	return user, item, true
 }
 
-// change applies change to the data of items and answers what the user did
-// with item afterwards. The user's apps that keep a socket open get the new
-// data of item and items.
-func (h *Handler) change(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item, change func(*userdata.Data)) {
-	h.changeEach(w, r, user, item, items, func(_ userdata.Item, d *userdata.Data) { change(d) })
+// change applies change to the data of items, for reason (see
+// userdata.SavedTogglePlayed and the others), and answers what the user
+// did with item afterwards. The user's apps that keep a socket open get
+// the new data of item and items, and UserDataSaved is told of items.
+func (h *Handler) change(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item, reason string,
+	change func(*userdata.Data)) {
+	h.changeEach(w, r, user, item, items, reason, func(_ userdata.Item, d *userdata.Data) { change(d) })
 }
 
 // changeEach is change with change told which item it changes. It reports
 // whether the change was made.
-func (h *Handler) changeEach(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item,
+func (h *Handler) changeEach(w http.ResponseWriter, r *http.Request, user accounts.User, item library.Item, items []library.Item, reason string,
 	change func(userdata.Item, *userdata.Data)) bool {
 	refs := make([]userdata.Item, 0, len(items))
 	for _, target := range items {
 		refs = append(refs, stored(target))
 	}
-	if _, err := h.UserData.ChangeEach(r.Context(), user.ID, refs, change); err != nil {
+	saved, err := h.UserData.ChangeEach(r.Context(), user.ID, refs, change)
+	if err != nil {
 		h.internalError(w, r, err)
 		return false
 	}
 	h.userDataChanged(user, append([]library.Item{item}, items...))
+	h.userDataSaved(user, items, saved, reason)
 	data, err := h.itemData(r.Context(), user, item)
 	if err != nil {
 		h.internalError(w, r, err)
@@ -289,6 +293,23 @@ func (h *Handler) changeEach(w http.ResponseWriter, r *http.Request, user accoun
 	}
 	writeJSON(w, http.StatusOK, data)
 	return true
+}
+
+// userDataSaved tells UserDataSaved that the data of items was saved for
+// reason, saved being their data afterwards as UserData.ChangeEach returns
+// it: an item listed twice is told once.
+func (h *Handler) userDataSaved(user accounts.User, items []library.Item, saved []userdata.Data, reason string) {
+	if h.UserDataSaved == nil {
+		return
+	}
+	seen := make(map[accounts.ID]bool, len(items))
+	for _, item := range items {
+		if seen[item.ID] || len(seen) >= len(saved) {
+			continue
+		}
+		h.UserDataSaved(user, item, saved[len(seen)], reason)
+		seen[item.ID] = true
+	}
 }
 
 // markPlayed marks an item played or unplayed: a movie or an episode
@@ -317,7 +338,7 @@ func (h *Handler) markPlayed(played bool) http.HandlerFunc {
 		}
 		now := time.Now().UTC()
 		var plays []accounts.ID
-		if !h.changeEach(w, r, user, item, targets, func(target userdata.Item, d *userdata.Data) {
+		if !h.changeEach(w, r, user, item, targets, userdata.SavedTogglePlayed, func(target userdata.Item, d *userdata.Data) {
 			if played {
 				// As MarkPlayed counts plays: a dated mark is one more, an
 				// undated one only on what was not played.
@@ -393,7 +414,7 @@ func (h *Handler) markFavorite(favorite bool) http.HandlerFunc {
 			h.savePlainSearch(w, r, user, item, favorite)
 			return
 		}
-		h.change(w, r, user, item, []library.Item{item}, func(d *userdata.Data) { d.Favorite = favorite })
+		h.change(w, r, user, item, []library.Item{item}, userdata.SavedUpdateUserRating, func(d *userdata.Data) { d.Favorite = favorite })
 	}
 }
 
@@ -429,7 +450,7 @@ func (h *Handler) rate(post bool) http.HandlerFunc {
 			return
 		}
 		var was, now *float64
-		if h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
+		if h.changeEach(w, r, user, item, []library.Item{item}, userdata.SavedUpdateUserRating, func(_ userdata.Item, d *userdata.Data) {
 			was = d.Rating
 			d.Rating = nil
 			if post && set {
@@ -496,7 +517,7 @@ func (h *Handler) updateUserData(w http.ResponseWriter, r *http.Request) {
 	}
 	var turned *bool
 	var was, now *float64
-	if !h.changeEach(w, r, user, item, []library.Item{item}, func(_ userdata.Item, d *userdata.Data) {
+	if !h.changeEach(w, r, user, item, []library.Item{item}, userdata.SavedUpdateUserData, func(_ userdata.Item, d *userdata.Data) {
 		was = d.Rating
 		played := d.Played
 		defer func() {
@@ -553,6 +574,14 @@ const (
 	playbackProgressed
 	playbackStopped
 )
+
+// savedReasons say why a playback report saved a user's data, as
+// UserDataSaved is told.
+var savedReasons = map[playbackEvent]string{
+	playbackStarted:    userdata.SavedPlaybackStart,
+	playbackProgressed: userdata.SavedPlaybackProgress,
+	playbackStopped:    userdata.SavedPlaybackFinished,
+}
 
 // track applies a playback report to the user's data of the title played,
 // as Jellyfin does: a start counts a play, positions move the resume point
@@ -625,7 +654,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	if event == playbackStopped && positionKnown {
 		credits = h.creditsStart(ctx, user, item, mediaSource, runtime, thresholds)
 	}
-	_, err = h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
+	saved, err := h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) {
 		switch {
 		case event == playbackStarted:
 			// Songs keep no resume point; videos and audiobooks do.
@@ -649,6 +678,7 @@ func (h *Handler) track(ctx context.Context, user accounts.User, device accounts
 	if event != playbackProgressed {
 		h.userDataChanged(user, []library.Item{item})
 	}
+	h.userDataSaved(user, []library.Item{item}, saved, savedReasons[event])
 	if h.Trackers != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
 		h.Trackers.Playback(user.ID, trackers.Playback{
 			Event:         trackedEvents[event],

@@ -13,10 +13,17 @@ type clock struct{ now time.Time }
 func (c *clock) at() time.Time           { return c.now }
 func (c *clock) advance(d time.Duration) { c.now = c.now.Add(d) }
 func newClock() *clock                   { return &clock{now: time.Date(2026, 10, 10, 20, 0, 0, 0, time.UTC)} }
+
+// tracker is a tracker on c whose changes of state are told, the
+// positions in between left out.
 func (c *clock) tracker(t *testing.T) (*Tracker, *[]Change) {
 	t.Helper()
 	var told []Change
-	tracker := NewTracker(func(change Change) { told = append(told, change) })
+	tracker := NewTracker(func(change Change) {
+		if change.Kind != Progressed {
+			told = append(told, change)
+		}
+	})
 	tracker.now = c.at
 	return tracker, &told
 }
@@ -179,5 +186,38 @@ func TestAnotherTitleEndsThePlaybackBefore(t *testing.T) {
 	}
 	if got := (*told)[1].Playback; got.Title.Item != movie.Item || got.Played != 20*time.Second {
 		t.Errorf("stopped %s after %v, want %s after 20s", got.Title.Name, got.Played, movie.Name)
+	}
+}
+
+// Each progress report that neither pauses nor resumes is told as a
+// position, with the device it plays on; a pause or a resumption is told
+// as its change only.
+func TestPositionsAreToldBetweenChanges(t *testing.T) {
+	t.Parallel()
+	c := newClock()
+	var told []Change
+	tracker := NewTracker(func(change Change) { told = append(told, change) })
+	tracker.now = c.at
+	withID := func(r Report) Report {
+		r.DeviceID = "phone-1"
+		return r
+	}
+	tracker.Report(withID(report(ReportStart, movie, 0, false, "")))
+	c.advance(10 * time.Second)
+	tracker.Report(withID(report(ReportProgress, movie, 10*time.Second, false, "")))
+	tracker.Report(withID(report(ReportProgress, movie, 10*time.Second, true, "")))
+	c.advance(10 * time.Second)
+	tracker.Report(withID(report(ReportProgress, movie, 10*time.Second, true, "")))
+	tracker.Report(withID(report(ReportProgress, movie, 10*time.Second, false, "")))
+	c.advance(10 * time.Second)
+	tracker.Report(withID(report(ReportProgress, movie, 20*time.Second, false, "")))
+	tracker.Report(withID(report(ReportStop, movie, 25*time.Second, false, "")))
+	want := []string{Started, Progressed, Paused, Progressed, Resumed, Progressed, Stopped}
+	if !equal(kinds(told), want) {
+		t.Fatalf("told %v, want %v", kinds(told), want)
+	}
+	if p := told[5].Playback; p.Position != 20*time.Second || p.Device != phone || p.DeviceID != "phone-1" || !told[5].At().Equal(c.now) {
+		t.Errorf("the last position told %v on %v (%q) at %v, want 20s on %v (phone-1) at %v", p.Position, p.Device, p.DeviceID,
+			told[5].At(), phone, c.now)
 	}
 }

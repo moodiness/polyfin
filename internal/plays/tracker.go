@@ -2,8 +2,9 @@
 // send, and keeps a history of the videos played for the statistics.
 //
 // The Tracker turns the reports into playbacks, which start, pause, resume
-// and stop, and tells each change once: the notifications send them, and
-// the History keeps the videos that stopped.
+// and stop, and tells each change once, and each position reported in
+// between: the notifications send them, and the History keeps the videos
+// that stopped.
 package plays
 
 import (
@@ -97,8 +98,10 @@ type Report struct {
 	// Kind is ReportStart, ReportProgress or ReportStop.
 	Kind int
 	// Device is the sign-in the report comes from: one device plays one
-	// thing at a time.
+	// thing at a time. DeviceID is the identifier the app gave its device
+	// as it signed in.
 	Device   accounts.ID
+	DeviceID string
 	User     accounts.ID
 	UserName string
 	// App and DeviceName name the app and the device, as they signed in.
@@ -124,6 +127,10 @@ type Report struct {
 // Playback is one playback of a title on a device, from its start to its
 // end.
 type Playback struct {
+	// Device is the sign-in it plays on, DeviceID the identifier the app
+	// gave its device.
+	Device     accounts.ID
+	DeviceID   string
 	User       accounts.ID
 	UserName   string
 	App        string
@@ -151,16 +158,18 @@ type Playback struct {
 	sentFrom int64
 }
 
-// The changes of a playback.
+// The changes of a playback. Progressed is a position reported while the
+// playback neither paused nor resumed.
 const (
-	Started = "started"
-	Paused  = "paused"
-	Resumed = "resumed"
-	Stopped = "stopped"
+	Started    = "started"
+	Paused     = "paused"
+	Resumed    = "resumed"
+	Progressed = "progressed"
+	Stopped    = "stopped"
 )
 
-// Change is a playback that started, paused, resumed or stopped, as it was
-// then.
+// Change is a playback that started, paused, resumed, progressed or
+// stopped, as it was then.
 type Change struct {
 	Kind     string
 	Playback Playback
@@ -214,8 +223,8 @@ func NewTracker(listen func(Change)) *Tracker {
 // than the one the device plays, ends the one it played; a report while
 // the device plays nothing starts a playback, as when Polyfin started
 // after the app's start report; a stop of what the device does not play is
-// ignored. Reports of a user's position tell nothing; only the changes of
-// state do.
+// ignored. A progress report that neither pauses nor resumes is told as
+// Progressed, with its position.
 func (t *Tracker) Report(r Report) {
 	if r.User == (accounts.ID{}) || r.Title.Item == (accounts.ID{}) {
 		return
@@ -235,8 +244,8 @@ func (t *Tracker) Report(r Report) {
 			changes = append(changes, t.end(r.Device, p, now))
 		}
 	case p == nil:
-		p = &Playback{User: r.User, UserName: r.UserName, App: r.App, DeviceName: r.DeviceName, Title: r.Title, Started: now,
-			LastReport: now, Paused: r.Paused, Shared: r.Shared}
+		p = &Playback{Device: r.Device, DeviceID: r.DeviceID, User: r.User, UserName: r.UserName, App: r.App, DeviceName: r.DeviceName,
+			Title: r.Title, Started: now, LastReport: now, Paused: r.Paused, Shared: r.Shared}
 		p.sentFrom = t.sentEnded[r.Device]
 		delete(t.sentEnded, r.Device)
 		if p.sentFrom > r.Sent {
@@ -256,6 +265,8 @@ func (t *Tracker) Report(r Report) {
 			changes = append(changes, Change{Kind: Paused, Playback: *p})
 		case !p.Paused && wasPaused:
 			changes = append(changes, Change{Kind: Resumed, Playback: *p})
+		case r.Kind == ReportProgress:
+			changes = append(changes, Change{Kind: Progressed, Playback: *p})
 		}
 	}
 	t.tell(changes)

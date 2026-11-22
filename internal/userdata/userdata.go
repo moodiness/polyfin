@@ -59,6 +59,18 @@ type Item struct {
 	ID, Series, Season accounts.ID
 }
 
+// Why a user's data was saved, by the names Jellyfin gives its save
+// reasons: a playback that started, reported its position or finished, a
+// played mark, a rating or a favorite, or data an app sent as it is.
+const (
+	SavedPlaybackStart    = "PlaybackStart"
+	SavedPlaybackProgress = "PlaybackProgress"
+	SavedPlaybackFinished = "PlaybackFinished"
+	SavedTogglePlayed     = "TogglePlayed"
+	SavedUpdateUserRating = "UpdateUserRating"
+	SavedUpdateUserData   = "UpdateUserData"
+)
+
 // Entry is the data of one item, as lists return it; Series and Season are
 // zero but for episodes.
 type Entry struct {

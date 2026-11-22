@@ -161,6 +161,10 @@ type Options struct {
 	// PlayFailed is told of a play that failed: no version played on the
 	// app, a limit refused it, or its stream broke; nil tells nothing.
 	PlayFailed func(plays.Failure)
+	// UserDataSaved is told of each item whose user data an app's request
+	// or playback report saved: the item, its data afterwards, and why,
+	// as one of the userdata.Saved reasons; nil tells nothing.
+	UserDataSaved func(user accounts.User, item library.Item, data userdata.Data, reason string)
 	// Reminders keeps the users' programme reminders; nil keeps none.
 	Reminders *reminders.Service
 	// Sent counts the bytes of media sent to apps, by the playback they

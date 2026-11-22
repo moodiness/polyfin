@@ -75,6 +75,7 @@ func (h *Handler) followPlayback(user accounts.User, device accounts.Device, eve
 	h.Plays.Report(plays.Report{
 		Kind:          playsReports[event],
 		Device:        device.ID,
+		DeviceID:      device.DeviceID,
 		User:          user.ID,
 		UserName:      user.Name,
 		App:           device.Client,

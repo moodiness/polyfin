@@ -77,7 +77,9 @@ func TestDirectPlaysCountWhatTheyMoveForTheirDevice(t *testing.T) {
 	tracker := plays.NewTracker(func(c plays.Change) {
 		mu.Lock()
 		defer mu.Unlock()
-		changes = append(changes, c)
+		if c.Kind != plays.Progressed {
+			changes = append(changes, c)
+		}
 	})
 	p := playingOn(t, newProbingServer(t, 10, "ffprobe-not-installed", func(o *Options, _ *pgxpool.Pool) {
 		o.Sent, o.Plays = sent, tracker

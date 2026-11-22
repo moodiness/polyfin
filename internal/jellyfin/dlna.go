@@ -213,11 +213,13 @@ func (h *Handler) markDLNAPlayed(ctx context.Context, user accounts.User, item l
 		return
 	}
 	now := time.Now().UTC()
-	if _, err := h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) { d.MarkPlayed(nil, now) }); err != nil {
+	saved, err := h.UserData.Change(ctx, user.ID, []userdata.Item{stored(item)}, func(d *userdata.Data) { d.MarkPlayed(nil, now) })
+	if err != nil {
 		h.Logger.Warn("A title a DLNA device played could not be marked played", "error", err)
 		return
 	}
 	h.userDataChanged(user, []library.Item{item})
+	h.userDataSaved(user, []library.Item{item}, saved, userdata.SavedPlaybackFinished)
 	if h.Trackers != nil && (item.Kind == library.KindMovie || item.Kind == library.KindEpisode) {
 		h.Trackers.Mark(user.ID, trackers.Mark{Played: true, Scope: markScope(item.Kind), Titles: h.trackedTitles(user, []library.Item{item})})
 	}
