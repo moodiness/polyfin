@@ -283,6 +283,31 @@ func TestExpiredEntriesAreDroppedAsOthersAreStored(t *testing.T) {
 	}
 }
 
+// In a sliding cache, each read keeps an entry its lifetime again: one
+// read within its lifetime outlives it, one left unread expires, and
+// DropExpired drops it without another entry stored.
+func TestASlidingCacheKeepsWhatIsReadAgain(t *testing.T) {
+	t.Parallel()
+	k := newClock(10 * time.Minute)
+	c := k.sized(1000).Sliding()
+	c.Put("read", "aaaa")
+	c.Put("unread", "bbbb")
+	for range 5 {
+		k.now = k.now.Add(8 * time.Minute)
+		if _, ok := c.Get("read"); !ok {
+			t.Fatalf("an entry read every 8 minutes expired at %v", k.now)
+		}
+	}
+	if _, ok := c.Get("unread"); ok {
+		t.Errorf("an entry unread for 40 minutes is kept")
+	}
+	k.now = k.now.Add(11 * time.Minute)
+	c.DropExpired()
+	if c.Len() != 0 || c.Bytes() != 0 {
+		t.Errorf("unread for 11 minutes: %d entries, %d bytes", c.Len(), c.Bytes())
+	}
+}
+
 func TestAShorterLifetimeDropsOlderEntriesAtTheNextPut(t *testing.T) {
 	t.Parallel()
 	k := newClock(time.Hour)

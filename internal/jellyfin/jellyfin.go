@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -290,11 +291,14 @@ type Handler struct {
 	// kept for drawLife (see randomLibraryListing).
 	draws *cache.Cache[drawKey, draw]
 	// nameOrders are the orders of libraries' titles by name for Silo's
-	// apps, kept for drawLife (see nameorder.go).
+	// apps, kept orderIdle after their last read (see nameorder.go).
 	nameOrders *cache.Cache[drawKey, nameOrder]
 	// nameBuilds sorts a library by name once for the requests that ask
 	// it at the same time, a few at once on the server.
 	nameBuilds *nameBuilds
+	// sortedAhead is set once the libraries were sorted ahead after the
+	// start (see sortAhead).
+	sortedAhead atomic.Bool
 }
 
 // New returns the Jellyfin API handler.
@@ -338,9 +342,10 @@ func New(options Options) *Handler {
 		Sized(64<<20, func(d draw) int { return cache.JSONSize(d.items) })
 	// Orders by name hold whole stored libraries: their size is reckoned
 	// from a measure of a title's (see nameOrderTitleSize), rather than
-	// measured at each order, which would encode every title.
-	h.nameOrders = cache.NewLasting[drawKey, nameOrder](100, func() time.Duration { return drawLife }, func() time.Time { return h.now() }).
-		Sized(128<<20, func(o nameOrder) int { return len(o.items) * nameOrderTitleSize })
+	// measured at each order, which would encode every title. Each read
+	// keeps one orderIdle again.
+	h.nameOrders = cache.NewLasting[drawKey, nameOrder](100, func() time.Duration { return orderIdle }, func() time.Time { return h.now() }).
+		Sized(nameOrdersBytes, func(o nameOrder) int { return len(o.items) * nameOrderTitleSize }).Sliding()
 	h.nameBuilds = newNameBuilds()
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, h.syncPlayConnected, func() time.Time { return h.now() }, options.Logger)
 	h.syncPlay.ended = h.groupEnded
@@ -350,7 +355,7 @@ func New(options Options) *Handler {
 	h.images.stamps.load(h.imageDir(), options.Logger)
 	if options.Library != nil {
 		options.Library.OnVersionsChanged(h.versionsChanged)
-		options.Library.OnFirstPagesRead(h.warmPosters)
+		options.Library.OnFirstPagesRead(h.firstPagesRead)
 	}
 	if options.Playback != nil {
 		options.Playback.OnAnalyzed(func(version library.Version) { h.tracksChanged(version.Item) })

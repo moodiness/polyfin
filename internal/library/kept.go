@@ -241,6 +241,13 @@ func keptOnly(ctx context.Context) bool {
 	return only
 }
 
+// WithKeptOnly marks a context whose reads take only the catalog pages
+// already kept, asking no addon for one that is not, and read no catalog
+// through (see readThrough): the reads a server makes ahead of any app.
+func WithKeptOnly(ctx context.Context) context.Context {
+	return withKeptOnly(ctx)
+}
+
 // errNotKept reports a page a read that asks no addon does not know.
 var errNotKept = errors.New("catalog page not kept")
 
