@@ -4,11 +4,15 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
@@ -38,6 +42,15 @@ import (
 
 // LeftoversInterval is how often CleanUpRemoved runs.
 const LeftoversInterval = time.Hour
+
+// cleanupAttempts is how many times CleanUpRemoved tries before leaving
+// the cleanup to its next run, as rows it read changed meanwhile.
+const cleanupAttempts = 3
+
+// ErrSourcesChanged is the error of CleanUpRemoved when rows it read
+// changed during each of its attempts, an addon or library changed under
+// way: the cleanup waits for its next run.
+var ErrSourcesChanged = errors.New("the sources changed during each attempt of the cleanup")
 
 // leftovers names what cleanLeftovers removes: the addons gone, the
 // catalogs addons still installed dropped, and the items of their
@@ -149,15 +162,43 @@ func liveLibraryKey(addon addons.Addon, catalog stremio.Catalog) string {
 // holding the addons as they are, so that it never takes for gone an addon
 // added, or a catalog an addon gained again, meanwhile: their items are
 // recorded once the change is stored, after the snapshot, and a change
-// waits for the cleanup. A row changed since the snapshot fails it, for
-// the next run.
+// waits for the cleanup. A row changed since the snapshot, or a deadlock
+// with a removal, fails the attempt; the cleanup tries again in a fresh
+// snapshot after a short pause, cleanupAttempts times in all, then returns
+// ErrSourcesChanged, for the next run.
 func (s *Service) CleanUpRemoved(ctx context.Context) (Cleaned, error) {
+	for attempt := 1; ; attempt++ {
+		l, cleaned, err := s.cleanUpRemovedOnce(ctx)
+		switch {
+		case err == nil:
+			if cleaned.Any() {
+				s.forgetLeftovers(ctx, l)
+			}
+			return cleaned, nil
+		case !conflicted(err):
+			return Cleaned{}, err
+		case attempt == cleanupAttempts:
+			return Cleaned{}, fmt.Errorf("%w: %w", ErrSourcesChanged, err)
+		}
+		// Random, so that a cleanup and a change that met part.
+		pause := time.NewTimer(500*time.Millisecond + rand.N(1500*time.Millisecond))
+		select {
+		case <-ctx.Done():
+			pause.Stop()
+			return Cleaned{}, ctx.Err()
+		case <-pause.C:
+		}
+	}
+}
+
+// cleanUpRemovedOnce is an attempt of CleanUpRemoved, in a transaction of
+// its own.
+func (s *Service) cleanUpRemovedOnce(ctx context.Context) (leftovers, Cleaned, error) {
 	var l leftovers
 	var cleaned Cleaned
-	var live []addons.Addon
 	err := pgx.BeginTxFunc(ctx, s.db, pgx.TxOptions{IsoLevel: pgx.RepeatableRead}, func(tx pgx.Tx) error {
-		var err error
-		if live, err = s.addons.Installed(ctx, tx); err != nil {
+		live, err := s.addons.Installed(ctx, tx)
+		if err != nil {
 			return err
 		}
 		if l, err = goneLeftovers(ctx, tx, live); err != nil {
@@ -166,13 +207,14 @@ func (s *Service) CleanUpRemoved(ctx context.Context) (Cleaned, error) {
 		cleaned, err = cleanLeftovers(ctx, tx, l)
 		return err
 	})
-	if err != nil {
-		return Cleaned{}, err
-	}
-	if cleaned.Any() {
-		s.forgetLeftovers(ctx, l)
-	}
-	return cleaned, nil
+	return l, cleaned, err
+}
+
+// conflicted reports whether err is a serialization failure or a deadlock,
+// which another attempt may not meet.
+func conflicted(err error) bool {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	return ok && (pgErr.Code == "40001" || pgErr.Code == "40P01")
 }
 
 // installedCatalogs knows the addons installed and their catalogs.

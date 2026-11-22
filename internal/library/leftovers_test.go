@@ -391,8 +391,10 @@ func TestTheCleanupClearsWhatADroppedCatalogLeft(t *testing.T) {
 
 // The cleanup never deletes what an addon's change under way brings back:
 // a catalog offered again while it runs, its library recorded already,
-// waits for it, and fails it rather than lose the library.
-func TestTheCleanupWaitsForAChangeOfTheAddons(t *testing.T) {
+// waits for it and fails its attempt with a serialization failure rather
+// than lose the library. Its next attempt, in a snapshot of its own after
+// a pause, finds nothing gone and succeeds.
+func TestTheCleanupWaitsForAChangeOfTheAddonsAndTriesAgain(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)
 	ctx := t.Context()
@@ -440,8 +442,12 @@ func TestTheCleanupWaitsForAChangeOfTheAddons(t *testing.T) {
 	if err := change.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-swept; err == nil {
-		t.Error("the cleanup went on after the change")
+	committed := time.Now()
+	if err := <-swept; err != nil {
+		t.Fatalf("the cleanup did not try again after the change: %v", err)
+	}
+	if waited := time.Since(committed); waited < 500*time.Millisecond {
+		t.Errorf("the cleanup ended %v after the change, without a pause before trying again", waited)
 	}
 	if n := e.count("SELECT count(*) FROM items WHERE id = $1", shows); n != 1 {
 		t.Fatal("the library offered again was deleted")

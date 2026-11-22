@@ -263,7 +263,7 @@ Schedule covers the server's addons, IPTV sources and guides first. Those users 
 | Refresh the sources | Every day at 3:30: downloads every addon's manifest again, as **Refresh** on its page does, so that catalogs added or renamed show without it (see [Refreshing every addon on a schedule](addons.md#refreshing-every-addon-on-a-schedule)) |
 | Refresh ratings | Only when started: it asks the addons again |
 | Forget the version lists | Only when started: every title asks its addons again for its versions (see [Forgetting the version lists](versions.md#forgetting-the-version-lists)) |
-| Clean up removed sources | Every hour: deletes what removed sources and dropped catalogs left behind (see [Removing a source](addons.md#removing-a-source)) |
+| Clean up removed sources | Every hour: deletes what removed sources and dropped catalogs left behind (see [Removing a source](addons.md#removing-a-source)). When an addon or library changes while it runs, it tries again up to twice, after a pause of a second or two; still meeting changes, it leaves the cleanup to its next run, logs `The cleanup of removed sources waits for the next run, as sources changed meanwhile` at Info level, and its run counts as completed |
 | Record ended accounts | Every hour |
 | Record expired share links | Every 10 minutes while share links are on, also deleting the links that ended more than 30 days ago |
 | Scan local folders | Each folder at startup, then every number of hours set in **Settings › Catalogs** |

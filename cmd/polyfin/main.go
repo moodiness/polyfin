@@ -574,7 +574,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		logger.Warn("Tesseract was not found: picture subtitles are not read into text", "tesseract", cfg.Tesseract)
 	}
 	registerLocalFoldersTask(registry, folders)
-	registerCleanupTask(registry, lib, folders, logger)
+	registry.Register(cleanupTask(lib, folders, logger))
 	registry.Register(subtitleTracksTask(player, logger))
 	// Channel streams of IPTV sources share their account's connections,
 	// and how they answer orders them.
@@ -1340,13 +1340,14 @@ func registerThumbnailsTask(registry *tasks.Registry, images *thumbnails.Service
 	})
 }
 
-// registerCleanupTask registers the hourly cleanup of what removed
-// sources and catalogs left, as a removal does in its transaction: for a
-// user deleted with their own sources, a catalog an addon dropped, or a
-// row deleted in the database. It forgets the home videos of removed
-// folders past their days too, as scans do.
-func registerCleanupTask(registry *tasks.Registry, lib *library.Service, folders *localfiles.Service, logger *slog.Logger) {
-	registry.Register(tasks.Task{
+// cleanupTask is the hourly cleanup of what removed sources and catalogs
+// left, as a removal does in its transaction: for a user deleted with
+// their own sources, a catalog an addon dropped, or a row deleted in the
+// database. It forgets the home videos of removed folders past their days
+// too, as scans do. Sources that changed during each attempt of the
+// cleanup leave it to the next run, a run that completes.
+func cleanupTask(lib *library.Service, folders *localfiles.Service, logger *slog.Logger) tasks.Task {
+	return tasks.Task{
 		Key:      "CleanUpRemovedSources",
 		Category: tasks.CategoryMaintenance,
 		Text: map[string]tasks.Text{
@@ -1361,10 +1362,12 @@ func registerCleanupTask(registry *tasks.Registry, lib *library.Service, folders
 		Limits:   tasks.Limits{MinInterval: 15 * time.Minute},
 		Run: func(ctx context.Context) error {
 			cleaned, err := lib.CleanUpRemoved(ctx)
-			if err != nil {
+			switch {
+			case errors.Is(err, library.ErrSourcesChanged):
+				logger.Info("The cleanup of removed sources waits for the next run, as sources changed meanwhile")
+			case err != nil:
 				return err
-			}
-			if cleaned.Any() {
+			case cleaned.Any():
 				logger.Info("Cleaned up what removed sources left", "items", cleaned.Items, "released", cleaned.Released, "rows", cleaned.Rows)
 			}
 			forgotten, err := folders.ForgetGoneVideos(ctx)
@@ -1373,7 +1376,7 @@ func registerCleanupTask(registry *tasks.Registry, lib *library.Service, folders
 			}
 			return err
 		},
-	})
+	}
 }
 
 // registerRecordingTasks registers the periodic jobs of Live TV recording,
