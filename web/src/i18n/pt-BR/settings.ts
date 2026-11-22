@@ -1016,6 +1016,18 @@ const settings: typeof en = {
     webPlayerHelp:
       'O que o player web (jellyfin-web, em /web/) mostra além das próprias páginas. O tema e o script são aplicados na próxima vez que uma página do player web for carregada; o player web mantém a mensagem de login por até um minuto.',
     openWebPlayer: 'Abrir o player web',
+    webPlayerDefaults: {
+      button: 'Restaurar os padrões',
+      help: 'Volta o tema, o CSS e o JavaScript personalizados, a mensagem de login e as opções desta seção aos padrões do Polyfin, depois de listar o que muda.',
+      none: 'Cada configuração desta seção está no padrão.',
+      title: 'Restaurar os padrões do player web?',
+      changes: 'Estas configurações voltam ao padrão:',
+      value: (setting: string, value: string) => `${setting}: ${value}`,
+      emptied: (setting: string) => `${setting}: esvaziado`,
+      kept: 'As linhas da tela inicial, os temas escolhidos nas páginas dos usuários e a cópia guardada no Polyfin continuam. As configurações que cada usuário escolheu no player web também: ele redefine as suas com “Redefinir minhas preferências”, em Minha conta.',
+      save: 'Os padrões vão para o formulário: “Salvar” os aplica, “Descartar alterações” mantém as configurações como estavam.',
+      confirm: 'Restaurar os padrões',
+    },
     webTheme: 'Tema do servidor',
     webThemeHelp:
       'A aparência do player web para os usuários que mantêm a do servidor; cada usuário pode ter a sua, na página dele em Usuários. LumaaGlaass é o tema que acompanha o Polyfin. A aparência do jellyfin-web não tem CSS nem script personalizado, e cada usuário escolhe os temas de exibição dela em Configurações › Exibição. Personalizado usa o seu CSS e o seu JavaScript abaixo, mantidos enquanto outro tema é escolhido.',

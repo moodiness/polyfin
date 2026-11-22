@@ -1029,6 +1029,18 @@ const settings: typeof en = {
     webPlayerHelp:
       'Ciò che il lettore web (jellyfin-web, su /web/) mostra oltre alle proprie pagine. Il tema e lo script si applicano al successivo caricamento di una pagina del lettore web; il lettore web conserva il messaggio di accesso per un massimo di un minuto.',
     openWebPlayer: 'Apri il lettore web',
+    webPlayerDefaults: {
+      button: 'Ripristina i valori predefiniti',
+      help: 'Riporta il tema, il CSS e il JavaScript personalizzati, il messaggio di accesso e le opzioni di questa sezione ai valori predefiniti di Polyfin, dopo aver elencato cosa cambia.',
+      none: 'Ogni impostazione di questa sezione ha il suo valore predefinito.',
+      title: 'Ripristinare i valori predefiniti del lettore web?',
+      changes: 'Queste impostazioni tornano al loro valore predefinito:',
+      value: (setting: string, value: string) => `${setting}: ${value}`,
+      emptied: (setting: string) => `${setting}: svuotato`,
+      kept: 'Le righe della Home, i temi scelti nelle pagine degli utenti e la copia conservata in Polyfin restano. Anche le impostazioni che ogni utente ha scelto nel lettore web: le ripristina con «Ripristina le mie preferenze», in Il mio account.',
+      save: 'I valori predefiniti vanno nel modulo: «Salva» li applica, «Annulla modifiche» lascia le impostazioni com’erano.',
+      confirm: 'Ripristina i valori predefiniti',
+    },
     webTheme: 'Tema del server',
     webThemeHelp:
       'L’aspetto del lettore web per gli utenti che mantengono quello del server; ogni utente può avere il proprio, nella sua pagina in Utenti. LumaaGlaass è il tema incluso in Polyfin. L’aspetto di jellyfin-web non ha CSS né script personalizzati, e ogni utente ne sceglie i temi di visualizzazione in Impostazioni › Visualizzazione. Personalizzato usa il tuo CSS e il tuo JavaScript qui sotto, conservati mentre è scelto un altro tema.',

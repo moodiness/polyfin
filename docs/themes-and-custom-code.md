@@ -19,6 +19,17 @@ This page is for administrators who change the web player's look. It covers the 
 
 The same page holds the [home rows](home-rows.md).
 
+### Restoring the defaults
+
+**Restore the defaults**, at the top of **Settings › Web player** beside **Open the web player**, puts the section's settings back to Polyfin's defaults: **Server theme**, **Custom CSS**, **Custom JavaScript**, **Sign-in message**, **Add versions to an open title's page**, **Version badges** and **Show ratings on posters**.
+
+- **It asks first,** listing each setting that changes with its default, such as "Server theme: LumaaGlaass" or "Custom CSS: emptied".
+- **Nothing is saved yet:** the defaults go in the form. **Save** applies them; **Discard changes** keeps the settings as they were.
+- **What stays:** the home rows, the theme given to a user on their page, **Let them change it**, and the copy of the theme kept in Polyfin. A user's own choices stay too: they reset theirs with **Reset my preferences** (see [Your own preferences](users.md#your-own-preferences)).
+- **Off** while every setting is at its default, with "Every setting of this section is at its default."
+
+Copy the **Custom** texts somewhere first to keep them: the restored defaults empty them.
+
 ## Themes
 
 **Server theme** is the theme of the users who keep the server's. Every user does until given their own (see [Theme per user](#theme-per-user)).

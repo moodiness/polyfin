@@ -1027,6 +1027,18 @@ const settings: typeof en = {
     webPlayerHelp:
       'Ce que le lecteur web (jellyfin-web, sur /web/) affiche en plus de ses propres pages. Le thème et le script s’appliquent au prochain chargement d’une page du lecteur web\u202f; le lecteur web garde le message de connexion jusqu’à une minute.',
     openWebPlayer: 'Ouvrir le lecteur web',
+    webPlayerDefaults: {
+      button: 'Rétablir les valeurs par défaut',
+      help: 'Remet le thème, le CSS et le JavaScript personnalisés, le message de connexion et les options de cette section aux valeurs par défaut de Polyfin, après avoir listé ce qui change.',
+      none: 'Chaque réglage de cette section a sa valeur par défaut.',
+      title: 'Rétablir les valeurs par défaut du lecteur web\u202f?',
+      changes: 'Ces réglages reprennent leur valeur par défaut\u202f:',
+      value: (setting: string, value: string) => `${setting}\u202f: ${value}`,
+      emptied: (setting: string) => `${setting}\u202f: vidé`,
+      kept: 'Les rangées d’accueil, les thèmes choisis sur les pages des utilisateurs et la copie gardée dans Polyfin restent. Les réglages que chaque utilisateur a choisis dans le lecteur web aussi\u202f: il rétablit les siens avec «\u202fRétablir mes préférences\u202f», dans Mon compte.',
+      save: 'Les valeurs par défaut vont dans le formulaire\u202f: «\u202fEnregistrer\u202f» les applique, «\u202fAnnuler les modifications\u202f» garde les réglages tels qu’ils étaient.',
+      confirm: 'Rétablir les valeurs par défaut',
+    },
     webTheme: 'Thème du serveur',
     webThemeHelp:
       'L’apparence du lecteur web pour les utilisateurs qui gardent celle du serveur\u202f; chacun peut avoir la sienne, sur sa page dans Utilisateurs. LumaaGlaass est le thème fourni avec Polyfin. L’apparence de jellyfin-web n’a ni CSS ni script personnalisé, et chacun en choisit le thème d’affichage dans Paramètres › Affichage. Personnalisé utilise votre CSS et votre JavaScript ci-dessous, conservés pendant qu’un autre thème est choisi.',

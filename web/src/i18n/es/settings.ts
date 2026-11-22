@@ -1026,6 +1026,18 @@ const settings: typeof en = {
     webPlayerHelp:
       'Lo que el reproductor web (jellyfin-web, en /web/) muestra además de sus propias páginas. El tema y el script se aplican la próxima vez que se cargue una página del reproductor web; el reproductor web conserva el mensaje de inicio de sesión hasta un minuto.',
     openWebPlayer: 'Abrir el reproductor web',
+    webPlayerDefaults: {
+      button: 'Restaurar los valores predeterminados',
+      help: 'Devuelve el tema, el CSS y el JavaScript personalizados, el mensaje de inicio de sesión y las opciones de esta sección a los valores predeterminados de Polyfin, tras listar lo que cambia.',
+      none: 'Cada ajuste de esta sección tiene su valor predeterminado.',
+      title: '¿Restaurar los valores predeterminados del reproductor web?',
+      changes: 'Estos ajustes vuelven a su valor predeterminado:',
+      value: (setting: string, value: string) => `${setting}: ${value}`,
+      emptied: (setting: string) => `${setting}: vaciado`,
+      kept: 'Las filas de inicio, los temas elegidos en las páginas de los usuarios y la copia guardada en Polyfin se mantienen. También los ajustes que cada usuario eligió en el reproductor web: los restablece con «Restablecer mis preferencias», en Mi cuenta.',
+      save: 'Los valores predeterminados van al formulario: «Guardar» los aplica, «Descartar cambios» deja los ajustes como estaban.',
+      confirm: 'Restaurar los valores predeterminados',
+    },
     webTheme: 'Tema del servidor',
     webThemeHelp:
       'El aspecto del reproductor web para los usuarios que conservan el del servidor; cada usuario puede tener el suyo, en su página en Usuarios. LumaaGlaass es el tema que incluye Polyfin. El aspecto propio de jellyfin-web no tiene CSS ni script personalizados, y cada usuario elige sus temas de visualización en Ajustes › Visualización. Personalizado usa su propio CSS y JavaScript de abajo, que se conservan mientras se elige otro tema.',
