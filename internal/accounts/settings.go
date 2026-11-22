@@ -773,6 +773,30 @@ const (
 	DefaultLiveTvRefreshHours = 12
 )
 
+// ErrInvalidLiveTvBufferMinutes reports a LiveTvBufferMinutes outside
+// [MinLiveTvBufferMinutes, MaxLiveTvBufferMinutes].
+var ErrInvalidLiveTvBufferMinutes = errors.New("invalid Live TV buffer minutes")
+
+// The bounds and default of Settings.LiveTvBufferMinutes: by default, the
+// last 30 minutes of each watched channel are kept for pause and rewind.
+const (
+	MinLiveTvBufferMinutes     = 0
+	MaxLiveTvBufferMinutes     = 240
+	DefaultLiveTvBufferMinutes = 30
+)
+
+// ErrInvalidLiveTvBufferGigabytes reports a LiveTvBufferGigabytes outside
+// [MinLiveTvBufferGigabytes, MaxLiveTvBufferGigabytes].
+var ErrInvalidLiveTvBufferGigabytes = errors.New("invalid Live TV buffer gigabytes")
+
+// The bounds and default of Settings.LiveTvBufferGigabytes: by default, the
+// buffers of all channels take at most 20 GB together.
+const (
+	MinLiveTvBufferGigabytes     = 1
+	MaxLiveTvBufferGigabytes     = 1000
+	DefaultLiveTvBufferGigabytes = 20
+)
+
 // ErrInvalidLocalScanHours reports a LocalScanHours outside
 // [0, MaxLocalScanHours].
 var ErrInvalidLocalScanHours = errors.New("invalid local scan hours")
@@ -1884,6 +1908,12 @@ type Settings struct {
 	// LiveTvRefreshHours is how many hours after it was fetched an XMLTV
 	// guide or an IPTV source's channel list is fetched again.
 	LiveTvRefreshHours int
+	// LiveTvBufferMinutes is how many minutes of each watched channel are
+	// kept for pause and rewind, 0 for none.
+	LiveTvBufferMinutes int
+	// LiveTvBufferGigabytes is the disk space, in GB (10^9 bytes), that
+	// the buffers of all channels may take together.
+	LiveTvBufferGigabytes int
 	// LocalScanHours is how many hours after its last scan a local folder
 	// is scanned again, 0 for never on a schedule: folders are still
 	// scanned at startup, when an administrator asks and, when watched,
@@ -2383,7 +2413,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"trickplay, trickplay_interval, trickplay_width, chapter_images, thumbnail_storage_gb, " +
 	"recording_pre_padding, recording_post_padding, recording_retention_days, " +
 	"recording_commercials, " +
-	"live_tv_refresh_hours, local_scan_hours, watchlist_check_hours, watch_local_folders, " +
+	"live_tv_refresh_hours, live_tv_buffer_minutes, live_tv_buffer_gigabytes, local_scan_hours, watchlist_check_hours, watch_local_folders, " +
 	"convert_recordings, convert_recordings_from, convert_recordings_until, convert_recordings_on_processor, " +
 	"web_theme, custom_css, custom_js, login_disclaimer, add_versions_to_open_page, version_badges, trakt_client_id, trakt_client_secret, simkl_client_id, lastfm_api_key, lastfm_secret, " +
 	"anilist_client_id, anilist_client_secret, myanimelist_client_id, myanimelist_client_secret, " +
@@ -2448,7 +2478,7 @@ func (settings *Settings) fields() []any {
 		&settings.Trickplay, &settings.TrickplayInterval, &settings.TrickplayWidth, &settings.ChapterImages, &settings.ThumbnailStorageGB,
 		&settings.RecordingPrePadding, &settings.RecordingPostPadding, &settings.RecordingRetentionDays,
 		&settings.RecordingCommercials,
-		&settings.LiveTvRefreshHours, &settings.LocalScanHours, &settings.WatchlistCheckHours,
+		&settings.LiveTvRefreshHours, &settings.LiveTvBufferMinutes, &settings.LiveTvBufferGigabytes, &settings.LocalScanHours, &settings.WatchlistCheckHours,
 		&settings.WatchLocalFolders,
 		&settings.ConvertRecordings, &settings.ConvertRecordingsFrom, &settings.ConvertRecordingsUntil, &settings.ConvertRecordingsOnProcessor,
 		&settings.WebTheme, &settings.CustomCss, &settings.CustomJs, &settings.LoginDisclaimer, &settings.AddVersionsToOpenPage, &settings.VersionBadges,
@@ -2896,6 +2926,12 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if settings.LiveTvRefreshHours < MinLiveTvRefreshHours || settings.LiveTvRefreshHours > MaxLiveTvRefreshHours {
 		return Settings{}, ErrInvalidLiveTvRefreshHours
+	}
+	if settings.LiveTvBufferMinutes < MinLiveTvBufferMinutes || settings.LiveTvBufferMinutes > MaxLiveTvBufferMinutes {
+		return Settings{}, ErrInvalidLiveTvBufferMinutes
+	}
+	if settings.LiveTvBufferGigabytes < MinLiveTvBufferGigabytes || settings.LiveTvBufferGigabytes > MaxLiveTvBufferGigabytes {
+		return Settings{}, ErrInvalidLiveTvBufferGigabytes
 	}
 	if settings.LocalScanHours < 0 || settings.LocalScanHours > MaxLocalScanHours {
 		return Settings{}, ErrInvalidLocalScanHours
