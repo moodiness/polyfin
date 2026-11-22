@@ -196,7 +196,7 @@ func TestPreferDirectPlayAnalyzesNoVersionToSaveAConversion(t *testing.T) {
 	}
 	p.setting(t, func(settings *accounts.Settings) { settings.PreferDirectPlay, settings.VersionAttempts = true, 5 })
 	source := firstSource(t, p.ask(t, p.token, p.movie, p.profile(t, "minimal"), nil))
-	if source.Id != p.movie || !strings.HasSuffix(source.TranscodingUrl, "&allowAudioStreamCopy=false") || probe.runs() != 0 {
+	if source.Id != p.movie || !strings.Contains(source.TranscodingUrl, "&allowAudioStreamCopy=false") || probe.runs() != 0 {
 		t.Errorf("chosen after %d analyses: %+v", probe.runs(), source)
 	}
 }

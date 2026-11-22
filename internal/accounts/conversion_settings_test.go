@@ -21,7 +21,7 @@ func TestConversionSettingsDefaultToWhatPolyfinDidBefore(t *testing.T) {
 			got.DeinterlaceMethod != "yadif" || got.DeinterlaceDoubleRate ||
 			got.DownmixAlgorithm != "None" || got.DownmixBoost != DefaultDownmixBoost || got.MaxAudioChannels != 0 ||
 			got.AudioBitratePerChannel != 0 || got.EncodingThreads != 0 || got.AheadSeconds != DefaultAheadSeconds || got.AdaptiveQuality != "off" ||
-			got.KeepConvertedVideo || got.FastStart {
+			got.KeepConvertedVideo || !got.FastStart {
 			t.Errorf("%s: %+v", when, got)
 		}
 	}

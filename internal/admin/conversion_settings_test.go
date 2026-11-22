@@ -45,7 +45,7 @@ func TestSettingsConversion(t *testing.T) {
 		"toneMappingPeak": 0.0, "toneMappingDesat": 0.0, "gpuToneMapping": true, "processorToneMappingHeight": 0.0,
 		"deinterlaceMethod": "yadif", "deinterlaceDoubleRate": false, "downmixAlgorithm": "None",
 		"downmixBoost": 2.0, "maxAudioChannels": 0.0, "audioBitratePerChannel": 0.0, "encodingThreads": 0.0, "aheadSeconds": 120.0,
-		"adaptiveQuality": "off", "keepConvertedVideo": false, "fastStart": false, "normalizeConvertedAudio": false, "dynamicRangeCompression": "encoded"}
+		"adaptiveQuality": "off", "keepConvertedVideo": false, "fastStart": true, "normalizeConvertedAudio": false, "dynamicRangeCompression": "encoded"}
 	_, body, _ := administrator.call(http.MethodGet, "/settings", nil)
 	if got := tuning(body); !reflect.DeepEqual(got, defaults) {
 		t.Errorf("defaults: %v", got)

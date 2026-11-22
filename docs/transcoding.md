@@ -338,7 +338,7 @@ API details: [HLS segment cutting for apps](jellyfin-api.md#hls-segment-cutting-
 
 A play shows its first picture once its first segment is made, and a segment ends on a keyframe. From an addon's link or a torrent with a keyframe every 10 seconds, Polyfin first reads 10 seconds of the file. It reads them at the file's bitrate, from a host that may send it barely faster than it plays.
 
-**Start remote plays faster**, in **Settings › Conversion (transcoding) › Performance**, is off by default. With it on:
+**Start remote plays faster**, in **Settings › Conversion (transcoding) › Performance**, is on by default. Turned off, plays start as they did before, on their full first segment. With it on:
 
 - **Which plays:** a repackaged or converted HLS play of an addon's link or a torrent, whose segment where it starts lasts more than 4 seconds. That is at the start, or where it resumes, as PlaybackInfo's `StartTimeTicks` tells. Local folders' files, recordings and Live TV are left out.
 - **Fast segments:** that segment is cut into 2-second segments, its last part up to 4 seconds long.
@@ -478,7 +478,7 @@ The VAAPI drivers without QVBR, QSV and AMF ignore the quality number because th
 | **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding) › Performance** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion (transcoding) › Performance** | 120 (range 30 to 600) | How many seconds of picture repackaging or converting a file makes past the last segment the app asked for, before it waits. |
 | **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding) › Performance** | Off | Keeps converted video 30 seconds once its play session stops, for a new session with another audio track to take over. See [Changing the audio track](#changing-the-audio-track). |
-| **Start remote plays faster** | **Settings › Conversion (transcoding) › Performance** | Off | Starts plays of addon links and torrents whose first segment is long with quick 2-second segments, at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |
+| **Start remote plays faster** | **Settings › Conversion (transcoding) › Performance** | On | Starts plays of addon links and torrents whose first segment is long with quick 2-second segments, at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |
 
 **Compared with Jellyfin**
 

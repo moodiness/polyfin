@@ -137,7 +137,7 @@ func DefaultSettings() Settings {
 		MaxAudioChannels:           AudioChannelLimits[0],
 		AheadSeconds:               DefaultAheadSeconds,
 		KeepConvertedVideo:         false,
-		FastStart:                  false,
+		FastStart:                  true,
 		NormalizeConvertedAudio:    false,
 		DynamicRangeCompression:    DynamicRangeCompressions[0],
 
