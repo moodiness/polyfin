@@ -943,6 +943,9 @@ func (s *Service) analyze(ctx context.Context, version library.Version, probe fu
 			}
 			return nil, err
 		}
+		if prober.Reads == media.Playlist && HLS(analysis) {
+			analysis.Bitrate = playlistBitrate(ctx, src, analysis)
+		}
 		if analysis.Size == 0 {
 			analysis.Size = version.Size
 		}
@@ -1011,6 +1014,34 @@ func startsPlaylist(ctx context.Context, src *source.Source) bool {
 	head := make([]byte, 16)
 	n, _ := src.ReadAt(ctx, head, 0)
 	return bytes.HasPrefix(bytes.TrimPrefix(head[:n], []byte("\xef\xbb\xbf")), []byte("#EXTM3U"))
+}
+
+// playlistBitrate is the bitrate of a version that is an HLS playlist,
+// analysis what ffprobe found in it (see media.VariantBitrate), with
+// what the playlist, read again from src, tells beyond (see
+// media.PlaylistBitrate): the AVERAGE-BANDWIDTH of the variant it plays,
+// which FFmpeg does not read; or, of a media playlist whose tracks tell
+// no bitrate, its segments' bytes over its duration. A playlist that
+// cannot be read within answerRead leaves analysis's own.
+func playlistBitrate(ctx context.Context, src *source.Source, analysis media.Analysis) int64 {
+	video, ok := videoOf(analysis)
+	if !ok || video.Variant == 0 && analysis.Bitrate > 0 {
+		return analysis.Bitrate
+	}
+	ctx, cancel := context.WithTimeout(ctx, answerRead)
+	defer cancel()
+	size, err := src.Size(ctx)
+	if err != nil || size <= 0 || size > maxPlaylist {
+		return analysis.Bitrate
+	}
+	playlist := make([]byte, size)
+	if n, err := src.ReadAt(ctx, playlist, 0); n < len(playlist) && err != nil {
+		return analysis.Bitrate
+	}
+	if bitrate := media.PlaylistBitrate(playlist, video.Variant); bitrate > 0 {
+		return bitrate
+	}
+	return analysis.Bitrate
 }
 
 // failureOf is why src failed, when failed, its Failed channel, closed.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -102,7 +103,11 @@ func vodAddon(t *testing.T, stream string, files map[string][]byte, header [2]st
 // addon declares: segments named relative to the playlist, segments named
 // by their full address that the source refuses without its header, and
 // the variants of a master playlist with their own segments. The playlist
-// stays finished, as #EXT-X-ENDLIST tells.
+// stays finished, as #EXT-X-ENDLIST tells. The movie's media source tells
+// no size, which ffprobe reads as the playlist's bytes, and the bitrate of
+// the variant Polyfin plays, the first, from its AVERAGE-BANDWIDTH when
+// given, else its BANDWIDTH; a conversion of it then asks no more than
+// that bitrate leads to.
 func TestFinishedHLSStreamsPlayThroughPolyfin(t *testing.T) {
 	t.Parallel()
 	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
@@ -120,7 +125,10 @@ func TestFinishedHLSStreamsPlayThroughPolyfin(t *testing.T) {
 	absoluteFiles := map[string][]byte{"index.m3u8": []byte(absolute)}
 	variants := map[string][]byte{"master.m3u8": []byte("#EXTM3U\n#EXT-X-VERSION:3\n" +
 		"#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=320x180\nlow/index.m3u8\n" +
-		"#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=320x180\nhigh/index.m3u8\n")}
+		"#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=320x180\nhigh/index.m3u8\n"),
+		"averaged.m3u8": []byte("#EXTM3U\n#EXT-X-VERSION:3\n" +
+			"#EXT-X-STREAM-INF:BANDWIDTH=400000,AVERAGE-BANDWIDTH=350000,RESOLUTION=320x180\nlow/index.m3u8\n" +
+			"#EXT-X-STREAM-INF:BANDWIDTH=800000,AVERAGE-BANDWIDTH=700000,RESOLUTION=320x180\nhigh/index.m3u8\n")}
 	for name, data := range encoded {
 		if strings.HasSuffix(name, ".ts") {
 			absoluteFiles[name] = data
@@ -132,10 +140,14 @@ func TestFinishedHLSStreamsPlayThroughPolyfin(t *testing.T) {
 		stream string
 		files  map[string][]byte
 		header [2]string
+		// bitrate is the media source's, 0 for none; converted, the most
+		// the AVERAGE-BANDWIDTH of a conversion of it may be, 0 for any.
+		bitrate, converted int64
 	}{
-		{"relative segments", "index.m3u8", relative, [2]string{}},
-		{"absolute segments needing a header", "index.m3u8", absoluteFiles, [2]string{"Referer", "https://site.example/"}},
-		{"a master playlist of two variants", "master.m3u8", variants, [2]string{}},
+		{"relative segments", "index.m3u8", relative, [2]string{}, 0, 0},
+		{"absolute segments needing a header", "index.m3u8", absoluteFiles, [2]string{"Referer", "https://site.example/"}, 0, 0},
+		{"a master playlist of two variants", "master.m3u8", variants, [2]string{}, 400_000, 2_000_000},
+		{"a master playlist of averaged variants", "averaged.m3u8", variants, [2]string{}, 350_000, 2_000_000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -183,6 +195,17 @@ func TestFinishedHLSStreamsPlayThroughPolyfin(t *testing.T) {
 			source := answer.MediaSources[0]
 			if source.IsInfiniteStream || source.RunTimeTicks == nil || *source.RunTimeTicks < 35_000_000 || !source.SupportsDirectPlay {
 				t.Fatalf("the movie's media source: %+v", source)
+			}
+			if source.Size != nil {
+				t.Errorf("the movie's media source tells a size of %d bytes", *source.Size)
+			}
+			switch {
+			case tc.bitrate == 0 && source.Bitrate != nil:
+				t.Errorf("the movie's media source tells a bitrate of %d", *source.Bitrate)
+			case tc.bitrate != 0 && source.Bitrate == nil:
+				t.Errorf("the movie's media source tells no bitrate, want %d", tc.bitrate)
+			case tc.bitrate != 0 && *source.Bitrate != tc.bitrate:
+				t.Errorf("the movie's media source's bitrate: %d, want %d", *source.Bitrate, tc.bitrate)
 			}
 
 			// Relayed, every address it names, a variant's segments
@@ -234,6 +257,13 @@ func TestFinishedHLSStreamsPlayThroughPolyfin(t *testing.T) {
 			status, master := get(transcoding)
 			if status != http.StatusOK {
 				t.Fatalf("the master playlist: %d %s", status, master)
+			}
+			if tc.converted > 0 {
+				_, attributes, _ := strings.Cut(master, "AVERAGE-BANDWIDTH=")
+				average, _, _ := strings.Cut(attributes, ",")
+				if n, err := strconv.ParseInt(average, 10, 64); err != nil || n > tc.converted {
+					t.Errorf("the conversion's average bandwidth: %q, want at most %d", average, tc.converted)
+				}
 			}
 			base := transcoding[:strings.Index(transcoding, "master.m3u8")]
 			var media string

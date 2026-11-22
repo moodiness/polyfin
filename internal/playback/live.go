@@ -247,6 +247,13 @@ func (s *Service) probeLive(ctx context.Context, version library.Version) (media
 		s.liveFailed(ctx, version, err, true)
 		return media.Analysis{}, err
 	}
+	// A live HLS stream keeps no bitrate: it plays its largest variant,
+	// not the first one media.VariantBitrate counts (see LiveVideo), and
+	// its master playlist offers the bitrates of its tracks (see
+	// LiveVariant).
+	if HLS(analysis) {
+		analysis.Bitrate = 0
+	}
 	s.analyses.Put(version.ID, analysis)
 	s.saveShape(ctx, version.ID, analysis)
 	s.report(ctx, version, nil)

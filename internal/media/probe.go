@@ -73,6 +73,10 @@ type Stream struct {
 	Title    string `json:"title,omitempty"`
 	Default  bool   `json:"default,omitempty"`
 	Forced   bool   `json:"forced,omitempty"`
+	// Variant is the BANDWIDTH of the variant of an HLS master playlist
+	// the track belongs to, as FFmpeg tags it: 0 for a track several
+	// variants share, and for one of a media playlist.
+	Variant int64 `json:"variant,omitempty"`
 	// HearingImpaired marks subtitles for the deaf and hard of hearing.
 	HearingImpaired bool `json:"hearingImpaired,omitempty"`
 	// Original marks a track in the work's original language.
@@ -447,6 +451,7 @@ func parse(data []byte) (Analysis, error) {
 			Bitrate:         integer(s.BitRate),
 			Language:        tag(s.Tags, "language"),
 			Title:           tag(s.Tags, "title"),
+			Variant:         integer(tag(s.Tags, "variant_bitrate")),
 			Default:         s.Disposition["default"] == 1,
 			Forced:          s.Disposition["forced"] == 1,
 			HearingImpaired: s.Disposition["hearing_impaired"] == 1,
@@ -512,6 +517,15 @@ func parse(data []byte) (Analysis, error) {
 			End:   seconds(c.EndTime),
 			Title: tag(c.Tags, "title"),
 		})
+	}
+	// ffprobe tells, of an HLS playlist, the playlist's own bytes and the
+	// bitrate they make over the stream's duration: neither is the
+	// stream's. Its size stays unknown, and its bitrate is that of the
+	// variant Polyfin plays, its first video.
+	if hlsFormat(analysis.Format) {
+		analysis.Size = 0
+		played, _ := firstTrack(analysis.Streams)
+		analysis.Bitrate = VariantBitrate(analysis, played)
 	}
 	return analysis, nil
 }

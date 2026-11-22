@@ -1,6 +1,11 @@
 package playback
 
-import "testing"
+import (
+	"slices"
+	"testing"
+
+	"github.com/moodiness/polyfin/internal/media"
+)
 
 // bitrateSource is a Matroska source of a video, 1080p unless it says,
 // and one audio track, the default, its bitrate their sum.
@@ -150,5 +155,41 @@ func TestConvertedVideoFollowsTheLimit(t *testing.T) {
 	}
 	if len(steps) != 2 || steps[0] > got.Video.Bitrate/2 || steps[1] > steps[0]/2 {
 		t.Errorf("steps %v below %d", steps, got.Video.Bitrate)
+	}
+}
+
+// An HLS master playlist's bitrate is the BANDWIDTH of the variant played,
+// its first video's (see media.VariantBitrate): its video gets that less
+// the audio of that variant alone, its own track or the first of those
+// the variants share, and converted video follows it as any source's
+// (here 644,280 b/s, 2.5 times as Jellyfin raises a low bitrate, then 2.5
+// times as it never lets one drop), rather than the usual bitrate of the
+// height a source of unknown bitrate gets.
+func TestAnHLSVariantsVideoFollowsItsBandwidth(t *testing.T) {
+	t.Parallel()
+	own := []media.Stream{
+		{Index: 0, Type: "audio", Codec: "aac", Channels: 2, Variant: 836_280},
+		{Index: 1, Type: "video", Codec: "h264", Width: 640, Height: 480, BitDepth: 8, Variant: 836_280},
+		{Index: 2, Type: "audio", Codec: "aac", Channels: 2, Variant: 460_560},
+		{Index: 3, Type: "video", Codec: "h264", Width: 512, Height: 384, BitDepth: 8, Variant: 460_560},
+	}
+	shared := []media.Stream{
+		{Index: 0, Type: "video", Codec: "h264", Width: 640, Height: 480, BitDepth: 8, Variant: 836_280},
+		{Index: 1, Type: "video", Codec: "h264", Width: 512, Height: 384, BitDepth: 8, Variant: 460_560},
+		{Index: 2, Type: "audio", Codec: "aac", Channels: 2, Language: "eng"},
+		{Index: 3, Type: "audio", Codec: "aac", Channels: 2, Language: "fra"},
+	}
+	for name, streams := range map[string][]media.Stream{"own audio": own, "shared audio": shared} {
+		analysis := media.Analysis{Format: "hls", Bitrate: 836_280, Streams: streams}
+		described := MediaStreams(analysis, nil, "en")
+		video := slices.IndexFunc(described, func(s MediaStream) bool { return s.Type == "Video" })
+		if got := described[video].BitRate; got == nil || *got != 644_280 {
+			t.Errorf("%s: the video's bitrate %v, want 644280", name, got)
+		}
+		options := Options{EnableDirectPlay: true, EnableDirectStream: true, ConvertVideo: true, Can: Capabilities{Encoders: []string{"libx264"}}}
+		got := Decide(readDeviceProfile(t, "minimal"), MediaSource{Container: "hls", Bitrate: analysis.Bitrate, Streams: described}, options)
+		if got.Video == nil || got.Video.Height != 480 || got.Video.Bitrate != 4_026_750 {
+			t.Errorf("%s: video %+v, want 480p at 4026750", name, got.Video)
+		}
 	}
 }

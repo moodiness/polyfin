@@ -807,17 +807,28 @@ func audioBitrate(s media.Stream) int64 {
 
 // derivedVideoBitrate is the bitrate Jellyfin gives a video track that
 // states none: the source's bitrate minus its audio tracks', or none when
-// that leaves nothing.
+// that leaves nothing. Of an HLS master playlist, whose bitrate is the
+// variant's its first video belongs to (see media.VariantBitrate), only
+// the audio that variant plays counts: its own tracks, else the first of
+// those the variants share.
 func derivedVideoBitrate(analysis media.Analysis) *int64 {
 	if analysis.Bitrate <= 0 {
 		return nil
 	}
 	bitrate := analysis.Bitrate
+	video, _ := videoOf(analysis)
+	shared := int64(-1)
 	for _, s := range analysis.Streams {
-		if s.Type == "audio" {
+		switch {
+		case s.Type != "audio":
+		case video.Variant == 0 || s.Variant == video.Variant:
 			bitrate -= audioBitrate(s)
+			shared = 0
+		case s.Variant == 0 && shared < 0:
+			shared = audioBitrate(s)
 		}
 	}
+	bitrate -= max(shared, 0)
 	if bitrate <= 0 {
 		return nil
 	}
