@@ -71,6 +71,10 @@ export function cleanup() {
   })()
   return cleaning
 }
+/** Adds a step to those run on the way out. */
+export function atExit(step) {
+  cleanups.push(step)
+}
 for (const [signal, code] of [
   ['SIGINT', 130],
   ['SIGTERM', 143],
@@ -273,7 +277,7 @@ async function freePorts(count) {
  * Starts Polyfin on the bench database and folder, on port when given (a restart keeps it), and
  * waits until it answers. stop() and restart() come with it, and its CPU and memory in usage().
  */
-async function startPolyfin(values, databaseUrl, dir, port) {
+export async function startPolyfin(values, databaseUrl, dir, port) {
   const [http, discovery, dlna, hdhomerun] = await freePorts(4)
   const listen = port ?? http
   const logPath = join(dir, 'polyfin.log')
@@ -391,6 +395,7 @@ export function adminClient(base) {
   return {
     get: (path) => request('GET', path),
     post: (path, body) => request('POST', path, body ?? {}),
+    patch: (path, body) => request('PATCH', path, body),
     signIn: (user) => request('POST', '/admin/api/session', user),
   }
 }
