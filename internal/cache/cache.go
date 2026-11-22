@@ -22,6 +22,8 @@ type Cache[K comparable, V any] struct {
 	// sum; without size, every value counts for nothing (see Sized).
 	size     func(V) int
 	maxBytes int
+	// sliding renews an entry's age at each read (see Sliding).
+	sliding bool
 
 	mu      sync.Mutex
 	entries map[K]*entry[K, V]
@@ -36,14 +38,17 @@ type Cache[K comparable, V any] struct {
 const (
 	// byUse is the order of use, whose oldest entry is the first evicted.
 	byUse = iota
-	// byAge is the order of storage. Entries all age alike, whatever the
-	// lifetime, so the expired ones are its oldest.
+	// byAge is the order of storage, or of the last read of a sliding
+	// cache. Entries all age alike, whatever the lifetime, so the expired
+	// ones are its oldest.
 	byAge
 )
 
 type entry[K comparable, V any] struct {
-	key    K
-	value  V
+	key   K
+	value V
+	// stored is when the value was stored, or last read in a sliding
+	// cache: its age counts from then.
 	stored time.Time
 	// size is the value's, as the cache's size function told it when the
 	// value was stored.
@@ -81,6 +86,14 @@ func NewLasting[K comparable, V any](capacity int, lifetime func() time.Duration
 // Sized is called on a new cache, before it is used.
 func (c *Cache[K, V]) Sized(maxBytes int, size func(V) int) *Cache[K, V] {
 	c.size, c.maxBytes = size, Budget(maxBytes)
+	return c
+}
+
+// Sliding has each read of an entry keep it as long again as when it was
+// stored, and returns c: an entry expires once unread for its lifetime.
+// Sliding is called on a new cache, before it is used.
+func (c *Cache[K, V]) Sliding() *Cache[K, V] {
+	c.sliding = true
 	return c
 }
 
@@ -209,7 +222,8 @@ func (c *Cache[K, V]) Bytes() int {
 	return c.bytes
 }
 
-// Get returns the value of key, if it is still kept.
+// Get returns the value of key, if it is still kept, and renews its age
+// in a sliding cache (see Sliding).
 func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -218,13 +232,19 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 		var zero V
 		return zero, false
 	}
-	if c.now().Sub(e.stored) > c.lifetime() {
+	now := c.now()
+	if now.Sub(e.stored) > c.lifetime() {
 		c.remove(e)
 		var zero V
 		return zero, false
 	}
 	e.unlink(byUse)
 	c.link(e, byUse)
+	if c.sliding {
+		e.stored = now
+		e.unlink(byAge)
+		c.link(e, byAge)
+	}
 	return e.value, true
 }
 
@@ -285,6 +305,15 @@ func (c *Cache[K, V]) dropExpired(now time.Time) {
 	for e := c.root.links[byAge].prev; e != &c.root && now.Sub(e.stored) > life; e = c.root.links[byAge].prev {
 		c.remove(e)
 	}
+}
+
+// DropExpired drops the entries expired by now, which otherwise go only as
+// others are stored or as they are read: a cache that holds much and may
+// stay unused calls it from time to time.
+func (c *Cache[K, V]) DropExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.dropExpired(c.now())
 }
 
 // Update keeps for key, from now on, what change makes of the value kept,

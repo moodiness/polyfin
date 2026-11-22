@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"unicode"
@@ -93,6 +98,65 @@ func (s *Service) Stores(ctx context.Context, user accounts.User, parent account
 	}
 	l, ok := v.library(parent)
 	return ok && l.stored(), nil
+}
+
+// SortedLibraries lists those of the server's libraries user sees whose
+// titles a sorted listing sorts, in order: those Polyfin stores (see
+// Stores) and those of an addon's catalog (see CatalogVersion). A user's
+// own libraries serve that user alone.
+func (s *Service) SortedLibraries(ctx context.Context, user accounts.User) ([]accounts.ID, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	var sorted []accounts.ID
+	for _, l := range v.libraries {
+		if _, _, catalog := catalogLibrary(v, l.item.ID, ""); l.addon.shared && (l.stored() || catalog) {
+			sorted = append(sorted, l.item.ID)
+		}
+	}
+	return sorted, nil
+}
+
+// ListingPrint names the way user sees the titles of their libraries:
+// users of one print list the same titles of a library, in the same
+// words, but for the titles each hid (see HiddenTitles) and a request's
+// rating filter (see WithRatingFilter), which it leaves out. An order of a
+// library's titles sorted for one of them serves them all.
+func (s *Service) ListingPrint(ctx context.Context, user accounts.User) (string, error) {
+	v, err := s.view(ctx, user)
+	if err != nil {
+		return "", err
+	}
+	return v.listingPrint(), nil
+}
+
+// listingPrint is ListingPrint of v: every field of the view that shapes
+// the titles a library lists. A field added to the view that does must be
+// named here (see unprintedViewFields).
+func (v view) listingPrint() string {
+	var b strings.Builder
+	for _, entry := range v.addons {
+		fmt.Fprintf(&b, "addon %s %t %t\n", entry.addon.ID, entry.confined, entry.shared)
+	}
+	for _, l := range v.libraries {
+		fmt.Fprintf(&b, "library %s %s %t %t %q %q %q %d %t %t\n", l.item.ID, l.addon.addon.ID, l.addon.confined, l.addon.shared,
+			l.catalog.Type, l.catalog.ID, l.genre, l.maxItems, l.skipLocal, l.mixed)
+	}
+	for _, kind := range slices.Sorted(maps.Keys(v.listedFolders)) {
+		fmt.Fprintf(&b, "folders %s %v\n", kind, v.listedFolders[kind])
+	}
+	parental, _ := json.Marshal(v.parental)
+	fmt.Fprintf(&b, "parental %s\ngenres %q\nwithheld %v\n", parental, v.genres, v.withheld)
+	fmt.Fprintf(&b, "language %q\n", v.language)
+	for _, entry := range v.translators {
+		fmt.Fprintf(&b, "translator %s\n", entry.addon.ID)
+	}
+	fmt.Fprintf(&b, "words %+v\n", v.words)
+	fmt.Fprintf(&b, "others %v\n", slices.SortedFunc(maps.Keys(v.others), func(a, b accounts.ID) int { return bytes.Compare(a[:], b[:]) }))
+	fmt.Fprintf(&b, "country %q release %t %t limits %d %t\n", v.country, v.waitRelease, v.upcoming, v.catalogLimit, v.members)
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:16])
 }
 
 // StoredChanges counts the changes to what the libraries Polyfin stores

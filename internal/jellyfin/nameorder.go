@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -28,10 +29,12 @@ import (
 // A library whose titles Polyfin stores, an IPTV source's movies or
 // series or a local folder, is read whole from the database: Polyfin
 // sorts it as library.NamePool lists it, with what the user may see only,
-// and keeps the order for drawLife, so that the pages of one listing, and
-// its letters, follow it, unless what the library lists changes meanwhile:
-// a scan, a link, a refresh of its source or an edit sorts it again (see
-// storedOrder). An addon's catalog, and a library of collections, keep
+// and keeps the order orderIdle after its last read, so that the pages of
+// one listing, its letters and the next listings of a session follow it,
+// unless what the library lists changes meanwhile: a scan, a link, a
+// refresh of its source or an edit sorts it again (see storedOrder). An
+// order read more than orderFresh after its titles is sorted again in the
+// background. An addon's catalog, and a library of collections, keep
 // their catalog's order, as in Jellyfin apps: reading one whole could
 // take thousands of requests, and Silo's Apple app opens every library in
 // title order.
@@ -47,13 +50,18 @@ import (
 // As in Jellyfin, a title without a value comes first in ascending order
 // and last in descending order.
 //
-// One order holds every kind of title of a library, for a user, their
-// limits and the titles they hid, a genre and the ratings a listing
-// narrows to: each listing keeps the kinds it asks for (includeItemTypes,
-// excludeItemTypes, mediaTypes, filters) as it pages, so that listings
-// asking for other kinds share it. At most nameSortsAtOnce orders are
-// sorted at once on the server, and a sort stops once no listing waits
-// for it.
+// One order holds every kind of title of a library, for the users who see
+// it alike (see library.Service.ListingPrint) and hid the same titles, a
+// genre and the ratings a listing narrows to: each listing keeps the kinds
+// it asks for (includeItemTypes, excludeItemTypes, mediaTypes, filters)
+// as it pages, so that listings asking for other kinds share it. At most
+// nameSortsAtOnce orders are sorted at once on the server, and a sort
+// stops once no listing waits for it.
+//
+// Reading a library of 10,000 titles whole takes some 200 ms, sorting it
+// 5 ms: once Polyfin started and read the libraries' first pages, it
+// sorts by name the server's libraries each user sees, one at a time (see
+// sortAhead), so that the first listings after a start find their order.
 //
 // GET /Polyfin/NameOrder lists a page of the order by name as /Items does,
 // from startIndex, limit titles, in ascending or descending order
@@ -70,7 +78,8 @@ import (
 // holds the same titles, with places, the indexes in items of its titles
 // in ascending order; places is nil for the order by name. added is set
 // for the titles of an addon's catalog, which tell when they were added
-// (see library.Item.Added).
+// (see library.Item.Added). sorted is when the titles were read, which an
+// order by another key keeps.
 type nameOrder struct {
 	items  []library.Item
 	keys   []string
@@ -78,6 +87,7 @@ type nameOrder struct {
 	places []int32
 	whole  bool
 	added  bool
+	sorted time.Time
 }
 
 // keptKeys are the keys of the titles of the order by name that keep
@@ -213,6 +223,22 @@ func productionYear(item *library.Item) int {
 // An order by another key counts as much: it shares the titles of the
 // order by name, and keeps them once that order is gone.
 const nameOrderTitleSize = 1536
+
+// nameOrdersBytes bounds the orders kept, as nameOrderTitleSize counts
+// them.
+const nameOrdersBytes = 128 << 20
+
+// orderIdle is how long an order is kept unread: each listing that reads
+// it keeps it as long again, so that a library browsed in a session, or
+// found sorted ahead, stays sorted. Its key changes with what versions its
+// titles (see sortedOrder).
+const orderIdle = 30 * time.Minute
+
+// orderFresh is how old the titles of an order a listing reads may be
+// before the order is sorted again in the background: what no version
+// tells, such as a name read since in the user's language or a rating,
+// shows that late at most, and the listing does not wait.
+const orderFresh = 2 * time.Minute
 
 // nameSortsAtOnce bounds the orders by name sorted at once on the server.
 const nameSortsAtOnce = 2
@@ -355,7 +381,7 @@ func (h *Handler) storedListing(w http.ResponseWriter, r *http.Request, user acc
 	if !stored {
 		return false
 	}
-	order, err := h.storedOrder(r, user, parent, genre, rating, sort)
+	order, err := h.storedOrder(r.Context(), user, parent, genre, rating, sort)
 	switch {
 	case r.Context().Err() != nil:
 		// The app gave up waiting.
@@ -401,7 +427,7 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 		// The library cannot be narrowed to the requested genre.
 		return user, nameOrder{whole: true}, true
 	}
-	order, err := h.storedOrder(r, user, parent, genre, library.RatingFilter{}, titleSort{key: "SortName"})
+	order, err := h.storedOrder(r.Context(), user, parent, genre, library.RatingFilter{}, titleSort{key: "SortName"})
 	switch {
 	case r.Context().Err() != nil:
 		// The app gave up waiting.
@@ -423,12 +449,16 @@ func (h *Handler) nameOrderOf(w http.ResponseWriter, r *http.Request, b bindErro
 // meanwhile (see nameBuilds). An order is kept while what the stored
 // libraries list stays as it was (see library.Service.StoredChanges): a
 // scan, a link, a refresh of an IPTV source or an edit sorts again.
-func (h *Handler) storedOrder(r *http.Request, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
+func (h *Handler) storedOrder(ctx context.Context, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
 	sort titleSort) (nameOrder, error) {
-	// The count is read before the titles: a change stored while they are
-	// sorted sorts them again at the next listing.
-	changes := strconv.FormatUint(h.Library.StoredChanges(), 10)
-	return h.sortedOrder(r, user, parent, genre, rating, sort, "stored "+changes+"|", h.sortByName)
+	return h.sortedOrder(ctx, user, parent, genre, rating, sort, h.storedVersion(), h.sortByName)
+}
+
+// storedVersion names the titles of the stored libraries as they are.
+// The count is read before the titles: a change stored while they are
+// sorted sorts them again at the next listing.
+func (h *Handler) storedVersion() string {
+	return "stored " + strconv.FormatUint(h.Library.StoredChanges(), 10) + "|"
 }
 
 // orderBuild sorts the titles of a library by name for an order kept
@@ -439,14 +469,17 @@ type orderBuild func(ctx context.Context, user accounts.User, parent accounts.ID
 // sortedOrder returns the order sort asks for of the titles of library
 // parent that build sorts by name, as storedOrder tells. version names
 // those titles as they are, so that the orders of other titles, or of the
-// same titles since changed, are kept apart.
-func (h *Handler) sortedOrder(r *http.Request, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
+// same titles since changed, are kept apart. An order serves every user
+// who sees the library alike (see library.Service.ListingPrint) and hid
+// the same titles. An order read more than orderFresh after its titles is
+// answered as it is and sorted again in the background.
+func (h *Handler) sortedOrder(ctx context.Context, user accounts.User, parent accounts.ID, genre string, rating library.RatingFilter,
 	sort titleSort, version string, build orderBuild) (nameOrder, error) {
-	byName, err := h.newDrawKey(r, user, parent, genre)
+	alike, err := h.Library.ListingPrint(ctx, user)
 	if err != nil {
 		return nameOrder{}, err
 	}
-	hidden, err := h.Library.HiddenTitles(r.Context(), user)
+	hidden, err := h.Library.HiddenTitles(ctx, user)
 	if err != nil {
 		return nameOrder{}, err
 	}
@@ -456,27 +489,42 @@ func (h *Handler) sortedOrder(r *http.Request, user accounts.User, parent accoun
 	}
 	// One order holds every kind; hiding a title sorts again, so that
 	// positions follow at once.
-	byName.kinds = ""
-	byName.order = version + "name|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	byName := drawKey{limits: alike, parent: parent, genre: genre,
+		order: version + "name|" + hiddenFingerprint(hidden) + "|" + string(narrowed)}
 	key := byName
 	key.order = version + sort.name() + "|" + hiddenFingerprint(hidden) + "|" + string(narrowed)
+	// sortKey sorts the order of key from the order by name kept, which
+	// it sorts again when missing, or when refreshing and stale.
+	sortKey := func(refresh bool) func(context.Context) (nameOrder, error) {
+		return func(ctx context.Context) (nameOrder, error) {
+			order, kept := h.nameOrders.Get(byName)
+			if !kept || refresh && h.staleOrder(order) {
+				var err error
+				if order, kept, err = build(ctx, user, parent, genre, hidden, byName); err != nil {
+					return nameOrder{}, err
+				}
+			}
+			sorted := order.sortedBy(sort)
+			if kept && key != byName {
+				h.nameOrders.Put(key, sorted)
+			}
+			return sorted, nil
+		}
+	}
+	ctx = library.WithRatingFilter(ctx, rating)
 	if order, ok := h.nameOrders.Get(key); ok {
+		if h.staleOrder(order) {
+			go func() { _, _ = h.nameBuilds.wait(context.WithoutCancel(ctx), key, sortKey(true)) }()
+		}
 		return order, nil
 	}
-	return h.nameBuilds.wait(library.WithRatingFilter(r.Context(), rating), key, func(ctx context.Context) (nameOrder, error) {
-		order, kept := h.nameOrders.Get(byName)
-		if !kept {
-			var err error
-			if order, kept, err = build(ctx, user, parent, genre, hidden, byName); err != nil {
-				return nameOrder{}, err
-			}
-		}
-		sorted := order.sortedBy(sort)
-		if kept && key != byName {
-			h.nameOrders.Put(key, sorted)
-		}
-		return sorted, nil
-	})
+	return h.nameBuilds.wait(ctx, key, sortKey(false))
+}
+
+// staleOrder reports whether the titles of order were read more than
+// orderFresh ago.
+func (h *Handler) staleOrder(order nameOrder) bool {
+	return h.now().Sub(order.sorted) > orderFresh
 }
 
 var (
@@ -498,6 +546,7 @@ func (h *Handler) sortByName(ctx context.Context, user accounts.User, parent acc
 	key drawKey) (_ nameOrder, kept bool, _ error) {
 	every := func(library.Kind) bool { return true }
 	listing := library.WithTitlesThrough(library.WithKinds(library.WithOpening(ctx), every))
+	read := h.now()
 	page, bound, stored, isLibrary, err := h.Library.NamePool(listing, user, parent, genre)
 	switch {
 	case err != nil:
@@ -508,6 +557,7 @@ func (h *Handler) sortByName(ctx context.Context, user accounts.User, parent acc
 		return nameOrder{}, false, errNotStored
 	}
 	order := sortedByName(hidden.Without(page.Items), !page.More)
+	order.sorted = read
 	if err := h.Library.WithLengths(ctx, user, parent, order.items); err != nil {
 		return nameOrder{}, false, err
 	}
@@ -529,6 +579,88 @@ func hiddenFingerprint(hidden library.HiddenTitles) string {
 	slices.Sort(ids)
 	sum := sha256.Sum256([]byte(strings.Join(ids, ",")))
 	return hex.EncodeToString(sum[:8])
+}
+
+// firstPagesRead sorts the libraries ahead the first time Polyfin read
+// their first pages since it started (see sortAhead), then warms the
+// posters of those pages (see warmPosters). Every time, it drops the
+// orders left unread for orderIdle, which an idle server would keep.
+func (h *Handler) firstPagesRead(ctx context.Context) {
+	h.nameOrders.DropExpired()
+	if h.sortedAhead.CompareAndSwap(false, true) {
+		h.sortAhead(ctx)
+	}
+	h.warmPosters(ctx)
+}
+
+// sortAhead sorts by name the titles of the server's libraries each user
+// sees whose sorted listings sort them (see
+// library.Service.SortedLibraries), as their first listing would, and
+// keeps their orders as listings do: those of the users who see a library
+// alike are sorted once. It sorts one library at a time, leaving the other
+// places of nameSortsAtOnce to listings, reads only the catalog pages
+// kept, asking no addon for one, and stops once its orders hold half of
+// what the orders keep at most.
+func (h *Handler) sortAhead(ctx context.Context) {
+	started := time.Now()
+	users, err := h.Accounts.Users(ctx)
+	if err != nil {
+		h.Logger.Debug("The libraries could not be sorted ahead", "error", err)
+		return
+	}
+	most := cache.Budget(nameOrdersBytes) / nameOrderTitleSize / 2
+	titles := 0
+	for _, user := range users {
+		if user.Refused(started) {
+			continue
+		}
+		// The user's view is built once for all their libraries.
+		ctx := library.PerRequest(ctx)
+		libraries, err := h.Library.SortedLibraries(ctx, user)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			h.Logger.Debug("The libraries to sort ahead could not be listed", "user", user.Name, "error", err)
+			continue
+		}
+		for _, parent := range libraries {
+			if titles >= most {
+				h.Logger.Debug("Libraries sorted ahead up to their bound", "titles", titles, "took", time.Since(started).Round(time.Millisecond))
+				return
+			}
+			order, err := h.sortLibraryAhead(ctx, user, parent)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				h.Logger.Debug("A library could not be sorted ahead", "user", user.Name, "library", parent, "error", err)
+				continue
+			}
+			titles += len(order.items)
+		}
+	}
+	h.Logger.Debug("Libraries sorted ahead", "titles", titles, "took", time.Since(started).Round(time.Millisecond))
+}
+
+// sortLibraryAhead returns the order by name of the titles of library
+// parent that user sees, the one kept or one sorted as a listing of them
+// sorts it, from the catalog pages kept for an addon's library.
+func (h *Handler) sortLibraryAhead(ctx context.Context, user accounts.User, parent accounts.ID) (nameOrder, error) {
+	byName := titleSort{key: "SortName"}
+	stored, err := h.Library.Stores(ctx, user, parent)
+	if err != nil {
+		return nameOrder{}, err
+	}
+	if stored {
+		return h.storedOrder(ctx, user, parent, "", library.RatingFilter{}, byName)
+	}
+	version, ok, err := h.Library.CatalogVersion(ctx, user, parent, "")
+	if err != nil || !ok {
+		return nameOrder{}, err
+	}
+	return h.sortedOrder(library.WithKeptOnly(ctx), user, parent, "", library.RatingFilter{}, byName, catalogVersion(version),
+		h.sortCatalog(version, 0))
 }
 
 func descendingOrder(r *http.Request) bool {

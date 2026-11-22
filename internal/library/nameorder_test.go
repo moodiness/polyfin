@@ -1,11 +1,63 @@
 package library
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 )
+
+// unprintedViewFields are the fields of a view that its listing print
+// leaves out (see view.listingPrint): who the user is, the titles they
+// hid and a request's rating filter, which orders of titles are kept by
+// apart, what a request's lookups count, and what lists no titles of a
+// library: channels, smart lists and people's biographies.
+var unprintedViewFields = []string{"user", "channels", "virtual", "channelFilter", "smart", "deadline", "lookups", "held", "hidden",
+	"query", "channelLimit", "peopleLanguage"}
+
+// printedViewFields are the fields of a view that its listing print names.
+var printedViewFields = []string{"addons", "libraries", "country", "listedFolders", "parental", "genres", "members", "withheld",
+	"waitRelease", "upcoming", "catalogLimit", "language", "translators", "words", "others"}
+
+// Users who see their libraries alike share a listing print, whoever they
+// are, whatever they hid and whatever ratings a request narrows to; one
+// whose limits, language or addons differ does not. Every field of a view
+// is printed or left out on purpose.
+func TestListingPrintsNameHowUsersSeeTheirTitles(t *testing.T) {
+	t.Parallel()
+	var fields []string
+	for field := range reflect.TypeFor[view]().Fields() {
+		fields = append(fields, field.Name)
+	}
+	known := append(slices.Clone(unprintedViewFields), printedViewFields...)
+	slices.Sort(fields)
+	slices.Sort(known)
+	if !slices.Equal(fields, known) {
+		t.Fatalf("view fields %q, printed or not %q", fields, known)
+	}
+	base := view{catalogLimit: 2000, others: map[accounts.ID]bool{{7}: true}}
+	other := base
+	other.user, other.hidden, other.query = accounts.ID{1}, HiddenTitles{{2}: true}, ratingQuery{active: true}
+	if base.listingPrint() != other.listingPrint() {
+		t.Errorf("another user, their hidden titles or a rating filter change the print")
+	}
+	maxRating := 10
+	for name, change := range map[string]func(*view){
+		"parental": func(v *view) { v.parental.MaxRating = &maxRating },
+		"genres":   func(v *view) { v.genres = []string{"Horror"} },
+		"language": func(v *view) { v.language = "fr" },
+		"others":   func(v *view) { v.others = nil },
+		"withheld": func(v *view) { v.withheld = []accounts.ID{{3}} },
+		"limit":    func(v *view) { v.catalogLimit = 5000 },
+	} {
+		changed := base
+		change(&changed)
+		if changed.listingPrint() == base.listingPrint() {
+			t.Errorf("%s: the print does not change", name)
+		}
+	}
+}
 
 // Titles sort by their sort name, without regard to case or accents:
 // articles count unless a sort name leaves them out, digits and symbols

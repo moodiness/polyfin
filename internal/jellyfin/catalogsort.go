@@ -48,7 +48,7 @@ func (h *Handler) catalogListing(w http.ResponseWriter, r *http.Request, user ac
 		limit = library.WholeListing
 	}
 	start = max(start, 0)
-	order, err := h.sortedOrder(r, user, parent, genre, rating, sort, "catalog "+version+"|", h.sortCatalog(version, start+limit))
+	order, err := h.sortedOrder(r.Context(), user, parent, genre, rating, sort, catalogVersion(version), h.sortCatalog(version, start+limit))
 	switch {
 	case r.Context().Err() != nil:
 		// The app gave up waiting.
@@ -73,6 +73,12 @@ func (h *Handler) catalogListing(w http.ResponseWriter, r *http.Request, user ac
 	return true
 }
 
+// catalogVersion names the titles of an addon's catalog at version (see
+// library.Service.CatalogVersion) as sortedOrder keeps them apart.
+func catalogVersion(version string) string {
+	return "catalog " + version + "|"
+}
+
 // sortCatalog returns what sorts by name the titles read of the catalog of
 // an addon's library at version, its first need titles at least (see
 // library.Service.CatalogPool), and keeps the order under its key when it
@@ -85,6 +91,7 @@ func (h *Handler) sortCatalog(version string, need int) orderBuild {
 		key drawKey) (nameOrder, bool, error) {
 		every := func(library.Kind) bool { return true }
 		listing := library.WithTitlesThrough(library.WithKinds(ctx, every))
+		started := h.now()
 		page, read, isCatalog, err := h.Library.CatalogPool(listing, user, parent, genre, need)
 		switch {
 		case err != nil:
@@ -93,7 +100,7 @@ func (h *Handler) sortCatalog(version string, need int) orderBuild {
 			return nameOrder{}, false, errNotLibrary
 		}
 		order := sortedByName(hidden.Without(page.Items), !page.More)
-		order.added = true
+		order.added, order.sorted = true, started
 		if read != version || page.More {
 			return order, false, nil
 		}
