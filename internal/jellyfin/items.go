@@ -228,7 +228,7 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 			h.Logger.Warn("The versions of a title could not be listed", "error", err)
 		}
 		sources = h.mediaSources(r, p, opened)
-		h.prepareOpened(r.Context(), user, item, p.versions, opened)
+		h.prepareDetails(r, user, item, p.versions, opened)
 	} else if detail {
 		var complete bool
 		var err error
@@ -242,9 +242,9 @@ func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *Base
 		}
 		h.setDownload(r, user, dto, item, p.versions, opened, true)
 		if complete {
-			h.prepareOpened(r.Context(), user, item, p.versions, opened)
+			h.prepareDetails(r, user, item, p.versions, opened)
 		} else {
-			h.prepareListed(r.Context(), user, item, opened)
+			h.prepareListed(r, user, item, opened)
 		}
 	} else if p = h.cachedPlayable(r.Context(), user, item); len(p.versions) > 0 {
 		sources = h.mediaSources(r, p, opened)

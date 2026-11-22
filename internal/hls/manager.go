@@ -181,6 +181,10 @@ type Remux struct {
 	// follow the plan's times, Shift telling where they are in the input.
 	// An error ends the encoding, as without it.
 	Switch func(ctx context.Context, n int) (Remux, func(), error)
+	// Lift, when set, lets FFmpeg read Input past the bytes of the plan's
+	// first segment, which an encoding started ahead of its play reads
+	// alone (see Manager.Early): a play taking the encoding over calls it.
+	Lift func()
 	// Shift is how far the input's times are past the plan's: zero but for
 	// an input switched to, whose speech comes that much later than the
 	// first one's.
@@ -1210,6 +1214,7 @@ func (m *Manager) stopIdle() {
 			m.stopLives(func(_ Key, l *live) bool { return l.idle() })
 			m.stopAudios(func(_ AudioKey, e *audioEncoding) bool { return e.idle() })
 			m.forgetReads()
+			m.expireEarly(time.Now())
 		case <-outlived.C:
 			m.stopOutlived()
 		}
@@ -1324,6 +1329,11 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 		}
 	}
 	for k, e := range m.encodings {
+		// One started ahead of its play counts once the play takes it
+		// over (see Early).
+		if e != nil && e.early {
+			continue
+		}
 		// An encoding whose input switched to one converting its video
 		// counts as converting (see carryOn).
 		k.Converts = k.Converts || e.converts
@@ -1555,7 +1565,10 @@ func (m *Manager) playing(key Key) *encoding {
 
 // encoding returns the encoding of key, opening it on first use. The
 // variants of a playback share its playback, and one opened later starts
-// where the player last asked.
+// where the player last asked. An encoding started ahead of its play (see
+// Early) is the play's once a request asks for its key, which counts it
+// toward the conversions at once from then on, if there is room for it;
+// a request of its user and device for another key stops it.
 func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding, error) {
 	m.mu.Lock()
 	if m.closed {
@@ -1563,9 +1576,25 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 		return nil, ErrStopped
 	}
 	e := m.encodings[key]
-	if e == nil {
+	var early []*encoding
+	if e == nil || e.early {
+		early = m.dropEarly(func(k Key, other *encoding) bool { return other != e && k.User == key.User && k.Device == key.Device })
+	}
+	switch {
+	case e != nil && e.early && !m.admits(key, nil):
+		delete(m.encodings, key)
+		m.mu.Unlock()
+		stopEncodings(append(early, e))
+		return nil, ErrBusy
+	case e != nil && e.early:
+		e.takeOver()
+		m.mu.Unlock()
+		stopEncodings(early)
+		go e.liftInput()
+	case e == nil:
 		if !m.admits(key, nil) {
 			m.mu.Unlock()
+			stopEncodings(early)
 			return nil, ErrBusy
 		}
 		var p *playback
@@ -1587,11 +1616,12 @@ func (m *Manager) encoding(ctx context.Context, key Key, open Opener) (*encoding
 		m.encodings[key] = e
 		stale := m.keepPlayback(key)
 		m.mu.Unlock()
+		stopEncodings(early)
 		for _, k := range stale {
 			m.expire(k)
 		}
 		e.open(ctx, open)
-	} else {
+	default:
 		m.mu.Unlock()
 	}
 	if err := e.waitOpen(ctx); err != nil {
@@ -1684,6 +1714,13 @@ type encoding struct {
 	// failing counts the runs of FFmpeg that failed in a row from one
 	// segment (see failed).
 	failing failing
+	// early marks an encoding started ahead of its play, which no player
+	// asked anything of yet, since earlyAt (see Early): it makes its first
+	// segment alone and counts toward no limit. It is set before the
+	// encoding is known, and cleared under both m.mu and e.mu: either lock
+	// reads it.
+	early   bool
+	earlyAt time.Time
 }
 
 // giveUp is how many runs of FFmpeg from the same segment may fail in a
@@ -2197,8 +2234,11 @@ type job struct {
 	cancel context.CancelFunc
 	done   bool
 	err    error
-	// file receives the segment being made, once its first keyframe came.
-	file *os.File
+	// file receives the segment being made, once its first keyframe came;
+	// ended is set once the segment before closed as its last fragment
+	// ended (see closeAtEnd): the next piece starts the next segment.
+	file  *os.File
+	ended bool
 	// progressed is when FFmpeg last read or wrote, as far as it tells,
 	// or else when the job started.
 	progressed time.Time
@@ -2391,36 +2431,81 @@ func (e *encoding) take(ctx context.Context, j *job, p piece) error {
 	if j.file == nil {
 		// FFmpeg may start on a keyframe before the segment: what comes
 		// before it is not part of the job.
-		if !p.keyframe || p.at < plan.Start(j.next)-j.input.cutTolerance() {
+		if !j.ended && (!p.keyframe || p.at < plan.Start(j.next)-j.input.cutTolerance()) {
 			return nil
 		}
-		return e.begin(j, p.data)
-	}
-	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-j.input.cutTolerance() {
-		if err := e.close(j); err != nil {
+		if err := e.begin(j, p.data); err != nil {
 			return err
 		}
-		// Make segments as far ahead of the last one asked for as allowed.
-		for j.next > e.m.aheadLimit(plan, e.requested) {
-			if err := e.wait(ctx); err != nil {
-				return errStale
-			}
-			if e.job != j || e.stopped {
-				return errStale
-			}
+		return e.closeAtEnd(ctx, j, p)
+	}
+	// A segment whose last fragment did not tell where it ends closes as
+	// the next one starts.
+	if p.keyframe && j.next+1 < plan.Len() && p.at >= plan.Start(j.next+1)-j.input.cutTolerance() {
+		if err := e.goOn(ctx, j); err != nil {
+			return err
 		}
-		// The segments from the job's end are made otherwise, by another
-		// job, from that keyframe on.
-		if j.next == j.end {
-			e.m.logger.Debug("A remux goes on otherwise", "segment", j.end, "fast", plan.Fast(j.end))
-			e.start(j.end)
-			e.signal()
+		if err := e.begin(j, p.data); err != nil {
+			return err
+		}
+		return e.closeAtEnd(ctx, j, p)
+	}
+	if _, err := j.file.Write(p.data); err != nil {
+		return err
+	}
+	return e.closeAtEnd(ctx, j, p)
+}
+
+// closeAtEnd closes the segment being made once p, its piece just
+// written, ends where the next segment starts: FFmpeg wrote that fragment
+// as it read the next segment's keyframe, and writes the next fragment
+// only once it read the keyframe after, a segment later for copied
+// video. The caller holds e.mu.
+func (e *encoding) closeAtEnd(ctx context.Context, j *job, p piece) error {
+	plan := e.remux.Plan
+	if !p.ends || j.next+1 >= plan.Len() || p.end < plan.Start(j.next+1)-j.input.cutTolerance() {
+		return nil
+	}
+	if err := e.goOn(ctx, j); err != nil {
+		return err
+	}
+	j.ended = true
+	return nil
+}
+
+// goOn closes the segment being made, and has the job go on to the next
+// once the player is close enough to it, or end there. The caller holds
+// e.mu.
+func (e *encoding) goOn(ctx context.Context, j *job) error {
+	if err := e.close(j); err != nil {
+		return err
+	}
+	// Started ahead of its play, the encoding has its first segment:
+	// FFmpeg ends, and so does its read of the source. The play starts
+	// FFmpeg again from the next segment (see Early).
+	if e.early {
+		j.cancel()
+		return errStale
+	}
+	// Make segments as far ahead of the last one asked for as allowed.
+	plan := e.remux.Plan
+	for j.next > e.m.aheadLimit(plan, e.requested) {
+		if err := e.wait(ctx); err != nil {
 			return errStale
 		}
-		return e.begin(j, p.data)
+		if e.job != j || e.stopped {
+			return errStale
+		}
 	}
-	_, err := j.file.Write(p.data)
-	return err
+	// The segments from the job's end are made otherwise, by another
+	// job, from that keyframe on.
+	if j.next == j.end {
+		e.m.logger.Debug("A remux goes on otherwise", "segment", j.end, "fast", plan.Fast(j.end))
+		e.start(j.end)
+		e.signal()
+		return errStale
+	}
+	return nil
 }
 
 // begin starts writing segment j.next. The caller holds e.mu.
@@ -2429,7 +2514,7 @@ func (e *encoding) begin(j *job, data []byte) error {
 	if err != nil {
 		return err
 	}
-	j.file = file
+	j.file, j.ended = file, false
 	e.playback.began(e, j.next)
 	_, err = file.Write(data)
 	return err

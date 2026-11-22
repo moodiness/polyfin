@@ -36,6 +36,10 @@ const (
 	warmBudget = 64 << 20
 	warmHead   = 5 << 20
 	warmMargin = 1 << 20
+	// earlyMargin is how much of a version a play started early reads
+	// past the end of its first segment, warmMargin at least (see
+	// firstSegmentEnd).
+	earlyMargin = time.Second
 	// warmTime bounds a warm, maxWarms the warms under way at once: a
 	// newer one stops the oldest.
 	warmTime = 2 * time.Minute
@@ -221,14 +225,67 @@ func warmSpans(plan hls.Plan, offsets []container.Keyframe, start time.Duration,
 
 // offsetAt is where the last keyframe at or before t starts, 0 when none.
 func offsetAt(offsets []container.Keyframe, t time.Duration) int64 {
+	if i := keyframeAt(offsets, t); i >= 0 {
+		return offsets[i].Offset
+	}
+	return 0
+}
+
+// keyframeAt is the index of the last keyframe at or before t, -1 when
+// none.
+func keyframeAt(offsets []container.Keyframe, t time.Duration) int {
 	i, found := slices.BinarySearchFunc(offsets, t, func(k container.Keyframe, t time.Duration) int { return cmp.Compare(k.Time, t) })
 	if !found {
 		i--
 	}
-	if i < 0 {
-		return 0
+	return i
+}
+
+// firstSegmentBound is the bound FFmpeg reads the source src of version
+// within when it starts ahead of its play (see StartEarly): the bytes of
+// its plan's first segment (see firstSegmentEnd). Nil, for none, for a
+// plan of a single segment, and when where its keyframes start is not
+// known: a version cut on a grid, one FFmpeg searches, or one whose index
+// tells no offsets.
+func (s *Service) firstSegmentBound(ctx context.Context, version library.Version, analysis media.Analysis, plan hls.Plan, src *source.Source) *source.Bound {
+	if plan.Len() < 2 || plan.Grid() || plan.IsSearched() {
+		return nil
 	}
-	return offsets[i].Offset
+	var bound *source.Bound
+	_ = s.readSized(ctx, version, analysis, src, func(size int64) error {
+		offsets, err := s.keyframeOffsets(ctx, version, src, size)
+		if err == nil && len(offsets) > 0 {
+			bound = source.NewBound(firstSegmentEnd(plan, offsets, size))
+		}
+		return err
+	})
+	return bound
+}
+
+// firstSegmentEnd is where the bytes of a plan's first segment end, in a
+// file of size bytes whose keyframes start at offsets: where the next
+// segment starts, from the keyframe at or before it, read at the rate of
+// the stretch up to the following keyframe, since a fast segment ends
+// between two (see hls.Plan.FastFrom); and earlyMargin of that stretch
+// more, warmMargin at least, for the bytes of the next segment's keyframe
+// and the frames FFmpeg holds before it writes a segment.
+func firstSegmentEnd(plan hls.Plan, offsets []container.Keyframe, size int64) int64 {
+	t := plan.Start(1)
+	i := keyframeAt(offsets, t)
+	var from container.Keyframe
+	if i >= 0 {
+		from = offsets[i]
+	}
+	to := container.Keyframe{Time: plan.End(plan.Len() - 1), Offset: size}
+	if i+1 < len(offsets) {
+		to = offsets[i+1]
+	}
+	var rate float64
+	if to.Time > from.Time {
+		rate = float64(to.Offset-from.Offset) / (to.Time - from.Time).Seconds()
+	}
+	end := from.Offset + int64(rate*(t-from.Time).Seconds()) + max(warmMargin, int64(rate*earlyMargin.Seconds()))
+	return min(end, size)
 }
 
 // ebmlMagic starts every Matroska and WebM file.

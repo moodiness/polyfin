@@ -631,8 +631,14 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	// 2.6.3, it fetches that file with its play session alone, which then
 	// asks Polyfin to relay it.
 	asFile, tokenless := integratedPlayer(r, request)
-	session := h.grant(playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
-		Relay: tokenless || mustRelay(r, chosen.version)})
+	grant := playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
+		Relay: tokenless || mustRelay(r, chosen.version)}
+	// A play over HLS from the start goes on from what was started for it
+	// as the title opened, in that play session (see startEarly).
+	session, early := h.earlySession(grant, chosen.decision.HLS && request.StartTimeTicks.value == 0)
+	if !early {
+		session = h.grant(grant)
+	}
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	// Every version listed is named for the profile sent: the one chosen
 	// from its decision, the others from what is known of them.
@@ -1092,12 +1098,8 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 	source.Container = decision.Container
 	source.SupportsDirectPlay, source.SupportsDirectStream = decision.DirectPlay, decision.DirectPlay
 	if streamed {
-		limit := request.MaxStreamingBitrate.value
-		if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
-			limit = *request.DeviceProfile.MaxStreamingBitrate
-		}
 		source.SupportsTranscoding = true
-		source.TranscodingUrl = transcodingURL(r, p.item.ID, id, version, analysis, streams, decision, limit, session, h.fastStart(r, version, decision, request))
+		source.TranscodingUrl = h.playURL(r, p, d, request, session)
 		source.TranscodingSubProtocol = "hls"
 		if decision.Progressive {
 			source.TranscodingSubProtocol = "http"
@@ -1137,6 +1139,18 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 		attachment.DeliveryUrl = attachmentURL(r, p.item.ID, id, attachment.Index)
 	}
 	return source
+}
+
+// playURL is the TranscodingUrl of a play of d over HLS, or streamed as
+// one file, in the play session session, under the app's bitrate limit,
+// once its subtitle deliveries were adapted (see deliverable).
+func (h *Handler) playURL(r *http.Request, p playable, d decided, request playbackInfoRequest, session string) string {
+	limit := request.MaxStreamingBitrate.value
+	if limit <= 0 && request.DeviceProfile.MaxStreamingBitrate != nil {
+		limit = *request.DeviceProfile.MaxStreamingBitrate
+	}
+	return transcodingURL(r, p.item.ID, d.id, d.version, d.analysis, d.source.MediaStreams, d.decision, limit, session,
+		h.fastStart(r, d.version, d.decision, request))
 }
 
 // fastStart is where a play over HLS that starts with fast segments

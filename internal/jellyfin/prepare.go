@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"runtime/debug"
 	"slices"
 	"sync"
@@ -28,7 +29,8 @@ import (
 // analyzeInTurn). The bytes of a first segment are read ahead for the
 // version a PlaybackInfo chose, and, within a small budget for each user,
 // for the titles of Continue Watching and Next Up and the next episode
-// (see warmAhead).
+// (see warmAhead). The title whose details a device opened last has its
+// play started early, once its version is analyzed (see startEarly).
 
 const (
 	// maxNextEpisodeLead is how long before an episode ends the next one is
@@ -101,6 +103,9 @@ type preparations struct {
 	// spent is what each user's first segments read ahead spent, since
 	// when.
 	spent map[accounts.ID]spentBytes
+	// early are the plays started early, one per user and device (see
+	// startEarly).
+	early map[earlyOwner]*earlyPlay
 }
 
 // spentBytes is what a user's first segments read ahead spent since a
@@ -112,7 +117,7 @@ type spentBytes struct {
 
 func newPreparations(logger *slog.Logger) *preparations {
 	return &preparations{now: time.Now, logger: logger, after: time.After, running: map[preparationKey]bool{},
-		prepared: map[preparationKey]time.Time{}, spent: map[accounts.ID]spentBytes{}}
+		prepared: map[preparationKey]time.Time{}, spent: map[accounts.ID]spentBytes{}, early: map[earlyOwner]*earlyPlay{}}
 }
 
 // spend reports whether a user's first segments read ahead may read n
@@ -275,6 +280,23 @@ func (h *Handler) prepare(key preparationKey, work func(ctx context.Context) boo
 // failed, as many as a play reads at once, preparedVersions at most. A
 // play then finds it analyzed, and the keyframe index of an HLS play read.
 func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) {
+	h.prepareTitle(ctx, nil, user, item, versions, opened)
+}
+
+// prepareDetails prepares as prepareOpened does a title whose details r
+// opened, then starts its play early for r's device (see startEarly), and
+// stops the one it started for another title.
+func (h *Handler) prepareDetails(r *http.Request, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) {
+	h.prepareTitle(r.Context(), earlyFrom(r), user, item, versions, opened)
+}
+
+// prepareTitle is prepareOpened, which starts the play early once the
+// version is analyzed for the device of from, when set: a copy of the
+// request that opened the details (see earlyFrom).
+func (h *Handler) prepareTitle(ctx context.Context, from *http.Request, user accounts.User, item library.Item, versions []library.Version, opened accounts.ID) {
+	if from != nil {
+		h.leaveEarly(from, item.ID)
+	}
 	settings := h.Accounts.Settings()
 	if !settings.PrepareAhead || len(versions) == 0 {
 		return
@@ -282,7 +304,12 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 	at := openedIndex(opened, versions)
 	order := append([]library.Version{versions[at]}, slices.Delete(slices.Clone(versions), at, at+1)...)
 	order = order[:min(len(order), preparedVersions, max(settings.VersionAttempts, 1))]
-	h.prepareVersions(ctx, preparationKey{user: user.ID, title: item.ID, version: order[0].ID}, order)
+	var then func()
+	if from != nil {
+		first := order[0]
+		then = func() { h.startEarly(from, user, item, first, opened) }
+	}
+	h.prepareVersionsThen(ctx, preparationKey{user: user.ID, title: item.ID, version: order[0].ID}, order, then)
 }
 
 // prepareVersions queues a preparation of key that analyzes versions in
@@ -292,6 +319,14 @@ func (h *Handler) prepareOpened(ctx context.Context, user accounts.User, item li
 // playback.ErrTorrentIdle), so a preparation would analyze nothing and be
 // made again at each trigger.
 func (h *Handler) prepareVersions(ctx context.Context, key preparationKey, versions []library.Version) {
+	h.prepareVersionsThen(ctx, key, versions, nil)
+}
+
+// prepareVersionsThen is prepareVersions, which then runs then, unless
+// nil, in a goroutine of its own: at once when the first version is
+// analyzed already, else once the preparation queued analyzed one. A
+// preparation of key under way or done lately runs no other then.
+func (h *Handler) prepareVersionsThen(ctx context.Context, key preparationKey, versions []library.Version, then func()) {
 	versions = slices.DeleteFunc(slices.Clone(versions), func(v library.Version) bool {
 		return h.Playback.Failed(v.ID) || h.idleTorrent(v)
 	})
@@ -299,10 +334,17 @@ func (h *Handler) prepareVersions(ctx context.Context, key preparationKey, versi
 		return
 	}
 	if _, analyzed := h.Playback.Analyzed(ctx, versions[0].ID); analyzed {
+		if then != nil {
+			go then()
+		}
 		return
 	}
 	h.prepare(key, func(ctx context.Context) bool {
-		return h.analyzeInTurn(ctx, versions)
+		analyzed := h.analyzeInTurn(ctx, versions)
+		if analyzed && then != nil {
+			go then()
+		}
+		return analyzed
 	})
 }
 
@@ -348,22 +390,24 @@ func (h *Handler) analyzeInTurn(ctx context.Context, versions []library.Version)
 	return analyzed
 }
 
-// prepareListed prepares as prepareOpened does once the title's versions
-// are all in, for details that answered before some addons did (see
+// prepareListed prepares as prepareDetails does once the title's versions
+// are all in, for details r that answered before some addons did (see
 // knownPlayable): waiting for them joins the requests the details started,
 // asking nothing more, within preparationTimeout. An addon answering later
 // still may change the version that comes first, which prepares it in turn
 // (see versionsChanged).
-func (h *Handler) prepareListed(ctx context.Context, user accounts.User, item library.Item, opened accounts.ID) {
+func (h *Handler) prepareListed(r *http.Request, user accounts.User, item library.Item, opened accounts.ID) {
+	from := earlyFrom(r)
+	h.leaveEarly(from, item.ID)
 	if !h.Accounts.Settings().PrepareAhead {
 		return
 	}
 	go func() {
 		defer logPanic(h.Logger, "Preparing a title's versions ended on a panic")
-		ctx, cancel := context.WithTimeout(library.Background(stremio.WithOrigin(context.WithoutCancel(ctx), stremio.OriginPreload)), preparationTimeout)
+		ctx, cancel := context.WithTimeout(library.Background(stremio.WithOrigin(from.Context(), stremio.OriginPreload)), preparationTimeout)
 		defer cancel()
 		if p, err := h.playable(ctx, user, item); err == nil {
-			h.prepareOpened(ctx, user, item, p.versions, opened)
+			h.prepareTitle(ctx, from, user, item, p.versions, opened)
 		}
 	}()
 }

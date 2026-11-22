@@ -12,13 +12,16 @@ import (
 // piece is a part of FFmpeg's output: the fMP4 initialization segment,
 // with the timescale of its video track, or media that starts on a video
 // keyframe, at its presentation time, or that continues the piece before
-// it.
+// it. A fragment of fMP4 tells where its video ends too (ends): where the
+// next keyframe is presented, as its first one is.
 type piece struct {
 	data      []byte
 	init      bool
 	timescale uint64
 	keyframe  bool
 	at        time.Duration
+	end       time.Duration
+	ends      bool
 }
 
 // maxBox bounds the boxes read from FFmpeg: a fragment holds the media
@@ -39,8 +42,8 @@ func splitMP4(r io.Reader, emit func(piece) error) error {
 	var video uint32
 	var timescale uint64
 	var fragment []byte
-	var keyframe bool
-	var at time.Duration
+	var keyframe, ends bool
+	var at, end time.Duration
 	for {
 		box, kind, err := readBox(in)
 		if errors.Is(err, io.EOF) {
@@ -68,11 +71,14 @@ func splitMP4(r io.Reader, emit func(piece) error) error {
 			var presentation uint64
 			presentation, keyframe = fragmentStart(box[8:], video)
 			at = ticks(presentation, timescale) - timestampOffset
+			var duration uint64
+			duration, ends = fragmentDuration(box[8:], video)
+			end = ticks(presentation+duration, timescale) - timestampOffset
 		case "mdat":
 			if fragment == nil {
 				return errors.New("media data came without a fragment header")
 			}
-			if err := emit(piece{data: append(fragment, box...), keyframe: keyframe, at: at}); err != nil {
+			if err := emit(piece{data: append(fragment, box...), keyframe: keyframe, at: at, end: end, ends: ends}); err != nil {
 				return err
 			}
 			fragment = nil
@@ -309,6 +315,94 @@ func firstSample(content []byte) sample {
 		at += 4
 	}
 	return s
+}
+
+// fragmentDuration reads how long the samples of the video track in a
+// moof's content last, in its timescale: the next fragment's first one
+// decodes that much after this one's, and, both keyframes, is presented
+// that much after it too, their composition offsets being the stream's
+// delay. False when the moof does not tell every sample's duration.
+func fragmentDuration(moof []byte, video uint32) (uint64, bool) {
+	var total uint64
+	var found bool
+	children(moof, func(kind string, traf []byte) {
+		if kind != "traf" || found {
+			return
+		}
+		var track, fallback uint32
+		var hasFallback, runs bool
+		known := true
+		var sum uint64
+		children(traf, func(kind string, content []byte) {
+			switch kind {
+			case "tfhd":
+				track, fallback, hasFallback = trackDuration(content)
+			case "trun":
+				duration, ok := runDuration(content, fallback, hasFallback)
+				sum, known, runs = sum+duration, known && ok, true
+			}
+		})
+		if track == video {
+			total, found = sum, runs && known
+		}
+	})
+	return total, found
+}
+
+// trackDuration reads a tfhd: the track id and the default sample
+// duration, if it tells one.
+func trackDuration(content []byte) (uint32, uint32, bool) {
+	if len(content) < 8 {
+		return 0, 0, false
+	}
+	flags := binary.BigEndian.Uint32(content) & 0xffffff
+	track := binary.BigEndian.Uint32(content[4:])
+	offset := 8
+	if flags&0x01 != 0 {
+		offset += 8
+	}
+	if flags&0x02 != 0 {
+		offset += 4
+	}
+	if flags&0x08 == 0 || len(content) < offset+4 {
+		return track, 0, false
+	}
+	return track, binary.BigEndian.Uint32(content[offset:]), true
+}
+
+// runDuration reads how long a trun's samples last: each its own duration,
+// or fallback, the track fragment's default, when known.
+func runDuration(content []byte, fallback uint32, hasFallback bool) (uint64, bool) {
+	if len(content) < 8 {
+		return 0, false
+	}
+	flags := binary.BigEndian.Uint32(content) & 0xffffff
+	count := uint64(binary.BigEndian.Uint32(content[4:]))
+	if flags&0x100 == 0 {
+		return count * uint64(fallback), hasFallback
+	}
+	at := uint64(8)
+	for _, flag := range []uint32{0x01, 0x04} {
+		if flags&flag != 0 {
+			at += 4
+		}
+	}
+	// Each sample's fields, in order: duration, size, flags and
+	// composition time offset, each present if its flag is set.
+	var size uint64
+	for _, flag := range []uint32{0x100, 0x200, 0x400, 0x800} {
+		if flags&flag != 0 {
+			size += 4
+		}
+	}
+	if uint64(len(content)) < at+count*size {
+		return 0, false
+	}
+	var sum uint64
+	for i := range count {
+		sum += uint64(binary.BigEndian.Uint32(content[at+i*size:]))
+	}
+	return sum, true
 }
 
 // ticks converts a time in timescale units, without overflowing.

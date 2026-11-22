@@ -76,6 +76,10 @@ type Remux struct {
 	// it gets them there when they can be made (see RemuxPlan).
 	FastStart bool
 	Start     time.Duration
+	// early marks a play started ahead of its Play (see StartEarly), whose
+	// FFmpeg reads its source within the bytes of its first segment until
+	// a play takes it over (see firstSegmentBound).
+	early bool
 }
 
 // Segmented reports whether a version is known to be cut into HLS
@@ -710,6 +714,27 @@ func (s *Service) StopRemux(session string) {
 	s.segments.Stop(session)
 }
 
+// StartEarly starts, ahead of a play, what the first request of remux's
+// play session would start: FFmpeg, reading the version's first segment
+// from its source, its initialization segment and first segment made,
+// which that session's first request takes over (see hls.Manager.Early).
+// Until then, FFmpeg reads nothing of the source past that segment's
+// bytes (see firstSegmentBound). It returns hls.ErrBusy, starting
+// nothing, while the server converts video.
+func (s *Service) StartEarly(ctx context.Context, remux Remux) error {
+	if !remux.HasVariant() {
+		return hls.ErrNotFound
+	}
+	remux.early = true
+	return s.segments.Early(ctx, remux.key(), s.remuxOpener(remux))
+}
+
+// StopEarly stops what StartEarly started for a play session, unless a
+// play took it over.
+func (s *Service) StopEarly(session string) {
+	s.segments.StopEarly(session)
+}
+
 // Encodings lists the remuxes and conversions under way, of files and
 // channels.
 func (s *Service) Encodings() []hls.Running {
@@ -813,7 +838,14 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// ones of the host.
 		src := s.open(remux.Version)
 		unurge := src.Urge()
-		target, unregister := s.loopback.register(remux.Version, src)
+		// Started ahead of its play, FFmpeg reads the first segment's bytes
+		// and nothing more until a play takes it over: a title opened and
+		// not played costs its first segment.
+		var bound *source.Bound
+		if remux.early {
+			bound = s.firstSegmentBound(ctx, remux.Version, analysis, plan, src)
+		}
+		target, unregister := s.loopback.registerBounded(remux.Version, src, bound)
 		done := make(chan struct{})
 		go s.watchSource(remux.Version, src, done)
 		release := func() {
@@ -828,6 +860,9 @@ func (s *Service) remuxOpener(remux Remux) hls.Opener {
 		// taking a body cut short for the end of the file.
 		failed := src.Failed()
 		r.Input, r.Failed, r.Failure = target, failed, func() error { return failureOf(src, failed) }
+		if bound != nil {
+			r.Lift = bound.Lift
+		}
 		// An MPEG-TS file or an MPEG program stream starts at the time its
 		// first packet tells, such as half a second, or hours into a
 		// broadcast: its timestamps are shifted to start at zero, as a

@@ -1076,7 +1076,7 @@ func (s *Source) holdsAny() bool {
 // host's answers stop, when they stop short of the size it tells (see
 // cutShort). A source that does not announce it is read to its end.
 func (s *Source) Size(ctx context.Context) (int64, error) {
-	r := s.reader(false)
+	r := s.reader(false, nil)
 	defer r.Close()
 	return r.Size(ctx)
 }
@@ -1116,7 +1116,7 @@ func (s *Source) extentLocked() int64 {
 // reading ahead: for the scattered reads of a container's index, which
 // must not move the window a stream reads ahead of.
 func (s *Source) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
-	r := s.reader(false)
+	r := s.reader(false, nil)
 	defer r.Close()
 	return r.ReadAt(ctx, p, off)
 }
@@ -1749,18 +1749,25 @@ func contentRange(value string) (start, end, total int64, ok bool) {
 // failing while a body is sent is not cut at once: what reads it is
 // stopped on Failed, and a body cut short reads as the end of the file.
 func (s *Source) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.serveHTTP(w, r, true)
+	s.serveHTTP(w, r, true, nil)
 }
 
 // ServeAsked is ServeHTTP without reading ahead: a request fetches the
 // blocks it reads, nothing more, for a read that must not fetch more than
 // it is sent, and the window a playback reads ahead of stays where it is.
 func (s *Source) ServeAsked(w http.ResponseWriter, r *http.Request) {
-	s.serveHTTP(w, r, false)
+	s.serveHTTP(w, r, false, nil)
 }
 
-func (s *Source) serveHTTP(w http.ResponseWriter, r *http.Request, streaming bool) {
-	if sending, err := s.serve(w, r, streaming); err != nil && sending && r.Context().Err() == nil {
+// ServeWithin is ServeHTTP within bound, until it is lifted (see Bound):
+// past it, the request is sent what the cache holds, and waits for the
+// rest.
+func (s *Source) ServeWithin(w http.ResponseWriter, r *http.Request, bound *Bound) {
+	s.serveHTTP(w, r, true, bound)
+}
+
+func (s *Source) serveHTTP(w http.ResponseWriter, r *http.Request, streaming bool, bound *Bound) {
+	if sending, err := s.serve(w, r, streaming, bound); err != nil && sending && r.Context().Err() == nil {
 		timer := time.NewTimer(failedHold)
 		defer timer.Stop()
 		select {
@@ -1779,19 +1786,19 @@ const failedHold = time.Second
 // content type set on w is kept. The error, for logs, is what made the
 // answer fail or end early.
 func (s *Source) Relay(w http.ResponseWriter, r *http.Request) error {
-	_, err := s.serve(w, r, true)
+	_, err := s.serve(w, r, true, nil)
 	return err
 }
 
 // serve answers a request for the source's bytes, read by a streaming
-// reader or not, and tells whether the error, if any, came once the answer
-// was being sent.
-func (s *Source) serve(w http.ResponseWriter, r *http.Request, streaming bool) (sending bool, err error) {
+// reader or not, within bound unless nil, and tells whether the error, if
+// any, came once the answer was being sent.
+func (s *Source) serve(w http.ResponseWriter, r *http.Request, streaming bool, bound *Bound) (sending bool, err error) {
 	if err := s.Failure(); err != nil {
 		http.Error(w, "source unavailable", http.StatusBadGateway)
 		return false, err
 	}
-	reader := s.reader(streaming)
+	reader := s.reader(streaming, bound)
 	defer reader.Close()
 	size, err := reader.Size(r.Context())
 	if err != nil {
