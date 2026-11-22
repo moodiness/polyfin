@@ -120,7 +120,7 @@ func (m *Manager) Playout(ctx context.Context, key, name string, next PlayoutNex
 	p := m.playouts[key]
 	if p == nil {
 		limit := m.limit()
-		if len(m.lives)+len(m.recordings)+len(m.playouts) >= serverLives || limit > 0 && m.converting(nil, nil) >= limit {
+		if m.runningLives()+len(m.recordings)+len(m.playouts) >= serverLives || limit > 0 && m.converting(nil, nil) >= limit {
 			m.mu.Unlock()
 			return nil, ErrBusy
 		}

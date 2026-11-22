@@ -91,6 +91,7 @@ func (m *Manager) Running() []Running {
 		}
 		running = append(running, r)
 	}
+	now := time.Now()
 	for _, l := range lives {
 		r := Running{Key: l.key, Live: true}
 		// A live input being opened holds its lock: it is shown as such.
@@ -100,7 +101,19 @@ func (m *Manager) Running() []Running {
 			}
 			l.mu.Unlock()
 		}
-		running = append(running, r)
+		// Each play session watching shows, sharing the encoding; one
+		// suspended runs nothing.
+		l.vmu.Lock()
+		if !l.suspended {
+			for session, v := range l.viewers {
+				if v.active(now) {
+					viewed := r
+					viewed.Key.Session, viewed.Key.User, viewed.Key.Device = session, v.user, v.device
+					running = append(running, viewed)
+				}
+			}
+		}
+		l.vmu.Unlock()
 	}
 	return running
 }

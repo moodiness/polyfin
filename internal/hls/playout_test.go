@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -229,4 +230,22 @@ func TestPlayoutReadsTheLastPlaylistFFmpegCouldNotRename(t *testing.T) {
 	if string(playlist) != want {
 		t.Fatalf("the playlist:\n%s\nwant the first piece's 4 seconds, then the second's numbered on:\n%s", playlist, want)
 	}
+}
+
+// listedSegments counts the segments an HLS playlist lists, and how long
+// they last in all, by their #EXTINF tags.
+func listedSegments(playlist []byte) (int, time.Duration) {
+	segments, listed := 0, time.Duration(0)
+	for line := range strings.Lines(string(playlist)) {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "#EXTINF:")
+		if !ok {
+			continue
+		}
+		segments++
+		duration, _, _ := strings.Cut(value, ",")
+		if seconds, err := strconv.ParseFloat(duration, 64); err == nil && seconds > 0 {
+			listed += time.Duration(seconds * float64(time.Second))
+		}
+	}
+	return segments, listed
 }

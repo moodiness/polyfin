@@ -912,6 +912,13 @@ type Manager struct {
 	// tests change.
 	keepVideo atomic.Pointer[func() bool]
 	keepFor   atomic.Int64
+	// buffer returns what live encodings keep for pause and rewind (see
+	// BufferLives); capping serializes the passes keeping them within
+	// their bound (see capBuffers), and diskFree, when set, tells the
+	// free space of the segments folder in place of its disk, for tests.
+	buffer   atomic.Pointer[func() LiveBuffer]
+	capping  sync.Mutex
+	diskFree func(path string) (free, used int64, mount string, ok bool)
 	// ends are where versions were found to end before their plans do,
 	// by Key.Version, under endsMu, which is taken last, with nothing
 	// taken under it (see End).
@@ -1004,7 +1011,7 @@ func (m *Manager) Stop(session string) {
 	delete(m.reads, session)
 	m.mu.Unlock()
 	m.stopWhere(func(key Key, _ *encoding) bool { return key.Session == session })
-	m.stopLives(func(key Key, _ *live) bool { return key.Session == session })
+	m.leaveLives(func(_ *live, s string, _ *viewer) bool { return s == session })
 	m.stopAudios(func(key AudioKey, _ *audioEncoding) bool { return key.Session == session })
 	m.release(session)
 }
@@ -1211,7 +1218,7 @@ func (m *Manager) stopIdle() {
 			return
 		case <-ticker.C:
 			m.stopWhere(func(_ Key, e *encoding) bool { return e.idle() })
-			m.stopLives(func(_ Key, l *live) bool { return l.idle() })
+			m.tendLives()
 			m.stopAudios(func(_ AudioKey, e *audioEncoding) bool { return e.idle() })
 			m.forgetReads()
 			m.expireEarly(time.Now())
@@ -1319,8 +1326,8 @@ type userVersion struct{ user, version string }
 // of HLS encodings, files' and channels', each conversion streamed as
 // one file on its own, each file converted whole (see ConvertFile), and
 // each channel Polyfin airs (see Playout).
-// The playback shared, which counts already, and the live encoding leaving
-// are left out. The caller holds m.mu.
+// The playback shared, which counts already, and the viewers of the user
+// shared leaving a live encoding are left out. The caller holds m.mu.
 func (m *Manager) converting(shared *userVersion, leaving *live) int {
 	playbacks := map[userVersion]bool{}
 	count := func(k Key) {
@@ -1340,7 +1347,10 @@ func (m *Manager) converting(shared *userVersion, leaving *live) int {
 		count(k)
 	}
 	for k, l := range m.lives {
-		if l != leaving {
+		// A live encoding counts once, whoever watches it, as the
+		// playback of one of its viewers.
+		if user, ok := l.converter(shared, l == leaving); ok {
+			k.User = user
 			count(k)
 		}
 	}

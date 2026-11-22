@@ -16,8 +16,8 @@ import (
 )
 
 // Live encodings read their source until the app leaves: a user starting
-// one more than userLives stops their oldest, and the server refuses one
-// past serverLives.
+// one more than userLives leaves their oldest, which stops, and the server
+// refuses one past serverLives.
 func TestLiveEncodingsAreCapped(t *testing.T) {
 	t.Parallel()
 	m, err := NewManager("ffmpeg-not-installed", t.TempDir(), slog.New(slog.DiscardHandler))
@@ -30,14 +30,14 @@ func TestLiveEncodingsAreCapped(t *testing.T) {
 	}
 	uri := func(name string) string { return name }
 	start := func(user string, n int) (Key, error) {
-		key := Key{Session: user + "-" + strconv.Itoa(n), Audio: -1, Format: TS, User: user}
+		key := Key{Session: user + "-" + strconv.Itoa(n), Audio: -1, Format: TS, User: user, Version: user + "-channel-" + strconv.Itoa(n)}
 		_, err := m.LivePlaylist(t.Context(), key, open, uri, 1)
 		return key, err
 	}
 	live := func(key Key) bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return m.lives[key] != nil
+		return m.lives[key.channel()] != nil
 	}
 	var keys []Key
 	for n := range userLives + 1 {

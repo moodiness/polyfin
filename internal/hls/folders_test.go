@@ -90,12 +90,12 @@ func TestAStoppedLiveEncodingKeepsTheNextOnesSegments(t *testing.T) {
 		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		return m.lives[key]
+		return m.lives[key.channel()]
 	}
 	old := live()
 	// The stop takes it off the live encodings first (see stopLives).
 	m.mu.Lock()
-	delete(m.lives, key)
+	delete(m.lives, key.channel())
 	m.mu.Unlock()
 	next := live()
 	kept := keepsSegment(t, next.dir)

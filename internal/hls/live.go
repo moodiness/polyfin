@@ -24,12 +24,14 @@ const (
 	// liveSegment is the length FFmpeg cuts live streams into, in seconds,
 	// as Jellyfin does for live TV; copied video is cut on its keyframes.
 	liveSegment = 3
-	// liveWindow is how many segments the live playlist lists. Older ones
-	// are deleted: a channel watched for hours keeps a minute of segments.
+	// liveWindow is how many segments FFmpeg's playlist lists, which the
+	// first ones of a second each fill (see liveInitTime), and what a live
+	// encoding keeps at least (see segmentBuffer).
 	liveWindow = 10
-	// liveIdle stops a live encoding no player asked anything of for that
-	// long. Players reload a live playlist every few seconds while they
-	// play, so a player that went quiet has left.
+	// liveIdle is how long a viewer of a live encoding counts as watching
+	// after it last asked for anything (see viewer.active). Players reload
+	// a live playlist every few seconds while they play, so a player that
+	// went quiet has left, unless its app reports its progress.
 	liveIdle = time.Minute
 	// liveInitTime is the length of the first segments, in seconds, so
 	// that a player starts a second after FFmpeg does.
@@ -79,8 +81,10 @@ var ErrBusy = errors.New("too many encodings")
 var liveFile = regexp.MustCompile(`^(\d+\.(ts|mp4)|init(-\d+)?\.mp4)$`)
 
 // live is a live stream that FFmpeg converts into HLS segments as it
-// comes, for a play session. Unlike a remux, it has no plan: FFmpeg's own
-// HLS muxer cuts the stream, and its playlist is served as it goes.
+// comes, for the play sessions watching its channel (see Key.channel).
+// Unlike a remux, it has no plan: FFmpeg's own HLS muxer cuts the stream,
+// and the segments it makes are kept for pause and rewind (see
+// livebuffer.go).
 type live struct {
 	m   *Manager
 	key Key
@@ -92,22 +96,37 @@ type live struct {
 	release func()
 	// run is the current or last run of FFmpeg, nil before the first;
 	// restarts are when runs started again lately, quick how many runs in
-	// a row ended within liveQuickRun.
+	// a row ended within liveQuickRun, ended how many ended since the
+	// encoding started or resumed.
 	run      *liveRun
 	restarts []time.Time
 	quick    int
+	ended    int
 	next     int
-	used     time.Time
-	// created orders a user's live encodings, the oldest replaced first.
-	created time.Time
+	buffer   segmentBuffer
 	// stopped is set once the encoding is stopped for good.
 	stopped bool
-	// answered is set once a playlist was answered: the first waits for
-	// its lead (see LivePlaylist), the next ones for a segment.
-	answered bool
 	// gaveUp is set once the encoding gave up after its restarts, and
 	// told so.
 	gaveUp bool
+	// suspending tells, once closed, that the encoding's last suspension
+	// stopped FFmpeg and released the input (see settleLocked), when they
+	// were at suspendedAt.
+	suspending  chan struct{}
+	suspendedAt time.Time
+
+	// vmu guards viewers and suspended. It is taken last, nothing being
+	// taken under it, and never held long, so that the manager reads them
+	// under its own lock while mu is held for an input being opened.
+	vmu sync.Mutex
+	// viewers are the play sessions watching, by session. A viewer's from
+	// and answered are guarded by mu.
+	viewers map[string]*viewer
+	// suspended is set once no one watched for liveIdle, or the last
+	// viewer stopped, while the buffer is kept: FFmpeg is stopped and the
+	// input released, until the next playlist asked for resumes it. It is
+	// written under mu too.
+	suspended bool
 }
 
 // liveRun is one run of FFmpeg.
@@ -125,66 +144,38 @@ type liveRun struct {
 	stalled error
 }
 
-// LivePlaylist returns the media playlist of the live encoding of key,
-// starting FFmpeg when it does not run. uri names each file the playlist
-// refers to.
+// channel is the key of the live encoding key's play session watches: its
+// play session, user and device left out, so that every play session
+// watching the same stream converted alike shares one FFmpeg and one
+// buffer.
+func (k Key) channel() Key {
+	k.Session, k.User, k.Device = "", "", ""
+	return k
+}
+
+// LivePlaylist returns the media playlist of the live encoding of key's
+// channel for key's play session, starting FFmpeg when it does not run.
+// uri names each file the playlist refers to.
 //
-// The first playlist is answered once it lists the segments the app asks
-// for (minSegments, as Jellyfin waits for MinSegments before answering a
-// live playlist: DynamicHlsController.GetLiveHlsStream, Jellyfin 12.4),
-// and at least liveLeadSegments segments of liveLead in all. Players start
-// a live stream at the first segment its playlist lists: with only one,
-// they play right behind FFmpeg, and any pause of the source stalls them.
-// A source the encoding read ahead, as a feed opened before, fills the
-// lead at once. The next playlists are answered once they list a segment,
-// as after a restart.
+// The first playlist of a play session is answered once it lists the
+// segments the app asks for (minSegments, as Jellyfin waits for
+// MinSegments before answering a live playlist:
+// DynamicHlsController.GetLiveHlsStream, Jellyfin 12.4), and at least
+// liveLeadSegments segments of liveLead in all. Players start a live
+// stream at the first segment its playlist lists: with only one, they
+// play right behind FFmpeg, and any pause of the source stalls them. A
+// source the encoding read ahead, as a feed opened before, or a channel
+// someone watches already, fills the lead at once. The next playlists are
+// answered once they list a segment, as after a restart, and go back to
+// where the play session joined, the buffer's length at most (see
+// window).
 func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri func(name string) string, minSegments int) ([]byte, error) {
-	m.mu.Lock()
-	if m.closed {
-		m.mu.Unlock()
-		return nil, ErrStopped
+	l, replaced, err := m.watch(key)
+	if err != nil {
+		return nil, err
 	}
-	l := m.lives[key]
-	var replaced *live
-	if l == nil {
-		// Each live encoding reads its source as it comes, until the app
-		// leaves: a user's newest replaces their oldest past userLives, and
-		// none starts past serverLives. Recordings count too, but are never
-		// replaced: past userLives with recordings only, none starts.
-		mine, oldest := m.userLives(key.User)
-		switch {
-		case mine >= userLives && oldest == nil:
-			m.mu.Unlock()
-			return nil, ErrBusy
-		case mine >= userLives:
-			replaced = oldest
-		case len(m.lives)+len(m.recordings)+len(m.playouts) >= serverLives:
-			m.mu.Unlock()
-			return nil, ErrBusy
-		}
-		// Nor does one converting the video of a playback past the limit.
-		if !m.admits(key, replaced) {
-			m.mu.Unlock()
-			return nil, ErrBusy
-		}
-		// A folder of its own: one of the same key started as this one
-		// stops does not have its segments removed with this one's (see
-		// stop).
-		dir, err := os.MkdirTemp(m.dir, "live-")
-		if err != nil {
-			m.mu.Unlock()
-			return nil, err
-		}
-		if replaced != nil {
-			delete(m.lives, replaced.key)
-		}
-		now := time.Now()
-		l = &live{m: m, key: key, dir: dir, used: now, created: now}
-		m.lives[key] = l
-	}
-	m.mu.Unlock()
 	if replaced != nil {
-		replaced.stop()
+		m.leaveLives(func(other *live, _ string, v *viewer) bool { return other == replaced && v.user == key.User })
 	}
 	ctx, cancel := context.WithTimeout(ctx, liveWait)
 	defer cancel()
@@ -195,9 +186,9 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 		if err != nil {
 			return nil, err
 		}
-		data, err := os.ReadFile(filepath.Join(l.dir, livePlaylist))
-		if err == nil && l.ready(data, minSegments) {
-			return rewriteLive(data, uri), nil
+		data, err := l.answer(key.Session, minSegments, uri)
+		if data != nil || err != nil {
+			return data, err
 		}
 		select {
 		case <-run.done:
@@ -222,56 +213,184 @@ func (m *Manager) LivePlaylist(ctx context.Context, key Key, open Opener, uri fu
 	}
 }
 
-// ready reports whether playlist, FFmpeg's, may be answered (see
-// LivePlaylist): the first once it lists minSegments segments, and
-// liveLeadSegments of liveLead in all; the next ones once they list one,
-// and so does the first once a run ended, as a run lists its own segments
-// only and a source read again owes no lead. It records the first
-// answered.
-func (l *live) ready(playlist []byte, minSegments int) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	segments, listed := listedSegments(playlist)
-	if l.answered || l.next > 0 || len(l.restarts) > 0 {
-		l.answered = l.answered || segments > 0
-		return segments > 0
+// watch makes key's play session a viewer of its channel's live encoding,
+// which it makes when there is none, and returns it, with the live
+// encoding the user leaves for it, if any.
+//
+// Each live encoding reads its source as it comes, until its viewers
+// leave. A user watching one more channel than userLives leaves their
+// oldest, and none starts past serverLives. Recordings count too, but are
+// never left: past userLives with recordings only, none starts. Joining a
+// channel another user watches costs the server nothing more, and so is
+// never refused past serverLives, nor past the conversions allowed.
+func (m *Manager) watch(key Key) (l, replaced *live, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		return nil, nil, ErrStopped
 	}
-	if segments < min(max(minSegments, liveLeadSegments), liveWindow) || listed < liveLead {
-		return false
+	now := time.Now()
+	channel := key.channel()
+	l = m.lives[channel]
+	if l == nil || !l.watchedBy(key.User, now) {
+		mine, oldest := m.userLives(key.User)
+		switch {
+		case mine >= userLives && oldest == nil:
+			return nil, nil, ErrBusy
+		case mine >= userLives:
+			replaced = oldest
+		}
 	}
-	l.answered = true
-	return true
+	if l == nil || l.isSuspended() {
+		if replaced == nil && m.runningLives()+len(m.recordings)+len(m.playouts) >= serverLives {
+			return nil, nil, ErrBusy
+		}
+		// Nor does one converting the video of a playback past the limit.
+		if !m.admits(key, replaced) {
+			return nil, nil, ErrBusy
+		}
+	}
+	if l == nil {
+		// A folder of its own: one of the same key started as this one
+		// stops does not have its segments removed with this one's (see
+		// stop).
+		dir, err := os.MkdirTemp(m.dir, "live-")
+		if err != nil {
+			return nil, nil, err
+		}
+		l = &live{m: m, key: channel, dir: dir, viewers: map[string]*viewer{}, buffer: segmentBuffer{last: -1}}
+		m.lives[channel] = l
+	}
+	l.vmu.Lock()
+	defer l.vmu.Unlock()
+	v := l.viewers[key.Session]
+	if v == nil {
+		v = &viewer{user: key.User, device: key.Device, joined: now}
+		l.viewers[key.Session] = v
+	}
+	v.used = now
+	return l, replaced, nil
 }
 
-// listedSegments counts the segments an HLS playlist lists, and how long
-// they last in all, by their #EXTINF tags.
-func listedSegments(playlist []byte) (int, time.Duration) {
-	segments, listed := 0, time.Duration(0)
-	for line := range strings.Lines(string(playlist)) {
-		value, ok := strings.CutPrefix(strings.TrimSpace(line), "#EXTINF:")
-		if !ok {
+// answer is the playlist of session, nil until it may be answered (see
+// window), or ErrStopped once session left the encoding.
+func (l *live) answer(session string, minSegments int, uri func(name string) string) ([]byte, error) {
+	l.vmu.Lock()
+	v := l.viewers[session]
+	l.vmu.Unlock()
+	l.mu.Lock()
+	added := l.takeIn()
+	var data []byte
+	var err error
+	if v == nil {
+		err = ErrStopped
+	} else if start, ok := l.window(v, minSegments); ok {
+		data = l.playlist(start, uri)
+	}
+	l.mu.Unlock()
+	if added {
+		l.m.capBuffers()
+	}
+	return data, err
+}
+
+// watchedBy reports whether an active viewer of the encoding, which runs,
+// is user's.
+func (l *live) watchedBy(user string, now time.Time) bool {
+	_, ok := l.userJoined(user, now)
+	return ok
+}
+
+// userJoined is when user's first active viewer of the encoding joined,
+// and whether it has one and the encoding runs.
+func (l *live) userJoined(user string, now time.Time) (time.Time, bool) {
+	l.vmu.Lock()
+	defer l.vmu.Unlock()
+	var joined time.Time
+	found := false
+	if l.suspended {
+		return joined, false
+	}
+	for _, v := range l.viewers {
+		if v.user == user && v.active(now) && (!found || v.joined.Before(joined)) {
+			joined, found = v.joined, true
+		}
+	}
+	return joined, found
+}
+
+// converter is the user whose playback a running live encoding counts as
+// toward the conversions at once (see converting): shared's user when they
+// watch it, else whoever joined first of its active viewers. leaving
+// leaves out shared's user, whose viewers leave the encoding. It reports
+// false for an encoding that runs no FFmpeg, or is left unwatched.
+func (l *live) converter(shared *userVersion, leaving bool) (string, bool) {
+	l.vmu.Lock()
+	defer l.vmu.Unlock()
+	if l.suspended {
+		return "", false
+	}
+	now := time.Now()
+	var first *viewer
+	for _, v := range l.viewers {
+		if !v.active(now) || shared != nil && v.user == shared.user && leaving {
 			continue
 		}
-		segments++
-		duration, _, _ := strings.Cut(value, ",")
-		if seconds, err := strconv.ParseFloat(duration, 64); err == nil && seconds > 0 {
-			listed += time.Duration(seconds * float64(time.Second))
+		if shared != nil && v.user == shared.user {
+			return v.user, true
+		}
+		if first == nil || v.joined.Before(first.joined) {
+			first = v
 		}
 	}
-	return segments, listed
+	if first == nil {
+		return "", false
+	}
+	return first.user, true
 }
 
-// LiveSegment opens a file of the live encoding of key: a segment its
-// playlist lists, or the initialization segment of fragmented MP4.
+// isSuspended reports whether the encoding is suspended (see
+// live.suspended).
+func (l *live) isSuspended() bool {
+	l.vmu.Lock()
+	defer l.vmu.Unlock()
+	return l.suspended
+}
+
+// runningLives counts the live encodings running: those suspended run no
+// FFmpeg and hold no source. The caller holds m.mu.
+func (m *Manager) runningLives() int {
+	n := 0
+	for _, l := range m.lives {
+		if !l.isSuspended() {
+			n++
+		}
+	}
+	return n
+}
+
+// LiveSegment opens a file of the live encoding of key's channel: a
+// segment its buffer lists, or the initialization segment of fragmented
+// MP4.
 func (m *Manager) LiveSegment(key Key, name string) (*os.File, error) {
 	m.mu.Lock()
-	l := m.lives[key]
+	l := m.lives[key.channel()]
 	m.mu.Unlock()
 	if l == nil || !liveFile.MatchString(name) {
 		return nil, ErrNotFound
 	}
+	// A play session that left, or was never a viewer, gets nothing of
+	// the buffer that lingers.
+	l.vmu.Lock()
+	v := l.viewers[key.Session]
+	if v != nil {
+		v.used = time.Now()
+	}
+	l.vmu.Unlock()
+	if v == nil {
+		return nil, ErrNotFound
+	}
 	l.mu.Lock()
-	l.used = time.Now()
 	stopped := l.stopped
 	l.mu.Unlock()
 	if stopped {
@@ -290,13 +409,27 @@ func (m *Manager) LiveSegment(key Key, name string) (*os.File, error) {
 // until then. Past liveRestarts within liveRestartWindow, it fails with
 // the last run's error, and so does the next request until the window
 // moved on. After a run that failed quickly the input is opened again,
-// which analyzes the stream again.
+// which analyzes the stream again. A suspended encoding resumes, once its
+// last run ended, as one starting: its input opened again, and its
+// segments numbered on after a discontinuity.
 func (l *live) ensure(ctx context.Context, open Opener) (*liveRun, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.used = time.Now()
 	if l.stopped {
 		return nil, ErrStopped
+	}
+	if l.suspended {
+		select {
+		case <-l.suspending:
+		default:
+			// Its FFmpeg is being stopped: the next request resumes it.
+			return l.run, nil
+		}
+		l.vmu.Lock()
+		l.suspended = false
+		l.vmu.Unlock()
+		l.run, l.restarts, l.quick, l.ended, l.gaveUp = nil, nil, 0, 0, false
+		l.m.logger.Debug("A live encoding resumes", "channel", l.remux.Channel)
 	}
 	reopen := false
 	run := l.run
@@ -352,16 +485,23 @@ func liveBackoff(quick int) time.Duration {
 
 // start runs FFmpeg into the encoding's directory, numbering segments on
 // from the last run's, so that a player that reloads the playlist does not
-// see the stream go back; a run after the first starts its playlist with
-// a discontinuity, and writes its own initialization segment. The caller
-// holds l.mu.
+// see the stream go back; a run after another, or after the encoding
+// resumed, starts with a discontinuity, and writes its own initialization
+// segment. Its segments are taken into the buffer as they come (see
+// follow). The caller holds l.mu.
 func (l *live) start() *liveRun {
 	ctx, cancel := context.WithCancel(context.Background())
-	previous := l.run
+	restart := l.run != nil || l.next > 0
 	run := &liveRun{started: time.Now(), cancel: cancel, done: make(chan struct{})}
 	l.run = run
-	args, method := l.remux.runArgs(l.dir, l.next, previous != nil), l.remux.Encode.method()
+	b := &l.buffer
+	b.runFirst, b.discontinue = b.end(), restart && b.last >= 0
+	if l.remux.Format == FMP4 {
+		b.init = liveInitName(l.next, restart)
+	}
+	args, method := l.remux.runArgs(l.dir, l.next, restart), l.remux.Encode.method()
 	refused, answered, channel := l.remux.Refused, l.remux.Answered, l.remux.Channel
+	go l.follow(run)
 	go func() {
 		defer cancel()
 		cmd := exec.CommandContext(ctx, l.m.ffmpegPath(), args...)
@@ -401,6 +541,8 @@ func (l *live) start() *liveRun {
 		}
 		l.mu.Lock()
 		l.next = max(l.next, lastSegment(l.dir)+1)
+		l.takeIn()
+		l.ended++
 		run.ended = time.Now()
 		if run.ended.Sub(run.started) < liveQuickRun {
 			l.quick++
@@ -525,13 +667,75 @@ func (l *live) played() bool {
 
 // playedLocked is played, l.mu held.
 func (l *live) playedLocked() bool {
-	return l.next > 0 || lastSegment(l.dir) >= 0
+	return l.next > 0 || l.buffer.last >= 0 || lastSegment(l.dir) >= 0
 }
 
-func (l *live) idle() bool {
+// leave removes the viewers match picks, and suspends the encoding once
+// none is active (see settleLocked).
+func (l *live) leave(match func(session string, v *viewer) bool, now time.Time) {
+	l.vmu.Lock()
+	removed := false
+	for session, v := range l.viewers {
+		if match(session, v) {
+			delete(l.viewers, session)
+			removed = true
+		}
+	}
+	l.vmu.Unlock()
+	// One watched still waits for no input being opened.
+	if !removed && l.watched(now) {
+		return
+	}
+	l.mu.Lock()
+	finish := l.settleLocked(now)
+	l.mu.Unlock()
+	if finish != nil {
+		finish()
+	}
+}
+
+// settleLocked suspends the encoding, which runs, once no viewer is
+// active, when it keeps a buffer: it then lingers for liveLinger (see
+// expired). It returns what finishes the suspension, to call once l.mu
+// is released, nil when it does not suspend. The caller holds l.mu.
+func (l *live) settleLocked(now time.Time) func() {
+	if l.stopped || l.suspended || l.watched(now) || !l.keepsLocked() {
+		return nil
+	}
+	l.vmu.Lock()
+	l.suspended = true
+	l.vmu.Unlock()
+	l.suspendedAt = now
+	done := make(chan struct{})
+	l.suspending = done
+	run, release := l.run, l.release
+	l.opened, l.release = false, nil
+	l.m.logger.Debug("A live encoding no one watches was suspended, its buffer kept", "channel", l.remux.Channel)
+	return func() {
+		if run != nil {
+			run.cancel()
+			<-run.done
+		}
+		if release != nil {
+			release()
+		}
+		close(done)
+	}
+}
+
+// expired reports whether the encoding is to be stopped for good: no
+// viewer is active, and it keeps no buffer, or it was suspended
+// liveLinger ago, or buffers were turned off since.
+func (l *live) expired(now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return time.Since(l.used) > liveIdle
+	if l.watched(now) {
+		return false
+	}
+	if l.suspended {
+		return now.Sub(l.suspendedAt) > liveLinger || l.m.bufferSettings().Length <= 0
+	}
+	return !l.keepsLocked()
 }
 
 // stop ends the encoding and removes its segments.
@@ -571,28 +775,46 @@ func (m *Manager) stopLives(match func(Key, *live) bool) {
 	}
 }
 
-// liveMap is the initialization segment an FFmpeg playlist names.
-var liveMap = regexp.MustCompile(`URI="init(-\d+)?\.mp4"`)
-
-// rewriteLive names the files FFmpeg's playlist refers to by uri.
-func rewriteLive(playlist []byte, uri func(name string) string) []byte {
-	var out bytes.Buffer
-	for line := range strings.Lines(string(playlist)) {
-		line = strings.TrimRight(line, "\r\n")
-		switch {
-		case line == "":
-			continue
-		case strings.HasPrefix(line, "#EXT-X-MAP:"):
-			line = liveMap.ReplaceAllStringFunc(line, func(attribute string) string {
-				return `URI="` + uri(attribute[len(`URI="`):len(attribute)-1]) + `"`
-			})
-		case !strings.HasPrefix(line, "#"):
-			line = uri(line)
-		}
-		out.WriteString(line)
-		out.WriteByte('\n')
+// liveList is the live encodings, suspended ones included.
+func (m *Manager) liveList() []*live {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	lives := make([]*live, 0, len(m.lives))
+	for _, l := range m.lives {
+		lives = append(lives, l)
 	}
-	return out.Bytes()
+	return lives
+}
+
+// leaveLives removes the viewers match picks from every live encoding,
+// suspends those left unwatched that keep a buffer, and stops the others
+// (see expired).
+func (m *Manager) leaveLives(match func(l *live, session string, v *viewer) bool) {
+	now := time.Now()
+	for _, l := range m.liveList() {
+		l.leave(func(session string, v *viewer) bool { return match(l, session, v) }, now)
+	}
+	m.stopLives(func(_ Key, l *live) bool { return l.expired(now) })
+}
+
+// tendLives forgets the viewers quiet for liveIdle and liveLinger, which
+// will not come back to their play session's window, suspends the live
+// encodings no one watches that keep a buffer, and stops those no one
+// watches that keep none, or lingered long enough.
+func (m *Manager) tendLives() {
+	m.leaveLives(func(_ *live, _ string, v *viewer) bool { return time.Since(v.used) > liveIdle+liveLinger })
+}
+
+// liveMap is the initialization segment an FFmpeg playlist names.
+var liveMap = regexp.MustCompile(`URI="(init(?:-\d+)?\.mp4)"`)
+
+// liveInitName is the initialization segment a run of a live encoding
+// writes, its first segment numbered start (see runArgs).
+func liveInitName(start int, restart bool) string {
+	if restart {
+		return "init-" + strconv.Itoa(start) + ".mp4"
+	}
+	return liveInit
 }
 
 // liveArgs is FFmpeg's command line for the first run of a live encoding
@@ -603,8 +825,9 @@ func (r Remux) liveArgs(dir string, start int) []string {
 
 // runArgs is FFmpeg's command line for a run of a live encoding writing
 // into dir, its first segment numbered start; restart marks a run after
-// the first. The playlist never ends: a live stream that does is read
-// again.
+// another. The playlist never ends: a live stream that does is read
+// again. FFmpeg leaves its segments in place: the buffer removes them
+// (see segmentBuffer).
 func (r Remux) runArgs(dir string, start int, restart bool) []string {
 	args := []string{"-hide_banner", "-nostdin", "-loglevel", "error"}
 	if r.Encode != nil {
@@ -630,12 +853,11 @@ func (r Remux) runArgs(dir string, start int, restart bool) []string {
 		args = append(args, "-bsf:a", "aac_adtstoasc")
 	}
 	args = append(args, r.threadArgs()...)
-	flags := "delete_segments+independent_segments+temp_file+omit_endlist"
-	init := liveInit
+	flags := "independent_segments+temp_file+omit_endlist"
 	if restart {
 		flags += "+discont_start"
-		init = "init-" + strconv.Itoa(start) + ".mp4"
 	}
+	init := liveInitName(start, restart)
 	args = append(args, "-f", "hls", "-hls_init_time", strconv.Itoa(liveInitTime), "-hls_time", strconv.Itoa(liveSegment),
 		"-hls_list_size", strconv.Itoa(liveWindow), "-hls_flags", flags, "-start_number", strconv.Itoa(start))
 	if r.Format == FMP4 {

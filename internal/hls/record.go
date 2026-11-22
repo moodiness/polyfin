@@ -28,17 +28,19 @@ const (
 	recordKill = 10 * time.Second
 )
 
-// userLives counts the live encodings and recordings of user, with the
-// oldest of their live encodings, which a new one may replace. The caller
-// holds m.mu.
+// userLives counts the live encodings user watches and the recordings of
+// user, with the live encoding user joined first of those, which a new
+// one may make them leave. The caller holds m.mu.
 func (m *Manager) userLives(user string) (int, *live) {
 	var oldest *live
+	var oldestJoined time.Time
 	mine := 0
-	for k, other := range m.lives {
-		if k.User == user {
+	now := time.Now()
+	for _, other := range m.lives {
+		if joined, ok := other.userJoined(user, now); ok {
 			mine++
-			if oldest == nil || other.created.Before(oldest.created) {
-				oldest = other
+			if oldest == nil || joined.Before(oldestJoined) {
+				oldest, oldestJoined = other, joined
 			}
 		}
 	}
@@ -89,8 +91,7 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 		return ErrBusy
 	case mine >= userLives:
 		replaced = oldest
-		delete(m.lives, replaced.key)
-	case len(m.lives)+len(m.recordings)+len(m.playouts) >= serverLives:
+	case m.runningLives()+len(m.recordings)+len(m.playouts) >= serverLives:
 		m.mu.Unlock()
 		return ErrBusy
 	}
@@ -102,7 +103,7 @@ func (m *Manager) Record(ctx context.Context, key Key, open Opener, path string)
 		m.mu.Unlock()
 	}()
 	if replaced != nil {
-		replaced.stop()
+		m.leaveLives(func(other *live, _ string, v *viewer) bool { return other == replaced && v.user == key.User })
 	}
 	remux, release, err := open(ctx)
 	if err != nil {
