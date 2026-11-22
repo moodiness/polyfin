@@ -688,6 +688,11 @@ type settingsJSON struct {
 	RecordingCommercials *bool `json:"recordingCommercials"`
 	// LiveTvRefreshHours keeps its current value when a PUT leaves it out.
 	LiveTvRefreshHours *int `json:"liveTvRefreshHours"`
+	// LiveTvBufferMinutes keeps its current value when a PUT leaves it out.
+	LiveTvBufferMinutes *int `json:"liveTvBufferMinutes"`
+	// LiveTvBufferGigabytes keeps its current value when a PUT leaves it
+	// out.
+	LiveTvBufferGigabytes *int `json:"liveTvBufferGigabytes"`
 	// LocalScanHours keeps its current value when a PUT leaves it out.
 	LocalScanHours *int `json:"localScanHours"`
 	// WatchlistCheckHours keeps its current value when a PUT leaves it out.
@@ -1044,6 +1049,8 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		RecordingRetentionDays: &settings.RecordingRetentionDays,
 		RecordingCommercials:   &settings.RecordingCommercials,
 		LiveTvRefreshHours:     &settings.LiveTvRefreshHours,
+		LiveTvBufferMinutes:    &settings.LiveTvBufferMinutes,
+		LiveTvBufferGigabytes:  &settings.LiveTvBufferGigabytes,
 		LocalScanHours:         &settings.LocalScanHours,
 		WatchlistCheckHours:    &settings.WatchlistCheckHours,
 		WatchLocalFolders:      &settings.WatchLocalFolders,
@@ -1956,6 +1963,8 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		RecordingRetentionDays: valueOr(body.RecordingRetentionDays, current.RecordingRetentionDays),
 		RecordingCommercials:   valueOr(body.RecordingCommercials, current.RecordingCommercials),
 		LiveTvRefreshHours:     valueOr(body.LiveTvRefreshHours, current.LiveTvRefreshHours),
+		LiveTvBufferMinutes:    valueOr(body.LiveTvBufferMinutes, current.LiveTvBufferMinutes),
+		LiveTvBufferGigabytes:  valueOr(body.LiveTvBufferGigabytes, current.LiveTvBufferGigabytes),
 		LocalScanHours:         valueOr(body.LocalScanHours, current.LocalScanHours),
 		WatchlistCheckHours:    valueOr(body.WatchlistCheckHours, current.WatchlistCheckHours),
 		WatchLocalFolders:      valueOr(body.WatchLocalFolders, current.WatchLocalFolders),

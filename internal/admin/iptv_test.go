@@ -257,3 +257,41 @@ func TestSettingsLiveTvRefreshHours(t *testing.T) {
 		}
 	}
 }
+
+// The pause and rewind buffer is 30 minutes per channel by default, from 0
+// to 240, within 20 GB for all channels by default, from 1 to 1000.
+func TestSettingsLiveTvBuffer(t *testing.T) {
+	t.Parallel()
+	api := newTestAPI(t, 10)
+	administrator := api.signedIn("administrator", true)
+	if _, body, _ := administrator.call(http.MethodGet, "/settings", nil); body["liveTvBufferMinutes"] != 30.0 || body["liveTvBufferGigabytes"] != 20.0 {
+		t.Errorf("default: %v %v", body["liveTvBufferMinutes"], body["liveTvBufferGigabytes"])
+	}
+	base := map[string]any{"serverName": "Polyfin", "quickConnectEnabled": true, "language": "en"}
+	settings := maps.Clone(base)
+	settings["liveTvBufferMinutes"], settings["liveTvBufferGigabytes"] = 0, 100
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", settings); status != http.StatusOK ||
+		body["liveTvBufferMinutes"] != 0.0 || body["liveTvBufferGigabytes"] != 100.0 {
+		t.Fatalf("saving: %d %v", status, body)
+	}
+	if status, body, _ := administrator.call(http.MethodPut, "/settings", base); status != http.StatusOK ||
+		body["liveTvBufferMinutes"] != 0.0 || body["liveTvBufferGigabytes"] != 100.0 {
+		t.Errorf("left out: %d %v", status, body)
+	}
+	for _, refused := range []struct {
+		key   string
+		value int
+		code  string
+	}{
+		{"liveTvBufferMinutes", -1, "invalid_live_tv_buffer_minutes"},
+		{"liveTvBufferMinutes", accounts.MaxLiveTvBufferMinutes + 1, "invalid_live_tv_buffer_minutes"},
+		{"liveTvBufferGigabytes", 0, "invalid_live_tv_buffer_gigabytes"},
+		{"liveTvBufferGigabytes", accounts.MaxLiveTvBufferGigabytes + 1, "invalid_live_tv_buffer_gigabytes"},
+	} {
+		body := maps.Clone(base)
+		body[refused.key] = refused.value
+		if status, answer, _ := administrator.call(http.MethodPut, "/settings", body); status != http.StatusBadRequest || answer["error"] != refused.code {
+			t.Errorf("%s %d: %d %v", refused.key, refused.value, status, answer)
+		}
+	}
+}

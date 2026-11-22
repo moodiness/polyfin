@@ -858,6 +858,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidConvertRecordingsHours, http.StatusBadRequest, "invalid_convert_recordings_hours"},
 		{accounts.ErrInvalidPlaybackHistoryDays, http.StatusBadRequest, "invalid_playback_history_days"},
 		{accounts.ErrInvalidLiveTvRefreshHours, http.StatusBadRequest, "invalid_live_tv_refresh_hours"},
+		{accounts.ErrInvalidLiveTvBufferMinutes, http.StatusBadRequest, "invalid_live_tv_buffer_minutes"},
+		{accounts.ErrInvalidLiveTvBufferGigabytes, http.StatusBadRequest, "invalid_live_tv_buffer_gigabytes"},
 		{accounts.ErrInvalidLocalScanHours, http.StatusBadRequest, "invalid_local_scan_hours"},
 		{accounts.ErrInvalidWatchlistCheckHours, http.StatusBadRequest, "invalid_watchlist_check_hours"},
 		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
