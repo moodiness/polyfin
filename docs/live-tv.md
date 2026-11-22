@@ -42,11 +42,11 @@ A channel plays as its source streams it, when the app takes that stream. Otherw
 | MPEG-TS, played as it is (by apps such as Android TV) | Relayed from the channel's connection. When the app may be sent to the source, can reach it, and the source has no connection limit, the app is sent to the source. |
 | DASH (an MPD manifest), from an IPTV source or an addon | Always converted: FFmpeg reads the manifest and its segments through Polyfin, and repackages them into HLS |
 
-- **jellyfin-web:** it always gets HLS relayed, as browsers cannot read other sites' playlists.
+- **jellyfin-web:** an HLS stream is relayed to it, as browsers cannot read other sites' playlists. With the pause buffer on, FFmpeg repackages it instead (see [Pause and rewind](#pause-and-rewind)).
 - **IPTV sources:** an app is never sent to an IPTV source, whose addresses hold its account, unless **Send apps to the source** is **Everyone** in **Settings › Playback**. A channel of an addon follows the addon's rule. With **No one**, every channel is relayed, its owner's play included, so that a provider account that may only be used from one address sees only the server's, at the cost of the server's bandwidth (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)).
 - **Headers:** IPTV channels are requested with the user agent and headers their list or source gives, else a web browser's user agent (see [Headers and user agent](iptv-streams.md#headers-and-user-agent)).
 - **DASH:** a ClearKey stream is decrypted with the keys its list gives. Widevine and PlayReady streams are not played. An app that sends no device profile is offered no DASH stream (see [DASH channels and encryption](iptv-streams.md#dash-channels-and-encryption)).
-- **Running time:** FFmpeg runs from the moment the app opens the channel until it leaves it. A minute without requests stops it.
+- **Running time:** FFmpeg runs from the moment the app opens the channel until it leaves it. A minute without requests or progress reports stops it (see [Pause and rewind](#pause-and-rewind)).
 
 Interlaced channels, such as most TV sports in 1080i50, are converted for apps that do not take interlaced video, jellyfin-web among them.
 
@@ -153,6 +153,34 @@ sequenceDiagram
     end
     Note over Polyfin,Source: A connection not open yet opens here, and its first bytes are checked
 ```
+
+### Pause and rewind
+
+Each channel played through FFmpeg keeps its last minutes on disk. A user can pause it and play on from where they paused, or go back.
+
+- **Length:** **Pause and rewind buffer per channel (minutes)**, in **Settings › Live TV**: 30 minutes by default, 240 at most. 0 turns it off. A channel then keeps its last 30 seconds, as before.
+- **How far back:** to when the user started watching the channel, as far as the buffer goes. A play starts near the newest segment, as it always did.
+- **Pause:** the buffer goes on growing while the user is paused. Playing on within the buffer's length picks up where they paused. After a longer pause, the player goes on from the oldest segment kept or from live, as it chooses.
+- **Shared:** users who watch the same channel, converted alike, share one FFmpeg and one buffer. Each one's playlist starts where they joined. A second user joining costs the server nothing more, so the limits on live streams and on conversions do not refuse them.
+
+| App | What it does with the buffer |
+|---|---|
+| jellyfin-web | Pauses and plays on, and seeks back with its rewind button or its progress bar |
+| Android TV and Android apps (ExoPlayer) | Pause and play on. Android TV offers no seeking in live TV. |
+| Other apps | Play live as before. A player that only plays HLS starts near the newest segment, whatever the buffer holds. |
+
+With the buffer on, jellyfin-web and the Android apps get the channel over HLS, its video copied, even when they could play its stream as it is. Otherwise Android TV would get the MPEG-TS stream, and jellyfin-web an HLS source relayed, which keep no buffer. An app whose profile takes no HLS with the video as it is plays the stream as before. Other apps play channels as before.
+
+#### What a buffer keeps
+
+- **Disk space per channel:** the buffer's length at the channel's bitrate. 30 minutes of a 6 Mb/s channel take about 1.35 GB.
+- **All channels together:** **Disk space for pause buffers (GB)**, 20 GB by default, from 1 to 1000. They also keep within half of what the conversion folder's disk leaves them: its free space and what they take already. A [memory folder](installation.md#a-memory-folder-for-conversion) leaves them half its free memory. Past either bound, the longest buffer gives its oldest segments first. Each channel keeps at least its last 30 seconds.
+- **Viewers:** a play session watches while its player asks for the playlist or segments, or its app reports its progress or pings. An app paused that reports its progress, as jellyfin-web does, keeps the buffer growing. One that asks nothing and reports nothing for a minute counts as gone.
+- **Last viewer gone:** once no one watched a channel for a minute, or its last viewer stopped, FFmpeg stops and the channel's connection is released at once, as before. No tuner or provider connection is held for the buffer.
+- **Kept 5 minutes more:** the buffer stays 5 minutes after that, for an app that comes back to the same play session, such as a phone that slept. It plays on from where it was, and FFmpeg reads the channel again after a discontinuity. The buffer is then removed.
+- **Recordings:** unaffected. They write their own files, and their space is not counted with the buffers'. They share tuners and connections as before (see [Recordings and tuners](recordings.md#recordings-and-tuners)).
+
+Polyfin writes each player's playlist itself, from the segments FFmpeg made, rather than relaying FFmpeg's, which lists the last 10. The playlist counts the discontinuities that left it, and names each run's initialization segment for fragmented MP4. Each segment's address carries the play's query: 30 minutes of 3-second segments make a playlist of about 500 KB, which players reload every few seconds. It goes gzip-compressed to the apps that accept it, over ten times smaller.
 
 ### When a live stream fails
 
