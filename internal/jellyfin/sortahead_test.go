@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -8,6 +9,7 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -248,4 +250,57 @@ func TestSortedOrdersStayWhileListingsReadThem(t *testing.T) {
 	list("once sorted again", false)
 	after(orderIdle + time.Minute)
 	list("unread for longer than orders stay", true)
+}
+
+// The libraries are sorted ahead once the apps' requests left the server
+// free for sortAheadQuiet, so that the first screens after a start do not
+// wait for the sorts: a second after the start with no request, a second
+// after a request that came meanwhile ended, at sortAheadWait at the
+// latest while one never ends, and never once the server stops.
+func TestSortingAheadWaitsForTheAppsRequests(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		h := &Handler{routes: http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release })}
+		h.requests.ended = time.Now()
+		request := func() {
+			go h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/System/Info", nil))
+			synctest.Wait()
+		}
+		waited := func(ctx context.Context) (time.Duration, bool) {
+			started := time.Now()
+			free := h.waitFree(ctx, started.Add(sortAheadWait))
+			return time.Since(started), free
+		}
+
+		if took, free := waited(t.Context()); took != sortAheadQuiet || !free {
+			t.Errorf("with no request: free %t after %v, want after %v", free, took, sortAheadQuiet)
+		}
+
+		time.Sleep(time.Minute)
+		request()
+		go func() {
+			time.Sleep(3 * time.Second)
+			close(release)
+		}()
+		if took, free := waited(t.Context()); took != 3*time.Second+sortAheadQuiet || !free {
+			t.Errorf("with a request of 3 s: free %t after %v, want after %v", free, took, 3*time.Second+sortAheadQuiet)
+		}
+
+		release = make(chan struct{})
+		request()
+		if took, free := waited(t.Context()); took != sortAheadWait || !free {
+			t.Errorf("with a request that never ends: free %t after %v, want after %v", free, took, sortAheadWait)
+		}
+
+		stopped, stop := context.WithCancel(t.Context())
+		go func() {
+			time.Sleep(10 * time.Second)
+			stop()
+		}()
+		if took, free := waited(stopped); took != 10*time.Second || free {
+			t.Errorf("stopped after 10 s: free %t after %v, want not free after 10s", free, took)
+		}
+		close(release)
+	})
 }

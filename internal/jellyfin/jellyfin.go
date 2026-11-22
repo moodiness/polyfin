@@ -302,6 +302,9 @@ type Handler struct {
 	// sortedAhead is set once the libraries were sorted ahead after the
 	// start (see sortAhead).
 	sortedAhead atomic.Bool
+	// requests counts the apps' requests under way, for the work that
+	// lets them go first (see sortAhead).
+	requests appRequests
 }
 
 // New returns the Jellyfin API handler.
@@ -350,6 +353,7 @@ func New(options Options) *Handler {
 	h.nameOrders = cache.NewLasting[drawKey, nameOrder](100, func() time.Duration { return orderIdle }, func() time.Time { return h.now() }).
 		Sized(nameOrdersBytes, func(o nameOrder) int { return len(o.items) * nameOrderTitleSize }).Sliding()
 	h.nameBuilds = newNameBuilds()
+	h.requests.ended = time.Now()
 	h.syncPlay = newSyncPlay(h.canPlay, h.writeSyncPlay, h.syncPlayConnected, func() time.Time { return h.now() }, options.Logger)
 	h.syncPlay.ended = h.groupEnded
 	h.listings = newListings(h.listVersions)
@@ -455,6 +459,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.socket(w, r)
 		return
 	}
+	h.requests.begin()
+	defer h.requests.end()
 	h.routes.ServeHTTP(w, r)
 }
 
