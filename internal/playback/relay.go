@@ -224,9 +224,11 @@ type registered struct {
 	src     *source.Source
 	// budget counts what is read of the source, nil for nothing (see
 	// registerWithin); asked serves it without reading ahead (see
-	// registerAsked).
+	// registerAsked); bound holds its reads within the source's first
+	// bytes until lifted, nil for none (see registerBounded).
 	budget *readBudget
 	asked  bool
+	bound  *source.Bound
 	// head is what the source's first bytes were found to be once read:
 	// headUnread, headPlaylist or headFile.
 	head atomic.Int32
@@ -258,6 +260,13 @@ func (l *loopback) registerAsked(version library.Version, src *source.Source) (s
 // A source read within a budget is served as registerAsked serves it.
 func (l *loopback) registerWithin(version library.Version, src *source.Source, budget *readBudget) (string, func()) {
 	return l.add(&registered{version: version, src: src, budget: budget, asked: budget != nil})
+}
+
+// registerBounded is register, the source served within bound until it is
+// lifted (see source.Bound): FFmpeg reads past it only what the source
+// cache holds, and waits for the rest.
+func (l *loopback) registerBounded(version library.Version, src *source.Source, bound *source.Bound) (string, func()) {
+	return l.add(&registered{version: version, src: src, bound: bound})
 }
 
 // add serves reg until release is called, at the URL returned.
@@ -317,6 +326,10 @@ func (l *loopback) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if reg.asked {
 		reg.src.ServeAsked(w, r)
+		return
+	}
+	if reg.bound != nil {
+		reg.src.ServeWithin(w, r, reg.bound)
 		return
 	}
 	reg.src.ServeHTTP(w, r)

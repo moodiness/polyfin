@@ -465,7 +465,8 @@ func (s *Source) reaches(c *conn, block int64) bool {
 
 // askedUntil is where the request connection c makes from block ends, the
 // first block it does not ask for: noEnd, open-ended, for the window a
-// streaming reader reads ahead of, and for a file read through its own
+// streaming reader reads ahead of, unless a bound holds that reader (see
+// Bound), which the request stops at, and for a file read through its own
 // protocol (see FileOpener), which sends nothing it was not asked to
 // read; else the end of the spans warmed that hold block, or, for a reader
 // waiting, as many blocks from there as the cache holds in a row before
@@ -473,8 +474,11 @@ func (s *Source) reaches(c *conn, block int64) bool {
 // each time, a read elsewhere, as of a file's index, one block. It never
 // goes past the connection's stretch. The source's lock is held.
 func (s *Source) askedUntil(c *conn, block int64) int64 {
-	if _, file := s.origin.Opener.(FileOpener); file || s.inWindow(block) {
+	if _, file := s.origin.Opener.(FileOpener); file {
 		return noEnd
+	}
+	if s.inWindow(block) {
+		return s.window.limit
 	}
 	until := block + 1
 	for _, warm := range s.warms {

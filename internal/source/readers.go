@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"slices"
+	"sync"
 )
 
 // Reader reads a source on behalf of one request: an FFmpeg or ffprobe
@@ -18,6 +19,9 @@ import (
 type Reader struct {
 	s         *Source
 	streaming bool
+	// bound holds the reader within the source's first bytes until lifted
+	// (see Bound), nil for none.
+	bound *Bound
 	// guarded by the source's lock: closed, waiting is the block waited
 	// for, -1 for none, and from and last the blocks a run of sequential
 	// reads started at and last read.
@@ -27,10 +31,48 @@ type Reader struct {
 }
 
 // window is the read-ahead window of a streaming reader: the blocks from
-// cursor to horizon are fetched ahead of it.
+// cursor to horizon are fetched ahead of it, by requests asking up to
+// limit at most, noEnd for open-ended ones (see askedUntil).
 type window struct {
-	owner           *Reader
-	cursor, horizon int64
+	owner                  *Reader
+	cursor, horizon, limit int64
+}
+
+// Bound holds the readers of a request served within it (see ServeWithin)
+// to a source's first bytes, until it is lifted: what they read past it
+// is what the cache holds, they wait for the rest until Lift, and nothing
+// past it is fetched for them meanwhile, read ahead or not. The window a
+// streaming one reads ahead of stops there, and so do the requests made
+// for it: the host sends nothing past it.
+type Bound struct {
+	// blocks is the first block past the bound.
+	blocks int64
+	lifted chan struct{}
+	once   sync.Once
+}
+
+// NewBound returns a bound at end, the first byte past it.
+func NewBound(end int64) *Bound {
+	return &Bound{blocks: (max(end, 0) + blockSize - 1) / blockSize, lifted: make(chan struct{})}
+}
+
+// Lift lets the readers within b read on, as any other. It may be called
+// more than once.
+func (b *Bound) Lift() {
+	b.once.Do(func() { close(b.lifted) })
+}
+
+// holding reports whether b, unless nil, still holds its readers.
+func (b *Bound) holding() bool {
+	if b == nil {
+		return false
+	}
+	select {
+	case <-b.lifted:
+		return false
+	default:
+		return true
+	}
 }
 
 // NewReader returns a reader of the source for one request that streams
@@ -38,11 +80,11 @@ type window struct {
 // of MiB as it starts, by up to the cache's budget once it read as much
 // in order. The caller closes it once done.
 func (s *Source) NewReader() *Reader {
-	return s.reader(true)
+	return s.reader(true, nil)
 }
 
-func (s *Source) reader(streaming bool) *Reader {
-	r := &Reader{s: s, streaming: streaming, waiting: -1, last: -1}
+func (s *Source) reader(streaming bool, bound *Bound) *Reader {
+	r := &Reader{s: s, streaming: streaming, bound: bound, waiting: -1, last: -1}
 	s.mu.Lock()
 	s.readers = append(s.readers, r)
 	if streaming {
@@ -86,7 +128,8 @@ func (r *Reader) Size(ctx context.Context) (int64, error) {
 }
 
 // ReadAt reads len(p) bytes at off, waiting for the blocks not cached yet
-// at most until ctx is done.
+// at most until ctx is done, and for those past its bound, until it is
+// lifted (see Bound).
 func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 	s := r.s
 	n := 0
@@ -96,6 +139,9 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 			return n, io.EOF
 		}
 		block := position / blockSize
+		if err := r.within(ctx, block); err != nil {
+			return n, err
+		}
 		if err := s.wait(ctx, r, block); err != nil {
 			return n, err
 		}
@@ -125,9 +171,35 @@ func (r *Reader) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
 	return n, nil
 }
 
+// within waits, for a block past the reader's bound that the cache does
+// not hold, until the bound is lifted, the cache holds it, or ctx is done.
+func (r *Reader) within(ctx context.Context, block int64) error {
+	if !r.bound.holding() || block < r.bound.blocks {
+		return nil
+	}
+	s := r.s
+	for {
+		s.mu.Lock()
+		if !s.missing(block) {
+			s.mu.Unlock()
+			return nil
+		}
+		progress := s.progress
+		s.mu.Unlock()
+		select {
+		case <-progress:
+		case <-r.bound.lifted:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // moveWindow places the read-ahead window after block, which r reads, when
 // r is the newest streaming reader. The window grows with what r read in
-// order: twice as much, from the cache's readahead to its budget. The
+// order: twice as much, from the cache's readahead to its budget. A reader
+// within a bound has it stop there, and its requests too (see Bound). The
 // source's lock is held.
 func (s *Source) moveWindow(r *Reader, block int64) {
 	if r.last < 0 || block < r.last || block > r.last+skipLimit {
@@ -138,7 +210,11 @@ func (s *Source) moveWindow(r *Reader, block int64) {
 		return
 	}
 	ahead := min(max(2*(block-r.from), s.cache.readahead), max(s.cache.aheadBudget(), s.cache.readahead))
-	s.window = window{owner: r, cursor: block, horizon: block + 1 + ahead}
+	w := window{owner: r, cursor: block, horizon: block + 1 + ahead, limit: noEnd}
+	if r.bound.holding() {
+		w.horizon, w.limit = min(w.horizon, r.bound.blocks), r.bound.blocks
+	}
+	s.window = w
 }
 
 // newestStreaming is the newest streaming reader open, or nil. The

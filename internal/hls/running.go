@@ -34,13 +34,16 @@ type Running struct {
 }
 
 // Running lists the encodings under way, of files and channels, and the
-// conversions streamed as one file; the recordings are left out. It never
-// waits for an input being opened.
+// conversions streamed as one file; the recordings are left out, and so
+// are the encodings started ahead of a play no player asked for yet (see
+// Early). It never waits for an input being opened.
 func (m *Manager) Running() []Running {
 	m.mu.Lock()
 	encodings := make([]*encoding, 0, len(m.encodings))
 	for _, e := range m.encodings {
-		encodings = append(encodings, e)
+		if !e.early {
+			encodings = append(encodings, e)
+		}
 	}
 	kept := make(map[Key]*keeping, len(m.kept))
 	for key, k := range m.kept {

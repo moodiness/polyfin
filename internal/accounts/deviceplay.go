@@ -68,6 +68,26 @@ func (s *Store) DevicePlay(ctx context.Context, device ID) (DevicePlay, bool, er
 	return play, true, nil
 }
 
+// LatestDevicePlay returns how the device of user that last told it in a
+// PlaybackInfo plays, among those of the app client named name, as
+// SetDevicePlay kept it: the same browser, or app, of the same user plays
+// alike. False when none of them told it.
+func (s *Store) LatestDevicePlay(ctx context.Context, user ID, client, name string) (DevicePlay, bool, error) {
+	var play DevicePlay
+	var profile []byte
+	err := s.db.QueryRow(ctx, `SELECT p.profile, p.bitrate, p.from_capabilities FROM device_play_profiles p JOIN devices d ON d.id = p.device_id
+		WHERE d.user_id = $1 AND d.client = $2 AND d.device_name = $3 AND NOT p.from_capabilities
+		ORDER BY p.updated_at DESC LIMIT 1`, user, client, name).Scan(&profile, &play.Bitrate, &play.FromCapabilities)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return DevicePlay{}, false, nil
+	}
+	if err != nil {
+		return DevicePlay{}, false, err
+	}
+	play.Profile = profile
+	return play, true, nil
+}
+
 // ForgetDevicePlay forgets how a device plays, as when its profile is too
 // large to keep: the profile kept before would no longer be the device's.
 func (s *Store) ForgetDevicePlay(ctx context.Context, device ID) error {

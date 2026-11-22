@@ -11,13 +11,14 @@ For administrators: preparing playback, reading and keeping addon and remote sto
 Playback then starts at once, not after a second or two. Polyfin prepares:
 
 - **A title opened in an app:** it analyzes the version a play would read first, again if a later addon answer puts another first. The next one, up to 3, only when the one before fails, or has no analysis after 3 seconds.
+- **The play of the title a device opened last:** once that version is analyzed, when the device plays it repackaged or converted, FFmpeg starts, reads the first segment's bytes from the source and nothing past them, makes that segment, then ends; with **Start remote plays faster**, that segment is the first 2-second fast one. Otherwise the first segment's bytes are read (64 MiB at most). Pressing Play goes on from there instead of starting over. A play with another audio track, quality or start position starts its own, and stops it; a title with a resume point has only the bytes where it resumes read. A device that never played on Polyfin is taken to play as its user's last device of the same app and name, such as another Chrome in jellyfin-web.
 - **Each prepared version:** its keyframe index and subtitle track positions, which HLS playback needs. Only what the analysis and the index read is fetched: the file's head and its index (see [How reads are served](#how-reads-are-served)).
 - **The next episode:** with its versions and subtitles, once the episode playing has 9 minutes left, and its first segment's bytes within the user's budget below.
 - **The next track:** as a song or audiobook starts, the next in the app's queue (else the album): its stream, and its analysis if the addon does not describe it.
 - **Continue Watching and Next Up:** in the background, the versions of each row's first 10 movies and episodes. Titles opened there list versions without a placeholder (see [Title pages](versions.md#title-pages)). The first version of each row's first 2 titles is analyzed, and the bytes of the segment its play starts at, where the user stopped, are read within the user's budget below, for instant resumes.
 - **The other home rows:** in the background, the stream lists of the first 3 titles of each row an app asks for: a library's latest titles, and the rows added under **Settings › Web player › Home rows**. For a series, it is the episode its Play starts with, as Next Up picks it. A title opened from them lists its versions at once rather than waiting for the addons, about 1.5 seconds with an addon that gathers others. Only the lists are asked: nothing is analyzed or read, and each addon keeps within the bounds below.
 
-This costs a few source requests, even for titles never played: about 1 to 3 MiB a title opened.
+This costs a few source requests, even for titles never played: about 1 to 3 MiB a title opened. A play started for the title opened last costs more when Play does not come: its first segment's bytes, up to a second past where the next segment starts, about 12 MiB for a 1080p file cut every 10 seconds, or 3 MiB with **Start remote plays faster**, and, converted, the conversion of that segment.
 
 | Limit | Value |
 |---|---|
@@ -26,6 +27,7 @@ This costs a few source requests, even for titles never played: about 1 to 3 MiB
 | Same title and user | Once per 10 minutes, unless it failed |
 | Row titles listed at once | 2 over the server, apart from preparations, in the order rows asked |
 | First segments read ahead for rows and next episodes | 32 MiB per user an hour; what the cache holds costs nothing, and a segment past the rest of the budget is not read |
+| Plays started for a title opened | One per user and device: opening another title stops it, and what it made is removed 30 to 60 seconds after it started when Play did not come. It never starts while the server converts video, and counts toward **Video conversions at once** only once Play takes it over |
 
 - A title waiting or being listed is not queued again. One whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 - All is background work: paced per addon, behind what users open, pausing after a rate refusal (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)).
@@ -84,7 +86,7 @@ Background reads wait for a free connection and yield theirs to playback: read-a
 - Apps still get the addon's address. A dead final address sends Polyfin back to the addon's, then to a renewed link.
 - An analysis asks for a file 1 MiB at a time, from its head and wherever ffprobe seeks, such as an MP4 index at the end: Polyfin fetches about what ffprobe reads, rather than what fills a connection's buffers. Playlists and manifests are read as each segment asks.
 - Polyfin reads 4 keyframe indexes of Matroska and MP4 files at once at most, 2 from one host: a large index takes tens of MiB of memory while read. A play whose index is not read yet waits for its turn; indexes read before, kept in the database, never wait.
-- Once the keyframe index is known, Polyfin reads the first segment's bytes (64 MiB at most) before the app asks, for the version `PlaybackInfo` chose alone. With [Prepare playback in advance](#preparing-playback-in-advance) on, it also reads them for the first titles of Continue Watching and Next Up and for the next episode, within the user's budget.
+- Once the keyframe index is known, Polyfin reads the first segment's bytes (64 MiB at most) before the app asks, for the version `PlaybackInfo` chose. With [Prepare playback in advance](#preparing-playback-in-advance) on, it also reads them for the title a device opened last, and for the first titles of Continue Watching and Next Up and the next episode, within the user's budget.
 - For a resume, it reads the file's head, which FFmpeg probes, and the resume segment. A Matroska index is read during analysis.
 - Relayed files use the same cache: earlier reads cost no request; seeks fetch only what is missing.
 - Before direct play, Polyfin checks the source answers, unless it answered Polyfin at that address within 2 minutes, as after an analysis.
