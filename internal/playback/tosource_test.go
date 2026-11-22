@@ -17,11 +17,14 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 )
 
-// An app is told where a version comes from only when its user owns the
-// source: an administrator for the server's addons, a user for their own,
-// and no one for an IPTV source, whose addresses hold its account. Send
-// apps to the source tells every app, as before the setting existed.
-func TestOnlyASourcesOwnerIsSentToIt(t *testing.T) {
+// An app is told where a version comes from by Send apps to the source.
+// Owners only, the default, tells it only when its user owns the source:
+// an administrator for the server's addons, a user for their own, and no
+// one for an IPTV source, whose addresses hold its account. Everyone tells
+// every app, as before the setting existed; no one tells none, so that
+// every play goes through the server. A version of no addon has no
+// source to keep under any choice.
+func TestWhoIsSentToTheSourceFollowsTheSetting(t *testing.T) {
 	t.Parallel()
 	s := newService(t, &fileSource{data: make([]byte, 1000)}, "ffprobe", nil)
 	store, err := accounts.Open(t.Context(), s.db)
@@ -54,45 +57,46 @@ func TestOnlyASourcesOwnerIsSentToIt(t *testing.T) {
 	recording := library.Version{ID: accounts.ID{90}, URL: "http://127.0.0.1:1/file/recording.ts"}
 	removed := library.Version{ID: accounts.ID{91}, URL: "https://93.184.216.34/file.mkv", Origin: library.Origin{Addon: accounts.ID{9, 9}}}
 
-	for _, c := range []struct {
+	type want struct{ owners, everyone, none bool }
+	cases := []struct {
 		name    string
 		version library.Version
 		user    accounts.User
-		want    bool
+		want    want
 	}{
-		{"a server addon, a member", serverAddon, member, false},
-		{"a server addon, an administrator", serverAddon, administrator, true},
-		{"a server music addon, a member", musicAddon, member, false},
-		{"a user's own addon, its owner", ownAddon, member, true},
-		{"a user's own addon, another user", ownAddon, other, false},
-		{"a user's own addon, an administrator", ownAddon, administrator, false},
-		{"a server M3U list, a member", list, member, false},
-		{"a server M3U list, an administrator", list, administrator, false},
-		{"a server Xtream account, a member", account, member, false},
-		{"a server Xtream account, an administrator", account, administrator, false},
-		{"a user's own Xtream account, its owner", ownList, member, false},
-		{"a recording, a member", recording, member, true},
-		{"a source removed since, an administrator", removed, administrator, false},
-	} {
-		if got := s.SendsToSource(t.Context(), c.user, c.version); got != c.want {
-			t.Errorf("%s: sent to the source %v, want %v", c.name, got, c.want)
+		{"a server addon, a member", serverAddon, member, want{false, true, false}},
+		{"a server addon, an administrator", serverAddon, administrator, want{true, true, false}},
+		{"a server music addon, a member", musicAddon, member, want{false, true, false}},
+		{"a server music addon, an administrator", musicAddon, administrator, want{true, true, false}},
+		{"a user's own addon, its owner", ownAddon, member, want{true, true, false}},
+		{"a user's own addon, another user", ownAddon, other, want{false, true, false}},
+		{"a user's own addon, an administrator", ownAddon, administrator, want{false, true, false}},
+		{"a server M3U list, a member", list, member, want{false, true, false}},
+		{"a server M3U list, an administrator", list, administrator, want{false, true, false}},
+		{"a server Xtream account, a member", account, member, want{false, true, false}},
+		{"a server Xtream account, an administrator", account, administrator, want{false, true, false}},
+		{"a user's own Xtream account, its owner", ownList, member, want{false, true, false}},
+		{"a recording, a member", recording, member, want{true, true, true}},
+		{"a recording, an administrator", recording, administrator, want{true, true, true}},
+		{"a source removed since, an administrator", removed, administrator, want{false, true, false}},
+	}
+	for _, choice := range accounts.SendToSourceChoices {
+		s.settings = func() accounts.Settings { return accounts.Settings{SendToSource: choice} }
+		for _, c := range cases {
+			wanted := map[string]bool{accounts.SendToSourceOwners: c.want.owners, accounts.SendToSourceEveryone: c.want.everyone,
+				accounts.SendToSourceNone: c.want.none}[choice]
+			if got := s.SendsToSource(t.Context(), c.user, c.version); got != wanted {
+				t.Errorf("%s, %s: sent to the source %v, want %v", choice, c.name, got, wanted)
+			}
 		}
 	}
 
 	// A database that does not answer keeps the source from the app.
+	s.settings = func() accounts.Settings { return accounts.Settings{SendToSource: accounts.SendToSourceOwners} }
 	stopped, stop := context.WithCancel(t.Context())
 	stop()
 	if s.SendsToSource(stopped, administrator, serverAddon) {
 		t.Error("an addon that could not be read sends its app to the source")
-	}
-
-	// With the setting, every version, an IPTV source's included.
-	s.settings = func() accounts.Settings { return accounts.Settings{SendAppsToSource: true} }
-	for name, version := range map[string]library.Version{"a server addon": serverAddon, "a server Xtream account": account, "a server M3U list": list,
-		"another user's addon": ownAddon} {
-		if !s.SendsToSource(t.Context(), other, version) {
-			t.Errorf("with Send apps to the source, %s is kept from a member", name)
-		}
 	}
 }
 

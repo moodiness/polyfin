@@ -189,7 +189,12 @@ export const settingEntries: readonly SettingEntry[] = [
       'redirection',
       'relais',
       'bande passante',
+      'owners',
+      'everyone',
+      'no one',
+      'address',
     ],
+    codes: ['invalid_send_to_source'],
   },
   {
     section: 'playback',

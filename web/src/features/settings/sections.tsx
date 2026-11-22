@@ -315,13 +315,18 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
           saved={saved.preferDirectPlay}
         />
         <SettingRow
-          kind="switch"
+          kind="choice"
           anchor="send-apps-to-source"
           label={s.sendAppsToSource}
           help={s.sendAppsToSourceHelp}
-          checked={form.sendAppsToSource}
-          onChange={(sendAppsToSource) => update({ sendAppsToSource })}
-          saved={saved.sendAppsToSource}
+          error={error('send-apps-to-source')}
+          value={form.sendToSource}
+          options={(['owners', 'everyone', 'none'] as const).map((value) => ({
+            value,
+            label: s.sendToSourceChoices[value],
+          }))}
+          onChange={(sendToSource) => update({ sendToSource })}
+          saved={saved.sendToSource}
         />
         <SettingRow
           kind="choice"

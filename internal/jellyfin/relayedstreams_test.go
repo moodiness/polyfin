@@ -181,9 +181,9 @@ func TestARelayedStreamKeepsAMediaType(t *testing.T) {
 	s.user("member", nil)
 	token := s.signIn("member", "tv")
 	// The page is relayed as its source wrote it: with Send apps to the
-	// source off, a member is refused a stream that starts as text, which
-	// may be a playlist naming its source.
-	s.setting(t, func(settings *accounts.Settings) { settings.SendAppsToSource = true })
+	// source at owners only, a member is refused a stream that starts as
+	// text, which may be a playlist naming its source.
+	s.setting(t, func(settings *accounts.Settings) { settings.SendToSource = accounts.SendToSourceEveryone })
 	host := pageStreamAddon(t)
 	if _, err := s.addons.Install(t.Context(), addons.Shared(), host+"/manifest.json", false); err != nil {
 		t.Fatal(err)
@@ -227,10 +227,10 @@ func TestANavigationIsNotRedirectedToASource(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A member is sent to a server addon's source only with Send apps to
-	// the source on.
+	// the source at everyone.
 	s.setting(t, func(settings *accounts.Settings) {
 		settings.SyncAddonSubtitles = false
-		settings.SendAppsToSource = true
+		settings.SendToSource = accounts.SendToSourceEveryone
 	})
 	token := s.signIn("member", "tv")
 	var views, page QueryResult

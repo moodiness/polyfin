@@ -30,17 +30,26 @@ import (
 //     only;
 //   - for a version of a user's own addon, to that user.
 //
-// With Send apps to the source (accounts.Settings.SendAppsToSource), every
-// app may be, as before the setting existed. A version that names no
-// addon, a recording or a channel Polyfin airs, has no source to keep
-// from anyone; one whose addon cannot be read is kept.
+// That is the default choice of Send apps to the source
+// (accounts.Settings.SendToSource), owners. With everyone, every app may
+// be sent, as before the setting existed; with no one, none is, an
+// administrator or an addon's owner included, so that a source sees only
+// the server's address. A version that names no addon, a recording or a
+// channel Polyfin airs, has no source to keep from anyone; one whose addon
+// cannot be read is kept.
 //
 // Serve and ServeChannel take no user: every caller of theirs that does
 // not relay already asks here, for the user the request plays for, and
 // relays when the answer is no.
 func (s *Service) SendsToSource(ctx context.Context, user accounts.User, version library.Version) bool {
-	if s.settings().SendAppsToSource || version.Origin.Addon == (accounts.ID{}) {
+	if version.Origin.Addon == (accounts.ID{}) {
 		return true
+	}
+	switch s.settings().SendToSource {
+	case accounts.SendToSourceEveryone:
+		return true
+	case accounts.SendToSourceNone:
+		return false
 	}
 	var kind string
 	var owner *accounts.ID

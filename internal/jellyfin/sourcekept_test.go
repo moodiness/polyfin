@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -313,8 +314,8 @@ func (k keptSources) playsRelayed(t *testing.T, what, target, item string, files
 // source's address, where the addon's key or the account's name and
 // password are: not PlaybackInfo, not the item's details, not the stream,
 // whole, in ranges or its headers alone, not a download, not a line of a
-// playlist. With Send apps to the source, the same plays are sent to
-// their sources.
+// playlist. With Send apps to the source at everyone, the same plays are
+// sent to their sources.
 func TestAMemberPlaysTheServersSourcesThroughPolyfin(t *testing.T) {
 	t.Parallel()
 	k := newKeptSources(t)
@@ -380,9 +381,9 @@ func TestAMemberPlaysTheServersSourcesThroughPolyfin(t *testing.T) {
 		t.Errorf("the list's MPEG-TS channel: %d bytes of %q", len(feed.body), feed.header.Get("Content-Type"))
 	}
 
-	// Send apps to the source: every play is sent to its source, an IPTV
-	// source's too, once analyzed (see analyzedFirst).
-	k.setting(t, func(settings *accounts.Settings) { settings.SendAppsToSource = true })
+	// Send apps to the source at everyone: every play is sent to its
+	// source, an IPTV source's too, once analyzed (see analyzedFirst).
+	k.setting(t, func(settings *accounts.Settings) { settings.SendToSource = accounts.SendToSourceEveryone })
 	member := playbackSetup{testServer: k.testServer, user: k.member}
 	member.analyzed(t, k.versions[k.movie], "h264-aac-mp4")
 	member.analyzed(t, k.versions[k.episode], "h264-aac-mp4")
@@ -450,4 +451,92 @@ func TestAPlaylistReachesAMemberWithPolyfinsAddressesOnly(t *testing.T) {
 	k.analyzedAs(t, k.listed, "hls", 8*time.Second)
 	k.playsRelayed(t, "the addon's playlist", stream, k.listed, 2)
 	k.ask(t, http.MethodGet, download, nil, 0).relayed(t, "a download of the addon's playlist", http.StatusNotFound, "")
+}
+
+// With Send apps to the source set to no one, every play goes through
+// Polyfin, so that a source sees the server's address alone: an
+// administrator's from the server's addons and an owner's from their own
+// addon, files whole and by ranges, a playlist with Polyfin's lines once
+// analyzed and refused before, as it is to a member, and the channels of
+// an IPTV source, as always. Owners only sends both to the addons. A
+// member's own addon is left to TestWhoIsSentToTheSourceFollowsTheSetting:
+// it may not reach the local network, where the fake addon answers.
+func TestNoOneIsSentToTheSource(t *testing.T) {
+	t.Parallel()
+	k := newKeptSources(t)
+	// The owner's own addon streams the server addon's movie from an
+	// address of its own, which serverSources answers as the same file.
+	const ownAddress = keptResolved + "?own"
+	ownAddon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/manifest.json":
+			_ = json.NewEncoder(w).Encode(stremio.Manifest{ID: "own.resolver", Name: "Own resolver", Version: "1", Types: []string{"movie"},
+				IDPrefixes: []string{"tt"}, Resources: []stremio.Resource{{Name: "stream"}}})
+		case "/stream/movie/tt3000.json":
+			_ = json.NewEncoder(w).Encode(map[string]any{"streams": []stremio.Stream{{Name: "Own", URL: "http://" + publicSource + ownAddress,
+				BehaviorHints: stremio.StreamBehavior{Filename: "Played.mp4"}}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(ownAddon.Close)
+	owner := k.user("owner", func(c *accounts.UserChanges) { c.IsAdministrator, c.PersonalAddons = new(true), new(true) })
+	k.setting(t, func(settings *accounts.Settings) { settings.PersonalAddons = true })
+	own, err := k.addons.Install(t.Context(), addons.Personal(owner.ID), ownAddon.URL+"/manifest.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k.testServer.listed(t, owner, k.played)
+	versions, err := k.library.Versions(t.Context(), owner, mustID(t, k.played))
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := slices.IndexFunc(versions, func(v library.Version) bool { return v.Origin.Addon == own.ID })
+	if at < 0 {
+		t.Fatalf("the owner's addon lists no version of the movie: %+v", versions)
+	}
+	owned := versions[at]
+	playbackSetup{testServer: k.testServer, user: owner}.analyzed(t, owned, "h264-aac-mp4")
+	administrator, ownerToken := k.signIn("administrator", "tv"), k.signIn("owner", "tv")
+	stream := func(token, item string, version library.Version) string {
+		return "/Videos/" + item + "/stream?static=true&mediaSourceId=" + version.ID.String() + "&ApiKey=" + token
+	}
+	plays := map[string]struct{ target, source string }{
+		"an administrator, the server addon's movie": {stream(administrator, k.played, k.versions[k.played]), keptResolved},
+		"the owner, their own addon's movie":         {stream(ownerToken, k.played, owned), ownAddress},
+	}
+	for name, play := range plays {
+		k.ask(t, http.MethodGet, play.target, nil, 0).sent(t, "owners only, "+name, "http://"+publicSource+play.source)
+	}
+
+	k.setting(t, func(settings *accounts.Settings) { settings.SendToSource = accounts.SendToSourceNone })
+	for name, play := range plays {
+		k.ask(t, http.MethodGet, play.target, nil, 0).relayed(t, name, http.StatusOK, keptFile)
+		k.ask(t, http.MethodGet, play.target, http.Header{"Range": {"bytes=5-23"}}, 0).relayed(t, "a range, "+name, http.StatusPartialContent, keptFile[5:24])
+		k.ask(t, http.MethodHead, play.target, nil, 0).relayed(t, "the headers, "+name, http.StatusOK, "")
+	}
+	k.ask(t, http.MethodGet, "/Items/"+k.played+"/Download?ApiKey="+administrator, nil, 0).relayed(t, "an administrator's download", http.StatusOK, keptFile)
+
+	// The addon's playlist, to an administrator: refused until analyzed,
+	// then relayed with Polyfin's lines, and never downloaded.
+	listed := stream(administrator, k.listed, k.versions[k.listed])
+	download := "/Items/" + k.listed + "/Download?ApiKey=" + administrator
+	for name, target := range map[string]string{"the stream route": listed, "a download": download} {
+		refused := k.ask(t, http.MethodGet, target, nil, 0)
+		refused.relayed(t, "a playlist not analyzed yet, an administrator, "+name, http.StatusNotFound, "")
+		if strings.Contains(refused.body, "#EXT") {
+			t.Errorf("a playlist not analyzed yet, an administrator, %s, is passed on:\n%s", name, refused.body)
+		}
+	}
+	k.analyzedAs(t, k.listed, "hls", 8*time.Second)
+	k.playsRelayed(t, "the addon's playlist, an administrator", listed, k.listed, 2)
+	k.ask(t, http.MethodGet, download, nil, 0).relayed(t, "a download of the addon's playlist, an administrator", http.StatusNotFound, "")
+
+	// The IPTV source's channels, as under owners only.
+	k.playsRelayed(t, "the list's HLS channel, an administrator", stream(administrator, k.playlist, k.versions[k.playlist]), k.playlist, 2)
+	feed := k.ask(t, http.MethodGet, stream(administrator, k.stream, k.versions[k.stream]), nil, 188)
+	feed.relayed(t, "the list's MPEG-TS channel, an administrator", http.StatusOK, "")
+	if len(feed.body) != 188 || feed.body[0] != 0x47 {
+		t.Errorf("the list's MPEG-TS channel: %d bytes", len(feed.body))
+	}
 }

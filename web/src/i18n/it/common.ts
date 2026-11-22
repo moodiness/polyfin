@@ -322,6 +322,7 @@ const common: typeof en = {
       'Impossibile raggiungere TMDB per verificare la chiave. Non è stato salvato nulla: riprova più tardi.',
     invalid_critic_rating_shows: 'Scegli dall’elenco quale punteggio mostra il voto della critica.',
     invalid_version_names: 'Scegli dall’elenco come vengono scritti i nomi delle versioni.',
+    invalid_send_to_source: 'Scegli dall’elenco quali applicazioni vengono inviate all’origine.',
     invalid_poster_badge_size: 'Scegli dall’elenco la dimensione dei badge.',
     invalid_poster_template:
       'Il modello di indirizzo delle locandine deve essere un indirizzo web che inizia con http:// o https:// e indica {imdb_id} o {tmdb_id}, senza spazi, nome utente né frammento.',

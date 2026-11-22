@@ -1029,6 +1029,23 @@ var ErrInvalidMeasureLoudness = errors.New("invalid loudness measure choice")
 // those of local music folders, or those of music addons too.
 var MeasureLoudnessChoices = []string{"off", "local", "all"}
 
+// ErrInvalidSendToSource reports a Settings.SendToSource not among
+// SendToSourceChoices.
+var ErrInvalidSendToSource = errors.New("invalid send to source choice")
+
+// The apps sent to the source of a version they play as it is (see
+// Settings.SendToSource): those of the source's owners, the default, every
+// app, or none.
+const (
+	SendToSourceOwners   = "owners"
+	SendToSourceEveryone = "everyone"
+	SendToSourceNone     = "none"
+)
+
+// SendToSourceChoices are the values Settings.SendToSource takes, the
+// first by default.
+var SendToSourceChoices = []string{SendToSourceOwners, SendToSourceEveryone, SendToSourceNone}
+
 // ErrInvalidTraktApp, ErrInvalidSimklApp, ErrInvalidLastFMApp,
 // ErrInvalidAniListApp and ErrInvalidMyAnimeListApp report a
 // Settings.TraktClientID, TraktClientSecret, SimklClientID, LastFMAPIKey,
@@ -1666,14 +1683,16 @@ type Settings struct {
 	// it is, or repackaged with its tracks copied) rather than the first
 	// that plays at all.
 	PreferDirectPlay bool
-	// SendAppsToSource lets every app be sent to the source of the version
-	// it plays as it is, when it can reach it: the source's address, with
-	// any key or account in it, is then told to the user who plays. Off,
-	// the default, a version of an IPTV source is always relayed, and one
-	// of a server addon is to users who are not administrators, which
-	// costs the server their bandwidth (see
-	// playback.Service.SendsToSource).
-	SendAppsToSource bool
+	// SendToSource tells which apps are sent to the source of the version
+	// they play as it is, when they can reach it, one of
+	// SendToSourceChoices (see playback.Service.SendsToSource). Owners, the
+	// default, sends an administrator to the server's addons and a user to
+	// their own, and relays the rest, IPTV sources always. Everyone sends
+	// every app: the source's address, with any key or account in it, is
+	// then told to the user who plays. None relays every play, so that a
+	// source sees only the server's address. Each relayed play costs the
+	// server its bandwidth.
+	SendToSource string
 	// VersionOrder are the criteria ordering a title's versions, of
 	// VersionCriteria, each grouping them and the next sorting within
 	// them; ties keep the addons' order, as does none, the default.
@@ -2351,7 +2370,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"personal_addons, server_imports, share_links, login_attempts, inactive_device_days, known_proxies, known_proxy_names, " +
 	"two_step_administrators, " +
 	"https_mode, https_port, https_redirect, https_certificate, https_private_key, acme_hosts, acme_email, acme_terms, acme_challenge, detailed_log, " +
-	"analysis_timeout, version_attempts, prefer_direct_play, send_apps_to_source, " +
+	"analysis_timeout, version_attempts, prefer_direct_play, send_to_source, " +
 	"version_order, version_codec_order, version_source_order, hide_versions_larger_gb, hidden_version_codecs, hidden_version_words, name_how_versions_play, version_names, " +
 	"hidden_releases, version_edition_order, version_mb_per_minute, version_label_rules, " +
 	"sync_addon_subtitles, max_conversions, max_conversion_height, converted_downloads, subtitle_ocr, subtitle_ocr_tracks, subtitle_ocr_download, " +
@@ -2411,7 +2430,7 @@ func (settings *Settings) fields() []any {
 		&settings.TwoStepAdministrators,
 		&settings.HTTPSMode, &settings.HTTPSPort, &settings.HTTPSRedirect, &settings.HTTPSCertificate, &settings.HTTPSPrivateKey,
 		&settings.ACMEHosts, &settings.ACMEEmail, &settings.ACMETerms, &settings.ACMEChallenge, &settings.DetailedLog,
-		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.SendAppsToSource,
+		&settings.AnalysisTimeout, &settings.VersionAttempts, &settings.PreferDirectPlay, &settings.SendToSource,
 		&settings.VersionOrder, &settings.VersionCodecOrder, &settings.VersionSourceOrder, &settings.HideVersionsLargerGB, &settings.HiddenVersionCodecs,
 		&settings.HiddenVersionWords,
 		&settings.NameHowVersionsPlay, &settings.VersionNames,
@@ -2714,6 +2733,9 @@ func (s *Store) UpdateSettings(ctx context.Context, settings Settings) (Settings
 	}
 	if !slices.Contains(VersionNameChoices, settings.VersionNames) {
 		return Settings{}, ErrInvalidVersionNames
+	}
+	if !slices.Contains(SendToSourceChoices, settings.SendToSource) {
+		return Settings{}, ErrInvalidSendToSource
 	}
 	if !slices.Contains(PosterBadgeSizes, settings.PosterBadgeSize) {
 		return Settings{}, ErrInvalidPosterBadgeSize

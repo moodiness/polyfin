@@ -76,8 +76,8 @@ func TestAStreamFromItsStartIsAnalyzedFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A member is sent to a server addon's source only with Send apps to
-	// the source on.
-	s.setting(t, func(settings *accounts.Settings) { settings.SendAppsToSource = true })
+	// the source at everyone.
+	s.setting(t, func(settings *accounts.Settings) { settings.SendToSource = accounts.SendToSourceEveryone })
 	token := s.signIn("member", "tv")
 	var views, page QueryResult
 	s.get(t, "/UserViews", token, &views)

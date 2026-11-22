@@ -357,6 +357,9 @@ export type HttpsMode = 'off' | 'files' | 'letsencrypt'
 /** The challenges Let's Encrypt checks host names with (see Settings.acmeChallenge). */
 export type AcmeChallenge = 'http-01' | 'tls-alpn-01'
 
+/** The apps sent to the source of a version they play as it is (see Settings.sendToSource). */
+export type SendToSource = 'owners' | 'everyone' | 'none'
+
 /** What a saved WireGuard configuration says, without its keys (see Settings.torrentWireGuardSaved). */
 type WireGuardSaved = {
   /** The server, host:port. */
@@ -530,11 +533,11 @@ export type Settings = {
   /** Prefers the first version an app plays without conversion over the first that plays at all. */
   preferDirectPlay: boolean
   /**
-   * Sends every app to the source of the version it plays as it is, when it can reach it: users who
-   * play then see the source's address. Off, versions of IPTV sources are relayed, and those of the
-   * server's addons are to users who are not administrators.
+   * Which apps are sent to the source of the version they play as it is, when they can reach it.
+   * Owners: administrators to the server's addons and users to their own, IPTV sources relayed.
+   * Everyone: every app, whose user then sees the source's address. None: every play relayed.
    */
-  sendAppsToSource: boolean
+  sendToSource: SendToSource
   /**
    * Up to six criteria ordering a title's versions, each grouping them and the next sorting within
    * them; none keeps the addons' order.

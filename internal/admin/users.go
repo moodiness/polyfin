@@ -585,13 +585,14 @@ type settingsJSON struct {
 	ACMEEmail        *string   `json:"acmeEmail"`
 	ACMETerms        *bool     `json:"acmeTerms"`
 	ACMEChallenge    *string   `json:"acmeChallenge"`
-	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, SendAppsToSource,
+	// AnalysisTimeout, VersionAttempts, PreferDirectPlay, SendToSource,
 	// SyncAddonSubtitles, MaxConversions and MaxConversionHeight keep their
-	// current values when a PUT leaves them out.
-	AnalysisTimeout  *int  `json:"analysisTimeout"`
-	VersionAttempts  *int  `json:"versionAttempts"`
-	PreferDirectPlay *bool `json:"preferDirectPlay"`
-	SendAppsToSource *bool `json:"sendAppsToSource"`
+	// current values when a PUT leaves them out. SendToSource is one of
+	// accounts.SendToSourceChoices.
+	AnalysisTimeout  *int    `json:"analysisTimeout"`
+	VersionAttempts  *int    `json:"versionAttempts"`
+	PreferDirectPlay *bool   `json:"preferDirectPlay"`
+	SendToSource     *string `json:"sendToSource"`
 	// The version rules keep their current values when a PUT leaves them
 	// out: VersionOrder holds up to six criteria (see
 	// accounts.VersionCriteria), VersionCodecOrder every video codec once,
@@ -982,7 +983,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		AnalysisTimeout:       &settings.AnalysisTimeout,
 		VersionAttempts:       &settings.VersionAttempts,
 		PreferDirectPlay:      &settings.PreferDirectPlay,
-		SendAppsToSource:      &settings.SendAppsToSource,
+		SendToSource:          &settings.SendToSource,
 		VersionOrder:          &settings.VersionOrder,
 		VersionCodecOrder:     &settings.VersionCodecOrder,
 		HideVersionsLargerGB:  &settings.HideVersionsLargerGB,
@@ -1894,7 +1895,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		AnalysisTimeout:       valueOr(body.AnalysisTimeout, current.AnalysisTimeout),
 		VersionAttempts:       valueOr(body.VersionAttempts, current.VersionAttempts),
 		PreferDirectPlay:      valueOr(body.PreferDirectPlay, current.PreferDirectPlay),
-		SendAppsToSource:      valueOr(body.SendAppsToSource, current.SendAppsToSource),
+		SendToSource:          valueOr(body.SendToSource, current.SendToSource),
 		VersionOrder:          valueOr(body.VersionOrder, current.VersionOrder),
 		VersionCodecOrder:     valueOr(body.VersionCodecOrder, current.VersionCodecOrder),
 		VersionSourceOrder:    sourceOrder,
