@@ -976,6 +976,9 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		Problems: admin.HealthProblems(adminOptions), History: history, LocalFiles: folders, Logger: logger})
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
+	// The movies and episodes scans of local folders and shares find new
+	// are told to the server's Jellyfin targets.
+	folders.UseAdded(notifier.LocalTitlesAdded)
 	registerSummaryTasks(registry, notifier)
 	if crashed != nil {
 		logger.Warn("Polyfin crashed during its last run: System › Health shows the start of its trace", "crashed_at", crashed.At.Format(time.RFC3339))

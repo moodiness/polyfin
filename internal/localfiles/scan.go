@@ -690,6 +690,11 @@ func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder)
 		return err
 	}
 	s.tellScanned(ctx, id, fresh)
+	if folder.ScannedAt != nil {
+		// A folder's first complete scan tells nothing: what it holds
+		// was there before Polyfin looked.
+		s.tellAdded(ctx, id, folder.Kind, at)
+	}
 	return nil
 }
 

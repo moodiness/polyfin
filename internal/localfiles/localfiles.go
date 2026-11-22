@@ -132,6 +132,9 @@ type Service struct {
 	// found is told of the videos a scan of a movies or shows folder found
 	// new or changed (see UseScanned), nil until set.
 	found func(videos []stremio.Stream)
+	// added is told of the movies and episodes a scan of a movies or
+	// shows folder found new (see UseAdded), nil until set; mu guards it.
+	added func(items []accounts.ID)
 	// retry is told of a folder whose address, credentials or host key
 	// changed (see UseRetry), nil until set.
 	retry func(folder accounts.ID)
@@ -265,6 +268,16 @@ func (s *Service) UseMeter(meter *loudness.Meter) { s.meter = meter }
 // them (see playback.Service.QueueScanned). It is called before the
 // service is used.
 func (s *Service) UseScanned(found func(videos []stremio.Stream)) { s.found = found }
+
+// UseAdded sets what is told, after each scan of a movies or shows folder
+// but its first complete one, of the movies and episodes it found new to
+// every folder, by their items (see tellAdded). It may be called while
+// folders are scanned: the scans before it tell nothing.
+func (s *Service) UseAdded(added func(items []accounts.ID)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.added = added
+}
 
 // UseRetry sets what is told of a folder whose address, credentials or
 // host key an administrator changed, so that its versions that could not

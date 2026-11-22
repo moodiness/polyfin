@@ -60,6 +60,7 @@ var JellyfinEvents = []string{JellyfinItemAdded, JellyfinPlaybackStart, Jellyfin
 var jellyfinTypes = map[string]string{
 	NewEpisode:         JellyfinItemAdded,
 	TitleAvailable:     JellyfinItemAdded,
+	LocalTitleAdded:    JellyfinItemAdded,
 	PlaybackStarted:    JellyfinPlaybackStart,
 	PlaybackPaused:     JellyfinPlaybackProgress,
 	PlaybackResumed:    JellyfinPlaybackProgress,

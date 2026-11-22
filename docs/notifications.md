@@ -481,7 +481,7 @@ A Jellyfin target chooses the plugin's notification types in its **Events**. A n
 
 | `NotificationType` | Sent when | Who receives it |
 |---|---|---|
-| `ItemAdded` | A new episode of a followed series is out (see [New episodes](#new-episodes)), or versions were found for a title of a Watchlist playlist (see [Watchlist titles available](#watchlist-titles-available)). | The targets of the user who follows the series, and the server's once per episode, with no user; the Watchlist's owner's targets only for a title found available. |
+| `ItemAdded` | A new episode of a followed series is out (see [New episodes](#new-episodes)), versions were found for a title of a Watchlist playlist (see [Watchlist titles available](#watchlist-titles-available)), or a scan of a local folder or a network share found a movie or an episode new (see [Titles added to local folders](#titles-added-to-local-folders)). | The targets of the user who follows the series, and the server's once per episode, with no user; the Watchlist's owner's targets only for a title found available; the server's targets only, with no user, for a title of a local folder. |
 | `PlaybackStart` | A playback starts (see [Playbacks](#playbacks)). | The targets of the user who plays, and the server's. |
 | `PlaybackProgress` | A playback reports its position, pauses or resumes. | The same. |
 | `PlaybackStop` | A playback stops, or its app stopped reporting it for five minutes. | The same. |
@@ -493,6 +493,17 @@ Positions are frequent, so they are paced:
 - `PlaybackProgress` is sent at most every 30 seconds per playback, counted from its start. A pause or a resumption is sent at once, and counts as a position.
 - `UserDataSaved` for a position a playback reports is sent at most every 30 seconds per user and title, counted from the playback's start. Its start, its stop and every other save are sent at once.
 - A played mark of a season or a series saves each of its episodes, and sends one `UserDataSaved` per episode, as Jellyfin does.
+
+### Titles added to local folders
+
+A scan of a movies or shows folder, or of a network share of those kinds, tells `ItemAdded` once per movie or episode it found new (see [Scanning](local-folders.md#scanning)):
+
+- **New to every folder:** a title is new when a matched file, a video or a [.strm file](local-folders.md#strm-files), is stored for the first time in this scan, and no file of any folder gave that movie or episode before. Another version of a title already there, or a file of a title already in another folder, tells nothing.
+- **Never on a folder's first scan:** a folder's first complete scan tells nothing, however much it holds, so that adding a whole library does not flood the targets. Only the titles found by its later scans are told. A first scan that fails or stops does not count: the next complete one is the first.
+- **Rescans:** a scan finding nothing new tells nothing.
+- **Bound:** one scan tells 100 titles at most; the others are logged.
+- **Not told:** a file its search could not match, even once matched later, home videos and music.
+- **Who:** the server's Jellyfin targets only, the title described as an administrator sees it, with its provider IDs, and no user fields.
 
 ### Fields
 
@@ -584,7 +595,7 @@ An episode's stop, for example:
 
 These notification types are never sent, as Polyfin has no such event: `SubtitleDownloadFailure`, `AuthenticationSuccess`, `AuthenticationFailure`, `SessionStart`, `PendingRestart`, `TaskCompleted`, the plugin types (`PluginInstalled`, `PluginInstalling`, `PluginInstallationCancelled`, `PluginInstallationFailed`, `PluginUninstalled`, `PluginUpdated`), `UserCreated`, `UserDeleted`, `UserPasswordChanged`, `UserUpdated` and `ItemDeleted`. `Generic` is sent by **Send a test** only.
 
-`ItemAdded` tells new episodes of followed series and Watchlist titles found available, not every title the library has: files added to local folders are not told.
+`ItemAdded` tells new episodes of followed series, Watchlist titles found available, and movies and episodes found new in local folders and network shares (see [Titles added to local folders](#titles-added-to-local-folders)), not every title the library has.
 
 These fields are never sent:
 
@@ -655,7 +666,7 @@ Each delivery also shows the status the target answered, the start of its answer
 **Compared with Jellyfin**
 
 - Polyfin builds the messages itself. Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
-- Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, home rows suggested, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin has no library scan to tell of added items ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, home rows suggested, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin tells items added only for its local folders and shares, whose scans find them, to Jellyfin targets ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin user chooses their own targets and events in **My account**, besides the server's ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Polyfin's webhook sends one documented, versioned JSON event rather than templates, a Jellyfin target sends the plugin's fields without a template (see [Jellyfin webhook format](#jellyfin-webhook-format)), and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
