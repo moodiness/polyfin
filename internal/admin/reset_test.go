@@ -126,10 +126,12 @@ func TestResetToDefaultsOnUsersAndGroups(t *testing.T) {
 }
 
 // Reset my preferences puts back what the user chose themselves: the
-// preferences and configuration Jellyfin apps saved, the home rows turned
-// off and the metadata language. What they watched, their favorites and
-// resume points stay, as do other users' preferences; their apps already
-// signed in read the server's descriptions at once.
+// preferences and configuration Jellyfin apps saved, LumaaGlaass's
+// settings among them, the home rows turned off and the metadata
+// language, and records when, for the settings jellyfin-web keeps in each
+// browser. What they watched, their favorites and resume points stay, as
+// do other users' preferences; their apps already signed in read the
+// server's descriptions at once.
 func TestResetMyPreferences(t *testing.T) {
 	t.Parallel()
 	var pool *pgxpool.Pool
@@ -153,6 +155,9 @@ func TestResetMyPreferences(t *testing.T) {
 		if err := prefs.Put(ctx, user, "usersettings", "emby", json.RawMessage(`{"SortBy":"SortName"}`)); err != nil {
 			t.Fatal(err)
 		}
+		if err := prefs.Put(ctx, user, "lumaaglaass", "lumaaglaass", json.RawMessage(`{"CustomPrefs":{"settings":"{}"}}`)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	row, err := rows.Create(ctx, homerows.Row{Name: "New here", Kind: homerows.KindNew, Place: homerows.PlaceTop, Count: 1, Everyone: true})
 	if err != nil {
@@ -172,9 +177,10 @@ func TestResetMyPreferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, user, err := api.store.DeviceByToken(ctx, token, "192.0.2.1"); err != nil || user.MetadataLanguage != "fr" {
+	if _, user, err := api.store.DeviceByToken(ctx, token, "192.0.2.1"); err != nil || user.MetadataLanguage != "fr" || user.PreferencesResetAt != nil {
 		t.Fatalf("sam's app before: %+v %v", user, err)
 	}
+	before := time.Now().Add(-time.Second)
 
 	if status, body, _ := sam.call(http.MethodPost, "/account/preferences/reset", nil); status != http.StatusNoContent {
 		t.Fatalf("resetting: %d %v", status, body)
@@ -186,11 +192,17 @@ func TestResetMyPreferences(t *testing.T) {
 	if _, found, err := prefs.Get(ctx, samID, "usersettings", "emby"); err != nil || found {
 		t.Errorf("sam's display preferences after the reset: %v %v", found, err)
 	}
+	if _, found, err := prefs.Get(ctx, samID, "lumaaglaass", "lumaaglaass"); err != nil || found {
+		t.Errorf("sam's LumaaGlaass settings after the reset: %v %v", found, err)
+	}
 	if _, found, err := prefs.Configuration(ctx, kim); err != nil || !found {
 		t.Errorf("kim's configuration after sam's reset: %v %v", found, err)
 	}
 	if _, found, err := prefs.Get(ctx, kim, "usersettings", "emby"); err != nil || !found {
 		t.Errorf("kim's display preferences after sam's reset: %v %v", found, err)
+	}
+	if _, found, err := prefs.Get(ctx, kim, "lumaaglaass", "lumaaglaass"); err != nil || !found {
+		t.Errorf("kim's LumaaGlaass settings after sam's reset: %v %v", found, err)
 	}
 	if off, err := rows.Off(ctx, samID); err != nil || len(off) != 0 {
 		t.Errorf("rows off after the reset: %v %v", off, err)
@@ -198,8 +210,12 @@ func TestResetMyPreferences(t *testing.T) {
 	if _, language, _ := sam.call(http.MethodGet, "/account/metadata-language", nil); language["language"] != "" {
 		t.Errorf("metadata language after the reset: %v", language)
 	}
-	if _, user, err := api.store.DeviceByToken(ctx, token, "192.0.2.1"); err != nil || user.MetadataLanguage != "" {
+	if _, user, err := api.store.DeviceByToken(ctx, token, "192.0.2.1"); err != nil || user.MetadataLanguage != "" ||
+		user.PreferencesResetAt == nil || user.PreferencesResetAt.Before(before) {
 		t.Errorf("sam's app after the reset: %+v %v", user, err)
+	}
+	if user, err := api.store.User(ctx, kim); err != nil || user.PreferencesResetAt != nil {
+		t.Errorf("kim after sam's reset: %v %v", user.PreferencesResetAt, err)
 	}
 	kept, err := data.Get(ctx, samID, []accounts.ID{{7}})
 	if d := kept[accounts.ID{7}]; err != nil || !d.Played || !d.Favorite || d.Position != 10*time.Minute {

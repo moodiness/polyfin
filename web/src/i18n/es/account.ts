@@ -787,6 +787,8 @@ const account: typeof en = {
     trackChoices: 'Elección de pistas: olvidada para cada serie y película',
     appPreferences:
       'Las preferencias que las aplicaciones de Jellyfin guardaron en tu cuenta: idiomas y modo del audio y los subtítulos, preferencias de la pantalla de inicio y de visualización',
+    browserSettings:
+      'Los ajustes del reproductor web guardados en cada navegador, como su tema de visualización, su CSS personalizado, su salvapantallas y sus fondos: olvidados la próxima vez que el reproductor web se cargue en él',
     kept: 'Lo que has visto, tus favoritos, tus puntos de reanudación, tus conexiones e importaciones se mantienen.',
     confirm: 'Restablecer',
     resetting: 'Restableciendo…',

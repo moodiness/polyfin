@@ -773,6 +773,8 @@ const account = {
     trackChoices: 'Track choices: forgotten for every series and movie',
     appPreferences:
       'The preferences Jellyfin apps saved in your account: audio and subtitle languages and mode, home screen and display preferences',
+    browserSettings:
+      'The web player’s settings kept in each browser, such as its display theme, custom CSS, screensaver and backdrops: forgotten the next time the web player loads there',
     kept: 'What you watched, your favorites, your resume points, your connections and imports stay.',
     confirm: 'Reset',
     resetting: 'Resetting…',
