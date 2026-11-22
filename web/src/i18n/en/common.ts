@@ -443,6 +443,9 @@ const common = {
     too_many_tests: 'At most 10 tests can be sent in an hour. Try again later.',
     invalid_per_minute: 'Messages a minute: 1 to 60, or empty for no limit.',
     invalid_group_minutes: 'Grouping: 1 to 1,440 minutes, or empty to send each at once.',
+    invalid_headers:
+      'Headers: at most 10, each named once, by letters, digits and dashes, with a value of at most 1,024 characters on one line. Polyfin sets Host, Content-Length and the connection headers itself.',
+    invalid_user_filter: 'Only the server’s Jellyfin targets keep to some users, who must exist.',
     invalid_summary: 'Only the weekly summary, the month and the year in review have a preview.',
     target_unreadable:
       'This target’s address or token cannot be decrypted with POLYFIN_SECRET_KEY. Enter it again.',

@@ -28,6 +28,7 @@ type TitleJSON struct {
 // and number.
 func (s *Service) titleAvailableEvent(user accounts.User, title library.Item) Event {
 	ev := s.newEvent(TitleAvailable)
+	ev.jellyfin = &jellyfinSource{viewer: user.ID, item: &title}
 	ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 	kind := "movie"
 	switch title.Kind {

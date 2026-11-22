@@ -457,6 +457,10 @@ const common: typeof en = {
     too_many_tests: 'No máximo 10 testes podem ser enviados por hora. Tente novamente mais tarde.',
     invalid_per_minute: 'Mensagens por minuto: de 1 a 60, ou vazio para nenhum limite.',
     invalid_group_minutes: 'Agrupamento: de 1 a 1.440 minutos, ou vazio para enviar na hora.',
+    invalid_headers:
+      'Cabeçalhos: no máximo 10, cada um com um nome único de letras, números e hifens, e um valor de no máximo 1.024 caracteres em uma linha. O Polyfin define ele mesmo Host, Content-Length e os cabeçalhos de conexão.',
+    invalid_user_filter:
+      'Só os destinos Jellyfin do servidor se limitam a alguns usuários, que precisam existir.',
     invalid_summary: 'Só o resumo semanal e as retrospectivas do mês e do ano têm prévia.',
     target_unreadable:
       'O endereço ou token deste destino não pode ser descriptografado com POLYFIN_SECRET_KEY. Digite-o novamente.',

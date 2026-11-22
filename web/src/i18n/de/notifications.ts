@@ -19,6 +19,7 @@ const notifications: typeof en = {
     kind: 'Art',
     kinds: {
       webhook: 'Webhook',
+      jellyfin: 'Jellyfin-Webhook-Format',
       discord: 'Discord',
       ntfy: 'ntfy',
       email: 'E-Mail',
@@ -29,6 +30,8 @@ const notifications: typeof en = {
     kindHelp: {
       webhook:
         'Polyfin sendet jedes Ereignis als JSON an diese Adresse, beschrieben in der Dokumentation für App-Entwickler.',
+      jellyfin:
+        'Polyfin sendet jedes Ereignis an diese Adresse wie das Webhook-Plugin von Jellyfin, damit Werkzeuge für Jellyfins Webhooks mit Polyfin funktionieren: Hausautomation, Tracker, Anfrageverwaltungen und Skripte.',
       discord: 'Polyfin sendet jedes Ereignis als Nachricht mit Link an einen Discord-Kanal.',
       ntfy: 'Polyfin veröffentlicht jedes Ereignis in einem ntfy-Topic, das die ntfy-App auf deinem Handy anzeigt.',
       email: 'Polyfin sendet jedes Ereignis per E-Mail an diese Adresse, als Nur-Text und HTML.',
@@ -243,6 +246,42 @@ const notifications: typeof en = {
     lastSent: 'Letzte Nachricht ',
     nothingSent: 'Noch keine Nachricht gesendet',
     noEvents: 'Kein Ereignis ausgewählt',
+    jellyfin: {
+      headers: 'Header',
+      headersHelp:
+        'Mit jeder Nachricht gesendet, etwa ein API-Schlüssel, den das Werkzeug verlangt. Ihre Werte werden nie wieder angezeigt und wie die Adresse gespeichert; ein gespeicherter Wert, der leer bleibt, wird behalten.',
+      headerName: 'Name',
+      headerValue: 'Wert',
+      headerSaved: 'Gespeichert',
+      addHeader: 'Header hinzufügen',
+      removeHeader: 'Entfernen',
+      users: 'Benutzer',
+      usersHelp:
+        'Nur die Ereignisse der angehakten Benutzer werden gesendet; Ereignisse ohne Benutzer, etwa neue Folgen, immer. Keinen anhaken, um die aller zu senden.',
+      usersLoading: 'Benutzer werden geladen…',
+      forUsers: (n: number) => (n === 1 ? 'Für 1 Benutzer' : `Für ${n} Benutzer`),
+      eventsHelp:
+        'Die Benachrichtigungstypen des Webhook-Plugins von Jellyfin. Jede Nachricht enthält die Felder des Plugins, etwa ItemId, Provider_imdb oder PlaybackPositionTicks.',
+      eventNames: {
+        ItemAdded: 'Element hinzugefügt',
+        PlaybackStart: 'Wiedergabe gestartet',
+        PlaybackProgress: 'Wiedergabefortschritt',
+        PlaybackStop: 'Wiedergabe beendet',
+        UserDataSaved: 'Benutzerdaten gespeichert',
+        UserLockedOut: 'Benutzer gesperrt',
+      },
+      eventHelp: {
+        ItemAdded:
+          'Eine neue Folge einer verfolgten Serie ist da, oder ein Titel einer Merkliste hat Versionen. Die Ziele des Servers erfahren jede Folge einmal.',
+        PlaybackStart: 'Ein Video oder ein Song startet in einer Jellyfin-App.',
+        PlaybackProgress:
+          'Wo eine Wiedergabe steht: höchstens alle 30 Sekunden pro Wiedergabe, und sofort, wenn sie pausiert oder fortgesetzt wird.',
+        PlaybackStop: 'Eine Wiedergabe endet, mit der Angabe, ob sie bis zum Ende lief.',
+        UserDataSaved:
+          'Ein Titel wird als gesehen oder ungesehen, Favorit oder bewertet markiert, oder eine Wiedergabe speichert ihre Position: Positionen höchstens alle 30 Sekunden pro Titel.',
+        UserLockedOut: 'Falsche Passwörter haben ein Konto gesperrt.',
+      },
+    },
   },
 }
 

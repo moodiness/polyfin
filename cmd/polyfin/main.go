@@ -808,10 +808,14 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		Backups:        backups,
 		Trackers:       tracking,
 		Plays:          playbacks,
-		// Guests playing through share links, and plays that failed, are
-		// told through the notifications, made below.
+		// Guests playing through share links, plays that failed, and the
+		// users' data saved, are told through the notifications, made
+		// below.
 		SharePlayed: func(link accounts.ShareLink) { notifier.SharePlayed(link) },
 		PlayFailed:  func(f plays.Failure) { notifier.PlaybackFailed(f) },
+		UserDataSaved: func(user accounts.User, item library.Item, data userdata.Data, reason string) {
+			notifier.UserDataSaved(user, item, data, reason)
+		},
 	})
 	// DLNA devices on the local network browse and play the libraries of
 	// the user chosen for each, while the settings share them; a port
@@ -968,8 +972,8 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	// System › Health finds, and once a week, a month and a year what
 	// happened in it.
 	notifier = notifications.New(notifications.Options{DB: pool, Accounts: store, Library: lib, UserData: userData, Secrets: box,
-		Version: version, ServerID: serverID, WebClient: webClient != nil, Problems: admin.HealthProblems(adminOptions), History: history,
-		LocalFiles: folders, Logger: logger})
+		Version: version, ServerID: serverID, JellyfinVersion: jellyfin.Version, WebClient: webClient != nil,
+		Problems: admin.HealthProblems(adminOptions), History: history, LocalFiles: folders, Logger: logger})
 	defer notifier.Close()
 	adminOptions.Notifications = notifier
 	registerSummaryTasks(registry, notifier)

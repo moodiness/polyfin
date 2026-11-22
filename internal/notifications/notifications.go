@@ -10,14 +10,17 @@
 // of the week, once a month and once a year a review of the month and of
 // the year, and an app or tracking connection that stopped. Messages go
 // to targets: generic webhooks, which receive a versioned JSON event (see
-// Event); Discord webhooks, ntfy topics, Telegram chats, Gotify servers
-// and Pushover users, which receive messages formatted for them; and email
-// addresses, through the SMTP server of the settings. Administrators add
-// the server's targets, which receive the events of every user but their
-// sign-ins on new devices, their programme reminders and their watchlist
-// titles found available; each user adds their own, which receive their
-// own events, and the health, joining and new version events, every
-// account's blocks and the server's summaries for administrators.
+// Event); Jellyfin targets, which receive the JSON of Jellyfin's webhook
+// plugin, the positions of playbacks and the users' saved data included
+// (see jellyfin.go); Discord webhooks, ntfy topics, Telegram chats,
+// Gotify servers and Pushover users, which receive messages formatted for
+// them; and email addresses, through the SMTP server of the settings.
+// Administrators add the server's targets, which receive the events of
+// every user but their sign-ins on new devices, their programme reminders
+// and their watchlist titles found available; each user adds their own,
+// which receive their own events, and the health, joining and new version
+// events, every account's blocks and the server's summaries for
+// administrators.
 //
 // Nothing is sent while a request is answered: each target has a queue,
 // sent in order in the background, at most so many a minute when the
@@ -52,6 +55,9 @@ import (
 const (
 	// Webhook receives each event as JSON (see Event).
 	Webhook = "webhook"
+	// Jellyfin receives each event as the JSON Jellyfin's webhook plugin
+	// sends, by the plugin's notification types (see jellyfin.go).
+	Jellyfin = "jellyfin"
 	// Discord is a Discord channel's webhook, which receives an embed.
 	Discord = "discord"
 	// Ntfy is a topic of an ntfy server, which receives a title, a message,
@@ -69,7 +75,7 @@ const (
 )
 
 // Kinds lists the kinds of targets in the order the admin app shows them.
-var Kinds = []string{Webhook, Discord, Ntfy, Email, Telegram, Gotify, Pushover}
+var Kinds = []string{Webhook, Jellyfin, Discord, Ntfy, Email, Telegram, Gotify, Pushover}
 
 // The events, by the names targets choose them by and Event.Type gives.
 const (
@@ -127,6 +133,13 @@ const (
 	// Grouped is a message that holds the plays and new episodes a target
 	// grouped (see Target.GroupMinutes); targets do not choose it.
 	Grouped = "grouped"
+	// PlaybackProgressed is a position a playback reported, at most one
+	// every timing.progressEvery per playback, and DataSaved a user's
+	// data saved for an item (see Service.UserDataSaved): only Jellyfin
+	// targets receive them, as the plugin's PlaybackProgress and
+	// UserDataSaved, and no other target chooses them.
+	PlaybackProgressed = "playback_progressed"
+	DataSaved          = "user_data_saved"
 )
 
 // Events lists the events targets choose from, in the order the admin app
@@ -237,9 +250,17 @@ var (
 	ErrUnreadable = errors.New("notification target cannot be decrypted")
 	// ErrInvalidPerMinute reports a cap of messages a minute that is not 0
 	// to MaxPerMinute; ErrInvalidGroupMinutes a grouping that is not 0 to
-	// MaxGroupMinutes minutes.
+	// MaxGroupMinutes minutes, or a grouping of a Jellyfin target, which
+	// never groups.
 	ErrInvalidPerMinute    = errors.New("invalid notification messages per minute")
 	ErrInvalidGroupMinutes = errors.New("invalid notification grouping minutes")
+	// ErrInvalidHeaders reports headers of a Jellyfin target that are not
+	// valid (see checkHeaders), or headers given to another kind.
+	ErrInvalidHeaders = errors.New("invalid notification target headers")
+	// ErrInvalidUserFilter reports a user filter given to a target other
+	// than a server's Jellyfin target, or naming a user who does not
+	// exist.
+	ErrInvalidUserFilter = errors.New("invalid notification user filter")
 	// ErrNoPreview reports a preview asked of an event that is not a
 	// summary.
 	ErrNoPreview = errors.New("no preview of this notification")
@@ -311,6 +332,9 @@ type Options struct {
 	// the server in events and links.
 	Version  string
 	ServerID string
+	// JellyfinVersion is the Jellyfin version Polyfin reproduces, which
+	// Jellyfin targets are told as the server's.
+	JellyfinVersion string
 	// WebClient tells whether Polyfin serves jellyfin-web at /web/, which
 	// links to episodes and recordings open.
 	WebClient bool
@@ -360,6 +384,9 @@ type timing struct {
 	// pruneEvery is how often the deliveries older than keepDeliveries
 	// are deleted.
 	pruneEvery time.Duration
+	// progressEvery is how often a playback's position, or a user's
+	// position saved for an item, is told to Jellyfin targets at most.
+	progressEvery time.Duration
 }
 
 var defaultTiming = timing{
@@ -378,6 +405,7 @@ var defaultTiming = timing{
 	minute:           time.Minute,
 	failureQuiet:     time.Hour,
 	pruneEvery:       time.Hour,
+	progressEvery:    30 * time.Second,
 }
 
 const (
@@ -431,6 +459,8 @@ type Service struct {
 	// certificates SMTP servers are checked against, nil for the system's.
 	telegramAPI, pushoverAPI string
 	smtpRoots                *x509.CertPool
+	// jellyfinVersion is the server's version Jellyfin targets are told.
+	jellyfinVersion string
 
 	mu     sync.Mutex
 	closed bool
@@ -449,6 +479,11 @@ type Service struct {
 	// failures are when each user's failed play of a title was last told,
 	// by user and title (see failures.go).
 	failures map[failureKey]time.Time
+	// progressed are when each playback's position was last told, by the
+	// device it plays on, and saved when each user's position for an item
+	// was (see jellyfin.go).
+	progressed map[accounts.ID]time.Time
+	saved      map[savedKey]time.Time
 	// underWay counts, by target, the sends that began and are not in
 	// recent yet, and tests are the tests allowed within the last hour,
 	// by owner, the zero identifier for the server's (see deliver.go).
@@ -504,10 +539,14 @@ func New(options Options) *Service {
 		held:        map[accounts.ID]*group{},
 		recent:      map[accounts.ID][]time.Time{},
 		failures:    map[failureKey]time.Time{},
+		progressed:  map[accounts.ID]time.Time{},
+		saved:       map[savedKey]time.Time{},
 		underWay:    map[accounts.ID]int{},
 		tests:       map[accounts.ID][]askedTest{},
 		summarySent: map[string]time.Time{},
 		loaded:      make(chan struct{}),
+
+		jellyfinVersion: options.JellyfinVersion,
 	}
 }
 

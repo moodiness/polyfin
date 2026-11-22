@@ -11,24 +11,28 @@ import (
 )
 
 // notificationsJSON is what a notifications page shows: the targets, the
-// events and kinds of targets they may choose from, and whether email
-// targets can be added: an SMTP server is set.
+// events and kinds of targets they may choose from, the notification
+// types Jellyfin targets choose from, and whether email targets can be
+// added: an SMTP server is set.
 type notificationsJSON struct {
 	Targets        []notificationTargetJSON `json:"targets"`
 	Events         []string                 `json:"events"`
+	JellyfinEvents []string                 `json:"jellyfinEvents"`
 	Kinds          []string                 `json:"kinds"`
 	EmailAvailable bool                     `json:"emailAvailable"`
 }
 
 // notificationTargetJSON is a target. Its secret address, tokens and keys
-// are never answered: Address is only the scheme and host of a webhook's
-// or Discord target's address, an ntfy or Gotify target's server, an
-// email target's recipient, and empty for Telegram and Pushover targets;
-// Topic is an ntfy target's topic, Chat a Telegram target's chat; TokenSet
-// tells whether an ntfy, Telegram, Gotify or Pushover target has a token.
-// Problem is null, "refused", "rejected", "unreachable" or "unreadable",
-// ProblemStatus the HTTP status the target answered, or the code the SMTP
-// server answered for an email target, when it answered.
+// are never answered: Address is only the scheme and host of a webhook's,
+// Jellyfin or Discord target's address, an ntfy or Gotify target's
+// server, an email target's recipient, and empty for Telegram and
+// Pushover targets; Topic is an ntfy target's topic, Chat a Telegram
+// target's chat; TokenSet tells whether an ntfy, Telegram, Gotify or
+// Pushover target has a token; Headers names a Jellyfin target's headers,
+// whose values are secret too. Problem is null, "refused", "rejected",
+// "unreachable" or "unreadable", ProblemStatus the HTTP status the target
+// answered, or the code the SMTP server answered for an email target,
+// when it answered.
 type notificationTargetJSON struct {
 	ID            string     `json:"id"`
 	Kind          string     `json:"kind"`
@@ -49,12 +53,23 @@ type notificationTargetJSON struct {
 	// many minutes, null to send each at once.
 	PerMinute    *int `json:"perMinute"`
 	GroupMinutes *int `json:"groupMinutes"`
+	// Headers names a Jellyfin target's headers.
+	Headers []string `json:"headers"`
+	// Users are the users whose events a server's Jellyfin target
+	// receives, null for every user's.
+	Users []string `json:"users"`
 }
 
 func newNotificationTargetJSON(t notifications.Target) notificationTargetJSON {
 	result := notificationTargetJSON{ID: t.ID.String(), Kind: t.Kind, Name: t.Name, Address: t.Address, Topic: t.Topic, Chat: t.Chat, TokenSet: t.TokenSet,
 		Events: t.Events, Enabled: t.Enabled, CreatedAt: t.CreatedAt.UTC().Truncate(time.Second), LastSentAt: utcSeconds(t.LastSentAt),
-		ProblemStatus: t.ProblemStatus, ProblemAt: utcSeconds(t.ProblemAt)}
+		ProblemStatus: t.ProblemStatus, ProblemAt: utcSeconds(t.ProblemAt), Headers: t.Headers}
+	if result.Headers == nil {
+		result.Headers = []string{}
+	}
+	for _, user := range t.Users {
+		result.Users = append(result.Users, user.String())
+	}
 	if t.Problem != "" {
 		result.Problem = &t.Problem
 	}
@@ -69,13 +84,16 @@ func newNotificationTargetJSON(t notifications.Target) notificationTargetJSON {
 
 // notificationDraftJSON adds a target, or changes one: on a change, the
 // fields left out keep their values, and kind is ignored. address is a
-// webhook's or Discord target's address, an ntfy target's server, null or
-// empty for the default one, a Gotify target's server, or an email
-// target's recipient; topic an ntfy target's topic; chat a Telegram
-// target's chat; token an ntfy target's access token, empty for none, a
-// Telegram bot's token, or a Gotify or Pushover application's token;
-// userKey a Pushover target's user key; perMinute 1 to 60, 0 for no cap;
-// groupMinutes 1 to 1440, 0 to send each message at once.
+// webhook's, Jellyfin or Discord target's address, an ntfy target's
+// server, null or empty for the default one, a Gotify target's server, or
+// an email target's recipient; topic an ntfy target's topic; chat a
+// Telegram target's chat; token an ntfy target's access token, empty for
+// none, a Telegram bot's token, or a Gotify or Pushover application's
+// token; userKey a Pushover target's user key; perMinute 1 to 60, 0 for
+// no cap; groupMinutes 1 to 1440, 0 to send each message at once, never
+// for a Jellyfin target. headers replace a Jellyfin target's headers, one
+// with an empty value keeping the value saved under its name; users
+// replace a server's Jellyfin target's user filter, empty for every user.
 type notificationDraftJSON struct {
 	Kind    string    `json:"kind"`
 	Name    *string   `json:"name"`
@@ -89,18 +107,34 @@ type notificationDraftJSON struct {
 	// PerMinute and GroupMinutes pace the messages.
 	PerMinute    *int `json:"perMinute"`
 	GroupMinutes *int `json:"groupMinutes"`
+	// Headers and Users are a Jellyfin target's.
+	Headers *[]notifications.Header `json:"headers"`
+	Users   *[]string               `json:"users"`
 }
 
-func (d notificationDraftJSON) draft() notifications.Draft {
+// draft is d as the notifications take it: ErrInvalidUserFilter for a
+// user that is not an identifier.
+func (d notificationDraftJSON) draft() (notifications.Draft, error) {
 	result := notifications.Draft{Kind: d.Kind, Name: d.Name, Address: d.Address, Topic: d.Topic, Chat: d.Chat, Token: d.Token, UserKey: d.UserKey,
-		Enabled: d.Enabled, PerMinute: d.PerMinute, GroupMinutes: d.GroupMinutes}
+		Enabled: d.Enabled, PerMinute: d.PerMinute, GroupMinutes: d.GroupMinutes, Headers: d.Headers}
 	if d.Events != nil {
 		result.Events = *d.Events
 		if result.Events == nil {
 			result.Events = []string{}
 		}
 	}
-	return result
+	if d.Users != nil {
+		users := []accounts.ID{}
+		for _, raw := range *d.Users {
+			id, err := accounts.ParseID(raw)
+			if err != nil {
+				return notifications.Draft{}, notifications.ErrInvalidUserFilter
+			}
+			users = append(users, id)
+		}
+		result.Users = &users
+	}
+	return result, nil
 }
 
 // testResultJSON is what came of "Send a test": whether the target
@@ -152,6 +186,8 @@ func notificationError(w http.ResponseWriter, err error) bool {
 		{notifications.ErrTooManyTests, http.StatusTooManyRequests, "too_many_tests"},
 		{notifications.ErrInvalidPerMinute, http.StatusBadRequest, "invalid_per_minute"},
 		{notifications.ErrInvalidGroupMinutes, http.StatusBadRequest, "invalid_group_minutes"},
+		{notifications.ErrInvalidHeaders, http.StatusBadRequest, "invalid_headers"},
+		{notifications.ErrInvalidUserFilter, http.StatusBadRequest, "invalid_user_filter"},
 		{notifications.ErrNoPreview, http.StatusBadRequest, "invalid_summary"},
 	} {
 		if errors.Is(err, known.err) {
@@ -168,8 +204,8 @@ type notificationRoutes struct {
 	owner notificationOwner
 }
 
-// list answers the owner's targets, and the events and kinds they may
-// choose from.
+// list answers the owner's targets, and the events, the notification
+// types of Jellyfin targets and the kinds they may choose from.
 func (n notificationRoutes) list(w http.ResponseWriter, r *http.Request) {
 	if n.h.Notifications == nil {
 		writeError(w, http.StatusNotFound, "not_found")
@@ -181,8 +217,8 @@ func (n notificationRoutes) list(w http.ResponseWriter, r *http.Request) {
 		n.h.internalError(w, r, err)
 		return
 	}
-	result := notificationsJSON{Targets: []notificationTargetJSON{}, Events: notifications.EventsFor(owner), Kinds: notifications.Kinds,
-		EmailAvailable: n.h.Accounts.Settings().SMTPAvailable()}
+	result := notificationsJSON{Targets: []notificationTargetJSON{}, Events: notifications.EventsFor(owner),
+		JellyfinEvents: notifications.JellyfinEvents, Kinds: notifications.Kinds, EmailAvailable: n.h.Accounts.Settings().SMTPAvailable()}
 	for _, t := range targets {
 		result.Targets = append(result.Targets, newNotificationTargetJSON(t))
 	}
@@ -199,7 +235,11 @@ func (n notificationRoutes) create(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	target, err := n.h.Notifications.Create(r.Context(), n.owner(r), body.draft())
+	draft, err := body.draft()
+	if notificationError(w, err) {
+		return
+	}
+	target, err := n.h.Notifications.Create(r.Context(), n.owner(r), draft)
 	if notificationError(w, err) {
 		return
 	} else if err != nil {
@@ -223,7 +263,11 @@ func (n notificationRoutes) update(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	target, err := n.h.Notifications.Update(r.Context(), n.owner(r), id, body.draft())
+	draft, err := body.draft()
+	if notificationError(w, err) {
+		return
+	}
+	target, err := n.h.Notifications.Update(r.Context(), n.owner(r), id, draft)
 	if notificationError(w, err) {
 		return
 	} else if err != nil {

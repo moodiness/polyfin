@@ -18,6 +18,7 @@ const notifications = {
     kind: 'Kind',
     kinds: {
       webhook: 'Webhook',
+      jellyfin: 'Jellyfin webhook format',
       discord: 'Discord',
       ntfy: 'ntfy',
       email: 'Email',
@@ -28,6 +29,8 @@ const notifications = {
     kindHelp: {
       webhook:
         'Polyfin posts each event to this address as JSON, described in the documentation for app developers.',
+      jellyfin:
+        'Polyfin posts each event to this address as Jellyfin’s webhook plugin does, so that tools made for Jellyfin’s webhooks work with Polyfin: home automation, watch trackers, request managers and scripts.',
       discord: 'Polyfin posts each event to a Discord channel, as a message with a link.',
       ntfy: 'Polyfin publishes each event to an ntfy topic, which the ntfy app shows on your phone.',
       email: 'Polyfin emails each event to this address, in plain text and HTML.',
@@ -237,6 +240,42 @@ const notifications = {
     lastSent: 'Last message ',
     nothingSent: 'No message sent yet',
     noEvents: 'No event chosen',
+    jellyfin: {
+      headers: 'Headers',
+      headersHelp:
+        'Sent with each message, such as an API key the tool asks for. Their values are never shown again, and are stored as the address is; a saved value left empty is kept.',
+      headerName: 'Name',
+      headerValue: 'Value',
+      headerSaved: 'Saved',
+      addHeader: 'Add a header',
+      removeHeader: 'Remove',
+      users: 'Users',
+      usersHelp:
+        'Only the events of the users ticked are sent; events about no user, such as new episodes, always are. Tick none to send every user’s.',
+      usersLoading: 'Loading the users…',
+      forUsers: (n: number) => (n === 1 ? 'For 1 user' : `For ${n} users`),
+      eventsHelp:
+        'The notification types of Jellyfin’s webhook plugin. Each message holds the plugin’s fields, such as ItemId, Provider_imdb or PlaybackPositionTicks.',
+      eventNames: {
+        ItemAdded: 'Item added',
+        PlaybackStart: 'Playback start',
+        PlaybackProgress: 'Playback progress',
+        PlaybackStop: 'Playback stop',
+        UserDataSaved: 'User data saved',
+        UserLockedOut: 'User locked out',
+      },
+      eventHelp: {
+        ItemAdded:
+          'A new episode of a followed series is out, or a title of a Watchlist playlist has versions. The server’s targets hear of each episode once.',
+        PlaybackStart: 'A video or a song starts playing in a Jellyfin app.',
+        PlaybackProgress:
+          'Where a playback is: at most every 30 seconds per playback, and at once when it pauses or resumes.',
+        PlaybackStop: 'A playback stops, with whether it was played to the end.',
+        UserDataSaved:
+          'A title is marked played or unplayed, favorite or rated, or a playback saves its position: positions at most every 30 seconds per title.',
+        UserLockedOut: 'Wrong passwords blocked an account.',
+      },
+    },
   },
 }
 

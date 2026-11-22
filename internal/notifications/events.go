@@ -66,6 +66,9 @@ type Event struct {
 	// Events are the events a grouped message holds, oldest first, each
 	// as it would have been sent alone.
 	Events []Event `json:"events,omitempty"`
+	// jellyfin is what Jellyfin targets are told beyond the event, shared
+	// by every target's copy (see jellyfinSource).
+	jellyfin *jellyfinSource
 }
 
 // ServerJSON identifies a server: its ID as Jellyfin apps know it, its
@@ -250,9 +253,11 @@ func (s *Service) testEvent() Event {
 }
 
 // episodeEvent tells of episode, new for user, nil for the server's
-// targets.
-func (s *Service) episodeEvent(user *accounts.User, episode library.Item) Event {
+// targets. viewer is the user it was found for, as whom Jellyfin targets
+// look up its series.
+func (s *Service) episodeEvent(user *accounts.User, viewer accounts.ID, episode library.Item) Event {
 	ev := s.newEvent(NewEpisode)
+	ev.jellyfin = &jellyfinSource{viewer: viewer, item: &episode}
 	if user != nil {
 		ev.User = &UserJSON{ID: user.ID.String(), Name: user.Name}
 	}

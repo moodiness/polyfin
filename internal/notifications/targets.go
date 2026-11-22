@@ -52,17 +52,20 @@ type target struct {
 	kind  string
 	name  string
 	// address is an ntfy or Gotify target's server, an email target's
-	// recipient, and a webhook's or Discord target's scheme and host,
-	// shown in place of its secret address; empty for Telegram and
+	// recipient, and a webhook's, Jellyfin or Discord target's scheme and
+	// host, shown in place of its secret address; empty for Telegram and
 	// Pushover targets.
 	address string
 	// topic is an ntfy target's topic, a Telegram target's chat.
 	topic string
-	// secret is a webhook's or Discord target's address, an ntfy target's
+	// secret is a webhook's or Discord target's address, a Jellyfin
+	// target's address and headers (see jellyfinSecret), an ntfy target's
 	// access token, a Telegram bot's token, a Gotify application's token,
 	// a Pushover target's user key and application token on two lines, as
 	// stored.
-	secret        string
+	secret string
+	// events are the events it receives; a Jellyfin target's are the
+	// plugin's notification types (see JellyfinEvents).
 	events        []string
 	enabled       bool
 	createdAt     time.Time
@@ -74,21 +77,38 @@ type target struct {
 	// groupMinutes groups the plays and new episodes into one message
 	// every so many minutes, 0 to send each at once.
 	perMinute, groupMinutes int
+	// users are the users whose events a server's Jellyfin target
+	// receives, nil for every user's.
+	users []accounts.ID
 }
 
 const targetColumns = "id, user_id, kind, name, address, topic, secret, events, enabled, created_at, last_sent_at, coalesce(problem, ''), problem_status, problem_at, " +
-	"coalesce(per_minute, 0), coalesce(group_minutes, 0)"
+	"coalesce(per_minute, 0), coalesce(group_minutes, 0), user_filter"
 
 func scanTarget(row pgx.Row) (target, error) {
 	var t target
 	err := row.Scan(&t.id, &t.owner, &t.kind, &t.name, &t.address, &t.topic, &t.secret, &t.events, &t.enabled, &t.createdAt,
-		&t.lastSent, &t.problem, &t.problemStatus, &t.problemAt, &t.perMinute, &t.groupMinutes)
+		&t.lastSent, &t.problem, &t.problemStatus, &t.problemAt, &t.perMinute, &t.groupMinutes, &t.users)
 	return t, err
 }
 
-// wants reports whether t receives event.
+// wants reports whether t receives events of type event: a Jellyfin
+// target receives those of the notification types it chose.
 func (t target) wants(event string) bool {
+	if t.kind == Jellyfin {
+		return t.enabled && slices.Contains(t.events, jellyfinTypes[event])
+	}
 	return t.enabled && slices.Contains(t.events, event)
+}
+
+// accepts reports whether t receives ev: an event of a type it wants,
+// about a user its user filter names, or about none.
+func (t target) accepts(ev Event) bool {
+	if !t.wants(ev.Type) {
+		return false
+	}
+	return len(t.users) == 0 || ev.User == nil ||
+		slices.ContainsFunc(t.users, func(id accounts.ID) bool { return id.String() == ev.User.ID })
 }
 
 // Target is a target as the admin API shows it: its secret address,
@@ -98,8 +118,8 @@ type Target struct {
 	Kind string
 	Name string
 	// Address is an ntfy or Gotify target's server, an email target's
-	// recipient, and only the scheme and host of a webhook's or Discord
-	// target's address, which is secret.
+	// recipient, and only the scheme and host of a webhook's, Jellyfin or
+	// Discord target's address, which is secret.
 	Address string
 	// Topic is an ntfy target's topic, Chat a Telegram target's chat;
 	// TokenSet tells whether an ntfy, Telegram, Gotify or Pushover target
@@ -123,17 +143,28 @@ type Target struct {
 	// GroupMinutes groups the plays and new episodes into one message every
 	// so many minutes, 0 to send each at once.
 	PerMinute, GroupMinutes int
+	// Headers names the headers a Jellyfin target sends, whose values
+	// are secret; Users are the users whose events a server's Jellyfin
+	// target receives, nil for every user's.
+	Headers []string
+	Users   []accounts.ID
 }
 
 func (s *Service) describe(t target) Target {
 	result := Target{ID: t.id, Kind: t.kind, Name: t.name, Address: t.address, Topic: t.topic, TokenSet: hasToken(t.kind) && t.secret != "",
 		Events: slices.Clone(t.events), Enabled: t.enabled, CreatedAt: t.createdAt, LastSentAt: t.lastSent,
-		Problem: t.problem, ProblemStatus: t.problemStatus, ProblemAt: t.problemAt, PerMinute: t.perMinute, GroupMinutes: t.groupMinutes}
+		Problem: t.problem, ProblemStatus: t.problemStatus, ProblemAt: t.problemAt, PerMinute: t.perMinute, GroupMinutes: t.groupMinutes,
+		Users: slices.Clone(t.users)}
 	if t.kind == Telegram {
 		result.Topic, result.Chat = "", t.topic
 	}
-	if _, err := s.box.Open(t.secret); err != nil {
+	opened, err := s.box.Open(t.secret)
+	if err != nil {
 		result.Problem, result.ProblemStatus, result.ProblemAt = ProblemUnreadable, nil, nil
+	} else if t.kind == Jellyfin {
+		for _, header := range openJellyfin(opened).headers {
+			result.Headers = append(result.Headers, header.Name)
+		}
 	}
 	return result
 }
@@ -145,13 +176,16 @@ func hasToken(kind string) bool {
 
 // Draft is what an owner gives to add a target or change one. On a
 // change, nil fields keep their values; Kind is only read when adding.
-// Address is a webhook's or Discord target's address, an ntfy target's
-// server, empty for DefaultNtfyServer, a Gotify target's server, or an
-// email target's recipient. Token is an ntfy target's access token, empty
-// for none, a Telegram bot's token, or a Gotify or Pushover application's
-// token. Chat is a Telegram target's chat, UserKey a Pushover target's
-// user key. PerMinute is 1 to MaxPerMinute, or 0 for no cap;
-// GroupMinutes 1 to MaxGroupMinutes, or 0 to send each message at once.
+// Address is a webhook's, Jellyfin or Discord target's address, an ntfy
+// target's server, empty for DefaultNtfyServer, a Gotify target's server,
+// or an email target's recipient. Token is an ntfy target's access token,
+// empty for none, a Telegram bot's token, or a Gotify or Pushover
+// application's token. Chat is a Telegram target's chat, UserKey a
+// Pushover target's user key. PerMinute is 1 to MaxPerMinute, or 0 for no
+// cap; GroupMinutes 1 to MaxGroupMinutes, or 0 to send each message at
+// once. Headers replace a Jellyfin target's headers, a header without a
+// value keeping the value saved under its name; Users replace a server's
+// Jellyfin target's user filter, empty for every user.
 type Draft struct {
 	Kind    string
 	Name    *string
@@ -165,6 +199,8 @@ type Draft struct {
 	// PerMinute and GroupMinutes pace the messages (see Target).
 	PerMinute    *int
 	GroupMinutes *int
+	Headers      *[]Header
+	Users        *[]accounts.ID
 }
 
 // ownerID is the identifier of owner, nil for the server.
@@ -277,9 +313,10 @@ func (s *Service) Create(ctx context.Context, owner *accounts.User, d Draft) (Ta
 			return ErrTooManyTargets
 		}
 		row := tx.QueryRow(ctx, `INSERT INTO notification_targets (user_id, kind, name, address, topic, secret, events, enabled, created_at,
-				per_minute, group_minutes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING `+targetColumns,
-			t.owner, t.kind, t.name, t.address, t.topic, t.secret, t.events, t.enabled, s.now(), nullZero(t.perMinute), nullZero(t.groupMinutes))
+				per_minute, group_minutes, user_filter)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING `+targetColumns,
+			t.owner, t.kind, t.name, t.address, t.topic, t.secret, t.events, t.enabled, s.now(), nullZero(t.perMinute), nullZero(t.groupMinutes),
+			nullEmpty(t.users))
 		var err error
 		t, err = scanTarget(row)
 		return err
@@ -306,12 +343,12 @@ func (s *Service) Update(ctx context.Context, owner *accounts.User, id accounts.
 	// goes.
 	clear := t.secret != before.secret || t.address != before.address || t.topic != before.topic
 	row := s.db.QueryRow(ctx, `UPDATE notification_targets SET name = $2, address = $3, topic = $4, secret = $5, events = $6, enabled = $7,
-			per_minute = $9, group_minutes = $10,
+			per_minute = $9, group_minutes = $10, user_filter = $11,
 			problem = CASE WHEN $8 THEN NULL ELSE problem END,
 			problem_status = CASE WHEN $8 THEN NULL ELSE problem_status END,
 			problem_at = CASE WHEN $8 THEN NULL ELSE problem_at END
 		WHERE id = $1 RETURNING `+targetColumns,
-		id, t.name, t.address, t.topic, t.secret, t.events, t.enabled, clear, nullZero(t.perMinute), nullZero(t.groupMinutes))
+		id, t.name, t.address, t.topic, t.secret, t.events, t.enabled, clear, nullZero(t.perMinute), nullZero(t.groupMinutes), nullEmpty(t.users))
 	if t, err = scanTarget(row); errors.Is(err, pgx.ErrNoRows) {
 		return Target{}, ErrNotFound
 	} else if err != nil {
@@ -361,7 +398,14 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 		t.name = name
 	}
 	confined := owner != nil && !owner.IsAdministrator
-	if d.Address != nil {
+	switch {
+	case t.kind == Jellyfin && (d.Address != nil || d.Headers != nil):
+		if err := s.applyJellyfin(ctx, t, d.Address, d.Headers, confined); err != nil {
+			return err
+		}
+	case d.Headers != nil && len(*d.Headers) > 0:
+		return ErrInvalidHeaders
+	case d.Address != nil:
 		if err := s.applyAddress(ctx, t, strings.TrimSpace(*d.Address), confined); err != nil {
 			return err
 		}
@@ -389,7 +433,10 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 		}
 	}
 	if d.Events != nil {
-		allowed := EventsFor(owner)
+		allowed, order := EventsFor(owner), Events
+		if t.kind == Jellyfin {
+			allowed, order = JellyfinEvents, JellyfinEvents
+		}
 		events := []string{}
 		for _, event := range d.Events {
 			if !slices.Contains(allowed, event) {
@@ -400,7 +447,7 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 			}
 		}
 		// Kept in the order the admin app shows them.
-		slices.SortFunc(events, func(a, b string) int { return slices.Index(Events, a) - slices.Index(Events, b) })
+		slices.SortFunc(events, func(a, b string) int { return slices.Index(order, a) - slices.Index(order, b) })
 		t.events = events
 	}
 	if d.Enabled != nil {
@@ -413,10 +460,15 @@ func (s *Service) apply(ctx context.Context, owner *accounts.User, t *target, d 
 		t.perMinute = *d.PerMinute
 	}
 	if d.GroupMinutes != nil {
-		if *d.GroupMinutes < 0 || *d.GroupMinutes > MaxGroupMinutes {
+		if *d.GroupMinutes < 0 || *d.GroupMinutes > MaxGroupMinutes || t.kind == Jellyfin && *d.GroupMinutes > 0 {
 			return ErrInvalidGroupMinutes
 		}
 		t.groupMinutes = *d.GroupMinutes
+	}
+	if d.Users != nil {
+		if err := s.applyUsers(ctx, owner, t, *d.Users); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -427,6 +479,46 @@ func nullZero(n int) *int {
 		return nil
 	}
 	return &n
+}
+
+// nullEmpty is ids, or NULL for none.
+func nullEmpty(ids []accounts.ID) any {
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+// applyUsers checks users, the user filter of t, a target of owner, and
+// writes it into t: only a server's Jellyfin target has one, of users who
+// exist; none, every user's events are sent.
+func (s *Service) applyUsers(ctx context.Context, owner *accounts.User, t *target, users []accounts.ID) error {
+	if len(users) == 0 {
+		t.users = nil
+		return nil
+	}
+	if owner != nil || t.kind != Jellyfin || len(users) > maxUserFilter {
+		return ErrInvalidUserFilter
+	}
+	existing, err := s.accounts.Users(ctx)
+	if err != nil {
+		return err
+	}
+	known := make(map[accounts.ID]bool, len(existing))
+	for _, user := range existing {
+		known[user.ID] = true
+	}
+	var filter []accounts.ID
+	for _, id := range users {
+		if !known[id] {
+			return ErrInvalidUserFilter
+		}
+		if !slices.Contains(filter, id) {
+			filter = append(filter, id)
+		}
+	}
+	t.users = filter
+	return nil
 }
 
 // applyAddress checks address, the address of a target of t's kind, and

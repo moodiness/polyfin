@@ -466,6 +466,10 @@ const common: typeof en = {
     too_many_tests: 'Si possono inviare al massimo 10 test all’ora. Riprova più tardi.',
     invalid_per_minute: 'Messaggi al minuto: da 1 a 60, oppure vuoto per nessun limite.',
     invalid_group_minutes: 'Raggruppamento: da 1 a 1.440 minuti, oppure vuoto per inviare subito.',
+    invalid_headers:
+      'Intestazioni: al massimo 10, ognuna con un nome unico di lettere, cifre e trattini, e un valore di al massimo 1.024 caratteri su una riga. Polyfin imposta da sé Host, Content-Length e le intestazioni di connessione.',
+    invalid_user_filter:
+      'Solo le destinazioni Jellyfin del server si limitano ad alcuni utenti, che devono esistere.',
     invalid_summary:
       'Solo il riepilogo settimanale, il mese e l’anno in sintesi hanno un’anteprima.',
     target_unreadable:

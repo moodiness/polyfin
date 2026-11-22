@@ -216,7 +216,7 @@ func (s *Service) checkUser(ctx context.Context, user accounts.User, toUser, toS
 				return err
 			}
 			if toUser {
-				s.dispatch(s.episodeEvent(&user, episode), func(t target) bool { return t.owner != nil && *t.owner == user.ID })
+				s.dispatch(s.episodeEvent(&user, user.ID, episode), func(t target) bool { return t.owner != nil && *t.owner == user.ID })
 			}
 			if toServer {
 				tag, err := s.db.Exec(ctx, "INSERT INTO notification_server_episodes (episode_id, seen_at) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -225,7 +225,7 @@ func (s *Service) checkUser(ctx context.Context, user accounts.User, toUser, toS
 					return err
 				}
 				if tag.RowsAffected() > 0 {
-					s.dispatch(s.episodeEvent(nil, episode), func(t target) bool { return t.owner == nil })
+					s.dispatch(s.episodeEvent(nil, user.ID, episode), func(t target) bool { return t.owner == nil })
 				}
 			}
 		}

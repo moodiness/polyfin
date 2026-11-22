@@ -20,9 +20,10 @@ Polyfin can tell users and administrators of:
 
 ## Targets
 
-A target is where messages go. Polyfin has seven kinds:
+A target is where messages go. Polyfin has eight kinds:
 
 - a generic webhook;
+- a webhook in Jellyfin's format, for tools made for Jellyfin's webhooks (see [Jellyfin webhook format](#jellyfin-webhook-format));
 - a Discord channel's webhook;
 - an ntfy topic;
 - an email address;
@@ -48,6 +49,7 @@ Targets have two kinds of owners:
 | Kind | What it asks for |
 |---|---|
 | **Webhook** | Its address. Polyfin posts each event to it as JSON (see [The webhook event](webhook-reference.md#the-webhook-event)). |
+| **Jellyfin webhook format** | Its address, the **Headers** sent with each message, and for the server's targets the **Users** whose events it receives (see [Jellyfin webhook format](#jellyfin-webhook-format)). Its **Events** are the notification types of Jellyfin's webhook plugin. |
 | **Discord** | The channel webhook's address. In Discord, open the channel's settings, then Integrations, Webhooks, Copy Webhook URL. |
 | **ntfy** | The **ntfy server** (`https://ntfy.sh` when left empty), the **Topic**, and an **Access token** for a topic that needs signing in. |
 | **Email** | The **Email address** messages go to. They go through the server's SMTP server (see [Email](#email)). |
@@ -66,7 +68,7 @@ Targets have two kinds of owners:
 
 Polyfin encrypts a target's secrets when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise (see [stored keys and tokens](configuration.md#stored-keys-and-tokens)). The secrets are:
 
-- webhook and Discord addresses;
+- webhook, Jellyfin and Discord addresses, and the values of a Jellyfin target's headers;
 - ntfy access tokens;
 - Telegram bot tokens;
 - Gotify application tokens;
@@ -246,7 +248,7 @@ A version newer than the running one is told once:
 Polyfin tells when a title starts playing in a Jellyfin app, pauses, resumes or stops. The title can be a movie, an episode, a channel, a recording, a Replay programme, a song or an audiobook.
 
 - Each change is told once, whatever the number of reports the app sends.
-- Positions as it plays are never told.
+- Positions as it plays are never told, but to Jellyfin targets, at most every 30 seconds (see [Jellyfin webhook format](#jellyfin-webhook-format)).
 - A playback whose app stops reporting is told stopped five minutes after its last report (see [Statistics](statistics.md#playbacks)).
 
 Each message names the user, the title, the app and the device, the position, and how it plays. The title is a movie, an episode with its series, a channel, or a song with its artist. How it plays is **Direct play**, **Remux** (repackaged) or **Conversion**. For example: "sam is watching Example Series S01E02" and "Pilot · Jellyfin Web on Chrome · 12:34 · Direct play".
@@ -446,6 +448,139 @@ Only refusals are told:
 
 A new target has this event chosen. Targets saved before it existed do not receive it until it is chosen in their **Events**.
 
+## Jellyfin webhook format
+
+A **Jellyfin webhook format** target receives each event as Jellyfin's webhook plugin sends it to its generic destination with all its properties: one JSON object whose fields are named as the plugin's template variables. Tools made for Jellyfin's webhooks then work with Polyfin as they are: home automation, watch trackers, request managers and scripts.
+
+- Polyfin posts each message to the target's address, with `Content-Type: application/json` and the target's **Headers**, such as an API key the tool asks for.
+- A target has at most 10 headers. Polyfin sets `Host`, `Content-Length` and the connection headers itself, and refuses them in the form.
+- The values of the headers are secrets, as the address is (see [Secrets](#secrets)): the form and the list show their names only. A header saved without a value keeps the value saved under its name.
+- A redirect to another host is followed without the headers.
+- The server's targets may keep to the events of some **Users**. Events about no user, such as new episodes told to the server's targets, are always sent. Users' own targets receive their own events only, and have no such filter.
+- Messages go as those of other targets do: in order, tried again, at most **Messages a minute, at most**, and listed in [Recent deliveries](#recent-deliveries). A Jellyfin target never groups its messages.
+- **Send a test** sends the plugin's `Generic` notification type, with the test's title as `Name` and its message as `Description`.
+
+### Notification types
+
+A Jellyfin target chooses the plugin's notification types in its **Events**. A new target has `ItemAdded`, `PlaybackStart` and `PlaybackStop` chosen.
+
+| `NotificationType` | Sent when | Who receives it |
+|---|---|---|
+| `ItemAdded` | A new episode of a followed series is out (see [New episodes](#new-episodes)), or versions were found for a title of a Watchlist playlist (see [Watchlist titles available](#watchlist-titles-available)). | The targets of the user who follows the series, and the server's once per episode, with no user; the Watchlist's owner's targets only for a title found available. |
+| `PlaybackStart` | A playback starts (see [Playbacks](#playbacks)). | The targets of the user who plays, and the server's. |
+| `PlaybackProgress` | A playback reports its position, pauses or resumes. | The same. |
+| `PlaybackStop` | A playback stops, or its app stopped reporting it for five minutes. | The same. |
+| `UserDataSaved` | A user's data for a title is saved: marked played or unplayed, favorite or not, liked or rated, sent by an app as it is, or the position a playback reports. | The targets of the user, and the server's. |
+| `UserLockedOut` | Wrong passwords blocked an account (see [Blocked accounts](#blocked-accounts)). | The server's targets and administrators' own, and the targets of the user whose account it is. |
+
+Positions are frequent, so they are paced:
+
+- `PlaybackProgress` is sent at most every 30 seconds per playback, counted from its start. A pause or a resumption is sent at once, and counts as a position.
+- `UserDataSaved` for a position a playback reports is sent at most every 30 seconds per user and title, counted from the playback's start. Its start, its stop and every other save are sent at once.
+- A played mark of a season or a series saves each of its episodes, and sends one `UserDataSaved` per episode, as Jellyfin does.
+
+### Fields
+
+Each message is one JSON object. A field is present when the event tells it; absent otherwise.
+
+| Field | Type | In | What it holds |
+|---|---|---|---|
+| `NotificationType` | string | every message | One of the types above, or `Generic` for a test. |
+| `ServerId`, `ServerName` | string | every message | The server's ID, as Jellyfin apps know it, and its name. |
+| `ServerVersion` | string | every message | The Jellyfin version Polyfin answers apps with. |
+| `ServerUrl` | string | every message | The **Public address**, empty when it is not set. |
+| `Timestamp`, `UtcTimestamp` | string | every message | When the event happened, in the server's time zone and in UTC, as ISO 8601. |
+| `NotificationUsername`, `Username`, `UserId` | string | messages about a user | The user's name, twice, and ID. |
+| `ItemId`, `Name`, `Overview`, `Tagline` | string | messages about a title | The title's ID, name, overview and first tagline. |
+| `ItemType` | string | messages about a title | `Movie`, `Episode`, `Season`, `Series`, `Audio`, `AudioBook`, `MusicAlbum`, `LiveTvChannel` or `Video`, as Jellyfin's webhook plugin names them. |
+| `Year` | number | messages about a title | Its year; an episode's or a season's is its series' year, as with Jellyfin. |
+| `PremiereDate` | string | messages about a title | Its release date, as `2008-05-01`. |
+| `Genres` | string | messages about a title | Its genres, separated by commas. |
+| `RunTimeTicks`, `RunTime` | number, string | messages about a title | Its length, in ticks of 100 nanoseconds, and as `01:40:00`; 0 when unknown. |
+| `Provider_imdb`, `Provider_tmdb`, `Provider_tvdb` | string | messages about a title | Its IDs at each provider, from the title's IDs, the provider's name in lower case; only those it has. |
+| `SeriesName`, `SeriesId`, `SeasonId` | string | episodes | The series, and the season's ID. |
+| `SeasonNumber`, `EpisodeNumber` | number | episodes | The numbers, also written on two and three digits as `SeasonNumber00`, `SeasonNumber000`, `EpisodeNumber00` and `EpisodeNumber000`. |
+| `SeriesPremiereDate` | string | episodes | The series' first release date. |
+| `Album`, `Artist` | string | songs and audiobooks | The album and the first artist. |
+| `DeviceId`, `DeviceName` | string | playbacks | The identifier the app gave its device, and the device's name. |
+| `ClientName`, `Client` | string | playbacks | The app, twice. |
+| `PlaybackPositionTicks`, `PlaybackPosition` | number, string | playbacks, saved data | Where the playback is, or the saved resume point, in ticks and as `00:12:34`. |
+| `IsPaused` | boolean | playbacks | Whether it is paused. |
+| `IsAutomated` | boolean | playbacks | Always `false`. |
+| `PlayMethod` | string | playbacks | `DirectPlay`, `DirectStream` or `Transcode`, when known. |
+| `PlayedToCompletion` | boolean | `PlaybackStop` | Whether it stopped past **Marked played after (%)** of the title (see [Played and resume thresholds](watch-state.md#played-and-resume-thresholds)). |
+| `Played`, `Favorite`, `Likes` | boolean | `UserDataSaved` | The title's state after the save; `Likes` is `false` for a title not rated. |
+| `PlayCount` | number | `UserDataSaved` | How many times it was played. |
+| `Rating` | number | `UserDataSaved` | The user's rating, from 0 to 10, 0 for none. |
+| `LastPlayedDate` | string | `UserDataSaved` | When it was last played, in UTC; absent when never. |
+| `SaveReason` | string | `UserDataSaved` | `PlaybackStart`, `PlaybackProgress`, `PlaybackFinished`, `TogglePlayed`, `UpdateUserRating` (a rating or a favorite) or `UpdateUserData` (data an app sent). |
+| `Name`, `Description` | string | `Generic` | The test message's title and text. |
+
+An episode's stop, for example:
+
+```json
+{
+  "NotificationType": "PlaybackStop",
+  "ServerId": "fedcba9876543210fedcba9876543210",
+  "ServerName": "Home",
+  "ServerVersion": "12.4.0",
+  "ServerUrl": "https://media.example.org",
+  "Timestamp": "2026-11-22T21:40:05.120+01:00",
+  "UtcTimestamp": "2026-11-22T20:40:05.120Z",
+  "NotificationUsername": "sam",
+  "Username": "sam",
+  "UserId": "0123456789abcdef0123456789abcdef",
+  "ItemId": "41000000000000000000000000000000",
+  "ItemType": "Episode",
+  "Name": "Pilot",
+  "Overview": "",
+  "Tagline": "",
+  "Genres": "Drama",
+  "Year": 2019,
+  "PremiereDate": "2020-03-04",
+  "RunTimeTicks": 27000000000,
+  "RunTime": "00:45:00",
+  "Provider_imdb": "tt0000041",
+  "Provider_tvdb": "4102",
+  "SeriesName": "Example Series",
+  "SeriesId": "40000000000000000000000000000000",
+  "SeasonId": "42000000000000000000000000000000",
+  "SeriesPremiereDate": "2019-09-01",
+  "SeasonNumber": 1,
+  "SeasonNumber00": "01",
+  "SeasonNumber000": "001",
+  "EpisodeNumber": 2,
+  "EpisodeNumber00": "02",
+  "EpisodeNumber000": "002",
+  "DeviceId": "TW96aWxsYS81LjA",
+  "DeviceName": "Chrome",
+  "ClientName": "Jellyfin Web",
+  "Client": "Jellyfin Web",
+  "PlaybackPositionTicks": 26400000000,
+  "PlaybackPosition": "00:44:00",
+  "IsPaused": false,
+  "IsAutomated": false,
+  "PlayMethod": "DirectPlay",
+  "PlayedToCompletion": true
+}
+```
+
+### Not supported
+
+These notification types are never sent, as Polyfin has no such event: `SubtitleDownloadFailure`, `AuthenticationSuccess`, `AuthenticationFailure`, `SessionStart`, `PendingRestart`, `TaskCompleted`, the plugin types (`PluginInstalled`, `PluginInstalling`, `PluginInstallationCancelled`, `PluginInstallationFailed`, `PluginUninstalled`, `PluginUpdated`), `UserCreated`, `UserDeleted`, `UserPasswordChanged`, `UserUpdated` and `ItemDeleted`. `Generic` is sent by **Send a test** only.
+
+`ItemAdded` tells new episodes of followed series and Watchlist titles found available, not every title the library has: files added to local folders are not told.
+
+These fields are never sent:
+
+- the streams' fields, `Audio_0_*`, `Video_0_*` and `Subtitle_0_*`, and `MediaSourceId`, `AspectRatio`, `AirTime` and the `EpisodeNumberEnd` fields;
+- `RemoteEndPoint`, `LastLoginDate` and `LastActivityDate`;
+- `AudioStreamIndex` and `SubtitleStreamIndex` in `UserDataSaved`, which Polyfin does not keep with the user's data;
+- `Played`, `Favorite` and the other saved data in playback messages: they come in `UserDataSaved`;
+- the plugin's fields, `PluginId` and the others, and `ExceptionMessage`.
+
+The plugin's templates, its item type filter, its other destinations (Discord, Gotify, Pushover, SMTP and the others) and its form fields are not part of this kind: Polyfin's own [targets](#targets) cover those destinations, and a Jellyfin target always sends all its fields.
+
 ## Delivery
 
 Nothing is sent while a request is answered. Each target has its own queue, sent in order in the background.
@@ -471,7 +606,7 @@ Each target's form has two fields that pace its messages:
 | Field | Values | What it does |
 |---|---|---|
 | **Messages a minute, at most** | 1 to 60, empty for no limit | Past it, the next messages wait their turn, in order, until a minute has passed since the oldest of the last ones. Each request counts, retries included, and so does **Send a test**, which is not sent while the target has had its messages of the minute. |
-| **Group plays and new episodes, in minutes** | 1 to 1,440, empty to send each at once | The playback events, shared links played and new episodes wait that long after the first of them, then go as one message. |
+| **Group plays and new episodes, in minutes** | 1 to 1,440, empty to send each at once | The playback events, shared links played and new episodes wait that long after the first of them, then go as one message. A Jellyfin target has no such field. |
 
 A group goes as "3 notifications", with a line per event: its title, then its message.
 
@@ -508,6 +643,6 @@ Each delivery also shows the status the target answered, the start of its answer
 - Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin has no library scan to tell of added items ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin user chooses their own targets and events in **My account**, besides the server's ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
-- Polyfin's webhook sends one documented, versioned JSON event rather than templates, and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin's webhook sends one documented, versioned JSON event rather than templates, a Jellyfin target sends the plugin's fields without a template (see [Jellyfin webhook format](#jellyfin-webhook-format)), and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Polyfin stores addresses, tokens, keys and the SMTP password encrypted when the server has a `POLYFIN_SECRET_KEY`, and shows failing targets ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Jellyfin apps see none of this: nothing of it is part of Jellyfin's API ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).

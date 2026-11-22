@@ -480,6 +480,10 @@ const common: typeof en = {
     invalid_per_minute: 'Messages par minute\u202f: de 1 à 60, ou vide pour aucune limite.',
     invalid_group_minutes:
       'Regroupement\u202f: de 1 à 1 440 minutes, ou vide pour tout envoyer aussitôt.',
+    invalid_headers:
+      'En-têtes\u202f: 10 au plus, chacun nommé une seule fois, de lettres, de chiffres et de tirets, avec une valeur d’au plus 1 024 caractères sur une ligne. Polyfin envoie lui-même Host, Content-Length et les en-têtes de connexion.',
+    invalid_user_filter:
+      'Seules les cibles Jellyfin du serveur se limitent à certains utilisateurs, qui doivent exister.',
     invalid_summary:
       'Seuls le résumé de la semaine, le bilan du mois et celui de l’année ont un aperçu.',
     target_unreadable:

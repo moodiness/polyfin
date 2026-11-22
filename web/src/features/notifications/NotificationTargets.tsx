@@ -1,4 +1,4 @@
-import { BellIcon, PlusIcon } from '@phosphor-icons/react'
+import { BellIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import {
@@ -7,12 +7,14 @@ import {
   deleteNotificationTarget,
   fetchNotificationDeliveries,
   fetchNotifications,
+  fetchUsers,
   queryClient,
   queryKeys,
   testNotificationTarget,
   updateNotificationTarget,
   type NotificationDraft,
   type NotificationDelivery,
+  type JellyfinEvent,
   type NotificationEvent,
   type NotificationKind,
   type NotificationScope,
@@ -26,6 +28,7 @@ import {
   ConfirmDialog,
   EmptyState,
   Field,
+  IconButton,
   IconTile,
   InlineError,
   Modal,
@@ -45,6 +48,7 @@ import {
 /** The letters in each kind's tile. */
 const monograms: Record<NotificationKind, string> = {
   webhook: 'W',
+  jellyfin: 'J',
   discord: 'D',
   ntfy: 'N',
   email: 'E',
@@ -74,7 +78,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
       </InlineError>
     )
   }
-  const { targets, events, kinds, emailAvailable } = notifications.data
+  const { targets, events, jellyfinEvents, kinds, emailAvailable } = notifications.data
   return (
     <div className="flex flex-col gap-4">
       {targets.length === 0 ? (
@@ -103,6 +107,7 @@ export default function NotificationTargets({ scope }: { scope: NotificationScop
           scope={scope}
           target={editing === 'new' ? null : editing}
           events={events}
+          jellyfinEvents={jellyfinEvents}
           kinds={kinds}
           emailAvailable={emailAvailable}
           onClose={() => setEditing(null)}
@@ -208,7 +213,14 @@ function TargetRow({
       <p className="text-small break-words text-ink-2">
         {target.events.length === 0
           ? text.noEvents
-          : target.events.map((event) => text.eventNames[event]).join(', ')}
+          : target.events
+              .map((event) =>
+                Object.hasOwn(text.jellyfin.eventNames, event)
+                  ? text.jellyfin.eventNames[event as JellyfinEvent]
+                  : text.eventNames[event as NotificationEvent],
+              )
+              .join(', ')}
+        {target.users !== null && ` · ${text.jellyfin.forUsers(target.users.length)}`}
         {target.perMinute !== null && ` · ${text.capped(target.perMinute)}`}
         {target.groupMinutes !== null && ` · ${text.grouped(target.groupMinutes)}`}
         {' · '}
@@ -270,11 +282,18 @@ function TargetRow({
 /** The codes about the address, shown under it. */
 const addressCodes = ['invalid_target_address', 'private_target_address', 'invalid_email_address']
 
+/** The notification types a new Jellyfin target is sent: positions and saved data are chosen on purpose. */
+const jellyfinDefaults: JellyfinEvent[] = ['ItemAdded', 'PlaybackStart', 'PlaybackStop']
+
+/** A header of a Jellyfin target in the form: a saved one's value stays empty until replaced. */
+type HeaderRow = { key: number; name: string; value: string; saved: boolean }
+
 /** The form to add a target, or to change one, in a floating panel. */
 function TargetModal({
   scope,
   target,
   events,
+  jellyfinEvents,
   kinds,
   emailAvailable,
   onClose,
@@ -282,6 +301,7 @@ function TargetModal({
   scope: NotificationScope
   target: NotificationTarget | null
   events: NotificationEvent[]
+  jellyfinEvents: JellyfinEvent[]
   kinds: NotificationKind[]
   emailAvailable: boolean
   onClose: () => void
@@ -294,7 +314,7 @@ function TargetModal({
   // A Discord webhook pasted in a new Webhook target makes it a Discord one.
   const [switched, setSwitched] = useState(false)
   const [name, setName] = useState(target?.name ?? '')
-  // A webhook's or Discord target's secret address: undefined keeps the saved one.
+  // A webhook's, Jellyfin or Discord target's secret address: undefined keeps the saved one.
   const [secretAddress, setSecretAddress] = useState<string | undefined>(undefined)
   // An ntfy or Gotify target's server, and an email target's recipient.
   const [server, setServer] = useState(
@@ -310,18 +330,30 @@ function TargetModal({
   // plays through share links, and the month in review, which comes beside the weekly summary or
   // in its place: those are chosen on purpose. Failed plays are told.
   const [chosen, setChosen] = useState<NotificationEvent[]>(
-    target?.events ??
-      events.filter(
-        (event) =>
-          (!event.startsWith('playback_') || event === 'playback_failed') &&
-          event !== 'share_played' &&
-          event !== 'monthly_summary',
-      ),
+    target !== null && target.kind !== 'jellyfin'
+      ? (target.events as NotificationEvent[])
+      : events.filter(
+          (event) =>
+            (!event.startsWith('playback_') || event === 'playback_failed') &&
+            event !== 'share_played' &&
+            event !== 'monthly_summary',
+        ),
   )
+  // A Jellyfin target's notification types, its headers, sent only once changed, and the user
+  // filter of a server's one, empty for every user.
+  const [chosenJellyfin, setChosenJellyfin] = useState<JellyfinEvent[]>(
+    target?.kind === 'jellyfin' ? (target.events as JellyfinEvent[]) : jellyfinDefaults,
+  )
+  const [headers, setHeaders] = useState<HeaderRow[]>(
+    (target?.headers ?? []).map((header, key) => ({ key, name: header, value: '', saved: true })),
+  )
+  const [headersChanged, setHeadersChanged] = useState(false)
+  const [users, setUsers] = useState<string[]>(target?.users ?? [])
   const [enabled, setEnabled] = useState(target?.enabled ?? true)
   // Empty for no cap, and to send each message at once.
   const [perMinute, setPerMinute] = useState(String(target?.perMinute ?? ''))
   const [groupMinutes, setGroupMinutes] = useState(String(target?.groupMinutes ?? ''))
+  const jellyfin = kind === 'jellyfin'
 
   const mutation = useMutation({
     mutationFn: (draft: NotificationDraft) =>
@@ -344,6 +376,8 @@ function TargetModal({
   const chatError = fieldError(['invalid_chat'])
   const tokenError = fieldError(['invalid_token'])
   const userKeyError = fieldError(['invalid_user_key'])
+  const headersError = fieldError(['invalid_headers'])
+  const usersError = fieldError(['invalid_user_filter'])
   const otherError =
     mutation.isError &&
     !nameError &&
@@ -351,7 +385,9 @@ function TargetModal({
     !topicError &&
     !chatError &&
     !tokenError &&
-    !userKeyError
+    !userKeyError &&
+    !headersError &&
+    !usersError
       ? message
       : undefined
   // An email target cannot be added without the server's SMTP server.
@@ -361,11 +397,12 @@ function TargetModal({
     event.preventDefault()
     const draft: NotificationDraft = {
       name: name.trim(),
-      events: chosen,
+      events: jellyfin ? chosenJellyfin : chosen,
       enabled,
       perMinute: perMinute.trim() === '' ? 0 : Number(perMinute),
-      groupMinutes: groupMinutes.trim() === '' ? 0 : Number(groupMinutes),
     }
+    // A Jellyfin target never groups.
+    if (!jellyfin) draft.groupMinutes = groupMinutes.trim() === '' ? 0 : Number(groupMinutes)
     if (target === null) draft.kind = kind
     if (token !== undefined) draft.token = token.trim()
     switch (kind) {
@@ -388,6 +425,12 @@ function TargetModal({
       default:
         if (secretAddress !== undefined) draft.address = secretAddress.trim()
     }
+    if (jellyfin && headersChanged) {
+      draft.headers = headers
+        .filter((header) => header.name.trim() !== '' || header.value.trim() !== '')
+        .map((header) => ({ name: header.name.trim(), value: header.value.trim() }))
+    }
+    if (jellyfin && scope === 'server') draft.users = users
     mutation.mutate(draft)
   }
 
@@ -482,24 +525,59 @@ function TargetModal({
             (secretAddress === undefined && discordHosts.includes(hostOf(target.address)))) && (
             <Notice tone="info">{text.discordAsWebhook}</Notice>
           )}
-        <fieldset className="space-y-3">
-          <legend className="mb-1 text-body font-semibold text-ink">{text.events}</legend>
-          <p className="text-small text-ink-3">{text.eventsHelp[scope]}</p>
-          {events.map((event) => (
-            <Checkbox
-              key={event}
-              label={text.eventNames[event]}
-              help={text.eventHelp[event]}
-              checked={chosen.includes(event)}
-              onChange={(checked) => {
-                mutation.reset()
-                setChosen((current) =>
-                  checked ? [...current, event] : current.filter((value) => value !== event),
-                )
-              }}
-            />
-          ))}
-        </fieldset>
+        {jellyfin && (
+          <JellyfinHeaders
+            rows={headers}
+            onChange={(rows) => {
+              mutation.reset()
+              setHeaders(rows)
+              setHeadersChanged(true)
+            }}
+            error={headersError}
+          />
+        )}
+        {jellyfin ? (
+          <fieldset className="space-y-3">
+            <legend className="mb-1 text-body font-semibold text-ink">{text.events}</legend>
+            <p className="text-small text-ink-3">{text.jellyfin.eventsHelp}</p>
+            {jellyfinEvents.map((event) => (
+              <Checkbox
+                key={event}
+                label={`${text.jellyfin.eventNames[event]} (${event})`}
+                help={text.jellyfin.eventHelp[event]}
+                checked={chosenJellyfin.includes(event)}
+                onChange={(checked) => {
+                  mutation.reset()
+                  setChosenJellyfin((current) =>
+                    checked ? [...current, event] : current.filter((value) => value !== event),
+                  )
+                }}
+              />
+            ))}
+          </fieldset>
+        ) : (
+          <fieldset className="space-y-3">
+            <legend className="mb-1 text-body font-semibold text-ink">{text.events}</legend>
+            <p className="text-small text-ink-3">{text.eventsHelp[scope]}</p>
+            {events.map((event) => (
+              <Checkbox
+                key={event}
+                label={text.eventNames[event]}
+                help={text.eventHelp[event]}
+                checked={chosen.includes(event)}
+                onChange={(checked) => {
+                  mutation.reset()
+                  setChosen((current) =>
+                    checked ? [...current, event] : current.filter((value) => value !== event),
+                  )
+                }}
+              />
+            ))}
+          </fieldset>
+        )}
+        {jellyfin && scope === 'server' && (
+          <JellyfinUsers chosen={users} onChange={change(setUsers)} error={usersError} />
+        )}
         <Field
           label={text.perMinute}
           help={text.perMinuteHelp}
@@ -513,23 +591,145 @@ function TargetModal({
             className="max-w-[9.5rem]"
           />
         </Field>
-        <Field
-          label={text.groupMinutes}
-          help={text.groupMinutesHelp}
-          error={fieldError(['invalid_group_minutes'])}
-        >
-          <TextInput
-            value={groupMinutes}
-            onValue={change(setGroupMinutes)}
-            inputMode="numeric"
-            maxLength={4}
-            className="max-w-[9.5rem]"
-          />
-        </Field>
+        {!jellyfin && (
+          <Field
+            label={text.groupMinutes}
+            help={text.groupMinutesHelp}
+            error={fieldError(['invalid_group_minutes'])}
+          >
+            <TextInput
+              value={groupMinutes}
+              onValue={change(setGroupMinutes)}
+              inputMode="numeric"
+              maxLength={4}
+              className="max-w-[9.5rem]"
+            />
+          </Field>
+        )}
         <Checkbox label={text.enabled} checked={enabled} onChange={change(setEnabled)} />
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
     </Modal>
+  )
+}
+
+/** A Jellyfin target's headers: a name and a value each, a saved value kept while left empty. */
+function JellyfinHeaders({
+  rows,
+  onChange,
+  error,
+}: {
+  rows: HeaderRow[]
+  onChange: (rows: HeaderRow[]) => void
+  error: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.notifications.jellyfin
+  const set = (key: number, patch: Partial<HeaderRow>) =>
+    onChange(rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-1 text-body font-semibold text-ink">{text.headers}</legend>
+      <p className="text-small text-ink-3">{text.headersHelp}</p>
+      {rows.map((row) => (
+        <div key={row.key} className="flex items-center gap-2">
+          <TextInput
+            value={row.name}
+            onValue={(value) => set(row.key, { name: value })}
+            aria-label={text.headerName}
+            placeholder={text.headerName}
+            autoComplete="off"
+            spellCheck={false}
+            mono
+            maxLength={64}
+            invalid={error !== undefined}
+            className="w-[11rem] shrink-0"
+          />
+          <TextInput
+            type="password"
+            revealable
+            autoComplete="new-password"
+            value={row.value}
+            onValue={(value) => set(row.key, { value })}
+            aria-label={text.headerValue}
+            placeholder={row.saved ? text.headerSaved : text.headerValue}
+            spellCheck={false}
+            mono
+            maxLength={1024}
+            invalid={error !== undefined}
+            className="min-w-0 flex-1"
+          />
+          <IconButton
+            icon={TrashIcon}
+            label={text.removeHeader}
+            danger
+            onClick={() => onChange(rows.filter((other) => other.key !== row.key))}
+          />
+        </div>
+      ))}
+      {error !== undefined && <Notice tone="danger">{error}</Notice>}
+      {rows.length < 10 && (
+        <div>
+          <Button
+            variant="secondary"
+            icon={PlusIcon}
+            onClick={() =>
+              onChange([
+                ...rows,
+                {
+                  key: Math.max(-1, ...rows.map((row) => row.key)) + 1,
+                  name: '',
+                  value: '',
+                  saved: false,
+                },
+              ])
+            }
+          >
+            {text.addHeader}
+          </Button>
+        </div>
+      )}
+    </fieldset>
+  )
+}
+
+/** The users whose events a server's Jellyfin target is sent: none ticked, every user's. */
+function JellyfinUsers({
+  chosen,
+  onChange,
+  error,
+}: {
+  chosen: string[]
+  onChange: (users: string[]) => void
+  error: string | undefined
+}) {
+  const { t } = useI18n()
+  const text = t.notifications.jellyfin
+  const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
+  return (
+    <fieldset className="space-y-3">
+      <legend className="mb-1 text-body font-semibold text-ink">{text.users}</legend>
+      <p className="text-small text-ink-3">{text.usersHelp}</p>
+      {users.isPending ? (
+        <SkeletonRows rows={2} label={text.usersLoading} />
+      ) : users.isError ? (
+        <InlineError onRetry={() => void users.refetch()} retrying={users.isFetching}>
+          {errorMessage(t, users.error)}
+        </InlineError>
+      ) : (
+        users.data.map((user) => (
+          <Checkbox
+            key={user.id}
+            label={user.name}
+            checked={chosen.includes(user.id)}
+            onChange={(checked) =>
+              onChange(checked ? [...chosen, user.id] : chosen.filter((id) => id !== user.id))
+            }
+          />
+        ))
+      )}
+      {error !== undefined && <Notice tone="danger">{error}</Notice>}
+    </fieldset>
   )
 }
 
@@ -685,7 +885,7 @@ function KindFields({
       return (
         <SecretField
           label={kind === 'discord' ? text.discordAddress : text.webhookAddress}
-          help={text.addressHelp[kind]}
+          help={text.addressHelp[kind === 'discord' ? 'discord' : 'webhook']}
           saved={target !== null && target.problem !== 'unreadable'}
           value={values.secretAddress}
           onValue={set.secretAddress}

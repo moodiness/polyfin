@@ -2892,7 +2892,7 @@ export const revealTrackingKey = async (service: TrackingKeyServiceName) =>
 
 /** The kinds of notification targets. */
 export type NotificationKind =
-  'webhook' | 'discord' | 'ntfy' | 'email' | 'telegram' | 'gotify' | 'pushover'
+  'webhook' | 'jellyfin' | 'discord' | 'ntfy' | 'email' | 'telegram' | 'gotify' | 'pushover'
 
 /** The events targets choose from. */
 export type NotificationEvent =
@@ -2919,10 +2919,20 @@ export type NotificationEvent =
   | 'programme_reminder'
   | 'title_available'
 
+/** The notification types of Jellyfin's webhook plugin that Jellyfin targets choose from. */
+export type JellyfinEvent =
+  | 'ItemAdded'
+  | 'PlaybackStart'
+  | 'PlaybackProgress'
+  | 'PlaybackStop'
+  | 'UserDataSaved'
+  | 'UserLockedOut'
+
 /**
- * Where notifications go. Its secret address, tokens and keys are never sent back: `address` is
- * only the scheme and host of a webhook's or Discord target's address, an ntfy or Gotify target's
- * server, an email target's recipient, and empty for Telegram and Pushover targets.
+ * Where notifications go. Its secret address, tokens, keys and header values are never sent back:
+ * `address` is only the scheme and host of a webhook's, Jellyfin or Discord target's address, an
+ * ntfy or Gotify target's server, an email target's recipient, and empty for Telegram and Pushover
+ * targets.
  */
 export type NotificationTarget = {
   id: string
@@ -2935,7 +2945,8 @@ export type NotificationTarget = {
   chat: string
   /** Whether an ntfy, Telegram, Gotify or Pushover target has a token. */
   tokenSet: boolean
-  events: NotificationEvent[]
+  /** The events it receives; a Jellyfin target's are the plugin's notification types. */
+  events: (NotificationEvent | JellyfinEvent)[]
   enabled: boolean
   createdAt: string
   /** The last time the target accepted a message. */
@@ -2953,13 +2964,22 @@ export type NotificationTarget = {
   perMinute: number | null
   /** Plays and new episodes grouped into one message every this many minutes, null for none. */
   groupMinutes: number | null
+  /** The names of a Jellyfin target's headers, whose values are secret. */
+  headers: string[]
+  /** The users whose events a server's Jellyfin target receives, null for every user's. */
+  users: string[] | null
 }
+
+/** A header a Jellyfin target sends: an empty value keeps the value saved under its name. */
+export type NotificationHeader = { name: string; value: string }
 
 /** The targets of the server, or of the signed-in user, and what they may choose. */
 export type Notifications = {
   targets: NotificationTarget[]
   /** The events these targets may receive: health events only for the server and administrators. */
   events: NotificationEvent[]
+  /** The notification types Jellyfin targets choose from. */
+  jellyfinEvents: JellyfinEvent[]
   kinds: NotificationKind[]
   /** Whether email targets can be added: the server has an SMTP server. */
   emailAvailable: boolean
@@ -2970,8 +2990,8 @@ export type NotificationDraft = {
   kind?: NotificationKind
   name?: string
   /**
-   * A webhook's or Discord target's address, an ntfy target's server (empty: the public one), a
-   * Gotify target's server, or an email target's recipient.
+   * A webhook's, Jellyfin or Discord target's address, an ntfy target's server (empty: the public
+   * one), a Gotify target's server, or an email target's recipient.
    */
   address?: string
   topic?: string
@@ -2984,12 +3004,16 @@ export type NotificationDraft = {
   token?: string
   /** A Pushover target's user key. */
   userKey?: string
-  events?: NotificationEvent[]
+  events?: (NotificationEvent | JellyfinEvent)[]
   enabled?: boolean
   /** 1 to 60 messages a minute, 0 for no cap. */
   perMinute?: number
   /** 1 to 1440 minutes, 0 to send each message at once. */
   groupMinutes?: number
+  /** Replace a Jellyfin target's headers. */
+  headers?: NotificationHeader[]
+  /** Replace a server's Jellyfin target's user filter: empty for every user. */
+  users?: string[]
 }
 
 /** Whose targets: the server's (Settings › Notifications) or the signed-in user's own. */
@@ -3027,8 +3051,11 @@ export const testNotificationTarget = (scope: NotificationScope, id: string) =>
 export type NotificationDelivery = {
   id: number
   eventId: string
-  /** The event's type, `test` for Send a test, `grouped` for a grouped message. */
-  type: NotificationEvent | 'test' | 'grouped'
+  /**
+   * The event's type, `test` for Send a test, `grouped` for a grouped message; a Jellyfin target
+   * is also sent playbacks' positions and users' saved data.
+   */
+  type: NotificationEvent | 'test' | 'grouped' | 'playback_progressed' | 'user_data_saved'
   title: string
   /** How many events it held: more than one for a grouped message. */
   events: number

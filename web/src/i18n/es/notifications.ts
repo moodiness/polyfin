@@ -19,6 +19,7 @@ const notifications: typeof en = {
     kind: 'Tipo',
     kinds: {
       webhook: 'Webhook',
+      jellyfin: 'Formato webhook de Jellyfin',
       discord: 'Discord',
       ntfy: 'ntfy',
       email: 'Correo electrónico',
@@ -29,6 +30,8 @@ const notifications: typeof en = {
     kindHelp: {
       webhook:
         'Polyfin envía cada evento a esta dirección en formato JSON, descrito en la documentación para desarrolladores de aplicaciones.',
+      jellyfin:
+        'Polyfin envía cada evento a esta dirección como lo hace el plugin de webhooks de Jellyfin, para que las herramientas hechas para los webhooks de Jellyfin funcionen con Polyfin: domótica, seguimiento de lo visto, gestores de solicitudes y scripts.',
       discord: 'Polyfin publica cada evento en un canal de Discord, como un mensaje con un enlace.',
       ntfy: 'Polyfin publica cada evento en un tema de ntfy, que la aplicación ntfy muestra en su teléfono.',
       email:
@@ -244,6 +247,42 @@ const notifications: typeof en = {
     lastSent: 'Último mensaje ',
     nothingSent: 'Aún no se ha enviado ningún mensaje',
     noEvents: 'No se ha elegido ningún evento',
+    jellyfin: {
+      headers: 'Cabeceras',
+      headersHelp:
+        'Se envían con cada mensaje, como una clave de API que pide la herramienta. Sus valores no se vuelven a mostrar y se guardan como la dirección; un valor guardado que se deja vacío se conserva.',
+      headerName: 'Nombre',
+      headerValue: 'Valor',
+      headerSaved: 'Guardado',
+      addHeader: 'Añadir una cabecera',
+      removeHeader: 'Quitar',
+      users: 'Usuarios',
+      usersHelp:
+        'Solo se envían los eventos de los usuarios marcados; los que no tratan de ningún usuario, como los episodios nuevos, siempre. No marque ninguno para enviar los de todos.',
+      usersLoading: 'Cargando los usuarios…',
+      forUsers: (n: number) => (n === 1 ? 'Para 1 usuario' : `Para ${n} usuarios`),
+      eventsHelp:
+        'Los tipos de notificación del plugin de webhooks de Jellyfin. Cada mensaje lleva los campos del plugin, como ItemId, Provider_imdb o PlaybackPositionTicks.',
+      eventNames: {
+        ItemAdded: 'Elemento añadido',
+        PlaybackStart: 'Inicio de reproducción',
+        PlaybackProgress: 'Progreso de reproducción',
+        PlaybackStop: 'Fin de reproducción',
+        UserDataSaved: 'Datos de usuario guardados',
+        UserLockedOut: 'Usuario bloqueado',
+      },
+      eventHelp: {
+        ItemAdded:
+          'Ha salido un episodio nuevo de una serie seguida, o un título de una lista «Para ver» tiene versiones. Los destinos del servidor reciben cada episodio una vez.',
+        PlaybackStart: 'Un vídeo o una canción empieza en una aplicación de Jellyfin.',
+        PlaybackProgress:
+          'Por dónde va una reproducción: como mucho cada 30 segundos por reproducción, y al momento cuando se pausa o se reanuda.',
+        PlaybackStop: 'Una reproducción se detiene, indicando si llegó hasta el final.',
+        UserDataSaved:
+          'Un título se marca como visto o no visto, favorito o valorado, o una reproducción guarda su posición: las posiciones como mucho cada 30 segundos por título.',
+        UserLockedOut: 'Unas contraseñas incorrectas han bloqueado una cuenta.',
+      },
+    },
   },
 }
 

@@ -130,11 +130,12 @@ func (f *fakeTargets) wait(t *testing.T, path string, n int) []received {
 	}
 }
 
-// fakeLibrary lists the episodes of series, which tests change, and names
-// channels.
+// fakeLibrary lists the episodes of series, which tests change, and
+// describes the items tests give, any other as a channel.
 type fakeLibrary struct {
 	mu       sync.Mutex
 	episodes map[accounts.ID][]library.Item
+	items    map[accounts.ID]library.Item
 	asked    int
 }
 
@@ -150,7 +151,21 @@ func (l *fakeLibrary) Episodes(_ context.Context, _ accounts.User, series accoun
 }
 
 func (l *fakeLibrary) Item(_ context.Context, _ accounts.User, id accounts.ID) (library.Item, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if item, ok := l.items[id]; ok {
+		return item, nil
+	}
 	return library.Item{ID: id, Kind: library.KindChannel, Name: "Channel Nine"}, nil
+}
+
+// describe has the library describe items.
+func (l *fakeLibrary) describe(items ...library.Item) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, item := range items {
+		l.items[item.ID] = item
+	}
 }
 
 // set replaces the episodes of series.
@@ -258,7 +273,8 @@ func newHarness(t *testing.T) harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := harness{store: store, targets: newFakeTargets(t), library: &fakeLibrary{episodes: map[accounts.ID][]library.Item{}},
+	h := harness{store: store, targets: newFakeTargets(t),
+		library:  &fakeLibrary{episodes: map[accounts.ID][]library.Item{}, items: map[accounts.ID]library.Item{}},
 		userData: &fakeUserData{episodes: map[accounts.ID][]userdata.Entry{}, favorites: map[accounts.ID][]userdata.Entry{}},
 		log:      &lockedBuffer{}, problems: &[]Problem{}}
 	if h.admin, err = store.CreateUser(t.Context(), accounts.NewUser{Name: "admin", Password: "correct horse", IsAdministrator: true}); err != nil {
@@ -268,7 +284,8 @@ func newHarness(t *testing.T) harness {
 		t.Fatal(err)
 	}
 	h.Service = New(Options{DB: pool, Accounts: store, Library: h.library, UserData: h.userData, Secrets: box, Version: "1.2.3",
-		ServerID: "fedcba9876543210fedcba9876543210", WebClient: true, Logger: slog.New(slog.NewTextHandler(h.log, nil)),
+		ServerID: "fedcba9876543210fedcba9876543210", JellyfinVersion: "12.4.0", WebClient: true,
+		Logger:   slog.New(slog.NewTextHandler(h.log, nil)),
 		Problems: func(context.Context) ([]Problem, error) { return slices.Clone(*h.problems), nil }})
 	h.timing.retryFirst, h.timing.retryMax, h.timing.giveUp = 20*time.Millisecond, 80*time.Millisecond, time.Second
 	// The fake targets are on the local network: members' targets reach

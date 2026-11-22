@@ -36,13 +36,13 @@ type lane struct {
 	failures int
 }
 
-// dispatch queues ev for every target that receives its type and that
-// recipient accepts.
+// dispatch queues ev for every target that accepts it (see
+// target.accepts) and that recipient accepts.
 func (s *Service) dispatch(ev Event, recipient func(target) bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, t := range s.targets {
-		if t.wants(ev.Type) && recipient(t) {
+		if t.accepts(ev) && recipient(t) {
 			s.push(id, ev)
 		}
 	}
@@ -55,10 +55,10 @@ func (s *Service) dispatchAdministrators(ev Event) {
 }
 
 // push queues ev for the target id, and starts its lane, or holds it for
-// the target's next group when the target groups events of its type. It
-// is called with s.mu held.
+// the target's next group when the target groups events of its type; a
+// Jellyfin target never groups. It is called with s.mu held.
 func (s *Service) push(id accounts.ID, ev Event) {
-	if t, ok := s.targets[id]; ok && t.groupMinutes > 0 && groupable(ev.Type) {
+	if t, ok := s.targets[id]; ok && t.groupMinutes > 0 && t.kind != Jellyfin && groupable(ev.Type) {
 		s.hold(id, t, ev)
 		return
 	}
@@ -333,7 +333,7 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	if t.kind == Email {
 		return s.sendEmail(ctx, t, ev)
 	}
-	response, err := client.Do(request.WithContext(withSecrets(ctx, t.kind)))
+	response, err := client.Do(request.WithContext(withSecrets(ctx, t.kind, secret)))
 	if err != nil {
 		return result{outcome: retry, err: describeError(err)}
 	}
@@ -342,8 +342,12 @@ func (s *Service) send(t target, ev Event, confined bool) result {
 	res := classify(t.kind, response.StatusCode, response.Header, body)
 	if res.outcome != delivered {
 		// What the target said, for the log and the admin app: never
-		// its address, tokens or topic.
-		res.err = excerpt(body, secret, t.address, t.topic)
+		// its address, tokens, headers or topic.
+		hidden := []string{secret, t.address, t.topic}
+		if t.kind == Jellyfin {
+			hidden = append(openJellyfin(secret).secrets(), t.address)
+		}
+		res.err = excerpt(body, hidden...)
 	}
 	return res
 }
@@ -616,6 +620,8 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 	var address string
 	var payload any
 	header := http.Header{}
+	// custom are a Jellyfin target's own headers, set last.
+	var custom []Header
 	switch t.kind {
 	case Webhook:
 		address = secret
@@ -627,6 +633,9 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 			payload = ev
 			header.Set("X-Polyfin-Event", ev.Type)
 		}
+	case Jellyfin:
+		saved := openJellyfin(secret)
+		address, payload, custom = saved.address, s.jellyfinBody(ev), saved.headers
 	case Discord:
 		address, payload = secret, discordMessage(ev)
 	case Ntfy:
@@ -658,18 +667,28 @@ func (s *Service) request(t target, secret string, ev Event) (*http.Request, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Polyfin/"+s.version)
+	for _, h := range custom {
+		request.Header.Set(h.Name, h.Value)
+	}
 	return request, nil
 }
 
-// withSecrets marks ctx with what the request to a target of kind holds for
-// the host it is sent to, which a redirect to another host is not given
-// (see redirect): Gotify's application token in its header, and a
-// Pushover user's key and app token in the body. Ntfy's token goes as
-// Authorization, which Go's client already keeps from another host.
-func withSecrets(ctx context.Context, kind string) context.Context {
+// withSecrets marks ctx with what the request to a target of kind, whose
+// secret is opened, holds for the host it is sent to, which a redirect to
+// another host is not given (see redirect): Gotify's application token in
+// its header, a Jellyfin target's headers, and a Pushover user's key and
+// app token in the body. Ntfy's token goes as Authorization, which Go's
+// client already keeps from another host.
+func withSecrets(ctx context.Context, kind, secret string) context.Context {
 	switch kind {
 	case Gotify:
 		return redirect.SecretHeaders(ctx, "X-Gotify-Key")
+	case Jellyfin:
+		var names []string
+		for _, h := range openJellyfin(secret).headers {
+			names = append(names, h.Name)
+		}
+		return redirect.SecretHeaders(ctx, names...)
 	case Pushover:
 		return redirect.SecretBody(ctx)
 	}

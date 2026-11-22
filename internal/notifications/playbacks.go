@@ -12,17 +12,20 @@ import (
 
 // playbackEvents are the events of the changes of playbacks.
 var playbackEvents = map[string]string{
-	plays.Started: PlaybackStarted,
-	plays.Paused:  PlaybackPaused,
-	plays.Resumed: PlaybackResumed,
-	plays.Stopped: PlaybackStopped,
+	plays.Started:    PlaybackStarted,
+	plays.Paused:     PlaybackPaused,
+	plays.Resumed:    PlaybackResumed,
+	plays.Progressed: PlaybackProgressed,
+	plays.Stopped:    PlaybackStopped,
 }
 
 // Playback tells the targets of the user who plays, and the server's, that
-// a playback started, paused, resumed or stopped. The tracker tells each
-// change once (see plays.Tracker); it returns at once.
+// a playback started, paused, resumed or stopped, and Jellyfin targets
+// where it is between, at most every timing.progressEvery (see
+// paceProgress). The tracker tells each change once (see plays.Tracker);
+// it returns at once.
 func (s *Service) Playback(c plays.Change) {
-	if _, ok := playbackEvents[c.Kind]; !ok {
+	if _, ok := playbackEvents[c.Kind]; !ok || !s.paceProgress(c) {
 		return
 	}
 	ev := s.playbackEvent(c)
@@ -36,6 +39,8 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 	ev.At = c.At().UTC()
 	p, t := c.Playback, c.Playback.Title
 	ev.User = &UserJSON{ID: p.User.String(), Name: p.UserName}
+	ev.jellyfin = &jellyfinSource{viewer: p.User, itemID: t.Item, title: &t, session: &jellyfinSession{deviceID: p.DeviceID,
+		deviceName: p.DeviceName, app: p.App, position: p.Position, paused: p.Paused, method: p.Method, stopped: c.Kind == plays.Stopped}}
 	j := &PlaybackJSON{ItemID: t.Item.String(), Kind: t.Kind, Name: t.Name, App: p.App, Device: p.DeviceName,
 		Position: int64(p.Position.Seconds()), Paused: p.Paused, Converted: p.Method == plays.Conversion, StartedAt: p.Started.UTC(),
 		Played: int64(p.Played.Seconds()), Shared: p.Shared}
@@ -58,7 +63,7 @@ func (s *Service) playbackEvent(c plays.Change) Event {
 
 	name := playedName(t)
 	switch c.Kind {
-	case plays.Started:
+	case plays.Started, plays.Progressed:
 		if plays.Video(t.Kind) {
 			ev.Title = s.phrase(i18n.Text{"%s is watching %s", "%s regarde %s", "%s schaut %s", "%s está viendo %s", "%s sta guardando %s", "%s está assistindo %s"}, p.UserName, name)
 		} else {
