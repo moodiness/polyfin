@@ -324,6 +324,7 @@ Polyfin stores a few secrets in its database. With `POLYFIN_SECRET_KEY` set, the
 | [Let's Encrypt](https-and-networking.md#let-s-encrypt) | The account key and the certificate's private key. The certificate is stored as it is. |
 | [Identity provider](sign-in-and-security.md#identity-provider-settings) | Its **Client secret** |
 | [Addons](addons.md#manifest-addresses) and [IPTV sources](iptv.md) | The addresses of Stremio and Eclipse addons, of M3U lists and of Xtream accounts, which hold their keys, logins and passwords, and the addresses of the programme guides (see [Addon and source addresses](#addon-and-source-addresses)) |
+| [.strm files](local-folders.md#strm-files) | The addresses they name, which may hold keys. With a key that cannot decrypt one, its title plays it for no one until the next scan reads it again from its file. |
 
 A local folder's path and an HDHomeRun tuner's address are stored as they are: they hold no credentials.
 

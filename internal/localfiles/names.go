@@ -82,15 +82,16 @@ func m3uFile(name string) bool {
 }
 
 // listed tells which files a scan of a folder of kind lists, by name: the
-// files it reads (videos, or a music folder's audio files), and the side
-// files beside them (NFO and subtitle files and images, which may be a
-// title's artwork whatever their name, as one named after its video; or a
-// music folder's images, lyrics files and playlists).
+// files it reads (videos, with a movies or shows folder's .strm files, or
+// a music folder's audio files), and the side files beside them (NFO and
+// subtitle files and images, which may be a title's artwork whatever their
+// name, as one named after its video; or a music folder's images, lyrics
+// files and playlists).
 func listed(kind, name string) (file, side bool) {
 	if kind == KindMusic {
 		return audioFile(name), musicImage(name) || lyricsFile(name) || m3uFile(name)
 	}
-	return videoFile(name), sideFile(name) || imageSide(name)
+	return videoFile(name) || kind != KindHomeVideos && strmFile(name), sideFile(name) || imageSide(name)
 }
 
 // skippedFolder reports whether a scan leaves a folder out: hidden ones,

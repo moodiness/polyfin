@@ -31,7 +31,9 @@
 // descriptions nor TMDB give a length of (see durations.go). A music
 // folder answers as an Eclipse addon instead (see music.go), and a home
 // videos folder lists its videos as titles of their own, which no metadata
-// addon is asked about (see homevideos.go).
+// addon is asked about (see homevideos.go). A movies or shows folder's
+// .strm file names the address of a stream, a version played as an
+// addon's link is (see strm.go).
 //
 // A share's files are read from the share at each request, with byte
 // ranges; its connections are kept between requests. Those of S3 buckets,
@@ -184,6 +186,10 @@ type Service struct {
 	// which measures waits for (see measureMusic).
 	measuring map[accounts.ID]bool
 	measures  sync.WaitGroup
+	// badStrm are the .strm files of each folder naming no address
+	// Polyfin plays at its last scan, logged once until they change (see
+	// readStreams).
+	badStrm map[accounts.ID]map[string]found
 
 	// shares are the readers of the folders that are network shares, by
 	// folder, kept between requests.
@@ -228,7 +234,7 @@ func New(db *pgxpool.Pool, store *addons.Store, titles Titles, logger *slog.Logg
 		running: map[accounts.ID]scanning{},
 		scanned: map[accounts.ID]bool{}, prints: map[accounts.ID]map[string]uint64{}, kept: map[accounts.ID]int{},
 		shares: map[accounts.ID]*pooledRemote{}, measuring: map[accounts.ID]bool{}, unlisted: map[string]uint64{},
-		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}}
+		frames: make(chan struct{}, episodeFrames), failedFrames: map[accounts.ID]failedFrame{}, badStrm: map[accounts.ID]map[string]found{}}
 }
 
 // UseFiles sets the address the folders' files are served at, a file's

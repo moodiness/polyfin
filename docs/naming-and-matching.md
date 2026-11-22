@@ -65,6 +65,8 @@ A scan reads videos by their extension, in any letter case:
 
 The `.VOB` files of a `VIDEO_TS` folder belong to its DVD, never videos of their own (see [DVD folders](discs.md#dvd-folders)).
 
+A movies or shows folder also reads `.strm` files, named as videos are, which hold the address of a stream to play (see [.strm files](local-folders.md#strm-files)).
+
 Each file plays as it is on an app that takes its container and codecs. Otherwise:
 
 | Format | Over HLS |

@@ -716,25 +716,26 @@ func (s *Service) matchedUnits(ctx context.Context, id accounts.ID) (map[string]
 }
 
 // unitFiles reads the files of one of a folder's units, as a scan read
-// them, with the identifier their NFO file gave, the titles of a show's
-// discs numbered as a scan numbers them (see numberDiscs).
+// them, with the identifier their NFO file gave and the address a .strm
+// file names, the titles of a show's discs numbered as a scan numbers
+// them (see numberDiscs).
 func (s *Service) unitFiles(ctx context.Context, folder Folder, unit string) ([]entry, error) {
-	rows, err := s.db.Query(ctx, "SELECT path, size, modified, nfo_id, coalesce(length, 0) FROM local_files WHERE addon_id = $1 AND unit = $2 ORDER BY path",
-		folder.Addon.ID, unit)
+	rows, err := s.db.Query(ctx, `SELECT path, size, modified, nfo_id, coalesce(length, 0), coalesce(stream_url, '') FROM local_files
+		WHERE addon_id = $1 AND unit = $2 ORDER BY path`, folder.Addon.ID, unit)
 	if err != nil {
 		return nil, err
 	}
 	entries, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (entry, error) {
-		var rel, nfo string
+		var rel, nfo, stream string
 		var f found
 		var seconds int
-		if err := row.Scan(&rel, &f.size, &f.modified, &nfo, &seconds); err != nil {
+		if err := row.Scan(&rel, &f.size, &f.modified, &nfo, &seconds, &stream); err != nil {
 			return entry{}, err
 		}
 		f.extra = folder.Kind == KindMovies && extraTitle(rel, unit)
 		f.length = time.Duration(seconds) * time.Second
 		e := readEntry(folder.Kind, locationName(folder.Addon.ManifestURL), rel, f)
-		e.nfo = nfo
+		e.nfo, e.stream = nfo, s.openStream(stream)
 		return e, nil
 	})
 	if err != nil || folder.Kind != KindShows {

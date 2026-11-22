@@ -39,7 +39,7 @@ const episodeColumns = `f.id, f.addon_id, a.manifest_url, f.path, f.size, f.modi
 	WHERE l.kind = 'shows' AND f.stremio_id IS NOT NULL AND f.season IS NOT NULL`
 
 // scanEpisodeFile reads a file of episodeColumns, ok only when it is read
-// as one file.
+// as one file: not a .strm file, whose stream is its address's.
 func (s *Service) scanEpisodeFile(row pgx.Row) (EpisodeFile, bool, error) {
 	var id accounts.ID
 	var root, rel string
@@ -50,7 +50,7 @@ func (s *Service) scanEpisodeFile(row pgx.Row) (EpisodeFile, bool, error) {
 	}
 	file.Path = strings.TrimSuffix(root, "/") + "/" + rel
 	file.URL = s.address(id, rel)
-	return file, s.files != "" && strings.HasPrefix(file.URL, s.files), nil
+	return file, s.files != "" && strings.HasPrefix(file.URL, s.files) && !strmFile(rel), nil
 }
 
 // EpisodeFile returns the file of a shows folder a version's address names

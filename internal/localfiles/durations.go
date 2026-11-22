@@ -25,10 +25,12 @@ import (
 // storeDurations probes, after a scan of a movies or shows folder stored
 // its files, those of files, the scan's listing, that have neither a
 // duration nor a length, discs and disc images left out: their titles have
-// the length their tables tell, else none. A video that cannot be probed
-// is stored with 0, not to be probed again until it changes. Those of a
-// share are read through the loopback server music folders read tags
-// through (see probeServer), started only when a video is to be probed.
+// the length their tables tell, else none. A .strm file is left out too:
+// its stream is the address's, measured when it is analyzed. A video that
+// cannot be probed is stored with 0, not to be probed again until it
+// changes. Those of a share are read through the loopback server music
+// folders read tags through (see probeServer), started only when a video
+// is to be probed.
 func (s *Service) storeDurations(ctx context.Context, id accounts.ID, list listing, files map[string]found) error {
 	rows, err := s.db.Query(ctx, "SELECT path FROM local_files WHERE addon_id = $1 AND duration IS NULL AND length IS NULL", id)
 	if err != nil {
@@ -42,7 +44,7 @@ func (s *Service) storeDurations(ctx context.Context, id accounts.ID, list listi
 	for _, rel := range stored {
 		// A file of a folder the walk skipped is probed once it is listed
 		// again.
-		if _, ok := files[rel]; ok && !discFile(rel) {
+		if _, ok := files[rel]; ok && !discFile(rel) && !strmFile(rel) {
 			wanted = append(wanted, rel)
 		}
 	}

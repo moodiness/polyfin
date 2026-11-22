@@ -292,9 +292,10 @@ func (h *Handler) origin(ctx context.Context, s *LiveSession, id accounts.ID) Or
 		}
 	case live, err == nil && addon.IPTV():
 		origin.Kind = OriginIPTV
-	case err == nil && addon.Local():
+	case err == nil && addon.Local() && version.LocalFolder:
 		// A local folder's location is a path; a share's, an address with
-		// its scheme (smb://, https://, s3://, sftp:// or rclone://).
+		// its scheme (smb://, https://, s3://, sftp:// or rclone://). The
+		// address a .strm file names is read as an addon's link is.
 		origin.Kind = OriginLocalFolder
 		if strings.Contains(addon.ManifestURL, "://") {
 			origin.Kind = OriginNetworkShare

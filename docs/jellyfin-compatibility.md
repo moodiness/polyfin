@@ -77,7 +77,7 @@ The Jellyfin app for Android plays videos with its integrated player, or with th
 
 - Jellyfin describes its own files as `Protocol` `File` ([BaseItem.cs, line 1231](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Controller/Entities/BaseItem.cs#L1231); [MediaSourceManager.cs, lines 240 to 260](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/Library/MediaSourceManager.cs#L240-L260)), and Polyfin describes its versions so to that player alone.
 - Other apps, the web player in the app's web view among them, get `Protocol` `Http` with Polyfin's signed `Path`: the web player needs that address for the grant, the relay and the volume boost.
-- A Jellyfin `.strm` item with an http link is `Http` on Jellyfin, and that player fails it, as its developers note ([jellyfin-android #1443](https://github.com/jellyfin/jellyfin-android/issues/1443)).
+- A Jellyfin `.strm` item with an http link is `Http` on Jellyfin, and that player fails it, as its developers note ([jellyfin-android #1443](https://github.com/jellyfin/jellyfin-android/issues/1443)). A `.strm` file of a Polyfin folder is described as its other versions are, and plays there as an addon's link does (see [.strm files](local-folders.md#strm-files)).
 
 API details: [Android integrated player for apps](jellyfin-api.md#android-integrated-player-for-apps).
 

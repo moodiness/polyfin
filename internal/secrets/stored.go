@@ -23,9 +23,10 @@ import (
 // and passphrases of the network shares, the
 // secret keys, passwords and private keys of the backup destinations, the
 // account key and private key of the certificate of Let's Encrypt, the
-// secrets of the users' two-step sign-in, and the addresses of the addons,
+// secrets of the users' two-step sign-in, the addresses of the addons,
 // IPTV sources and guides (see SealsAddress), which embed their keys and
-// passwords.
+// passwords, and the addresses the .strm files of the local folders name,
+// which may too.
 var settingSecrets = []struct{ column, name string }{
 	{"publicmetadb_key", "publicMetaDbKey"},
 	{"theintrodb_key", "theIntroDbKey"},
@@ -51,8 +52,9 @@ var settingSecrets = []struct{ column, name string }{
 // private key or passphrase of a network share, by its folder's name, a backup destination, by what it shows
 // (see DestinationName), the keys of the certificate of Let's Encrypt,
 // the two-step sign-in of a user, or the address of an addon or an IPTV
-// source, by its name, of a user or of the server (User empty), or of
-// one of its guides (Guide true).
+// source, by its name, of a user or of the server (User empty), of one of
+// its guides (Guide true), or the addresses a local folder's .strm files
+// name, by the folder's name.
 type Unreadable struct {
 	Setting       string
 	Service, User string
@@ -382,8 +384,9 @@ func (b *Box) Inspect(ctx context.Context, db *pgxpool.Pool) (Report, error) {
 
 // inspectAddresses counts into report the addresses of the addons and
 // IPTV sources (see SealsAddress), of the server's then of each user's,
-// then those of their guides, stored unsealed, and names those the key
-// cannot open: each addon's own, and its guides' once.
+// then those of their guides, then those the .strm files of the local
+// folders name, stored unsealed, and names those the key cannot open: each
+// addon's own, its guides' once, and a folder's .strm files' once.
 func (b *Box) inspectAddresses(ctx context.Context, db *pgxpool.Pool, report *Report) error {
 	inspect := func(address string, unreadable Unreadable) bool {
 		if !Sealed(address) {
@@ -436,7 +439,31 @@ func (b *Box) inspectAddresses(ctx context.Context, db *pgxpool.Pool, report *Re
 			named = id
 		}
 	}
-	return guides.Err()
+	if err := guides.Err(); err != nil {
+		return err
+	}
+	streams, err := db.Query(ctx, `SELECT f.addon_id, coalesce(a.name, a.manifest->>'name', ''), f.stream_url
+		FROM local_files f JOIN addons a ON a.id = f.addon_id WHERE f.stream_url IS NOT NULL
+		ORDER BY a.position, a.created_at, a.id, f.path`)
+	if err != nil {
+		return err
+	}
+	defer streams.Close()
+	named = [16]byte{}
+	for streams.Next() {
+		var id [16]byte
+		var name, address string
+		if err := streams.Scan(&id, &name, &address); err != nil {
+			return err
+		}
+		if id == named && Sealed(address) {
+			continue
+		}
+		if inspect(address, Unreadable{Addon: name}) {
+			named = id
+		}
+	}
+	return streams.Err()
 }
 
 // DestinationName is what a backup destination shows: an S3 bucket and its
@@ -500,6 +527,7 @@ var sealedTables = map[string]struct {
 	"users":                {KindTwoStep, []string{"two_step_secret"}},
 	"addons":               {KindAddress, []string{"manifest_url"}},
 	"live_guides":          {KindAddress, []string{"url"}},
+	"local_files":          {KindAddress, []string{"stream_url"}},
 }
 
 // plainAddressKinds are the kinds of addons whose address is stored as it
@@ -730,12 +758,13 @@ func sealTwoStep(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 }
 
 // sealAddresses seals the addresses of the addons and IPTV sources (see
-// SealsAddress), and of the guides, stored as plaintext, counting them
-// into sealed. An addon's address takes its fingerprint (see
-// Fingerprint), which tells it installed twice in its scope, unless an
-// addon of the scope sealed earlier with the key holds it already, as
-// when the address was installed again while the key was not set: both
-// stay, as they were.
+// SealsAddress), of the guides, and those the .strm files of the local
+// folders name, stored as plaintext, counting them into sealed. An
+// addon's address takes its fingerprint (see Fingerprint), which tells it
+// installed twice in its scope, unless an addon of the scope sealed
+// earlier with the key holds it already, as when the address was
+// installed again while the key was not set: both stay, as they were. No
+// query looks a .strm file up by its address: it takes no fingerprint.
 func sealAddresses(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	type plain struct {
 		id      [16]byte
@@ -772,6 +801,20 @@ func sealAddresses(ctx context.Context, b *Box, tx pgx.Tx, sealed *int) error {
 	}
 	for _, p := range guides {
 		if _, err := tx.Exec(ctx, "UPDATE live_guides SET url = $2 WHERE id = $1", p.id, b.Seal(p.address)); err != nil {
+			return err
+		}
+		*sealed++
+	}
+	rows, err = tx.Query(ctx, "SELECT id, stream_url FROM local_files WHERE stream_url NOT LIKE $1 ORDER BY id FOR UPDATE", prefix+"%")
+	if err != nil {
+		return err
+	}
+	streams, err := pgx.CollectRows(rows, scan)
+	if err != nil {
+		return err
+	}
+	for _, p := range streams {
+		if _, err := tx.Exec(ctx, "UPDATE local_files SET stream_url = $2 WHERE id = $1", p.id, b.Seal(p.address)); err != nil {
 			return err
 		}
 		*sealed++

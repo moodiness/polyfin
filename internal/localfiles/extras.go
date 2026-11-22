@@ -135,14 +135,23 @@ func readExtra(rel string) (extraFile, int) {
 		}
 		return extraFile{}, leftOut
 	}
-	if !videoFile(path.Base(rel)) {
+	// A .strm file names a stream, never an extra's: one named as an
+	// extra is left out, as one in an extras folder is.
+	strm := strmFile(rel)
+	if !strm && !videoFile(path.Base(rel)) {
 		return extraFile{}, readAsTitle
 	}
 	if extraType, ok := extraNames[name]; ok {
+		if strm {
+			return extraFile{}, leftOut
+		}
 		return extraFile{extraType: extraType, dir: dir, named: true}, readAsExtra
 	}
 	for _, s := range extraSuffixes {
 		if strings.HasSuffix(name, s.suffix) {
+			if strm {
+				return extraFile{}, leftOut
+			}
 			base := stem(rel)
 			base = strings.TrimRight(base[:len(base)-len(s.suffix)], " -._")
 			return extraFile{extraType: s.extraType, dir: dir, base: base, named: true}, readAsExtra

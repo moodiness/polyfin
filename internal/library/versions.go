@@ -53,7 +53,8 @@ type Version struct {
 	// link expires.
 	Origin Origin
 	// LocalFolder is set for a file of one of Polyfin's own local folders,
-	// a network share's included.
+	// a network share's included; not for the address a .strm file of
+	// theirs names, which plays as an addon's link does.
 	LocalFolder bool
 	// Confined is true when the stream may only be fetched from public
 	// addresses.
@@ -939,7 +940,9 @@ func newVersion(t target, source streamSource, stream stremio.Stream) Version {
 	if stream.Confined != nil {
 		version.Confined = *stream.Confined
 	}
-	version.LocalFolder = entry.addon.Local()
+	// A local folder's stream naming an address, a .strm file's, plays
+	// as an addon's link does: it is no file of the folder's.
+	version.LocalFolder = entry.addon.Local() && !stream.Remote
 	return version
 }
 

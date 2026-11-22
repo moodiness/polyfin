@@ -104,7 +104,7 @@ Direct play sends the app to the source's own address. That address can hold wha
 | The version comes from | Owners only (default) | Everyone | No one |
 |---|---|---|---|
 | An IPTV source, the server's or a user's own | Never. Polyfin builds these addresses from the account: channels, movies, episodes and past programmes are relayed, for administrators too | Every user | Never |
-| An addon of the server | An administrator only. Other users get the version relayed | Every user | Never, administrators included |
+| An addon of the server, or a `.strm` file of a local folder or network share | An administrator only. Other users get the version relayed | Every user | Never, administrators included |
 | A user's own addon | That user | Every user | Never, that user included |
 
 | Setting | Where | Default | What it does |
@@ -119,7 +119,7 @@ Direct play sends the app to the source's own address. That address can hold wha
 - **What may not play:** a source that answers the users' addresses and refuses the server's no longer plays for them. Choose **Everyone**, or use a source that answers the server.
 - **Playlists:** a playlist's lines are addresses too. For a user who is not sent to the source, administrators included with **No one**, a version that is an HLS playlist is relayed only with its lines replaced: it cannot be downloaded, and is refused until its first analysis, which a play makes. A DASH manifest is not passed on as it is: it plays converted.
 - **At each request:** the rule is read when the stream is asked for, not when its address is given. Changing the choice, or taking an administrator's rights away, applies to the addresses apps already hold.
-- **Not concerned:** DLNA devices, Silo apps and guests of shared links always play through Polyfin, whatever the choice. Local files, network shares and torrents are never sent anywhere.
+- **Not concerned:** DLNA devices, Silo apps and guests of shared links always play through Polyfin, whatever the choice. Local files, network shares and torrents are never sent anywhere. A `.strm` file is the exception: it names a remote address, which counts as a server addon's link (see [.strm files](local-folders.md#strm-files)).
 
 API details: [Direct play redirects for apps](jellyfin-api.md#direct-play-redirects-for-apps).
 

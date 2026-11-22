@@ -116,7 +116,8 @@ type secretsHealthJSON struct {
 // of Let's Encrypt (certificate true), a user's two-step sign-in
 // (twoStep true), or the address of an addon or an IPTV source, by its
 // name, of a user or of the server (user null), or of one of its guides
-// (guide true).
+// (guide true), the addresses a local folder's .strm files name counting
+// as the folder's, by its name.
 type unreadableJSON struct {
 	Setting     *string `json:"setting"`
 	Service     *string `json:"service"`

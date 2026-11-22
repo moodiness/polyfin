@@ -366,7 +366,8 @@ func (s *Service) readFrames(ctx context.Context, images map[accounts.ID]library
 }
 
 // framed reports whether a frame is made of the video at rel: one file, not
-// a disc's title nor a disc image.
+// a disc's title, a disc image nor a .strm file, whose stream is read from
+// its address alone as it plays.
 func framed(rel string) bool {
 	if _, _, titled := titleOf(rel); titled {
 		return false
@@ -374,7 +375,7 @@ func framed(rel string) bool {
 	if _, _, ok := discEntry(rel); ok {
 		return false
 	}
-	return !imageFile(rel)
+	return !imageFile(rel) && !strmFile(rel)
 }
 
 // episodeFrame makes the frame of the file of an episode, a tenth into it

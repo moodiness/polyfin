@@ -64,6 +64,11 @@ type Stream struct {
 	// addresses only, as that owner may, rather than as what the source's
 	// answers name is; nil for a stream the source named.
 	Confined *bool `json:"-"`
+	// Remote is Polyfin's, never an addon's: set for a stream of one of
+	// Polyfin's local folders that names an address to play, as a .strm
+	// file does, rather than a file the folder holds; it plays as an
+	// addon's link does.
+	Remote bool `json:"-"`
 }
 
 // StreamBehavior holds hints about how a stream is played.

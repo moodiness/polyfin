@@ -378,8 +378,10 @@ func (s *Service) retryLater(ctx context.Context, id accounts.ID, m match) error
 }
 
 // stored is a file a scan found before, the identifier its unit's NFO
-// file gave (see nfoID), its episodes, as formatEpisode writes them, and
-// whether its plain video's identifier is stored (see plainID).
+// file gave (see nfoID), its episodes, as formatEpisode writes them,
+// whether its plain video's identifier is stored (see plainID), and the
+// address a .strm file names, opened (see openStream): empty when the key
+// cannot open it.
 type stored struct {
 	size     int64
 	modified time.Time
@@ -389,6 +391,7 @@ type stored struct {
 	nfo      string
 	episodes string
 	plain    bool
+	stream   string
 }
 
 // scan reads a folder: files gone are forgotten, new and changed ones read
@@ -531,10 +534,16 @@ func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder)
 	if err != nil {
 		return err
 	}
+	streams, err := s.readStreams(ctx, folder, &list, known)
+	if err != nil {
+		return err
+	}
 	rootName := locationName(root)
 	entries := make(map[string]entry, len(files))
 	for rel, f := range files {
-		entries[rel] = readEntry(folder.Kind, rootName, rel, f)
+		e := readEntry(folder.Kind, rootName, rel, f)
+		e.stream = streams[rel]
+		entries[rel] = e
 	}
 	if folder.Kind == KindShows {
 		given, err := s.givenEpisodes(ctx, id)
@@ -586,8 +595,10 @@ func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder)
 	for rel, e := range entries {
 		e.nfo = infos[places[e.unit]].id()
 		old, ok := known[rel]
+		// A .strm file whose stored address the key cannot open is
+		// stored again with the address read from it.
 		changed := !ok || old.size != e.file.size || !old.modified.Equal(e.file.modified) || old.unit != e.unit ||
-			old.episodes != scannedEpisodes(e.episode)
+			old.episodes != scannedEpisodes(e.episode) || old.stream != e.stream
 		if changed {
 			fresh = append(fresh, rel)
 		}
@@ -683,13 +694,15 @@ func (s *Service) scanFolder(ctx context.Context, id accounts.ID, folder Folder)
 }
 
 // tellScanned tells the videos of a folder a scan found new or changed, as
-// Streams lists them, to what UseScanned set. A failure to list them is
-// only logged: the scan itself went through.
+// Streams lists them, to what UseScanned set: not a .strm file's stream,
+// which the scan does not read. A failure to list them is only logged:
+// the scan itself went through.
 func (s *Service) tellScanned(ctx context.Context, id accounts.ID, paths []string) {
 	if s.found == nil || len(paths) == 0 || s.files == "" {
 		return
 	}
-	rows, err := s.db.Query(ctx, "SELECT id, path FROM local_files WHERE addon_id = $1 AND path = ANY($2) ORDER BY path", id, paths)
+	rows, err := s.db.Query(ctx, "SELECT id, path FROM local_files WHERE addon_id = $1 AND path = ANY($2) AND stream_url IS NULL ORDER BY path",
+		id, paths)
 	if err != nil {
 		s.logger.Warn("The videos a scan found could not be listed", "error", err)
 		return
@@ -764,8 +777,8 @@ func (s *Service) forgetAudio(ctx context.Context) error {
 // to (see numbering.go).
 func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]stored, error) {
 	rows, err := s.db.Query(ctx, `SELECT path, size, modified, unit, stremio_id IS NOT NULL, reason, nfo_id, coalesce(file_season, season),
-		coalesce(file_episode, episode), coalesce(file_last_episode, last_episode), plain_id IS NOT NULL, absolute FROM local_files
-		WHERE addon_id = $1`, id)
+		coalesce(file_episode, episode), coalesce(file_last_episode, last_episode), plain_id IS NOT NULL, absolute, coalesce(stream_url, '')
+		FROM local_files WHERE addon_id = $1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -775,7 +788,7 @@ func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]s
 		var f stored
 		var season, episode, last, absolute *int
 		if err := rows.Scan(&rel, &f.size, &f.modified, &f.unit, &f.matched, &f.reason, &f.nfo, &season, &episode, &last, &f.plain,
-			&absolute); err != nil {
+			&absolute, &f.stream); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -785,6 +798,7 @@ func (s *Service) storedFiles(ctx context.Context, id accounts.ID) (map[string]s
 		case season != nil && episode != nil && last != nil:
 			f.episodes = formatEpisode(name{episodic: true, season: *season, episode: *episode, lastEpisode: *last})
 		}
+		f.stream = s.openStream(f.stream)
 		known[rel] = f
 	}
 	return known, rows.Err()
@@ -808,8 +822,8 @@ func (s *Service) links(ctx context.Context, id accounts.ID) (map[string]string,
 	return links, rows.Err()
 }
 
-// entry is a file to store, with what its path tells, and the identifier
-// its unit's NFO file gives (see nfoID).
+// entry is a file to store, with what its path tells, the identifier its
+// unit's NFO file gives (see nfoID), and the address a .strm file names.
 type entry struct {
 	path  string
 	file  found
@@ -818,6 +832,7 @@ type entry struct {
 	// episode is what an episode's name tells, its season and numbers.
 	episode name
 	nfo     string
+	stream  string
 }
 
 // readEntry reads what a file's path tells in a folder of kind, root being
@@ -992,22 +1007,31 @@ func (s *Service) store(ctx context.Context, id accounts.ID, kind string, entrie
 			heightValue = &height
 		}
 		plain := plainID(id, e.unit)
+		// A .strm file's address is stored sealed (see strm.go). One
+		// stored again without it, as a link made by hand stores its
+		// unit's files when the key cannot open their addresses, keeps
+		// the one stored: only a video has none.
+		var stream *string
+		if e.stream != "" {
+			stream = new(s.box.Seal(e.stream))
+		}
 		// A file whose size and modification time are those stored keeps
 		// its probed duration: it is the same video. A changed one is
 		// probed again (see storeDurations).
 		batch.Queue(`INSERT INTO local_files (addon_id, path, size, modified, unit, title, year, season, episode, last_episode, height,
 				stremio_id, imdb_id, tmdb_id, name, poster, title_year, matched_by, reason, nfo_id, length, search_addon, search_failure, added_at,
-				plain_id, absolute, numbering, file_season, file_episode, file_last_episode, unmapped)
+				plain_id, absolute, numbering, file_season, file_episode, file_last_episode, unmapped, stream_url)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27,
-				$28, $29, $30, $31)
+				$28, $29, $30, $31, $32)
 			ON CONFLICT (addon_id, path) DO UPDATE SET size = $3, modified = $4, unit = $5, title = $6, year = $7, season = $8, episode = $9,
 				last_episode = $10, height = $11, stremio_id = $12, imdb_id = $13, tmdb_id = $14, name = $15, poster = $16, title_year = $17,
 				matched_by = $18, reason = $19, nfo_id = $20, length = $21, search_addon = $22, search_failure = $23, plain_id = $25,
 				absolute = $26, numbering = $27, file_season = $28, file_episode = $29, file_last_episode = $30, unmapped = $31,
+				stream_url = coalesce($32, local_files.stream_url),
 				duration = CASE WHEN local_files.size = $3 AND local_files.modified = $4 THEN local_files.duration END`,
 			id, e.path, e.file.size, e.file.modified, e.unit, e.title.title, year, season, episode, last, heightValue,
 			stremioID, f.imdb, f.tmdb, f.name, f.poster, titleYear, f.by, f.reason, e.nfo, length, f.searchAddon, f.searchFailure, added, plain,
-			absolute, numbering, fileSeason, fileEpisode, fileLast, unmapped)
+			absolute, numbering, fileSeason, fileEpisode, fileLast, unmapped, stream)
 		if !plainFile(kind, f.stremioID, f.reason, e.episode.episodic) {
 			continue
 		}

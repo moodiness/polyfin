@@ -1,6 +1,6 @@
 # Local folders
 
-This page is for administrators who want Polyfin to serve their own video files. It covers adding folders and network shares, scanning them, changing what they hold, and home videos.
+This page is for administrators who want Polyfin to serve their own video files. It covers adding folders and network shares, scanning them, changing what they hold, `.strm` files and home videos.
 
 Each file is matched to a title and becomes one more version of it, beside the addons' streams. It gets the same version picker, subtitles, audio tracks and transcoding. Each folder is also a library that apps see, listing the titles found in it.
 
@@ -98,6 +98,7 @@ A scan reads only what changed:
 - Files left unmatched are matched again at each scan.
 - On a share, NFO and subtitle files and images are listed with the folders. Only the new or changed NFO files are read.
 - A video of a movies or shows folder is read with ffprobe once, when it is new or changed, for how long it plays. A movie or an episode whose description gives no length, and TMDB none either, shows that one with its "Ends at" time (see [Lengths and "Ends at"](collections-people-and-ratings.md#lengths-and-ends-at)). A disc's title has the length its disc gives. A video ffprobe cannot read has none, until it changes. While ffprobe cannot be run, as when it is missing, videos are read at a later scan. After an update, the first scan reads every video found before, once.
+- A `.strm` file is read when it is new or changed, for the address it names. Its stream is never probed by the scan (see [.strm files](#strm-files)).
 
 A few titles are looked up at once, so a large first scan takes a while. The folder's figures follow it.
 
@@ -135,7 +136,7 @@ Folders mounted in the container are watched for changes, with inotify on Linux.
 - The schedule and **Scan now** stay, as a safety net for changes a watch misses.
 - A folder that disappears is scanned, which reports it missing. When it is back, it is scanned and watched again within a minute.
 - Hidden folders and the folders a scan leaves out, such as a home videos folder's `Extras`, are not watched.
-- Only changes to these files start a scan: videos, theme songs, disc images, NFO files, subtitle files, images (see [Artwork](naming-and-matching.md#artwork)), a DVD's `.IFO` and `.VOB` files, and a Blu-ray disc's playlists.
+- Only changes to these files start a scan: videos, `.strm` files, theme songs, disc images, NFO files, subtitle files, images (see [Artwork](naming-and-matching.md#artwork)), a DVD's `.IFO` and `.VOB` files, and a Blu-ray disc's playlists.
 - The extras folders of movies and shows folders are watched as their titles' folders are (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)), whether the folder reads extras or not.
 - In a music folder, subfolders named `Extras` or `Other` are watched, as its scans read them. Its audio files, artwork, lyrics files and playlists start a scan.
 - A folder that follows the links leading out of it watches the folders its links lead to as well. A link added starts a scan, and so does any entry removed or renamed in it, as that may have been a link to a folder. A drive mounted through FUSE, as many network mounts are, may tell of no changes: the schedule and **Scan now** read those.
@@ -288,6 +289,39 @@ To tell whether two entries are one title, open each in the web player. The addr
 | The catalog's entry off the home screen | In the web player, open **Settings › Home** and, under the catalog's library, untick "Display in home screen sections such as 'Recently Added Media' and 'Continue Watching'". The library's row leaves the home screen. So do the titles only that library lists, from Next Up and Continue Watching. A title the folder's library lists too stays (see [Home screen sections](jellyfin-compatibility.md#home-screen-sections)). Untick "Display on home screen" instead to leave the library out of the menus too. Each user chooses for themselves. The library still opens from the "My Media" row. |
 | The catalog's library out of a user's libraries | Under **Users**, on the user's or their group's page, untick the library in [Visible libraries](user-limits.md#visible-libraries). Its titles stay reachable through the folder's library and search. |
 | Only the catalog's entry of one show listed under another identifier off the lists | "Hide this title" in its ⋮ menu takes it off the user's lists. The folder's entry stays (see [Watch state](watch-state.md#watch-state)). For a title of the same identifier, it would hide the folder's entry too, as they are one. |
+
+## .strm files
+
+A `.strm` file is a text file holding the address of a stream, as Jellyfin and Kodi read one. A movies or shows folder, on the server's disk or on a network share, reads it as a title named like a video file:
+
+```
+/media/movies/Night of the Living Dead (1968).strm
+/media/shows/The Lone Ranger (1949)/Season 01/The Lone Ranger - S01E02.strm
+```
+
+```
+#KODIPROP:inputstream=inputstream.adaptive
+https://media.example/night-of-the-living-dead/master.m3u8
+```
+
+- **Its title:** it is named and matched as a video is, by its name, its folder's name and its NFO file, with the subtitle files and artwork beside it (see [Naming and matching files](naming-and-matching.md)). Music and home videos folders do not read `.strm` files.
+- **Its address:** the first line that is neither blank nor starts with `#`, so Kodi's `#KODIPROP` and `#EXTINF` lines are skipped. The lines after it are not read.
+- **Allowed addresses:** `http` and `https` only, on the internet or on the local network, as a server addon's links may be.
+- **Left out:** an empty file, a file whose address is a path, a relative address such as `movie.mkv` or another scheme such as `file`, `rtsp` or `smb`, and a file larger than 1 KiB. The scan logs the file's path with why: `empty`, `not_http` or `too_large`. It logs it once, until the file changes. To play a file of the folder, put that file in the folder rather than a `.strm` file naming it.
+- **Changes:** a scan reads a `.strm` file when it is new or changed, by its size and modification time, as for a video. After a rescan, or a change the watch sees, the title plays the address the file holds now. A file whose address turns bad leaves the library at that scan. A file that cannot be read, as when a share stops answering, keeps the address read before.
+- **Extras:** a `.strm` file is never an extra. In an extras folder, or named as an extra in a folder that reads extras, it is left out.
+
+Its version plays as an addon's link does:
+
+- **Name:** the folder's, with the resolution its name gives, such as `Movies · 1080p`. It has no size.
+- **Playing:** Polyfin reads the address through its analysis, the source cache, the relay and conversions, as for any addon's link (see [Reading the sources](reading-the-sources.md)). The scan never asks the address: the first play reads its length and tracks.
+- **Send apps to the source:** a local file is never sent anywhere, but a `.strm` file names a remote address, so it counts as a server addon's link. With **Owners only**, the default, an administrator's app may be sent to the address, and other users' apps get the stream through the server. **Everyone** sends every app there, and **No one** relays every play (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)). An address on the local network is relayed to every app, as for any source.
+- **Keys:** an address may hold a key. With `POLYFIN_SECRET_KEY` set, Polyfin stores it encrypted, as addons' addresses, so that neither a copy of the database nor a backup shows it (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)). An address the key cannot decrypt plays for no one, and **System › Health** names its folder, until the next scan reads it again from its file. Logs show only an address's scheme and host, as for addons' links, and the scan logs a file's path, never what it holds.
+- **A remote stream:** **Play local files first** does not move it ahead of the addons' streams, and bandwidth figures count it as an addon's link. The thumbnails task that reads local files ahead of any play leaves it out: it gets thumbnails from its plays, as an addon's link does. No episode frame is made of it, and no intro or credits are looked for in its audio.
+
+**Compared with Jellyfin**
+
+- Jellyfin also plays a path or another protocol named in a `.strm` file. Polyfin plays `http` and `https` addresses only.
 
 ## Home videos
 

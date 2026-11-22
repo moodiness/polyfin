@@ -170,7 +170,8 @@ func (s *Service) Meta(ctx context.Context, source accounts.ID, id string) (stre
 // show's disc, its number too, as in "Box - DISC02 - title 2.m2ts", or for
 // an image's, "Box - title 2.iso"; a Blu-ray disc's playlist, a DVD and a
 // disc image have the address of their input as their URL, FFmpeg reading
-// them itself (see Input).
+// them itself (see Input). A .strm file's stream has the address the file
+// names as its URL, and is remote (see strm.go).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if s.files == "" {
 		return nil, nil
@@ -195,7 +196,8 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		}
 		return "f.stremio_id = $2"
 	}
-	const fileRows = "SELECT f.id, f.path, f.unit, f.size, f.height FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.addon_id = $1 AND "
+	const fileRows = `SELECT f.id, f.path, f.unit, f.size, f.height, f.stream_url FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id
+		WHERE f.addon_id = $1 AND `
 	if kind == KindShows {
 		m := episodeVideo.FindStringSubmatch(id)
 		if m == nil {
@@ -217,10 +219,25 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		var rel, unit string
 		var size int64
 		var height *int
-		if err := row.Scan(&file, &rel, &unit, &size, &height); err != nil {
+		var address *string
+		if err := row.Scan(&file, &rel, &unit, &size, &height, &address); err != nil {
 			return stremio.Stream{}, err
 		}
 		files = append(files, file)
+		if address != nil {
+			// An address the key cannot open plays for no one, until a
+			// scan reads it again from its file.
+			opened := s.openStream(*address)
+			if opened == "" {
+				return stremio.Stream{}, nil
+			}
+			var details string
+			if height != nil {
+				details = strconv.Itoa(*height) + "p"
+			}
+			return stremio.Stream{Name: folderName, Description: details, URL: opened, Remote: true,
+				BehaviorHints: stremio.StreamBehavior{Filename: strmFilename(rel, opened)}}, nil
+		}
 		details := []string{formatSize(size)}
 		if height != nil {
 			details = append([]string{strconv.Itoa(*height) + "p"}, details...)
@@ -252,8 +269,19 @@ func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([
 		return stremio.Stream{Name: folderName, Description: strings.Join(details, " · "), URL: s.address(file, rel),
 			BehaviorHints: stremio.StreamBehavior{Filename: filename, VideoSize: stremio.Number64(size)}}, nil
 	})
-	if err != nil || len(files) == 0 {
-		return streams, err
+	if err != nil {
+		return nil, err
+	}
+	kept := 0
+	for i := range streams {
+		if streams[i].URL != "" {
+			streams[kept], files[kept] = streams[i], files[i]
+			kept++
+		}
+	}
+	streams, files = streams[:kept], files[:kept]
+	if len(files) == 0 {
+		return streams, nil
 	}
 	subtitles, err := s.fileSubtitles(ctx, files)
 	if err != nil {
@@ -341,6 +369,11 @@ func (s *Service) Open(ctx context.Context, key string) (io.ReadSeekCloser, time
 	}
 	if data != nil {
 		return readSeekNopCloser{bytes.NewReader(data)}, *modified, nil
+	}
+	// A .strm file's address is played as it is, never read here: what
+	// the file holds is the folder's alone.
+	if strmFile(rel) {
+		return nil, time.Time{}, ErrGone
 	}
 	if shareKind(root) != "" && shareTitle(rel) {
 		return s.openTitle(ctx, id)
