@@ -118,6 +118,7 @@ const notifications: typeof en = {
       share_played: 'Lien partagé lu',
       programme_reminder: 'Début d’une émission',
       title_available: 'Titre à regarder disponible',
+      titles_suggested: 'Rangée d’accueil suggérée',
     },
     eventHelp: {
       server_crashed:
@@ -159,6 +160,8 @@ const notifications: typeof en = {
         'Une émission de TV en direct dont vous avez demandé le rappel dans le lecteur web commence bientôt, avec l’avance choisie dans «\u202fMe prévenir avant\u202f», et un lien vers sa chaîne.',
       title_available:
         'Des versions ont été trouvées pour un titre de votre liste de lecture «\u202fÀ regarder\u202f» pour lequel les vérifications précédentes n’en avaient trouvé aucune\u202f: une fois par titre. Une version trouvée n’a pas encore été essayée.',
+      titles_suggested:
+        'Une rangée d’accueil qu’un administrateur a faite pour vous commence à s’afficher sur votre page d’accueil, et il a demandé que vous en soyez prévenu\u202f: une fois par rangée, avec son mot.',
     },
     enabled: 'Envoyer les messages à cette cible',
     create: 'Ajouter',

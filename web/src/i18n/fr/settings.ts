@@ -1274,6 +1274,17 @@ const settings: typeof en = {
       libraryHelp:
         'On ne peut pas donner aux autres applis un nouveau type de section d’accueil\u202f: la rangée devient aussi une bibliothèque, sans type, qu’elles affichent parmi les bibliothèques de l’utilisateur, avec une rangée de ses derniers titres sur leur accueil.',
       libraryBadge: 'Bibliothèque',
+      note: 'Mot pour les utilisateurs',
+      noteHelp: (length: number, max: number) =>
+        `Affiché sous le nom de la rangée dans le lecteur web et dans la notification, signé de votre nom. ${length}/${max}`,
+      notify: 'Prévenir les utilisateurs',
+      notifyHelp:
+        'Une fois, quand la rangée commence à être affichée à chacun\u202f: sur ses propres cibles de notification, et sur ses applis qui acceptent les messages, maintenant ou à sa prochaine connexion.',
+      leavePlayed: 'Retirer les titres qu’ils ont regardés',
+      leavePlayedHelp:
+        'Un titre commencé ou vu quitte la rangée de cet utilisateur, et sa bibliothèque.',
+      toldCount: (told: number, users: number) => `Prévenus\u202f: ${told} sur ${users}`,
+      seenCount: (seen: number, users: number) => `Vue par ${seen} sur ${users}`,
       moveLabel: 'Déplacer',
       schedule: 'Calendrier',
       scheduleHelp:

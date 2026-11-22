@@ -123,12 +123,22 @@ var customRowKinds = map[homerows.Kind]string{
 // A Recommended on Trakt row's Kind is Trakt. A row of a playlist is of
 // Kind Watchlist, FavoritePlaylists or Playlist, and PlaylistId names its
 // playlist, whose page its name opens.
+// RowId names the row the administrator made, which /Seen and /Hidden
+// take. Note is the administrator's note, and NoteBy the name of the one
+// who signs it, both left out when there is none. Suggested tells a row
+// shown to chosen users, which the user may hide, and New one of them the
+// user did not see yet.
 type CustomRowDto struct {
 	Id         string
+	RowId      string
 	Name       string
 	Place      string
 	Kind       string
 	PlaylistId string `json:",omitempty"`
+	Note       string `json:",omitempty"`
+	NoteBy     string `json:",omitempty"`
+	Suggested  bool
+	New        bool
 	Items      []BaseItemDto
 }
 
@@ -427,13 +437,67 @@ func (h *Handler) recentlyPlayedTitles(ctx context.Context, user accounts.User, 
 
 // customRowTitles lists a row's titles from start, for user: its first
 // ones as a home row shows them when first is set, else as its list does.
-// A row whose catalog or collection the user does not reach lists none.
+// A row whose catalog or collection the user does not reach lists none,
+// and one that leaves out the titles played (homerows.Row.LeavePlayed)
+// leaves out those the user started or played.
 func (h *Handler) customRowTitles(ctx context.Context, user accounts.User, row customRow, start, count int, first bool) (library.Page, error) {
+	if row.row.LeavePlayed {
+		return h.unstartedRowTitles(ctx, user, row, start, count, first)
+	}
 	page, err := h.readCustomRow(ctx, user, row, start, count, first)
 	if errors.Is(err, library.ErrNotFound) {
 		return library.Page{}, nil
 	}
 	return page, err
+}
+
+// unstartedRowTitles lists a row's titles from start, without those user
+// started or played. Twice as many as asked are read, which leaves room
+// for those left out, as for a Because you watched row.
+func (h *Handler) unstartedRowTitles(ctx context.Context, user accounts.User, row customRow, start, count int, first bool) (library.Page, error) {
+	page, err := h.readCustomRow(ctx, user, row, 0, 2*(start+count), first)
+	if errors.Is(err, library.ErrNotFound) {
+		return library.Page{}, nil
+	}
+	if err != nil {
+		return library.Page{}, err
+	}
+	ids := make([]accounts.ID, len(page.Items))
+	for i, item := range page.Items {
+		ids[i] = item.ID
+	}
+	started, err := h.startedTitles(ctx, user, ids)
+	if err != nil {
+		return library.Page{}, err
+	}
+	read := len(page.Items)
+	kept := slices.DeleteFunc(page.Items, func(item library.Item) bool { return started[item.ID] })
+	result := pageOfItems(kept, start, count)
+	if page.More {
+		result.More = true
+		result.Total = max(result.Total, page.Total-(read-len(kept)))
+	}
+	return result, nil
+}
+
+// startedTitles reports which of ids the user started or played: an item
+// with a resume point, or played; a series or a season one of whose
+// episodes they started or played.
+func (h *Handler) startedTitles(ctx context.Context, user accounts.User, ids []accounts.ID) (map[accounts.ID]bool, error) {
+	data, err := h.UserData.Get(ctx, user.ID, ids)
+	if err != nil {
+		return nil, err
+	}
+	counts, err := h.UserData.EpisodeCounts(ctx, user.ID, ids)
+	if err != nil {
+		return nil, err
+	}
+	started := make(map[accounts.ID]bool, len(ids))
+	for _, id := range ids {
+		d, c := data[id], counts[id]
+		started[id] = d.Played || d.Position > 0 || c.Played > 0 || c.Resumable > 0
+	}
+	return started, nil
 }
 
 func (h *Handler) readCustomRow(ctx context.Context, user accounts.User, row customRow, start, count int, first bool) (library.Page, error) {
@@ -621,16 +685,77 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 	for _, items := range titles {
 		h.listRowAhead(user, items)
 	}
+	seen := map[accounts.ID]bool{}
+	if len(rows) > 0 {
+		if seen, err = h.HomeRows.Seen(r.Context(), user.ID); err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+	}
+	signers := map[accounts.ID]string{}
 	result := []CustomRowDto{}
 	for i, row := range rows {
-		dto := CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
-			Kind: customRowKinds[row.row.Kind], Items: h.listDtos(r, user, titles[i], fields, state)}
+		dto := CustomRowDto{Id: row.id.String(), RowId: row.row.ID.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
+			Kind: customRowKinds[row.row.Kind], Note: row.row.Note, Suggested: row.row.Suggested(),
+			New: row.row.Suggested() && !seen[row.row.ID], Items: h.listDtos(r, user, titles[i], fields, state)}
 		if row.playlist != (accounts.ID{}) {
 			dto.PlaylistId = row.playlist.String()
+		}
+		if by := row.row.NoteBy; dto.Note != "" && by != (accounts.ID{}) {
+			name, ok := signers[by]
+			if !ok {
+				// A signer deleted since leaves the note unsigned.
+				if signer, err := h.Accounts.User(r.Context(), by); err == nil {
+					name = signer.Name
+				}
+				signers[by] = name
+			}
+			dto.NoteBy = name
 		}
 		result = append(result, dto)
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []CustomRowDto }{result})
+}
+
+// seenCustomRow answers POST /Polyfin/HomeRows/{rowId}/Seen: the user saw
+// a row shown to chosen users (see homerows.Store.SetSeen), as the web
+// player tells once they open it or one of its titles from the home page.
+// It answers 204, and 404 for a row that is no suggestion of theirs.
+func (h *Handler) seenCustomRow(w http.ResponseWriter, r *http.Request) {
+	h.customRowChange(w, r, func(ctx context.Context, user, row accounts.ID) error {
+		return h.HomeRows.SetSeen(ctx, user, row, h.now())
+	})
+}
+
+// hideCustomRow answers POST /Polyfin/HomeRows/{rowId}/Hidden, which
+// turns a row shown to the user off, as My account › Home rows does, and
+// DELETE, which turns it on again. Both answer 204, and 404 for a row not
+// shown to them.
+func (h *Handler) hideCustomRow(w http.ResponseWriter, r *http.Request) {
+	off := r.Method == http.MethodPost
+	h.customRowChange(w, r, func(ctx context.Context, user, row accounts.ID) error {
+		return h.HomeRows.SetOff(ctx, user, row, off)
+	})
+}
+
+// customRowChange answers a change of the user's to the row of the path.
+func (h *Handler) customRowChange(w http.ResponseWriter, r *http.Request, change func(ctx context.Context, user, row accounts.ID) error) {
+	id, ok := parseGUID(r.PathValue("rowId"))
+	user := callerFrom(r.Context()).User
+	if !ok || h.HomeRows == nil || user.ID == (accounts.ID{}) {
+		notFoundProblem(w)
+		return
+	}
+	err := change(r.Context(), user.ID, id)
+	if errors.Is(err, homerows.ErrNotFound) {
+		notFoundProblem(w)
+		return
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // firstCustomRowTitles lists the rows user sees, in order, each with its

@@ -115,6 +115,7 @@ const notifications = {
       share_played: 'Shared link played',
       programme_reminder: 'Programme starting',
       title_available: 'Watchlist title available',
+      titles_suggested: 'Home row suggested',
     },
     eventHelp: {
       server_crashed:
@@ -153,6 +154,8 @@ const notifications = {
         'A Live TV programme you set a reminder for in the web player starts soon, as long before as Remind me before says, with a link to its channel.',
       title_available:
         'Versions were found for a title of your Watchlist playlist that the earlier checks found none for: once per title. A version found has not been tried yet.',
+      titles_suggested:
+        'A home row an administrator made for you starts showing on your home page, and they asked that you be told: once per row, with their note.',
     },
     enabled: 'Send messages to this target',
     create: 'Add',

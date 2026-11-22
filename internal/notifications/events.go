@@ -63,6 +63,8 @@ type Event struct {
 	Failure *FailureJSON `json:"failure,omitempty"`
 	// Crash is the crash a server_crashed event tells of.
 	Crash *CrashJSON `json:"crash,omitempty"`
+	// Suggestion is the home row a titles_suggested event tells of.
+	Suggestion *SuggestionJSON `json:"suggestion,omitempty"`
 	// Events are the events a grouped message holds, oldest first, each
 	// as it would have been sent alone.
 	Events []Event `json:"events,omitempty"`

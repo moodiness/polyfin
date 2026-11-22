@@ -429,6 +429,13 @@
 // the tenth keeps them in the session storage for the user signed in (a
 // series hidden taking its items with it), and a row left without a
 // title. Nothing else changes, nor anything while the answer is awaited.
+// A row with a Note shows it under its name, after "From <NoteBy>:" when
+// it is signed. A row shown to chosen users (Suggested) has a Hide button
+// after its name, which posts /Polyfin/HomeRows/{RowId}/Hidden, takes the
+// row off the page and says so in a toast; and while it is New, a "New"
+// badge, which goes, with a post of /Polyfin/HomeRows/{RowId}/Seen, once
+// the user opens the row's list or one of its titles from the page. Its
+// words follow jellyfin-web's language, as the third's.
 // Any error just stops it.
 //
 // Twelfth, on a movie's or an episode's page, it adds a "Share" button to
@@ -4071,6 +4078,57 @@
   var shown = null
   var answer = null
   var asking = null
+  // The words of the rows shown to chosen users, in jellyfin-web's
+  // language: the note's signature, the badge of a row not seen yet, and
+  // its Hide button.
+  var rowWords = {
+    en: {
+      from: 'From %s:',
+      fresh: 'New',
+      hide: 'Hide',
+      hidden: 'Row hidden. My account › Home rows shows it again.',
+      notHidden: 'The row could not be hidden. Try again.',
+    },
+    fr: {
+      from: 'De la part de %s\u202f:',
+      fresh: 'Nouveau',
+      hide: 'Masquer',
+      hidden: 'Rangée masquée. Mon compte › Rangées d’accueil la réaffiche.',
+      notHidden: 'La rangée n’a pas pu être masquée. Réessayez.',
+    },
+    de: {
+      from: 'Von %s:',
+      fresh: 'Neu',
+      hide: 'Ausblenden',
+      hidden: 'Zeile ausgeblendet. Unter Mein Konto › Startseitenzeilen wird sie wieder angezeigt.',
+      notHidden: 'Die Zeile konnte nicht ausgeblendet werden. Versuche es erneut.',
+    },
+    es: {
+      from: 'De parte de %s:',
+      fresh: 'Nuevo',
+      hide: 'Ocultar',
+      hidden: 'Fila oculta. Mi cuenta › Filas de inicio la vuelve a mostrar.',
+      notHidden: 'No se pudo ocultar la fila. Inténtelo de nuevo.',
+    },
+    it: {
+      from: 'Da parte di %s:',
+      fresh: 'Nuovo',
+      hide: 'Nascondi',
+      hidden: 'Riga nascosta. Il mio account › Righe della Home la mostra di nuovo.',
+      notHidden: 'Non è stato possibile nascondere la riga. Riprova.',
+    },
+    pt: {
+      from: 'Da parte de %s:',
+      fresh: 'Novo',
+      hide: 'Ocultar',
+      hidden: 'Fileira oculta. Minha conta › Fileiras do início a mostra de novo.',
+      notHidden: 'Não foi possível ocultar a fileira. Tente de novo.',
+    },
+  }
+  function say(key) {
+    var language = /^[a-z]*/.exec(String(document.documentElement.lang || '').toLowerCase())[0]
+    return (rowWords[language] || rowWords.en)[key]
+  }
   // homeContainer returns the container of sections of the home page
   // shown, or null.
   function homeContainer() {
@@ -4259,24 +4317,143 @@
     var more = row.PlaylistId
       ? '#/details?id=' + encodeURIComponent(row.PlaylistId) + '&serverId=' + encodeURIComponent(server)
       : '#/list?parentId=' + encodeURIComponent(row.Id) + '&serverId=' + encodeURIComponent(server)
-    var title = made('div', 'sectionTitleContainer sectionTitleContainer-cards padded-left', {}, [
+    var head = [
       made('a', 'more button-flat button-flat-mini sectionTitleTextButton emby-button', { is: 'emby-linkbutton', href: more }, [
         made('h2', 'sectionTitle sectionTitle-cards', {}, [row.Name]),
         icon('chevron_right'),
       ]),
-    ])
+    ]
+    if (row.Suggested && row.RowId) {
+      style()
+      if (row.New) head.push(made('span', 'polyfinRowNew', {}, [say('fresh')]))
+      var hide = made('button', 'polyfinRowHide button-flat button-flat-mini emby-button', { type: 'button', is: 'emby-button' }, [
+        icon('close'),
+        made('span', '', {}, [say('hide')]),
+      ])
+      hide.addEventListener('click', function (event) {
+        event.preventDefault()
+        event.stopPropagation()
+        hideRow(row)
+      })
+      head.push(hide)
+    }
+    var parts = [made('div', 'sectionTitleContainer sectionTitleContainer-cards padded-left', {}, head)]
+    if (row.Note) {
+      style()
+      var note = row.NoteBy ? [made('b', '', {}, [say('from').replace('%s', row.NoteBy)]), ' ' + row.Note] : [row.Note]
+      parts.push(made('p', 'polyfinRowNote padded-left', {}, note))
+    }
     var cards = (row.Items || []).map(function (item, index) {
       return card(api, server, item, index)
     })
     var items = made('div', 'itemsContainer scrollSlider focuscontainer-x animatedScrollX', { is: 'emby-itemscontainer' }, cards)
-    var scroller = made(
-      'div',
-      'padded-top-focusscale padded-bottom-focusscale emby-scroller',
-      { is: 'emby-scroller', 'data-centerfocus': 'true' },
-      [items]
+    parts.push(
+      made('div', 'padded-top-focusscale padded-bottom-focusscale emby-scroller', { is: 'emby-scroller', 'data-centerfocus': 'true' }, [
+        items,
+      ])
     )
-    var attributes = { 'data-polyfin-row': row.Id, 'data-polyfin-kind': row.Kind || '' }
-    return made('div', 'verticalSection emby-scroller-container polyfinHomeRow', attributes, [title, scroller])
+    var attributes = { 'data-polyfin-row': row.Id, 'data-polyfin-rowid': row.RowId || '', 'data-polyfin-kind': row.Kind || '' }
+    var element = made('div', 'verticalSection emby-scroller-container polyfinHomeRow', attributes, parts)
+    if (row.Suggested && row.New) {
+      // In the capture phase: jellyfin-web stops the clicks on cards it
+      // handles before they reach the row.
+      element.addEventListener(
+        'click',
+        function (event) {
+          try {
+            opened(row, event)
+          } catch (error) {}
+        },
+        true
+      )
+    }
+    return element
+  }
+  // opened marks a row not seen yet seen once the user opens its list or
+  // one of its titles: a click on its name, a card, or a card's buttons.
+  function opened(row, event) {
+    var target = event.target
+    if (!target || typeof target.closest !== 'function' || target.closest('.polyfinRowHide')) return
+    if (!target.closest('.itemAction') && !target.closest('.sectionTitleTextButton')) return
+    var api = window.ApiClient
+    var fresh = answer.rows.some(function (r) {
+      return r.RowId === row.RowId && r.New
+    })
+    if (!fresh) return
+    answer.rows.forEach(function (r) {
+      if (r.RowId === row.RowId) r.New = false
+    })
+    rowElementsOf(row).forEach(function (element) {
+      var badge = element.querySelector('.polyfinRowNew')
+      if (badge) badge.parentNode.removeChild(badge)
+    })
+    api.ajax({ type: 'POST', url: api.getUrl('Polyfin/HomeRows/' + row.RowId + '/Seen') }).then(
+      function () {},
+      function () {}
+    )
+  }
+  // hideRow turns a row off for the user, as My account › Home rows
+  // does, then takes it off the page, and says so.
+  function hideRow(row) {
+    var api = window.ApiClient
+    var user = api.getCurrentUserId()
+    api.ajax({ type: 'POST', url: api.getUrl('Polyfin/HomeRows/' + row.RowId + '/Hidden') }).then(
+      function () {
+        if (!answer || answer.user !== user) return
+        answer.rows = answer.rows.filter(function (r) {
+          return r.RowId !== row.RowId
+        })
+        rowElementsOf(row).forEach(function (element) {
+          element.parentNode.removeChild(element)
+        })
+        toast(say('hidden'))
+      },
+      function () {
+        toast(say('notHidden'))
+      }
+    )
+  }
+  // rowElementsOf lists the elements drawn of row: those of a Because you
+  // watched row are several.
+  function rowElementsOf(row) {
+    var container = answer && answer.container
+    if (!container) return []
+    return Array.prototype.filter.call(container.querySelectorAll('.polyfinHomeRow'), function (element) {
+      return element.getAttribute('data-polyfin-rowid') === row.RowId
+    })
+  }
+  // toast says text as jellyfin-web's toasts do, for 3.3 seconds.
+  function toast(text) {
+    var holder = document.querySelector('.toastContainer')
+    if (!holder) {
+      holder = made('div', 'toastContainer')
+      document.body.appendChild(holder)
+    }
+    var shown = made('div', 'toast', {}, [text])
+    holder.appendChild(shown)
+    setTimeout(function () {
+      shown.classList.add('toastVisible')
+    }, 50)
+    setTimeout(function () {
+      shown.classList.add('toastHide')
+      setTimeout(function () {
+        if (shown.parentNode) shown.parentNode.removeChild(shown)
+      }, 300)
+    }, 3300)
+  }
+  // style adds the look of the notes, the badges and the Hide buttons,
+  // once.
+  function style() {
+    if (document.getElementById('polyfinRowsStyle')) return
+    var sheet = document.createElement('style')
+    sheet.id = 'polyfinRowsStyle'
+    sheet.textContent =
+      '.polyfinRowNote{margin:-.3em 0 .4em;font-size:.95em;line-height:1.4;opacity:.85;max-width:70ch}' +
+      '.polyfinRowNew{margin-left:.6em;padding:.15em .6em;border-radius:1em;background:#00a4dc;color:#fff;font-size:.75em;' +
+      'font-weight:600;letter-spacing:.02em;white-space:nowrap}' +
+      '.polyfinRowHide{margin-left:.6em;display:inline-flex;align-items:center;gap:.25em;opacity:.8}' +
+      '.polyfinRowHide .material-icons{font-size:1.2em}'
+    document.head.appendChild(sheet)
   }
   // A row's posters load as they come near the screen, as jellyfin-web
   // loads its own: a row holds up to 20, and a home page several rows,

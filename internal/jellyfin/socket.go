@@ -255,6 +255,10 @@ func (h *Handler) socket(w http.ResponseWriter, r *http.Request) {
 	if !send("ForceKeepAlive", lost) {
 		return
 	}
+	// The suggestions told while no app of the user's was open show now.
+	if h.Suggestions != nil {
+		h.Suggestions.Connected(c.User.ID)
+	}
 	alive := time.Now()
 	// Like Jellyfin, sockets are checked five times in the time they last,
 	// and reminded once three quarters of it went by in silence.

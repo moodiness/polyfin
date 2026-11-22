@@ -128,6 +128,10 @@ const (
 	// ServerCrashed tells that the server crashed, at the next start, to
 	// the server's targets and administrators' own (see crash.go).
 	ServerCrashed = "server_crashed"
+	// TitlesSuggested tells a user of a home row shown to them that tells
+	// its users, once, as it starts showing to them, to their own targets
+	// only (see suggestions.go).
+	TitlesSuggested = "titles_suggested"
 	// Test is the message "Send a test" sends; targets do not choose it.
 	Test = "test"
 	// Grouped is a message that holds the plays and new episodes a target
@@ -146,7 +150,7 @@ const (
 // shows them.
 var Events = []string{NewEpisode, RecordingFinished, RecordingFailed, HealthProblem, HealthSolved, ServerCrashed, UserJoined, NewVersion,
 	PlaybackStarted, PlaybackPaused, PlaybackResumed, PlaybackStopped, PlaybackFailed, WeeklySummary, MonthlySummary, YearlySummary,
-	ConnectionStopped, AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder, TitleAvailable}
+	ConnectionStopped, AccountBlocked, NewDevice, SharePlayed, ProgrammeReminder, TitleAvailable, TitlesSuggested}
 
 // administratorsEvent reports whether event is one only the server's
 // targets and administrators' own receive: about System › Health, a crash
@@ -170,9 +174,9 @@ func groupable(event string) bool {
 
 // personalEvent reports whether event is one only users' own targets
 // receive: a sign-in on a new device, a programme reminder, a title of
-// their watchlist found available.
+// their watchlist found available, a home row suggested to them.
 func personalEvent(event string) bool {
-	return event == NewDevice || event == ProgrammeReminder || event == TitleAvailable
+	return event == NewDevice || event == ProgrammeReminder || event == TitleAvailable || event == TitlesSuggested
 }
 
 // EventsFor lists the events the targets of owner may receive: every event

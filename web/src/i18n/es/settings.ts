@@ -1269,6 +1269,16 @@ const settings: typeof en = {
       libraryHelp:
         'No se puede dar a otras aplicaciones un nuevo tipo de sección de inicio: esto convierte la fila también en una biblioteca, sin tipo, que muestran entre las bibliotecas del usuario, con una fila de sus últimos títulos en su inicio.',
       libraryBadge: 'Biblioteca',
+      note: 'Nota para los usuarios',
+      noteHelp: (length: number, max: number) =>
+        `Se muestra bajo el nombre de la fila en el reproductor web y en la notificación, firmada con su nombre. ${length}/${max}`,
+      notify: 'Avisar a los usuarios',
+      notifyHelp:
+        'Una vez, cuando la fila empieza a mostrarse a cada uno: en sus propios destinos de notificación y en sus aplicaciones que aceptan mensajes, ahora o en su próxima conexión.',
+      leavePlayed: 'Quitar los títulos que vieron',
+      leavePlayedHelp: 'Un título que un usuario empezó o vio sale de su fila y de su biblioteca.',
+      toldCount: (told: number, users: number) => `Avisados: ${told} de ${users}`,
+      seenCount: (seen: number, users: number) => `Vista por ${seen} de ${users}`,
       moveLabel: 'Mover',
       schedule: 'Horario',
       scheduleHelp:

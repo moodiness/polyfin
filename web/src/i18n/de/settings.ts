@@ -1256,6 +1256,17 @@ const settings: typeof en = {
       libraryHelp:
         'Anderen Apps kann keine neue Art von Startseitenbereich hinzugefügt werden: Dadurch wird die Zeile auch zu einer Bibliothek ohne Typ, die sie unter den Bibliotheken des Benutzers auflisten, mit einer Zeile ihrer neuesten Titel auf ihrer Startseite.',
       libraryBadge: 'Bibliothek',
+      note: 'Notiz für die Benutzer',
+      noteHelp: (length: number, max: number) =>
+        `Wird im Webplayer unter dem Namen der Zeile und in der Benachrichtigung angezeigt, mit deinem Namen unterschrieben. ${length}/${max}`,
+      notify: 'Benutzer benachrichtigen',
+      notifyHelp:
+        'Einmal, sobald die Zeile jedem von ihnen angezeigt wird: über seine eigenen Benachrichtigungsziele und in seinen Apps, die Nachrichten annehmen, sofort oder bei der nächsten Verbindung.',
+      leavePlayed: 'Angesehene Titel weglassen',
+      leavePlayedHelp:
+        'Ein Titel, den ein Benutzer begonnen oder angesehen hat, verschwindet aus seiner Zeile und ihrer Bibliothek.',
+      toldCount: (told: number, users: number) => `Benachrichtigt: ${told} von ${users}`,
+      seenCount: (seen: number, users: number) => `Gesehen von ${seen} von ${users}`,
       moveLabel: 'Verschieben',
       schedule: 'Zeitplan',
       scheduleHelp:

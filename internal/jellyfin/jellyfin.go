@@ -167,6 +167,10 @@ type Options struct {
 	UserDataSaved func(user accounts.User, item library.Item, data userdata.Data, reason string)
 	// Reminders keeps the users' programme reminders; nil keeps none.
 	Reminders *reminders.Service
+	// Suggestions tells users of the home rows that tell them, and shows
+	// them on their apps as these connect (see homerows.Teller); nil
+	// shows none.
+	Suggestions *homerows.Teller
 	// Sent counts the bytes of media sent to apps, by the playback they
 	// serve (see metered); nil counts them for the metrics only.
 	Sent *bandwidth.Meters

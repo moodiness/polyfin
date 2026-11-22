@@ -1257,6 +1257,17 @@ const settings: typeof en = {
       libraryHelp:
         'Não é possível dar aos outros aplicativos um novo tipo de seção da tela inicial: isso torna a linha também uma biblioteca, sem tipo, que eles listam entre as bibliotecas do usuário, com uma linha dos títulos mais recentes dela na tela inicial.',
       libraryBadge: 'Biblioteca',
+      note: 'Nota para os usuários',
+      noteHelp: (length: number, max: number) =>
+        `Mostrada sob o nome da fileira no player web e na notificação, assinada com o seu nome. ${length}/${max}`,
+      notify: 'Avisar os usuários',
+      notifyHelp:
+        'Uma vez, quando a fileira começa a aparecer para cada um: nos seus próprios destinos de notificação e nos seus apps que aceitam mensagens, agora ou na próxima conexão.',
+      leavePlayed: 'Tirar os títulos que eles assistiram',
+      leavePlayedHelp:
+        'Um título que um usuário começou ou assistiu sai da fileira dele e da sua biblioteca.',
+      toldCount: (told: number, users: number) => `Avisados: ${told} de ${users}`,
+      seenCount: (seen: number, users: number) => `Vista por ${seen} de ${users}`,
       moveLabel: 'Mover',
       schedule: 'Agenda',
       scheduleHelp:

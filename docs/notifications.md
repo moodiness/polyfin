@@ -14,6 +14,7 @@ Polyfin can tell users and administrators of:
 - a guest who played a title through a share link;
 - a Live TV programme a user asked to be reminded of, which starts soon;
 - a title of a user's Watchlist playlist that versions were found for;
+- a home row an administrator suggested to a user, as it starts showing to them;
 - what happened each week, month and year (see [Weekly summary](#weekly-summary), [Month in review](#month-in-review) and [Year in review](#year-in-review)).
 
 [Events](#events) lists each one, with who receives it.
@@ -36,9 +37,9 @@ Targets have two kinds of owners:
 | Where | Whose targets | What they receive |
 |---|---|---|
 | **Settings › Notifications** | The server's, for administrators | The events of every user, the health events, server crashes, failed plays, the users who joined, new versions, the blocked accounts, and the server's weekly summary, month and year in review. |
-| **My account › Notifications** | Each user's own | That user's new episodes, recordings and playbacks, their stopped connections, their share links played, the blocks of their account and its sign-ins on new devices, their programme reminders, the titles of their Watchlist playlist found available, and their own weekly summary, month and year in review. |
+| **My account › Notifications** | Each user's own | That user's new episodes, recordings and playbacks, their stopped connections, their share links played, the blocks of their account and its sign-ins on new devices, their programme reminders, the titles of their Watchlist playlist found available, the home rows suggested to them, and their own weekly summary, month and year in review. |
 
-- Sign-ins on new devices, programme reminders and Watchlist titles go to the user's own targets only.
+- Sign-ins on new devices, programme reminders, Watchlist titles and home rows suggested go to the user's own targets only.
 - An administrator's own targets may also receive the health events, server crashes, failed plays, the users who joined, new versions and every blocked account.
 - An administrator's own targets receive the server's summaries in place of their own.
 
@@ -166,6 +167,7 @@ Each target chooses the events it receives in its **Events**. The `type` is the 
 | Shared link played | `share_played` | The targets of the user who made the share link, and the server's: at most once an hour per link. |
 | Programme starting | `programme_reminder` | The targets of the user who set the reminder only: the server's targets cannot choose it. |
 | Watchlist title available | `title_available` | The targets of the user whose Watchlist playlist holds the title only, never those of a user it is shared with: the server's targets cannot choose it. |
+| Home row suggested | `titles_suggested` | The targets of each user the home row is shown to, once, as it starts showing to them: the server's targets cannot choose it. |
 
 Some events are urgent: ntfy, Gotify and Pushover show them with a higher priority (see [Messages for each kind](webhook-reference.md#messages-for-each-kind)). The sections below say which.
 
@@ -352,6 +354,19 @@ Polyfin checks the titles of each user's Watchlist playlist they have not starte
 - Each title is told of once: not when it already had versions at its first check, as when it was added, nor again when it finds versions anew after losing them.
 - A title that parental control, blocked genres or the user's hidden titles keep from them is never told of.
 - It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+
+A new target in the admin app has the event chosen. Targets saved before it existed receive it once chosen.
+
+### Home rows suggested
+
+A home row shown to chosen users, with **Tell the users** on, tells each of them once, as it starts showing to them (see [Suggesting titles to users](home-rows.md#suggesting-titles-to-users)).
+
+- The title is "Morgan suggests: For the weekend", Morgan being the administrator who signs the row's note, or "Suggested for you: For the weekend" for a row without a note.
+- The message is the note, or "For the weekend is on your home page." without one.
+- It opens the web player's home page when a **Public address** is set.
+- It is in the server language. The note is as the administrator typed it.
+- It is not urgent: ntfy, Gotify and Pushover show it with their normal priority.
+- The user's apps that accept messages show it too, as **Send a message** shows one: those open then, else the first to connect while the row shows, five seconds after it connects (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)).
 
 A new target in the admin app has the event chosen. Targets saved before it existed receive it once chosen.
 
@@ -640,7 +655,7 @@ Each delivery also shows the status the target answered, the start of its answer
 **Compared with Jellyfin**
 
 - Polyfin builds the messages itself. Jellyfin sends notifications through its webhook plugin, which administrators install and configure with templates for each destination ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
-- Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin has no library scan to tell of added items ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
+- Polyfin's events are its own: new episodes of followed series, recordings, Health problems, crashes, playbacks and failed plays, stopped connections, users who joined, blocked accounts, sign-ins on new devices, share links played, programme reminders, Watchlist titles available, home rows suggested, and the weekly summary, month and year in review. Jellyfin's are item added, playback, users and tasks; Polyfin has no library scan to tell of added items ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin target may cap its messages a minute and group plays and new episodes, and keeps its recent deliveries ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Each Polyfin user chooses their own targets and events in **My account**, besides the server's ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).
 - Polyfin's webhook sends one documented, versioned JSON event rather than templates, a Jellyfin target sends the plugin's fields without a template (see [Jellyfin webhook format](#jellyfin-webhook-format)), and Discord, ntfy, email, Telegram, Gotify and Pushover get messages made for them ([jellyfin-plugin-webhook](https://github.com/jellyfin/jellyfin-plugin-webhook)).

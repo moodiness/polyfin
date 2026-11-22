@@ -2519,7 +2519,10 @@ export type HomeRowSchedule = {
  * catalog, a collection row its collection, a playlist row its playlist (`playlistId`); `count` is
  * how many rows Because you watched or My playlists makes; `users` are those a row not shown to
  * everyone is shown to; `library` also makes it a library in other apps, never for My playlists;
- * `shownNow` tells whether its schedule shows it now.
+ * `note` shows under its name, signed by the administrator who last changed it; `notify` tells its
+ * chosen users once, as it starts showing to them; `leavePlayed` leaves out the titles each user
+ * started or played; `shownNow` tells whether its schedule shows it now, and `counts`, for a row
+ * shown to chosen users, how many of them were told of it and saw it.
  */
 export type HomeRow = {
   id: string
@@ -2536,10 +2539,14 @@ export type HomeRow = {
   users: string[]
   library: boolean
   schedule: HomeRowSchedule
+  note: string
+  notify: boolean
+  leavePlayed: boolean
   shownNow: boolean
+  counts?: { users: number; told: number; seen: number }
 }
 
-export type HomeRowDraft = Omit<HomeRow, 'id' | 'shownNow'>
+export type HomeRowDraft = Omit<HomeRow, 'id' | 'shownNow' | 'counts'>
 
 /** A catalog of the server's addons a home row may list. */
 export type HomeRowCatalog = {
@@ -2918,6 +2925,7 @@ export type NotificationEvent =
   | 'share_played'
   | 'programme_reminder'
   | 'title_available'
+  | 'titles_suggested'
 
 /** The notification types of Jellyfin's webhook plugin that Jellyfin targets choose from. */
 export type JellyfinEvent =

@@ -2,7 +2,9 @@
 // player's home page (Settings › Web player › Home rows), when each shows
 // (Row.ShowsAt), and the rows each user turned off (My account › Home
 // rows). What a row lists, for whom, is told by the Jellyfin API (see
-// jellyfin's customrows.go).
+// jellyfin's customrows.go). A row shown to chosen users is a suggestion:
+// each of them is told of it once, when its row asks (see Teller), and
+// whether they saw it is kept (see notices.go).
 package homerows
 
 import (
@@ -10,6 +12,7 @@ import (
 	"errors"
 	"slices"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -39,6 +42,8 @@ const (
 	// DefaultCount is how many rows a Because you watched row, or a row
 	// of favorite playlists, makes when none is chosen.
 	DefaultCount = 3
+	// MaxNoteLength bounds a row's note, in characters.
+	MaxNoteLength = 300
 )
 
 // Kind is what a row lists.
@@ -94,6 +99,11 @@ const (
 // Places are the places of rows, from the top of the page.
 var Places = []Place{PlaceTop, PlaceResume, PlaceNextUp, PlaceBottom}
 
+// PlayedKinds are the kinds of rows that may leave out the titles each
+// user started or played (Row.LeavePlayed). The others already leave them
+// out, or list the user's own Continue Watching.
+var PlayedKinds = []Kind{KindCatalog, KindCollection, KindNew, KindWatchlist, KindPlaylist}
+
 // Row is a row of the home page.
 type Row struct {
 	ID   accounts.ID
@@ -120,6 +130,23 @@ type Row struct {
 	Library bool
 	// Schedule is when the row shows.
 	Schedule Schedule
+	// Note is the administrator's note shown under the row's name, at most
+	// MaxNoteLength characters, and NoteBy the administrator who last
+	// changed it, zero when none or deleted since.
+	Note   string
+	NoteBy accounts.ID
+	// Notify tells each of the row's chosen users once, as it starts
+	// showing to them (see Teller); never for a row shown to everyone.
+	Notify bool
+	// LeavePlayed leaves out, for each user, the titles they started or
+	// played; only for PlayedKinds.
+	LeavePlayed bool
+}
+
+// Suggested reports whether the row is a suggestion: one shown to chosen
+// users, which tells whether each of them saw it.
+func (r Row) Suggested() bool {
+	return !r.Everyone
 }
 
 // Schedule is when a row shows, in the server's time zone: from its Start
@@ -190,7 +217,9 @@ func (r Row) ShowsAt(t time.Time) bool {
 // Valid reports whether r's fields go together: a known kind and place, a
 // name, a catalog for a catalog row, a collection for a collection row and
 // a playlist for a playlist row, and nothing of these for the other kinds,
-// no library for a row of favorite playlists, and a valid schedule.
+// no library for a row of favorite playlists, a valid schedule, a note of
+// at most MaxNoteLength characters, no telling for a row shown to
+// everyone, and titles played left out by PlayedKinds only.
 func (r Row) Valid() bool {
 	name := []rune(r.Name)
 	catalog := r.Addon != (accounts.ID{}) && r.CatalogType != "" && r.CatalogID != ""
@@ -198,7 +227,8 @@ func (r Row) Valid() bool {
 		r.Count >= 1 && r.Count <= MaxCount &&
 		catalog == (r.Kind == KindCatalog) && (r.Kind == KindCatalog || r.Addon == (accounts.ID{}) && r.CatalogType == "" && r.CatalogID == "") &&
 		(r.Collection != (accounts.ID{})) == (r.Kind == KindCollection) && (r.Playlist != (accounts.ID{})) == (r.Kind == KindPlaylist) &&
-		!(r.Library && r.Kind == KindPlaylists) && r.Schedule.Valid()
+		!(r.Library && r.Kind == KindPlaylists) && r.Schedule.Valid() && utf8.RuneCountInString(r.Note) <= MaxNoteLength &&
+		!(r.Notify && r.Everyone) && (!r.LeavePlayed || slices.Contains(PlayedKinds, r.Kind))
 }
 
 // ShownTo reports whether the row is shown to user, before they turn it
@@ -236,16 +266,16 @@ func (s *Store) Row(ctx context.Context, id accounts.ID) (Row, error) {
 
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Row, error) {
 	rows, _ := s.db.Query(ctx, `SELECT id, name, kind, place, addon_id, catalog_type, catalog_id, collection_id, playlist_id, count, everyone,
-		library, start_date, end_date, days, start_hour, end_hour
+		library, start_date, end_date, days, start_hour, end_hour, note, note_by, notify, leave_played
 		FROM home_rows `+where+` ORDER BY position, created_at, id`, args...)
 	var result []Row
 	var r Row
-	var addon, collection, playlist *accounts.ID
+	var addon, collection, playlist, noteBy *accounts.ID
 	var start, end *time.Time
 	var days []int16
 	var from, to *int16
 	if _, err := pgx.ForEachRow(rows, []any{&r.ID, &r.Name, &r.Kind, &r.Place, &addon, &r.CatalogType, &r.CatalogID, &collection, &playlist,
-		&r.Count, &r.Everyone, &r.Library, &start, &end, &days, &from, &to}, func() error {
+		&r.Count, &r.Everyone, &r.Library, &start, &end, &days, &from, &to, &r.Note, &noteBy, &r.Notify, &r.LeavePlayed}, func() error {
 		row := r
 		if addon != nil {
 			row.Addon = *addon
@@ -255,6 +285,9 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Row, err
 		}
 		if playlist != nil {
 			row.Playlist = *playlist
+		}
+		if noteBy != nil {
+			row.NoteBy = *noteBy
 		}
 		if start != nil {
 			row.Schedule.Start = *start
@@ -289,7 +322,7 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Row, err
 	return result, nil
 }
 
-// Create adds a row after the others.
+// Create adds a row after the others, its note signed by NoteBy.
 func (s *Store) Create(ctx context.Context, r Row) (Row, error) {
 	if !r.Valid() {
 		return Row{}, ErrInvalid
@@ -308,10 +341,11 @@ func (s *Store) Create(ctx context.Context, r Row) (Row, error) {
 		}
 		start, end, days, from, to := scheduleColumns(r.Schedule)
 		if err := tx.QueryRow(ctx, `INSERT INTO home_rows (position, name, kind, place, addon_id, catalog_type, catalog_id, collection_id,
-			playlist_id, count, everyone, library, start_date, end_date, days, start_hour, end_hour)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+			playlist_id, count, everyone, library, start_date, end_date, days, start_hour, end_hour, note, note_by, notify, leave_played)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, CASE WHEN $18 <> '' THEN $19::uuid END,
+				$20, $21) RETURNING id`,
 			last+1, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), nullable(r.Playlist), r.Count,
-			r.Everyone, r.Library, start, end, days, from, to).Scan(&r.ID); err != nil {
+			r.Everyone, r.Library, start, end, days, from, to, r.Note, nullable(r.NoteBy), r.Notify, r.LeavePlayed).Scan(&r.ID); err != nil {
 			return err
 		}
 		return setUsers(ctx, tx, r)
@@ -322,7 +356,8 @@ func (s *Store) Create(ctx context.Context, r Row) (Row, error) {
 	return s.Row(ctx, r.ID)
 }
 
-// Update changes a row, its place in the list kept.
+// Update changes a row, its place in the list kept. A note changed is
+// signed by NoteBy; one left as it was keeps its signature.
 func (s *Store) Update(ctx context.Context, r Row) (Row, error) {
 	if !r.Valid() {
 		return Row{}, ErrInvalid
@@ -331,9 +366,11 @@ func (s *Store) Update(ctx context.Context, r Row) (Row, error) {
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE home_rows SET name = $2, kind = $3, place = $4, addon_id = $5, catalog_type = $6, catalog_id = $7,
 			collection_id = $8, playlist_id = $9, count = $10, everyone = $11, library = $12, start_date = $13, end_date = $14, days = $15,
-			start_hour = $16, end_hour = $17 WHERE id = $1`,
+			start_hour = $16, end_hour = $17, note = $18,
+			note_by = CASE WHEN $18 = '' THEN NULL WHEN note = $18 THEN note_by ELSE $19::uuid END, notify = $20, leave_played = $21
+			WHERE id = $1`,
 			r.ID, r.Name, r.Kind, r.Place, nullable(r.Addon), r.CatalogType, r.CatalogID, nullable(r.Collection), nullable(r.Playlist), r.Count,
-			r.Everyone, r.Library, start, end, days, from, to)
+			r.Everyone, r.Library, start, end, days, from, to, r.Note, nullable(r.NoteBy), r.Notify, r.LeavePlayed)
 		if err != nil {
 			return err
 		}

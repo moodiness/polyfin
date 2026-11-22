@@ -49,6 +49,7 @@ import {
   Select,
   SkeletonRows,
   Switch,
+  Textarea,
   TextInput,
   type SelectOption,
   useToast,
@@ -71,6 +72,12 @@ const places: HomeRowPlace[] = ['top', 'resume', 'nextup', 'bottom']
 
 /** The bounds of the rows Because you watched and My playlists make, as the server checks them. */
 const count = { min: 1, max: 10, byDefault: 3 }
+
+/** The longest note, in characters, as the server checks it. */
+const noteLength = 300
+
+/** The kinds of rows that may leave out the titles each user played, as the server checks them. */
+const playedKinds: HomeRowKind[] = ['catalog', 'collection', 'new', 'watchlist', 'playlist']
 
 /** The days of the week, from Sunday, as schedules number them. */
 const weekdays = [
@@ -268,14 +275,27 @@ function HomeRowEntry({
         ) : undefined
       }
       meta={
-        <span className="min-w-0 break-words">
-          {[
-            source,
-            text.places[row.place],
-            row.everyone ? text.everyone : text.shownToUsers(row.users.length),
-            ...(scheduled(row.schedule) ? [text.scheduled] : []),
-          ].join(' · ')}
-        </span>
+        <>
+          <span className="min-w-0 break-words">
+            {[
+              source,
+              text.places[row.place],
+              row.everyone ? text.everyone : text.shownToUsers(row.users.length),
+              ...(scheduled(row.schedule) ? [text.scheduled] : []),
+            ].join(' · ')}
+          </span>
+          {row.note !== '' && (
+            <span className="min-w-0 basis-full break-words italic">{row.note}</span>
+          )}
+          {row.counts && (
+            <span className="min-w-0 basis-full break-words">
+              {[
+                ...(row.notify ? [text.toldCount(row.counts.told, row.counts.users)] : []),
+                text.seenCount(row.counts.seen, row.counts.users),
+              ].join(' · ')}
+            </span>
+          )}
+        </>
       }
       // Edit, Delete and Move on the right of the row, as other rows keep their actions, rather
       // than on a line of their own under it.
@@ -347,6 +367,9 @@ function HomeRowModal({
   const [everyone, setEveryone] = useState(row?.everyone ?? true)
   const [chosen, setChosen] = useState<string[]>(row?.users ?? [])
   const [library, setLibrary] = useState(row?.library ?? false)
+  const [note, setNote] = useState(row?.note ?? '')
+  const [notify, setNotify] = useState(row?.notify ?? false)
+  const [leavePlayed, setLeavePlayed] = useState(row?.leavePlayed ?? false)
   const [startDate, setStartDate] = useState(row?.schedule.startDate ?? '')
   const [endDate, setEndDate] = useState(row?.schedule.endDate ?? '')
   const [days, setDays] = useState<number[]>(row?.schedule.days ?? [])
@@ -403,6 +426,8 @@ function HomeRowModal({
   // My playlists makes a row of each playlist, which other apps could not be given as one library.
   const libraryOffered = kind !== 'playlists'
   const asLibrary = libraryOffered && library
+  // Rows of the other kinds already leave the titles played out, or are the user's own.
+  const playedOffered = playedKinds.includes(kind)
 
   const missingUser = !everyone && chosen.length === 0
   // Dates as YYYY-MM-DD compare as text.
@@ -424,6 +449,9 @@ function HomeRowModal({
       everyone,
       users: everyone ? [] : chosen,
       library: asLibrary,
+      note: note.trim(),
+      notify: !everyone && notify,
+      leavePlayed: playedOffered && leavePlayed,
       schedule: {
         startDate,
         endDate,
@@ -584,6 +612,43 @@ function HomeRowModal({
               />
             ))}
           </fieldset>
+        )}
+        <Field label={text.note} help={text.noteHelp(note.trim().length, noteLength)}>
+          <Textarea
+            value={note}
+            rows={2}
+            maxLength={noteLength}
+            onValue={(value) => {
+              mutation.reset()
+              setNote(value)
+            }}
+          />
+        </Field>
+        {!everyone && (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p id={`${formId}-notify`} className="text-control font-medium text-ink">
+                {text.notify}
+              </p>
+              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.notifyHelp}</p>
+            </div>
+            <Switch checked={notify} onChange={setNotify} labelledBy={`${formId}-notify`} />
+          </div>
+        )}
+        {playedOffered && (
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p id={`${formId}-played`} className="text-control font-medium text-ink">
+                {text.leavePlayed}
+              </p>
+              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.leavePlayedHelp}</p>
+            </div>
+            <Switch
+              checked={leavePlayed}
+              onChange={setLeavePlayed}
+              labelledBy={`${formId}-played`}
+            />
+          </div>
         )}
         {libraryOffered && (
           <div className="flex items-start justify-between gap-4">

@@ -116,6 +116,7 @@ const notifications: typeof en = {
       share_played: 'Freigabelink abgespielt',
       programme_reminder: 'Sendung beginnt',
       title_available: 'Titel der Merkliste verfügbar',
+      titles_suggested: 'Startseitenzeile vorgeschlagen',
     },
     eventHelp: {
       server_crashed:
@@ -157,6 +158,8 @@ const notifications: typeof en = {
         'Eine Live-TV-Sendung, für die du im Web-Player eine Erinnerung gesetzt hast, beginnt bald, so lange vorher, wie „Remind me before“ angibt, mit einem Link zu ihrem Kanal.',
       title_available:
         'Für einen Titel deiner Wiedergabeliste „Merkliste“, für den die früheren Prüfungen keine Version gefunden hatten, wurden Versionen gefunden: einmal je Titel. Eine gefundene Version wurde noch nicht ausprobiert.',
+      titles_suggested:
+        'Eine Startseitenzeile, die ein Administrator für dich angelegt hat, erscheint auf deiner Startseite, und er hat darum gebeten, dich zu benachrichtigen: einmal je Zeile, mit seiner Notiz.',
     },
     enabled: 'Nachrichten an dieses Ziel senden',
     create: 'Hinzufügen',

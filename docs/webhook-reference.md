@@ -61,7 +61,7 @@ A user who joined through an invite link:
 |---|---|---|
 | `version` | number | The version of this format, 1. Fields may be added within a version; a field removed or changed in meaning makes a new version. |
 | `id` | string | Unique to the event. A message tried again keeps it, so a webhook can tell a repeat. |
-| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `server_crashed`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `playback_failed`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `share_played`, `programme_reminder`, `title_available`, `grouped` for a target's grouped message, or `test` for **Send a test**. |
+| `type` | string | `new_episode`, `recording_finished`, `recording_failed`, `health_problem`, `health_solved`, `server_crashed`, `user_joined`, `new_version`, `playback_started`, `playback_paused`, `playback_resumed`, `playback_stopped`, `playback_failed`, `weekly_summary`, `monthly_summary`, `yearly_summary`, `connection_stopped`, `account_blocked`, `new_device`, `share_played`, `programme_reminder`, `title_available`, `titles_suggested`, `grouped` for a target's grouped message, or `test` for **Send a test**. |
 | `at` | string | When the event happened, RFC 3339 in UTC. |
 | `server` | object | `id` as Jellyfin apps know the server, `name`, and `url`, the public address, or null. |
 | `title`, `message` | string | The event for people, in the server language. A `programme_reminder` is in the language its reminder was set in when Polyfin speaks it, else the server's. |
@@ -81,9 +81,10 @@ A user who joined through an invite link:
 | `signIn`, `block` | object | For `account_blocked` and `new_device`. See [The sign-in events](#the-sign-in-events). |
 | `programme` | object | For `programme_reminder`: `id`, the programme's item as Jellyfin apps know it, `name`, `channelId`, `channelName`, and its `start` and `end`, RFC 3339 in UTC. |
 | `watchlistTitle` | object | For `title_available`: `id`, the movie's, series' or episode's item as Jellyfin apps know it, `kind` (`movie`, `series` or `episode`), `name` (an episode's own), `year` (0 when unknown) and `providerIds`, as `episode`'s. |
+| `suggestion` | object | For `titles_suggested`: `rowId`, the home row's identifier in the admin API, its `name`, the administrator's `note` (empty for none), and `from`, the administrator who signs the note (`id`, `name`), null when none does. |
 | `events` | array | For `grouped`: each event of the group whole, as it would have been sent alone (see [Pacing](notifications.md#pacing)). |
 
-Every event added after the first ones was added within version 1, with its own object; no other field changed. These are the playback events, `new_version`, `connection_stopped`, `account_blocked`, `new_device`, the summaries, `programme_reminder` and `title_available`.
+Every event added after the first ones was added within version 1, with its own object; no other field changed. These are the playback events, `new_version`, `connection_stopped`, `account_blocked`, `new_device`, the summaries, `programme_reminder`, `title_available` and `titles_suggested`.
 
 ### Who the user is
 
@@ -94,6 +95,7 @@ Every event added after the first ones was added within version 1, with its own 
 | `connection_stopped` | The user whose connection stopped. |
 | `account_blocked`, `new_device` | The account. |
 | `programme_reminder` | The user who set the reminder. |
+| `title_available`, `titles_suggested` | The user told. |
 | Playback events | The user who plays. |
 | Health events, `new_version` | Null. |
 | `new_episode` | The user who follows the series; null when sent to the server's targets. |

@@ -1269,6 +1269,17 @@ const settings: typeof en = {
       libraryHelp:
         'Alle altre applicazioni non si può dare un nuovo tipo di sezione della Home: così la riga diventa anche una libreria, senza tipo, che elencano tra le librerie dell’utente, con una riga dei suoi ultimi titoli nella loro Home.',
       libraryBadge: 'Libreria',
+      note: 'Nota per gli utenti',
+      noteHelp: (length: number, max: number) =>
+        `Mostrata sotto il nome della riga nel lettore web e nella notifica, firmata con il tuo nome. ${length}/${max}`,
+      notify: 'Avvisa gli utenti',
+      notifyHelp:
+        'Una volta, quando la riga inizia a essere mostrata a ciascuno: sulle sue destinazioni di notifica e sulle sue app che accettano messaggi, subito o alla prossima connessione.',
+      leavePlayed: 'Togli i titoli che hanno guardato',
+      leavePlayedHelp:
+        'Un titolo iniziato o guardato da un utente esce dalla sua riga e dalla sua libreria.',
+      toldCount: (told: number, users: number) => `Avvisati: ${told} su ${users}`,
+      seenCount: (seen: number, users: number) => `Vista da ${seen} su ${users}`,
       moveLabel: 'Sposta',
       schedule: 'Programmazione',
       scheduleHelp:

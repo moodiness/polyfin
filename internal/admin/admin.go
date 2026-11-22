@@ -204,6 +204,9 @@ type Options struct {
 	HomeRows        *homerows.Store
 	HomeRowChoices  HomeRowChoices
 	HomeRowPreviews HomeRowPreviews
+	// Suggestions is woken as a row is saved, so that a row that tells its
+	// users tells them at once when it shows now; nil tells none.
+	Suggestions interface{ Wake() }
 	// Taste keeps the users' taste profiles, which My account shows each
 	// their own; nil keeps none.
 	Taste *taste.Service

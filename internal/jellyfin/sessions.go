@@ -247,6 +247,11 @@ func (h *Handler) saveCapabilities(w http.ResponseWriter, r *http.Request, capab
 		h.internalError(w, r, err)
 		return
 	}
+	// An app that takes messages now shows the suggestions told while none
+	// of the user's did.
+	if h.Suggestions != nil && capabilities.SupportsMediaControl {
+		h.Suggestions.Connected(callerFrom(r.Context()).User.ID)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

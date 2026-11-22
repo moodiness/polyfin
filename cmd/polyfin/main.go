@@ -992,10 +992,23 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		Reaches: func(user accounts.ID) bool { return notifier.Receives(user, notifications.ProgrammeReminder) },
 		Ready:   notifier.Loaded(), Logger: logger})
 	jellyfinAPI.Reminders = programmeReminders
+	// The home rows that tell their users tell each of them once, as they
+	// start showing to them, on their own targets and on their apps that
+	// take messages, once the notifications read their targets.
+	suggestions := homerows.NewTeller(homerows.TellerConfig{Store: homeRows, Users: store, Notifier: notifier, Apps: jellyfinAPI,
+		Sees: func(ctx context.Context, user accounts.User, row homerows.Row) (bool, error) {
+			if row.Kind != homerows.KindPlaylist {
+				return true, nil
+			}
+			return jellyfinAPI.SeesPlaylist(ctx, user, row.Playlist)
+		},
+		Ready: notifier.Loaded(), Logger: logger})
+	jellyfinAPI.Suggestions = suggestions
 	// Refresh metadata forgets the failed downloads of the artwork the
 	// image relay remembers.
 	lib.UseArtworkFailures(jellyfinAPI)
 	adminOptions.Reminders = programmeReminders
+	adminOptions.Suggestions = suggestions
 	registerWatchlistTasks(registry, store, lists, jellyfinAPI, notifier, logger)
 	// Playbacks under way when Polyfin stops are kept in the history, as
 	// ended at their last report.
@@ -1057,6 +1070,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	go fromApps.Run(ctx)
 	go notifier.Run(ctx)
 	go programmeReminders.Run(ctx)
+	go suggestions.Run(ctx)
 	go updateCheck.Run(ctx)
 	go playbacks.Run(ctx)
 	// Playbacks whose apps stopped reporting are stopped.

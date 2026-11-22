@@ -116,6 +116,7 @@ const notifications: typeof en = {
       share_played: 'Link condiviso riprodotto',
       programme_reminder: 'Programma in partenza',
       title_available: 'Titolo da guardare disponibile',
+      titles_suggested: 'Riga della Home suggerita',
     },
     eventHelp: {
       server_crashed:
@@ -158,6 +159,8 @@ const notifications: typeof en = {
         'Un programma della Diretta TV per cui hai impostato un promemoria nel lettore web inizia a breve, con l’anticipo indicato in Remind me before, con un link al suo canale.',
       title_available:
         'Sono state trovate versioni di un titolo della tua playlist «Da guardare» per cui i controlli precedenti non ne avevano trovata nessuna: una volta per titolo. Una versione trovata non è ancora stata provata.',
+      titles_suggested:
+        'Una riga della Home che un amministratore ha creato per te inizia a comparire nella tua pagina iniziale, e ha chiesto che tu venga avvisato: una volta per riga, con la sua nota.',
     },
     enabled: 'Invia messaggi a questa destinazione',
     create: 'Aggiungi',

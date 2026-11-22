@@ -118,6 +118,7 @@ const notifications: typeof en = {
       share_played: 'Link compartilhado reproduzido',
       programme_reminder: 'Programa começando',
       title_available: 'Título para assistir disponível',
+      titles_suggested: 'Fileira do início sugerida',
     },
     eventHelp: {
       server_crashed:
@@ -159,6 +160,8 @@ const notifications: typeof en = {
         'Um programa da TV ao Vivo para o qual você definiu um lembrete no player web começa em breve, com a antecedência definida em Remind me before, com um link para o canal.',
       title_available:
         'Foram encontradas versões de um título da sua playlist “Para assistir” para o qual as verificações anteriores não tinham encontrado nenhuma: uma vez por título. Uma versão encontrada ainda não foi testada.',
+      titles_suggested:
+        'Uma fileira do início que um administrador fez para você começa a aparecer na sua página inicial, e ele pediu que você fosse avisado: uma vez por fileira, com a nota dele.',
     },
     enabled: 'Enviar mensagens para este destino',
     create: 'Adicionar',

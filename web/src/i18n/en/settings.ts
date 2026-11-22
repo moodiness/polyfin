@@ -1241,6 +1241,16 @@ const settings = {
       libraryHelp:
         'Other apps cannot be given a new kind of home section: this makes the row a library too, without type, which they list among the user’s libraries, with a row of its latest titles on their home.',
       libraryBadge: 'Library',
+      note: 'Note to the users',
+      noteHelp: (length: number, max: number) =>
+        `Shown under the row’s name in the web player, and in the notification, signed with your name. ${length}/${max}`,
+      notify: 'Tell the users',
+      notifyHelp:
+        'Once, as the row starts showing to each of them: on their own notification targets, and on their apps that accept messages, now or at their next connection.',
+      leavePlayed: 'Leave out the titles they played',
+      leavePlayedHelp: 'A title a user started or played leaves their row, and its library.',
+      toldCount: (told: number, users: number) => `Told: ${told} of ${users}`,
+      seenCount: (seen: number, users: number) => `Seen by ${seen} of ${users}`,
       moveLabel: 'Move',
       schedule: 'Schedule',
       scheduleHelp:

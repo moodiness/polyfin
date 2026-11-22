@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -38,8 +39,11 @@ type HomeRowPreviews interface {
 // row's collection; playlistId a playlist row's playlist; count is how
 // many rows a Because you watched or a My playlists row makes; users are
 // those a row not shown to everyone is shown to; schedule is when it
-// shows. shownNow, in answers only, tells whether the schedule shows it
-// now.
+// shows. note is the administrator's note, notify tells the chosen users
+// once, and leavePlayed leaves out the titles each user started or
+// played. shownNow, in answers only, tells whether the schedule shows it
+// now, and counts, for a row shown to chosen users, how many were told of
+// it and saw it, never who.
 type homeRowJSON struct {
 	ID           string              `json:"id"`
 	Name         string              `json:"name"`
@@ -55,7 +59,19 @@ type homeRowJSON struct {
 	Users        []string            `json:"users"`
 	Library      bool                `json:"library"`
 	Schedule     homeRowScheduleJSON `json:"schedule"`
+	Note         string              `json:"note"`
+	Notify       bool                `json:"notify"`
+	LeavePlayed  bool                `json:"leavePlayed"`
 	ShownNow     bool                `json:"shownNow"`
+	Counts       *homeRowCountsJSON  `json:"counts,omitempty"`
+}
+
+// homeRowCountsJSON counts the users a row is shown to, those told of it
+// and those who saw it.
+type homeRowCountsJSON struct {
+	Users int `json:"users"`
+	Told  int `json:"told"`
+	Seen  int `json:"seen"`
 }
 
 // homeRowScheduleJSON is when a row shows, in the server's time zone
@@ -71,10 +87,16 @@ type homeRowScheduleJSON struct {
 	EndHour   *int   `json:"endHour"`
 }
 
-func newHomeRowJSON(r homerows.Row, now time.Time) homeRowJSON {
+// newHomeRowJSON is r's JSON at now, with its counts when it is shown to
+// chosen users.
+func newHomeRowJSON(r homerows.Row, now time.Time, counts map[accounts.ID]homerows.Counts) homeRowJSON {
 	result := homeRowJSON{ID: r.ID.String(), Name: r.Name, Kind: string(r.Kind), Place: string(r.Place), CatalogType: r.CatalogType,
 		CatalogID: r.CatalogID, Count: r.Count, Everyone: r.Everyone, Users: []string{}, Library: r.Library,
-		Schedule: homeRowScheduleJSON{Days: []int{}}, ShownNow: r.ShowsAt(now)}
+		Schedule: homeRowScheduleJSON{Days: []int{}}, Note: r.Note, Notify: r.Notify, LeavePlayed: r.LeavePlayed, ShownNow: r.ShowsAt(now)}
+	if r.Suggested() {
+		c := counts[r.ID]
+		result.Counts = &homeRowCountsJSON{Users: c.Users, Told: c.Told, Seen: c.Seen}
+	}
 	if r.Addon != (accounts.ID{}) {
 		result.AddonID = r.Addon.String()
 	}
@@ -134,7 +156,8 @@ func (j homeRowScheduleJSON) schedule() (homerows.Schedule, bool) {
 // identifier that is not one leaves the row invalid.
 func (j homeRowJSON) row() (homerows.Row, bool) {
 	r := homerows.Row{Name: j.Name, Kind: homerows.Kind(j.Kind), Place: homerows.Place(j.Place), CatalogType: j.CatalogType,
-		CatalogID: j.CatalogID, Count: j.Count, Everyone: j.Everyone, Library: j.Library}
+		CatalogID: j.CatalogID, Count: j.Count, Everyone: j.Everyone, Library: j.Library,
+		Note: strings.Join(strings.Fields(j.Note), " "), Notify: j.Notify, LeavePlayed: j.LeavePlayed}
 	if r.Count == 0 {
 		r.Count = homerows.DefaultCount
 	}
@@ -188,14 +211,34 @@ func (h *handler) homeRows(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
+	counts, err := h.HomeRows.Counts(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
 	result := make([]homeRowJSON, 0, len(rows))
 	now := h.now()
 	for _, row := range rows {
-		result = append(result, newHomeRowJSON(row, now))
+		result = append(result, newHomeRowJSON(row, now, counts))
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Rows []homeRowJSON `json:"rows"`
 	}{result})
+}
+
+// savedHomeRow answers a row created or changed with status, its counts
+// with it, and has the suggestions told soon: a row that tells its users
+// tells them at once when it shows now.
+func (h *handler) savedHomeRow(w http.ResponseWriter, r *http.Request, status int, row homerows.Row) {
+	counts, err := h.HomeRows.Counts(r.Context())
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	if h.Suggestions != nil {
+		h.Suggestions.Wake()
+	}
+	writeJSON(w, status, newHomeRowJSON(row, h.now(), counts))
 }
 
 // homeRowCatalogJSON is a catalog of the server's addons a row may list.
@@ -316,12 +359,14 @@ func (h *handler) homeRowFrom(w http.ResponseWriter, r *http.Request) (homerows.
 	return row, ok
 }
 
-// createHomeRow adds a row after the others: 201 with the row.
+// createHomeRow adds a row after the others, its note signed by the
+// administrator: 201 with the row.
 func (h *handler) createHomeRow(w http.ResponseWriter, r *http.Request) {
 	row, ok := h.homeRowFrom(w, r)
 	if !ok {
 		return
 	}
+	row.NoteBy = sessionFrom(r.Context()).User.ID
 	created, err := h.HomeRows.Create(r.Context(), row)
 	if homeRowError(w, err) {
 		return
@@ -329,10 +374,11 @@ func (h *handler) createHomeRow(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, newHomeRowJSON(created, h.now()))
+	h.savedHomeRow(w, r, http.StatusCreated, created)
 }
 
-// updateHomeRow changes a row.
+// updateHomeRow changes a row; a note changed is signed by the
+// administrator.
 func (h *handler) updateHomeRow(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
@@ -343,6 +389,7 @@ func (h *handler) updateHomeRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row.ID = id
+	row.NoteBy = sessionFrom(r.Context()).User.ID
 	updated, err := h.HomeRows.Update(r.Context(), row)
 	if homeRowError(w, err) {
 		return
@@ -350,7 +397,7 @@ func (h *handler) updateHomeRow(w http.ResponseWriter, r *http.Request) {
 		h.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, newHomeRowJSON(updated, h.now()))
+	h.savedHomeRow(w, r, http.StatusOK, updated)
 }
 
 // deleteHomeRow deletes a row: 204.

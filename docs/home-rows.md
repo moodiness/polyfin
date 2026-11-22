@@ -22,6 +22,9 @@ Each row has these fields:
 | **Kind** | | What the row lists (see [Row kinds](#row-kinds)). |
 | **Place** | | Where the row goes on the home page (see [Where a row goes](#where-a-row-goes)). |
 | **Shown to** | | **Every user**, or **Chosen users**. |
+| **Note to the users** | Empty | A note shown under the row's name in the web player, signed with the name of the administrator who last changed it, 300 characters at most (see [The note](#the-note)). |
+| **Tell the users** | Off | For a row shown to chosen users: tells each of them once, as it starts showing to them (see [Telling the users](#telling-the-users)). |
+| **Leave out the titles they played** | Off | For a catalog, a collection, New in your libraries, the Watchlist or a playlist: a title a user started or played leaves their row (see [Titles played](#titles-played)). |
 | **Also a library in other apps** | Off | Makes the row a library too (see [Rows as libraries in other apps](#rows-as-libraries-in-other-apps)). |
 | **Schedule** | Empty: the row shows all the time | When the row shows (see [Row schedules](#row-schedules)). |
 
@@ -130,9 +133,56 @@ A catalog row needs the user to use the server's addons. A row without any title
 
 - A row with a schedule is listed outside its schedule too, so that the user can turn it off beforehand.
 - Off, the row leaves the user's home page. When it is also a library in other apps, it leaves their libraries there too.
+- In the web player, a row shown to chosen users also has **Hide**, which turns it off the same way (see [Seen and hidden](#seen-and-hidden)).
 - Other users keep it.
 - jellyfin-web's own home sections stay in the web player's **Settings › Home**.
 - **Reset my preferences** turns every row on again (see [Your own preferences](users.md#your-own-preferences)).
+
+## Suggesting titles to users
+
+To suggest titles to some users, put them in a collection or a playlist and add a row of it with **Shown to** set to **Chosen users**. A row shown to chosen users is a suggestion: Polyfin keeps whether each of them saw it, and the web player lets them hide it. Its **Schedule** says how long it lasts, such as this weekend only, and **Also a library in other apps** brings it to the other apps.
+
+### The note
+
+**Note to the users** shows under the row's name in the web player, after the name of the administrator who last changed it: "From Morgan: watch it this weekend!". A row of any kind may have one, shown to everyone or not.
+
+- The note is one paragraph: line breaks and repeated spaces become single spaces.
+- Changing anything else of the row keeps its signature. Deleting the administrator leaves it unsigned.
+- Other apps show no note: no app takes text for a home section. [Telling the users](#telling-the-users) brings it to their apps.
+
+### Telling the users
+
+**Tell the users**, offered for a row shown to chosen users only, tells each of them once, as the row starts showing to them:
+
+- at once when it shows now as it is saved;
+- at the start of its schedule;
+- when they are added to its users.
+
+A user who turned the row off, whose account may not sign in at that time, or who may not see the playlist of a **Playlist** row, is told once they may. A user who saw the row first is not told. Polyfin looks every minute, and keeps who was told in the database, so that a restart never tells anyone twice.
+
+Each is told in two ways:
+
+- **Their own notification targets** that chose **Home row suggested** (see [Home rows suggested](notifications.md#home-rows-suggested)). A user without targets of their own gets nothing this way.
+- **Their apps that accept messages**, as **Send a message** shows one (see [Administration](administration.md#stopping-a-playback-or-sending-a-message)): those open then, else the first one that connects while the row shows, five seconds after it connects, once it started. It is shown once, on one app, and not after the user saw the row.
+
+The web player shows the message until it is dismissed. Other apps show it their own way, for a few seconds on some, and some show none.
+
+### Seen and hidden
+
+In the web player, a row shown to chosen users has:
+
+- **New** beside its name, until the user opens the row's list or one of its titles from the home page. It is gone from every device of theirs once seen.
+- **Hide**, which turns the row off for them, as **My account › Home rows** does, and says where to show it again (see [Rows each user turns off](#turning-off-a-row)).
+
+The row's line in **Settings › Web player › Home rows** counts its users who were told of it and who saw it, such as "Told: 2 of 3 · Seen by 1 of 3". It never says who.
+
+The rows shown to chosen users before this version count as seen and told: they show no **New**.
+
+### Titles played
+
+**Leave out the titles they played** leaves out, for each user, the titles they started or played, on their home page, in the row's list and in its library: a movie with a resume point or played, a series one of whose episodes they started or played. Other users keep them. With the schedule's **Until**, a suggestion lasts until played or until a date.
+
+The other kinds do not offer it: Because you watched, Recommended on Trakt and Top picks for you already leave out the titles played, and Now available and Still waiting the titles started.
 
 ## Rows as libraries in other apps
 
