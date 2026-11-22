@@ -332,8 +332,10 @@ export async function startPolyfin(values, databaseUrl, dir, port) {
       return current.child.pid
     },
     log: () => current.log(),
-    async restart() {
+    /** Stops Polyfin, runs between, if given, while it is stopped, and starts it again. */
+    async restart(between) {
       await stop(current)
+      if (between) await between()
       current = await start()
     },
     /** Polyfin's CPU time so far, in seconds, and its resident memory, in MB. */

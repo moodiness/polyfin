@@ -207,6 +207,9 @@ type Handler struct {
 	preparations *preparations
 	// listings lists the versions of home rows' titles ahead of a play.
 	listings *listings
+	// rowsAhead bounds the home rows whose first titles are read at once
+	// to be listed ahead (see listRowAhead).
+	rowsAhead rowsAhead
 	// watched are the title pages that follow their versions as addons
 	// answer (see versionsChanged).
 	watched *watchedPages

@@ -255,7 +255,7 @@ const settings: typeof en = {
       'Veraltete Methoden können Anmeldedaten in URLs senden, die in Protokollen, im Browserverlauf und in Proxys landen. Schalte dies nur ein, wenn sich eine deiner Apps sonst nicht anmelden kann.',
     prepareAhead: 'Wiedergabe im Voraus vorbereiten',
     prepareAheadHelp:
-      'Polyfin liest die Datei, sobald die Seite eines Titels geöffnet wird, und bereitet gegen Ende der aktuellen Folge die nächste vor, damit die Wiedergabe sofort startet. Außerdem listet es die Versionen der Titel in „Weiterschauen“ und „Als Nächstes“ im Voraus auf, damit ihre Seiten sie sofort zeigen. Dadurch gehen etwas mehr Anfragen an deine Quellen, auch für Titel, die geöffnet, aber nicht abgespielt werden.',
+      'Polyfin liest die Datei, sobald die Seite eines Titels geöffnet wird, und bereitet gegen Ende der aktuellen Folge die nächste vor, damit die Wiedergabe sofort startet. Außerdem listet es die Versionen der Titel in „Weiterschauen“ und „Als Nächstes“ und der ersten Titel der anderen Zeilen der Startseite im Voraus auf, damit ihre Seiten sie sofort zeigen. Dadurch gehen etwas mehr Anfragen an deine Quellen, auch für Titel, die geöffnet, aber nicht abgespielt werden, und für die anderen Zeilen höchstens einige Dutzend pro Stunde an jedes Add-on.',
     transcoding: 'Konvertierung (Transkodierung)',
     transcodingHelp:
       'Kodiert Video und Audio neu für Apps, die eine Datei nicht unverändert abspielen können. Ist dies ausgeschaltet, spielen Apps Dateien unverändert oder nur neu verpackt ohne Neukodierung ab, und ein Titel, den eine App so nicht abspielen kann, startet auf dieser App nicht. Das gilt auch für nach HEVC konvertierte Aufnahmen auf Apps, die kein HEVC abspielen.',

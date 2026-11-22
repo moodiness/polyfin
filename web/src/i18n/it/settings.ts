@@ -257,7 +257,7 @@ const settings: typeof en = {
       'I metodi legacy possono inviare le credenziali negli URL, che finiscono nei log, nella cronologia del browser e nei proxy. Attiva questa opzione solo se un’applicazione che usi non riesce ad accedere in altro modo.',
     prepareAhead: 'Prepara la riproduzione in anticipo',
     prepareAheadHelp:
-      'Polyfin legge il file appena si apre la pagina di un titolo e prepara l’episodio successivo verso la fine di quello in corso, così la riproduzione parte subito. Elenca inoltre in anticipo le versioni dei titoli in «Continua a guardare» e «Prossimo», così le loro pagine le mostrano subito. Questo invia qualche richiesta in più alle tue origini, anche per titoli aperti ma non riprodotti.',
+      'Polyfin legge il file appena si apre la pagina di un titolo e prepara l’episodio successivo verso la fine di quello in corso, così la riproduzione parte subito. Elenca inoltre in anticipo le versioni dei titoli in «Continua a guardare» e «Prossimo», e dei primi titoli delle altre righe della Home, così le loro pagine le mostrano subito. Questo invia qualche richiesta in più alle tue origini, anche per titoli aperti ma non riprodotti, e qualche decina all’ora al massimo a ogni add-on per le altre righe.',
     transcoding: 'Conversione (transcodifica)',
     transcodingHelp:
       'Ricodifica video e audio per le applicazioni che non riescono a riprodurre un file così com’è. Se disattivata, le applicazioni riproducono i file così come sono o semplicemente reimpacchettati senza ricodifica, e un titolo che un’applicazione non può riprodurre in questo modo non partirà su quell’applicazione. Questo vale anche per le registrazioni convertite in HEVC, sulle applicazioni che non riproducono HEVC.',

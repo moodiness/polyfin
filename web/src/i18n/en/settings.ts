@@ -252,7 +252,7 @@ const settings = {
       'Legacy methods can send credentials in URLs, which end up in logs, browser history and proxies. Only turn this on if an app you use cannot sign in otherwise.',
     prepareAhead: 'Prepare playback in advance',
     prepareAheadHelp:
-      'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. It also lists in advance the versions of the titles in Continue Watching and Next Up, so their pages show them at once. This sends a few more requests to your sources, also for titles that are opened but not played.',
+      'Polyfin reads the file as soon as a title’s page opens, and gets the next episode ready near the end of the current one, so playback starts right away. It also lists in advance the versions of the titles in Continue Watching and Next Up, and of the first titles of the other home rows, so their pages show them at once. This sends a few more requests to your sources, also for titles that are opened but not played, and a few dozen an hour at most to each addon for the other rows.',
     transcoding: 'Conversion (transcoding)',
     transcodingHelp:
       'Re-encodes video and audio for apps that cannot play a file as it is. When off, apps play files as they are or simply repackaged without re-encoding, and a title an app cannot play that way will not start on that app. This includes recordings converted to HEVC, on apps that do not play HEVC.',

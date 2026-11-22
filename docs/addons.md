@@ -523,6 +523,7 @@ The same is true of a page that cannot be read for another reason, such as a ser
 Besides what users open, Polyfin asks addons for streams and descriptions on its own:
 
 - the titles of Continue Watching and Next Up, listed ahead;
+- the first titles of the other home rows, listed ahead within each addon's own bounds (see [Preparing playback in advance](reading-the-sources.md#preparing-playback-in-advance));
 - the next episodes, prepared or preloaded;
 - the Watchlist checks;
 - descriptions read again, or in a user's language;

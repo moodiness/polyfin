@@ -15,6 +15,7 @@ Playback then starts at once, not after a second or two. Polyfin prepares:
 - **The next episode:** with its versions and subtitles, once the episode playing has 9 minutes left, and its first segment's bytes within the user's budget below.
 - **The next track:** as a song or audiobook starts, the next in the app's queue (else the album): its stream, and its analysis if the addon does not describe it.
 - **Continue Watching and Next Up:** in the background, the versions of each row's first 10 movies and episodes. Titles opened there list versions without a placeholder (see [Title pages](versions.md#title-pages)). The first version of each row's first 2 titles is analyzed, and the bytes of the segment its play starts at, where the user stopped, are read within the user's budget below, for instant resumes.
+- **The other home rows:** in the background, the stream lists of the first 3 titles of each row an app asks for: a library's latest titles, and the rows added under **Settings › Web player › Home rows**. For a series, it is the episode its Play starts with, as Next Up picks it. A title opened from them lists its versions at once rather than waiting for the addons, about 1.5 seconds with an addon that gathers others. Only the lists are asked: nothing is analyzed or read, and each addon keeps within the bounds below.
 
 This costs a few source requests, even for titles never played: about 1 to 3 MiB a title opened.
 
@@ -29,6 +30,17 @@ This costs a few source requests, even for titles never played: about 1 to 3 MiB
 - A title waiting or being listed is not queued again. One whose versions are still kept (**Keep version lists for (minutes)**) asks nothing.
 - All is background work: paced per addon, behind what users open, pausing after a rate refusal (see [How Polyfin paces addons](addons.md#how-polyfin-paces-addons)).
 - Torrent versions are left out while no playback runs their torrent. Only a playback joins a swarm, and its first play analyzes it (see [How a torrent starts](torrents.md#how-a-torrent-starts)). Opening the page neither reads nor logs it.
+
+The other home rows ask each stream addon within bounds of its own. Every user of a shared addon shares them; a user's own addon has its own.
+
+| Bound per addon | Value |
+|---|---|
+| Titles of each row | The first 3 movies, episodes and series |
+| Requests at once | 1 |
+| Requests | 12 a minute and 120 an hour, the requests asked again after each answer included; past the hour's, the titles waiting are dropped until a row is asked again |
+| Order | The first title of every row first, then the second, behind every other background request |
+| Titles skipped | A list kept younger than **Keep version lists for (minutes)**, in memory or in the database, even after a restart; a title the addon failed for or had nothing for lately, or is asked for already |
+| After a refusal for its rate | The titles waiting are dropped at once; none is asked until the pause of its server ends, as **System › Health** marks it **Too many requests** |
 
 ## The source cache
 

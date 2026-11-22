@@ -229,15 +229,18 @@ func (rs rowsSetup) row(t *testing.T, path string) []string {
 	return ids
 }
 
-// listedAhead waits for the titles queued from home rows to be listed.
+// listedAhead waits for the titles queued from home rows to be listed,
+// those of Continue Watching and Next Up, and the first of the others
+// (see listRowAhead).
 func (s testServer) listedAhead(t *testing.T) {
 	t.Helper()
 	eventually(t, "the titles of home rows to be listed", func() bool {
 		l := s.handler.listings
 		l.mu.Lock()
 		defer l.mu.Unlock()
-		return l.running == 0 && len(l.waiting) == 0
+		return l.running == 0 && len(l.waiting) == 0 && s.handler.rowsAhead.idle()
 	})
+	s.library.WaitRowAhead()
 }
 
 // onceEach is the requests of asking each of ids once.

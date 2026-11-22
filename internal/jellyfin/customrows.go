@@ -618,6 +618,9 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fields := requestedFields(r)
+	for _, items := range titles {
+		h.listRowAhead(user, items)
+	}
 	result := []CustomRowDto{}
 	for i, row := range rows {
 		dto := CustomRowDto{Id: row.id.String(), Name: row.name, Place: customRowPlaces[row.row.Place],
@@ -901,6 +904,7 @@ func (h *Handler) customRowLatest(w http.ResponseWriter, r *http.Request, user a
 		h.internalError(w, r, err)
 		return true
 	}
+	h.listRowAhead(user, items)
 	writeJSON(w, http.StatusOK, dtos)
 	return true
 }

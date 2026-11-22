@@ -10,6 +10,7 @@ Home rows are rows an administrator adds to the web player's home page: a catalo
 - Each row has **Edit**, **Delete** and arrows to move it.
 - **Not shown now** shows beside a row its schedule hides at the moment.
 - "Scheduled" shows beside a row with a schedule.
+- With **Prepare playback in advance** on, the first 3 titles of each row have their versions listed ahead, so that a title opened from the row lists them at once (see [Preparing playback in advance](reading-the-sources.md#preparing-playback-in-advance)).
 
 ![The Home rows list in Settings › Web player, with four rows and one marked Not shown now](images/home-rows-editor.webp)
 

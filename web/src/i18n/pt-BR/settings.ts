@@ -254,7 +254,7 @@ const settings: typeof en = {
       'Métodos legados podem enviar credenciais em URLs, que acabam ficando em registros, no histórico do navegador e em proxies. Só ative esta opção se um aplicativo que você usa não conseguir entrar de outra forma.',
     prepareAhead: 'Preparar a reprodução com antecedência',
     prepareAheadHelp:
-      'O Polyfin lê o arquivo assim que a página de um título é aberta e prepara o próximo episódio perto do fim do atual, para que a reprodução comece na hora. Ele também lista com antecedência as versões dos títulos em Continuar assistindo e A seguir, para que as páginas deles as mostrem na hora. Isso envia algumas solicitações a mais às suas fontes, inclusive para títulos que são abertos, mas não reproduzidos.',
+      'O Polyfin lê o arquivo assim que a página de um título é aberta e prepara o próximo episódio perto do fim do atual, para que a reprodução comece na hora. Ele também lista com antecedência as versões dos títulos em Continuar assistindo e A seguir, e dos primeiros títulos das outras fileiras do início, para que as páginas deles as mostrem na hora. Isso envia algumas solicitações a mais às suas fontes, inclusive para títulos que são abertos, mas não reproduzidos, e algumas dezenas por hora no máximo a cada complemento para as outras fileiras.',
     transcoding: 'Conversão (transcodificação)',
     transcodingHelp:
       'Recodifica vídeo e áudio para aplicativos que não conseguem reproduzir um arquivo como ele é. Quando desativada, os aplicativos reproduzem os arquivos como são ou apenas reempacotados, sem recodificação, e um título que um aplicativo não consegue reproduzir assim não será iniciado nesse aplicativo. Isso inclui gravações convertidas para HEVC, em aplicativos que não reproduzem HEVC.',

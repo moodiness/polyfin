@@ -359,7 +359,19 @@ func followUpList[T any](ctx context.Context, s *Service, lists *cache.Cache[str
 			if _, fresh, _ := listOf(s, lists, key); !fresh || !s.followingUp(followed, f) {
 				return
 			}
+			release := func() {}
+			if kind.name == listStreams && rowAheadOf(detached) && markOf(asking).background {
+				// A follow-up of a list asked ahead is one of the addon's
+				// requests ahead, unless a play hurries it.
+				ok, hurried := false, false
+				if release, ok, hurried = s.rowAhead.followUp(detached, key.addon, f.hurry); hurried {
+					release, asking = func() {}, foreground(detached)
+				} else if !ok {
+					return
+				}
+			}
 			answer, err := shared(asking, s, flightKey, fetch)
+			release()
 			if err != nil {
 				s.logger.Debug("An addon asked again for a list failed", "addon", addon, "list", kind.name, "error", err)
 				return

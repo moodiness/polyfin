@@ -108,7 +108,17 @@ const cells = [
     wait: 5000,
     name: 'Native app, Play 5 s after opening',
   },
+  // The addon's requests while the home page is open, which has no catalog of its own.
+  {
+    id: 'home',
+    scenario: 'home',
+    user: 'themed',
+    name: 'Home page, addon requests',
+  },
 ]
+
+/** The cases with a catalog: all but the home page's. */
+const cataloged = cells.filter((cell) => cell.scenario !== 'home')
 
 const values = parseArgs({
   options: {
@@ -131,6 +141,17 @@ const values = parseArgs({
     shots: { type: 'string' },
     from: { type: 'string' },
     keep: { type: 'boolean', default: false },
+    // Each cold run starts from an empty database, and opens the title at --place of its row.
+    fresh: { type: 'boolean', default: false },
+    place: { type: 'string', default: '0' },
+    // How long a run waits on the home page, once it settled, before it clicks a card; for
+    // the home case, how long it keeps the page open, loading it again every --revisit.
+    'home-wait': { type: 'string', default: '0' },
+    revisit: { type: 'string', default: '0' },
+    // The status of the fixture's stream answers: 429 refuses every one for its rate.
+    'stream-status': { type: 'string', default: '200' },
+    // The titles of each catalog, at least: one for the warm runs and one per cold run.
+    titles: { type: 'string', default: '0' },
   },
 }).values
 
@@ -206,20 +227,20 @@ async function makeMedia() {
 
 /** The titles of each case: one for the warm runs, then one per cold run. */
 function titlesOf(cell, runs) {
-  return Array.from({ length: runs + 1 }, (_, n) => ({
+  return Array.from({ length: Math.max(runs + 1, Number(values.titles)) }, (_, n) => ({
     id: `fluid:${cell.id}-${n}`,
     name: `${cell.id} ${String(n).padStart(2, '0')}`,
     n,
   }))
 }
 
-async function startFixture({ media, runs, latency, streamDelay, sourceRate }) {
+async function startFixture({ media, runs, latency, streamDelay, sourceRate, streamStatus }) {
   let base = ''
   const posterDir = join(repoDir, 'docs/public/posters')
   const posters = readdirSync(posterDir).filter(
     (name) => /^[a-z-]+[a-z]\.jpg$/.test(name) && !name.includes('-sq'),
   )
-  const all = cells.flatMap((cell) => titlesOf(cell, runs).map((title) => ({ ...title, cell })))
+  const all = cataloged.flatMap((cell) => titlesOf(cell, runs).map((title) => ({ ...title, cell })))
   const byId = new Map(all.map((title, index) => [title.id, { ...title, index }]))
   /** What the fixture answered: each request's path, when it came and when its answer ended. */
   const events = []
@@ -264,7 +285,7 @@ async function startFixture({ media, runs, latency, streamDelay, sourceRate }) {
           resources: ['catalog', 'meta', 'stream'],
           types: ['movie'],
           idPrefixes: ['fluid:'],
-          catalogs: cells.map((cell) => ({ type: 'movie', id: cell.id, name: cell.id })),
+          catalogs: cataloged.map((cell) => ({ type: 'movie', id: cell.id, name: cell.id })),
         })
       }
       let match = path.match(/^\/catalog\/movie\/([a-z-]+)(\/[^/]*)?\.json$/)
@@ -283,6 +304,10 @@ async function startFixture({ media, runs, latency, streamDelay, sourceRate }) {
       match = path.match(/^\/stream\/movie\/(fluid:[a-z0-9-]+)\.json$/)
       if (match) {
         event.kind = 'stream'
+        if (streamStatus !== 200) {
+          response.writeHead(streamStatus, { 'content-type': 'application/json' })
+          return response.end('{"error":"too many requests"}')
+        }
         await sleep(Math.max(0, streamDelay - latency))
         const title = byId.get(match[1])
         if (!title) return json(response, { streams: [] })
@@ -408,46 +433,60 @@ async function startStage(media, runs) {
     latency: Number(values.latency),
     streamDelay: Number(values['stream-delay']),
     sourceRate: Number(values['source-rate']) * 1_000_000,
+    streamStatus: Number(values['stream-status']),
   })
   log(`Fixture addon at ${fixture.manifestUrl}`)
   const polyfin = await startPolyfin(values, own.toString(), dir)
   log(`Polyfin at ${polyfin.url}`)
   const api = adminClient(polyfin.url)
-  let code
-  for (let i = 0; i < 300 && !code; i++) {
-    code = polyfin.log().match(/setup_code=([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1]
-    if (!code) await sleep(100)
-  }
-  await api.post('/admin/api/setup', { setupCode: code, ...admin, language: 'en' })
-  for (const user of Object.values(users)) {
-    const made = await api.post('/admin/api/users', {
-      name: user.name,
-      password: user.password,
-      isAdministrator: false,
-    })
-    if (user.webTheme) {
-      await api.patch(`/admin/api/users/${made.id}`, { webTheme: user.webTheme })
+  /** Sets the server up: its administrator, the users, the addon, and the titles listed. */
+  const setUp = async () => {
+    let code
+    for (let i = 0; i < 300 && !code; i++) {
+      code = polyfin.log().match(/setup_code=([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1]
+      if (!code) await sleep(100)
     }
-  }
-  await api.post('/admin/api/scopes/shared/addons', { manifestUrl: fixture.manifestUrl })
+    await api.post('/admin/api/setup', { setupCode: code, ...admin, language: 'en' })
+    for (const user of Object.values(users)) {
+      const made = await api.post('/admin/api/users', {
+        name: user.name,
+        password: user.password,
+        isAdministrator: false,
+      })
+      if (user.webTheme) {
+        await api.patch(`/admin/api/users/${made.id}`, { webTheme: user.webTheme })
+      }
+    }
+    await api.post('/admin/api/scopes/shared/addons', { manifestUrl: fixture.manifestUrl })
 
-  // The titles' identifiers, as each user's libraries list them: listing them stores them.
-  const ids = new Map()
-  const app = await nativeApp(polyfin.url, users.themed, 'fluidity-setup')
-  for (let tries = 0; ids.size < fixture.titles.length; tries++) {
-    if (tries > 150) throw new Error(`only ${ids.size} of ${fixture.titles.length} titles listed`)
-    const views = (await app.get(`/UserViews?userId=${app.userId}`)).Items
-    for (const view of views) {
-      const items = await app.get(
-        `/Items?userId=${app.userId}&ParentId=${view.Id}&Recursive=true&IncludeItemTypes=Movie&Limit=200`,
-      )
-      for (const item of items.Items) ids.set(item.Name, item.Id)
+    // The titles' identifiers, as each user's libraries list them: listing them stores them.
+    const ids = new Map()
+    const app = await nativeApp(polyfin.url, users.themed, 'fluidity-setup')
+    for (let tries = 0; ids.size < fixture.titles.length; tries++) {
+      if (tries > 150) throw new Error(`only ${ids.size} of ${fixture.titles.length} titles listed`)
+      const views = (await app.get(`/UserViews?userId=${app.userId}`)).Items
+      for (const view of views) {
+        const items = await app.get(
+          `/Items?userId=${app.userId}&ParentId=${view.Id}&Recursive=true&IncludeItemTypes=Movie&Limit=200`,
+        )
+        for (const item of items.Items) ids.set(item.Name, item.Id)
+      }
+      if (ids.size < fixture.titles.length) await sleep(200)
     }
-    if (ids.size < fixture.titles.length) await sleep(200)
+    for (const title of fixture.titles) title.itemId = ids.get(title.name)
+    await polyfin.conversionsDone()
   }
-  for (const title of fixture.titles) title.itemId = ids.get(title.name)
-  await polyfin.conversionsDone()
-  return { polyfin, fixture, api, dir }
+  await setUp()
+  /** Starts Polyfin again on an empty database and data folder, set up anew (see --fresh). */
+  const reset = async () => {
+    await polyfin.restart(async () => {
+      await query(server, `DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
+      await query(server, `CREATE DATABASE ${name}`)
+      await rm(join(dir, 'data'), { recursive: true, force: true })
+    })
+    await setUp()
+  }
+  return { polyfin, fixture, api, dir, reset }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -807,6 +846,7 @@ async function clickCard(tab, title) {
  */
 async function openRun(tab, base, title, press = false) {
   await goHome(tab, title)
+  if (Number(values['home-wait'])) await sleep(Number(values['home-wait']))
   await tab.page.evaluate(() => performance.setResourceTimingBufferSize(100000))
   const clicked = await clickCard(tab, title)
   const handle = await tab.page.waitForFunction(
@@ -868,6 +908,48 @@ async function playRun(tab, base, title, wait) {
     method,
     requests,
   }
+}
+
+/** What a fixture request is of: the manifest, a catalog, a description, streams or files. */
+function fixtureKind(event) {
+  if (event.kind) return event.kind
+  if (event.path === '/manifest.json') return 'manifest'
+  return event.path.startsWith('/catalog/') ? 'catalog' : 'meta'
+}
+
+/**
+ * Signs in, which shows the home page, and keeps it open --home-wait, loading it again every
+ * --revisit: the fixture's requests meanwhile, by kind. ms is the requests for streams.
+ */
+async function homeRun(tab, base, user, fixture) {
+  const began = Date.now()
+  const wait = Number(values['home-wait'])
+  const every = Number(values.revisit)
+  await signIn(tab, base, user)
+  let loads = 1
+  while (every && Date.now() + every < began + wait) {
+    await sleep(every)
+    await tab.page.reload({ waitUntil: 'networkidle2' }).catch(() => {})
+    loads++
+  }
+  await sleep(Math.max(0, began + wait - Date.now()))
+  const counts = {}
+  for (const event of fixture.events.filter((each) => each.at >= began)) {
+    counts[fixtureKind(event)] = (counts[fixtureKind(event)] ?? 0) + 1
+  }
+  return { began, ms: counts.stream ?? 0, loads, minutes: (Date.now() - began) / 60000, counts }
+}
+
+/** The home case's runs: the fixture's requests by kind, and the page's loads. */
+function homeSummary(runs) {
+  return [
+    '| Home page | Minutes | Loads | Streams | Descriptions | Catalogs | Pictures |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+    ...runs.map(
+      (run) =>
+        `| run ${run.n} | ${run.minutes.toFixed(1)} | ${run.loads} | ${run.counts.stream ?? 0} | ${run.counts.meta ?? 0} | ${run.counts.catalog ?? 0} | ${run.counts.image ?? 0} |`,
+    ),
+  ].join('\n')
 }
 
 /** A run's requests, times from t0, with what they are of. */
@@ -949,7 +1031,7 @@ async function main() {
     (cell) => !only || only.includes(cell.id) || only.includes(cell.scenario),
   )
   const media = await makeMedia()
-  const { polyfin, fixture } = await startStage(media, runs)
+  const { polyfin, fixture, reset } = await startStage(media, runs)
   const base = polyfin.url
   const titleOf = (cell, n) =>
     fixture.titles.find((title) => title.cell.id === cell.id && title.n === n)
@@ -1003,13 +1085,22 @@ async function main() {
   }
   const failures = []
   const once = async (cell, mode, n, tab) => {
-    const title = titleOf(cell, n)
+    // With --fresh, every cold run opens the same title, at --place of its row.
+    const title =
+      cell.scenario === 'home'
+        ? null
+        : titleOf(cell, values.fresh && mode === 'cold' ? Number(values.place) : n)
     const from = Date.now()
     try {
       if (cell.scenario === 'native') {
         const app = await nativeApp(base, users.themed, `fluidity-native-${mode}`)
         const result = await nativeRun(app, base, title, cell.wait)
         record(cell, mode, n, { ...result, clicked: result.began }, from, Date.now())
+        return
+      }
+      if (cell.scenario === 'home') {
+        const result = await homeRun(tab, base, users[cell.user], fixture)
+        record(cell, mode, n, result, from, Date.now())
         return
       }
       const result =
@@ -1033,6 +1124,8 @@ async function main() {
   if (modes.includes('warm')) {
     const tabs = {}
     for (const cell of chosen) {
+      // The home page's requests are counted from a start only.
+      if (cell.scenario === 'home') continue
       let tab = null
       if (cell.scenario !== 'native') {
         if (!tabs[cell.user]) {
@@ -1050,15 +1143,20 @@ async function main() {
   if (modes.includes('cold')) {
     for (const cell of chosen) {
       for (let n = 1; n <= runs; n++) {
-        // A start of Polyfin, a browser that kept nothing, and a title never opened.
-        await polyfin.restart()
-        await polyfin.conversionsDone()
+        // A start of Polyfin, a browser that kept nothing, and a title never opened; with
+        // --fresh, a database where nothing was ever listed.
+        if (values.fresh) {
+          await reset()
+        } else {
+          await polyfin.restart()
+          await polyfin.conversionsDone()
+        }
         let tab = null
         let context = null
         if (cell.scenario !== 'native') {
           context = await browser.createBrowserContext()
           tab = await openTab(context)
-          await signIn(tab, base, users[cell.user])
+          if (cell.scenario !== 'home') await signIn(tab, base, users[cell.user])
         }
         await once(cell, 'cold', n, tab)
         await context?.close()
@@ -1066,8 +1164,14 @@ async function main() {
     }
   }
 
-  const summary = summarize(results)
+  const summary = summarize(results.filter((each) => each.scenario !== 'home'))
   console.log(summary.text)
+  const homes = results.filter((each) => each.scenario === 'home')
+  if (homes.length) {
+    const lines = homeSummary(homes)
+    console.log(lines)
+    summary.markdown += `\n\n${lines}\n`
+  }
   if (values.json)
     await writeFile(values.json, JSON.stringify({ values, results, failures }, null, 2))
   if (values.report) await writeFile(values.report, summary.markdown)

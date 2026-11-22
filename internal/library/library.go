@@ -200,6 +200,9 @@ type Service struct {
 	// pace paces the background requests for streams and descriptions
 	// to each addon's server (see pacing.go).
 	pace *pacing
+	// rowAhead lists home rows' titles ahead, within each addon's bounds
+	// (see rowahead.go).
+	rowAhead *rowAhead
 	// hintSpacing is the time between two reads of configure hints (see
 	// ReadConfigureHints).
 	hintSpacing time.Duration
@@ -499,6 +502,7 @@ func New(db *pgxpool.Pool, store *addons.Store, client *stremio.Client, logger *
 	s.failedRefreshes = cache.NewLasting[pageKey, time.Time](4000, func() time.Duration { return failedRefreshWait }, clock)
 	s.absent = cache.NewLasting[metaKey, absence](maxAbsent, func() time.Duration { return absentFor }, clock)
 	s.pace = newPacing(clock)
+	s.rowAhead = newRowAhead(s)
 	s.prefetches = make(chan struct{}, prefetchLimit)
 	s.translations = make(chan struct{}, translationReaders)
 	s.readAhead = true

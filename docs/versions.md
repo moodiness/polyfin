@@ -193,6 +193,7 @@ In apps:
   - Nothing changes during a video; leaving the page restores the buttons.
 - Other Jellyfin apps cannot be told to refresh: they show versions known at opening, and all on Play or reopening. Titles show as playable before any version is known; Play waits for addons answering for the first time, then picks among their versions, but waits no longer than 5 seconds for each next addon once one gave a version to play (see [How Play waits for addons](#how-play-waits-for-addons)).
 - In every app, with [Prepare playback in advance](reading-the-sources.md#preparing-playback-in-advance) on, Continue Watching and Next Up titles get versions listed when an app asks for these rows, and open with all of them. An addon failing, or silent 30 seconds, only leaves its versions out.
+- So do the first 3 titles of the other home rows, a library's latest and the rows added under **Settings › Web player › Home rows**, within each addon's bounds: opened before their addons answered, they list them as any other title.
 - Addon subtitles work alike: known ones at once, others on Play or reopening. Play waits for them 1 second at most after the versions; later ones come with the next play or track change.
 
 | Setting | Where | Default | What it does |
