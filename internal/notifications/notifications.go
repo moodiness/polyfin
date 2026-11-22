@@ -144,6 +144,10 @@ const (
 	// UserDataSaved, and no other target chooses them.
 	PlaybackProgressed = "playback_progressed"
 	DataSaved          = "user_data_saved"
+	// LocalTitleAdded is a movie or an episode a scan of a local folder or
+	// a network share found new (see Service.LocalTitlesAdded): only the
+	// server's Jellyfin targets receive it, as the plugin's ItemAdded.
+	LocalTitleAdded = "local_title_added"
 )
 
 // Events lists the events targets choose from, in the order the admin app
