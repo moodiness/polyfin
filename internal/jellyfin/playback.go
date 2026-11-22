@@ -70,6 +70,11 @@ func (h *Handler) record(r *http.Request, event playbackEvent, state playback.Pl
 		h.sessions.Start(c.Device.ID, c.User.ID, state)
 	case playbackProgressed:
 		h.sessions.Progress(c.Device.ID, c.User.ID, state, positionKnown)
+		// A channel paused keeps its buffer growing for the session, whose
+		// player may ask for nothing meanwhile.
+		if state.PlaySessionID != "" {
+			h.Playback.KeepWatching(state.PlaySessionID)
+		}
 	case playbackStopped:
 		h.sessions.Stop(c.Device.ID)
 		// Another of the user's devices may go on from it at once.
@@ -2024,13 +2029,16 @@ func (h *Handler) reportPlayback(parameter string, event playbackEvent) http.Han
 	}
 }
 
-// pingPlayback keeps a play session alive; Polyfin's sessions need no
-// keeping.
+// pingPlayback keeps a play session alive: Polyfin's sessions need no
+// keeping, but a channel's buffer goes on growing for it (see
+// playback.Service.KeepWatching).
 func (h *Handler) pingPlayback(w http.ResponseWriter, r *http.Request) {
-	if strings.TrimSpace(query(r, "playSessionId")) == "" {
+	session := strings.TrimSpace(query(r, "playSessionId"))
+	if session == "" {
 		validationProblem(w, map[string][]string{"playSessionId": {"The playSessionId field is required."}})
 		return
 	}
+	h.Playback.KeepWatching(session)
 	w.WriteHeader(http.StatusNoContent)
 }
 

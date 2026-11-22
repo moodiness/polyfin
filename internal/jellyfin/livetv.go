@@ -853,6 +853,17 @@ func webClient(client string) bool {
 	return strings.EqualFold(client, "Jellyfin Web")
 }
 
+// windowApp reports whether the app's player keeps to the window of an
+// HLS live playlist, as hls.js in jellyfin-web and ExoPlayer in the
+// Android apps do: it starts near the playlist's newest segment, may go
+// back within it, and plays on from where it paused while the playlist
+// still lists it. Such an app gets channels over HLS when they keep a
+// buffer for pause and rewind (see liveSource).
+func windowApp(r *http.Request) bool {
+	client := callerFrom(r.Context()).Device.Client
+	return webClient(client) || strings.EqualFold(client, "Android TV") || strings.EqualFold(client, "Jellyfin Android")
+}
+
 // livePlaybackInfo answers PlaybackInfo for a channel: its stream as a
 // live media source, played as it is when the app takes it, else
 // converted into HLS by FFmpeg as it comes. Unlike Jellyfin's tuners, a
@@ -1097,6 +1108,18 @@ func (h *Handler) liveSource(r *http.Request, channel library.Item, version libr
 			convertSound(&converting)
 			if converted := playback.Decide(request.DeviceProfile, described, converting); soundConverted(converted, decision, false, allowed) {
 				decision, options = converted, converting
+			}
+		}
+		// With pause and rewind on, an app whose player keeps to an HLS
+		// live window gets a channel it would play as it is over HLS
+		// instead, its video copied, so that the channel's buffer serves
+		// it (see hls.Manager.LivePlaylist). It plays as it is when its
+		// profile takes no HLS with the video as it is.
+		if _, hasVideo := playback.LiveVideo(analysis); decision.DirectPlay && hasVideo && h.Accounts.Settings().LiveTvBufferMinutes > 0 && windowApp(r) {
+			buffered := options
+			buffered.EnableDirectPlay, buffered.EnableDirectStream = false, false
+			if repackaged := playback.Decide(request.DeviceProfile, described, buffered); repackaged.HLS && repackaged.Video == nil && permitted(allowed, repackaged) {
+				decision, options = repackaged, buffered
 			}
 		}
 	}

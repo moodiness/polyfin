@@ -787,7 +787,9 @@ func LiveVideo(analysis media.Analysis) (media.Stream, bool) {
 
 // LivePlaylist returns the media playlist of a live remux, starting FFmpeg
 // when it does not run; uri names the files it lists. The first waits for
-// the segments the app asks for, and a lead (see hls.Manager.LivePlaylist).
+// the segments the app asks for, and a lead; the next ones go back to
+// where the play session joined the channel, as far as the channel's
+// buffer keeps (see hls.Manager.LivePlaylist).
 func (s *Service) LivePlaylist(ctx context.Context, remux Remux, uri func(name string) string) ([]byte, error) {
 	return s.segments.LivePlaylist(ctx, remux.key(), s.liveOpener(remux), uri, remux.MinSegments)
 }
@@ -795,6 +797,12 @@ func (s *Service) LivePlaylist(ctx context.Context, remux Remux, uri func(name s
 // LiveSegment opens a file the playlist of a live remux lists.
 func (s *Service) LiveSegment(remux Remux, name string) (*os.File, error) {
 	return s.segments.LiveSegment(remux.key(), name)
+}
+
+// KeepWatching tells that a play session still watches its channel, as
+// its app reports its progress while paused (see hls.Manager.KeepWatching).
+func (s *Service) KeepWatching(session string) {
+	s.segments.KeepWatching(session)
 }
 
 // liveOpener reads the live stream through the loopback relay, so that

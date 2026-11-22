@@ -185,8 +185,10 @@ type Service struct {
 // sets on segments, the limit of the playbacks converting video, whenever
 // one more would start, the segments made ahead of the player, and whether
 // converted video is kept when the audio track changes, as each request
-// comes. The versions sources refused for their host's error file are
-// tried again as soon as the host answers its files (see retryRefused).
+// comes, and what channels watched keep for pause and rewind, as each of
+// their segments comes. The versions sources refused for their host's
+// error file are tried again as soon as the host answers its files (see
+// retryRefused).
 func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Signer, sources *source.Cache, segments *hls.Manager, renew Renewer, logger *slog.Logger,
 	settings func() accounts.Settings) (*Service, error) {
 	server, err := newLoopback()
@@ -196,6 +198,11 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 	segments.LimitConversions(func() int { return settings().MaxConversions })
 	segments.LimitAhead(func() time.Duration { return time.Duration(settings().AheadSeconds) * time.Second })
 	segments.KeepVideo(func() bool { return settings().KeepConvertedVideo })
+	segments.BufferLives(func() hls.LiveBuffer {
+		current := settings()
+		return hls.LiveBuffer{Length: time.Duration(current.LiveTvBufferMinutes) * time.Minute,
+			Bytes: int64(current.LiveTvBufferGigabytes) * 1_000_000_000}
+	})
 	s := &Service{
 		db:          db,
 		opener:      opener,
