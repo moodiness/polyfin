@@ -998,6 +998,12 @@ const settings: typeof en = {
     liveTvRefreshHours: 'Actualizar las listas y guías de Televisión en vivo cada (horas)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Con qué frecuencia se vuelven a descargar las listas de canales IPTV y las guías de programación XMLTV. Una descarga que ha fallado se reintenta antes: a los 5 minutos, a los 15 minutos y después cada hora. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    liveTvBufferMinutes: 'Búfer de pausa y retroceso por canal (minutos)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Los usuarios pueden pausar un canal y retroceder hasta el momento en que empezaron a verlo, como máximo este número de minutos, en jellyfin-web y en las aplicaciones cuyo reproductor lo permita. El búfer se guarda en el disco mientras alguien ve el canal y se borra unos minutos después de que se vaya el último espectador. 0 lo desactiva. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
+    liveTvBufferGigabytes: 'Espacio en disco para los búferes de pausa (GB)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `Los búferes de todos los canales juntos no superan este espacio ni la mitad del espacio libre de la carpeta de segmentos; los minutos más antiguos se borran primero. De ${r.min} a ${r.max}; ${r.default} de forma predeterminada.`,
     backupsFolder: (folder: string) =>
       `Las copias de seguridad de la base de datos se guardan en ${folder}.`,
     backups: 'Hacer copias de seguridad de la base de datos',
@@ -1341,7 +1347,8 @@ const settings: typeof en = {
       catalogs: 'Cuánto lee Polyfin de los catálogos de las extensiones, y con qué frecuencia.',
       security:
         'Extensiones e importaciones propias de los usuarios, cuentas bloqueadas, dispositivos sin usar y proxies inversos.',
-      liveTv: 'Con qué frecuencia se vuelven a descargar las listas de canales y las guías IPTV.',
+      liveTv:
+        'Con qué frecuencia se vuelven a descargar las listas de canales y las guías IPTV, y cuánto de cada canal se guarda para pausar y retroceder.',
       diagnostics: 'El registro detallado y las variables de entorno en vigor.',
       notifications:
         'Dónde avisa Polyfin, para cada usuario, de nuevos episodios, grabaciones, reproducciones y conexiones que se detienen, y de problemas del estado del sistema, nuevos usuarios, nuevas versiones y cuentas bloqueadas, y dónde envía el resumen semanal y los resúmenes del mes y del año.',

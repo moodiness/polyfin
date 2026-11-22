@@ -282,6 +282,10 @@ const common: typeof en = {
     invalid_quality_group: 'Scegli il gruppo di qualità dall’elenco.',
     invalid_live_tv_refresh_hours:
       'L’intervallo di aggiornamento deve essere un numero intero di ore da 1 a 168.',
+    invalid_live_tv_buffer_minutes:
+      'Il buffer di pausa deve essere un numero intero di minuti da 0 a 240.',
+    invalid_live_tv_buffer_gigabytes:
+      'Lo spazio su disco per i buffer di pausa deve essere un numero intero di GB da 1 a 1000.',
     invalid_local_scan_hours:
       'L’intervallo di scansione deve essere un numero intero di ore da 0 a 168.',
     invalid_watchlist_check_hours:

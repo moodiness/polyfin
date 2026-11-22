@@ -293,6 +293,10 @@ const common: typeof en = {
     invalid_quality_group: 'Choisissez le groupe de qualité dans la liste.',
     invalid_live_tv_refresh_hours:
       'L’intervalle d’actualisation doit être un nombre entier d’heures de 1 à 168.',
+    invalid_live_tv_buffer_minutes:
+      'La mémoire de pause doit être un nombre entier de minutes de 0 à 240.',
+    invalid_live_tv_buffer_gigabytes:
+      'L’espace disque des mémoires de pause doit être un nombre entier de Go de 1 à 1000.',
     invalid_local_scan_hours:
       'L’intervalle d’analyse doit être un nombre entier d’heures de 0 à 168.',
     invalid_watchlist_check_hours:

@@ -1002,6 +1002,12 @@ const settings: typeof en = {
     liveTvRefreshHours: 'Aggiorna elenchi e guide della Diretta TV ogni (ore)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Ogni quanto vengono scaricati di nuovo gli elenchi canali IPTV e le guide dei programmi XMLTV. Un download non riuscito viene ritentato prima: dopo 5 minuti, 15 minuti, poi ogni ora. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+    liveTvBufferMinutes: 'Buffer di pausa e riavvolgimento per canale (minuti)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Gli utenti possono mettere in pausa un canale e tornare indietro fino al momento in cui hanno iniziato a guardarlo, al massimo questo numero di minuti, in jellyfin-web e nelle app il cui lettore lo consente. Il buffer resta su disco mentre qualcuno guarda il canale e viene eliminato pochi minuti dopo l’uscita dell’ultimo spettatore. 0 lo disattiva. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
+    liveTvBufferGigabytes: 'Spazio su disco per i buffer di pausa (GB)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `I buffer di tutti i canali insieme restano entro questo spazio ed entro metà dello spazio libero della cartella dei segmenti; i minuti più vecchi vengono eliminati per primi. Da ${r.min} a ${r.max}; ${r.default} per impostazione predefinita.`,
     backupsFolder: (folder: string) => `I backup del database vengono salvati in ${folder}.`,
     backups: 'Esegui il backup del database',
     backupsHelp:
@@ -1342,7 +1348,8 @@ const settings: typeof en = {
       catalogs: 'Quanto Polyfin legge dai cataloghi degli add-on, e con quale frequenza.',
       security:
         'Add-on e importazioni degli utenti, account bloccati, dispositivi inutilizzati e reverse proxy.',
-      liveTv: 'Ogni quanto vengono riscaricati gli elenchi canali e le guide IPTV.',
+      liveTv:
+        'Ogni quanto vengono riscaricati gli elenchi canali e le guide IPTV, e quanto di ogni canale viene conservato per la pausa e il riavvolgimento.',
       diagnostics: 'Il registro dettagliato e le variabili d’ambiente in uso.',
       notifications:
         'Dove Polyfin segnala, per ogni utente, nuovi episodi, registrazioni, riproduzioni e connessioni che si interrompono, oltre ai problemi dello stato di salute, ai nuovi utenti, alle nuove versioni e agli account bloccati, e invia il riepilogo settimanale, il mese in sintesi e l’anno in sintesi.',

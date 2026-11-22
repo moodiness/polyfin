@@ -989,6 +989,12 @@ const settings: typeof en = {
     liveTvRefreshHours: 'Atualizar listas e guias da TV ao Vivo a cada (horas)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Com que frequência as listas de canais IPTV e os guias de programação XMLTV são baixados novamente. Um download que falhou é tentado novamente antes: após 5 minutos, 15 minutos e depois a cada hora. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+    liveTvBufferMinutes: 'Buffer de pausa e retrocesso por canal (minutos)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Os usuários podem pausar um canal e voltar até o momento em que começaram a assisti-lo, no máximo este número de minutos, no jellyfin-web e nos apps cujo player permite. O buffer fica no disco enquanto alguém assiste ao canal e é apagado alguns minutos depois que o último espectador sai. 0 o desativa. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+    liveTvBufferGigabytes: 'Espaço em disco para buffers de pausa (GB)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `Os buffers de todos os canais juntos ficam dentro deste espaço e dentro da metade do espaço livre da pasta de segmentos; os minutos mais antigos saem primeiro. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     backupsFolder: (folder: string) => `Os backups do banco de dados são salvos em ${folder}.`,
     backups: 'Fazer backup do banco de dados',
     backupsHelp:
@@ -1330,7 +1336,8 @@ const settings: typeof en = {
       catalogs: 'Quanto o Polyfin lê dos catálogos dos complementos, e com que frequência.',
       security:
         'Complementos e importações dos próprios usuários, contas bloqueadas, dispositivos sem uso e proxies reversos.',
-      liveTv: 'Com que frequência as listas de canais e os guias IPTV são baixados novamente.',
+      liveTv:
+        'Com que frequência as listas de canais e os guias IPTV são baixados novamente, e quanto de cada canal é guardado para pausar e voltar.',
       diagnostics: 'O registro detalhado e as variáveis de ambiente em uso.',
       notifications:
         'Onde o Polyfin avisa, para cada usuário, sobre novos episódios, gravações, reproduções e conexões que param, e sobre problemas de integridade, novos usuários, novas versões e contas bloqueadas, e envia o resumo semanal e as retrospectivas do mês e do ano.',

@@ -983,6 +983,12 @@ const settings = {
     liveTvRefreshHours: 'Refresh Live TV lists and guides every (hours)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `How often the IPTV channel lists and the XMLTV programme guides are downloaded again. A download that failed is tried again sooner: after 5 minutes, 15 minutes, then every hour. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    liveTvBufferMinutes: 'Pause and rewind buffer per channel (minutes)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Users can pause a channel and go back as far as when they started watching it, this many minutes at most, in jellyfin-web and in the apps whose players allow it. The buffer is kept on disk while someone watches the channel and removed a few minutes after the last viewer leaves. 0 turns it off. From ${r.min} to ${r.max}; ${r.default} by default.`,
+    liveTvBufferGigabytes: 'Disk space for pause buffers (GB)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `The buffers of all channels together stay within this space and within half the free space of the segments folder; the oldest minutes go first. From ${r.min} to ${r.max}; ${r.default} by default.`,
     backupsFolder: (folder: string) => `Backups of the database are saved in ${folder}.`,
     backups: 'Back up the database',
     backupsHelp:
@@ -1312,7 +1318,8 @@ const settings = {
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',
       security:
         'Users’ own addons and imports, blocked accounts, unused devices and reverse proxies.',
-      liveTv: 'How often the IPTV channel lists and guides are downloaded again.',
+      liveTv:
+        'How often the IPTV channel lists and guides are downloaded again, and how much of each channel is kept for pause and rewind.',
       diagnostics: 'The detailed log, and the environment variables in effect.',
       notifications:
         'Where Polyfin tells, for every user, of new episodes, recordings, playbacks and connections that stop, and of Health problems, new users, new versions and blocked accounts, and sends the weekly summary and the month and year in review.',

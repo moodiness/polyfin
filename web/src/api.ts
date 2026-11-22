@@ -703,6 +703,10 @@ export type Settings = {
   recordingsFolderDefault: string
   /** Hours after which the XMLTV guides and IPTV channel lists are fetched again. */
   liveTvRefreshHours: number
+  /** Minutes of each watched channel kept for pause and rewind; 0 turns it off. */
+  liveTvBufferMinutes: number
+  /** Disk space, in GB, all channels' pause buffers may take together. */
+  liveTvBufferGigabytes: number
   /** Hours after its last scan a local folder is scanned again; 0 for never on a schedule. */
   localScanHours: number
   /** Hours after its last check a watchlist title is checked again for versions; 0 for never. */

@@ -268,6 +268,10 @@ const common = {
     invalid_quality_group: 'Choose the quality group from the list.',
     invalid_live_tv_refresh_hours:
       'The refresh interval must be a whole number of hours from 1 to 168.',
+    invalid_live_tv_buffer_minutes:
+      'The pause buffer must be a whole number of minutes from 0 to 240.',
+    invalid_live_tv_buffer_gigabytes:
+      'The disk space for pause buffers must be a whole number of GB from 1 to 1000.',
     invalid_local_scan_hours: 'The scan interval must be a whole number of hours from 0 to 168.',
     invalid_watchlist_check_hours:
       'The watchlist check interval must be a whole number of hours from 0 to 168.',

@@ -1245,6 +1245,22 @@ export const settingEntries: readonly SettingEntry[] = [
     keywords: ['iptv', 'xmltv', 'epg'],
     codes: ['invalid_live_tv_refresh_hours'],
   },
+  {
+    section: 'live-tv',
+    anchor: 'live-tv-buffer-minutes',
+    label: (t) => s(t).liveTvBufferMinutes,
+    help: (t, r) => s(t).liveTvBufferMinutesHelp(r('liveTvBufferMinutes')),
+    keywords: ['pause', 'rewind', 'timeshift', 'buffer'],
+    codes: ['invalid_live_tv_buffer_minutes'],
+  },
+  {
+    section: 'live-tv',
+    anchor: 'live-tv-buffer-gigabytes',
+    label: (t) => s(t).liveTvBufferGigabytes,
+    help: (t, r) => s(t).liveTvBufferGigabytesHelp(r('liveTvBufferGigabytes')),
+    keywords: ['pause', 'rewind', 'timeshift', 'buffer', 'disk'],
+    codes: ['invalid_live_tv_buffer_gigabytes'],
+  },
   // Recordings
   {
     section: 'recordings',

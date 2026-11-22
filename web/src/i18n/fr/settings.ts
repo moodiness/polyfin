@@ -1003,6 +1003,12 @@ const settings: typeof en = {
     liveTvRefreshHours: 'Actualiser les listes et les guides de TV toutes les (heures)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `À quelle fréquence les listes de chaînes IPTV et les guides des programmes XMLTV sont téléchargés à nouveau. Un téléchargement qui a échoué est réessayé plus tôt\u202f: après 5 minutes, 15 minutes, puis toutes les heures. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
+    liveTvBufferMinutes: 'Mémoire de pause et de retour en arrière par chaîne (minutes)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Les utilisateurs peuvent mettre une chaîne en pause et revenir en arrière jusqu’au moment où ils ont commencé à la regarder, dans la limite de ce nombre de minutes, dans jellyfin-web et dans les applications dont le lecteur le permet. La mémoire est gardée sur le disque tant que quelqu’un regarde la chaîne et supprimée quelques minutes après le départ du dernier spectateur. 0 la désactive. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
+    liveTvBufferGigabytes: 'Espace disque des mémoires de pause (Go)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `Les mémoires de toutes les chaînes réunies restent dans cet espace et dans la moitié de l’espace libre du dossier des segments\u202f; les minutes les plus anciennes partent en premier. De ${r.min} à ${r.max}\u202f; ${r.default} par défaut.`,
     backupsFolder: (folder: string) =>
       `Les sauvegardes de la base de données sont enregistrées dans ${folder}.`,
     backups: 'Sauvegarder la base de données',
@@ -1347,7 +1353,7 @@ const settings: typeof en = {
       security:
         'Addons et importations des utilisateurs, comptes bloqués, appareils inutilisés et proxys inverses.',
       liveTv:
-        'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés.',
+        'La fréquence à laquelle les listes de chaînes IPTV et les guides sont retéléchargés, et la part de chaque chaîne gardée pour la pause et le retour en arrière.',
       diagnostics: 'Le journal détaillé et les variables d’environnement utilisées.',
       notifications:
         'Où Polyfin signale, pour tous les utilisateurs, les nouveaux épisodes, les enregistrements, les lectures et les connexions qui s’arrêtent, ainsi que les problèmes de santé, les nouveaux utilisateurs, les nouvelles versions et les comptes bloqués, et envoie le résumé de la semaine et le bilan du mois et de l’année.',

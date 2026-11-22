@@ -991,6 +991,12 @@ const settings: typeof en = {
     liveTvRefreshHours: 'Live-TV-Listen und Fernsehprogramme aktualisieren alle (Stunden)',
     liveTvRefreshHoursHelp: (r: RangeText) =>
       `Wie oft die IPTV-Kanallisten und die XMLTV-Fernsehprogramme erneut heruntergeladen werden. Ein fehlgeschlagener Download wird früher wiederholt: nach 5 Minuten, nach 15 Minuten, dann stündlich. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    liveTvBufferMinutes: 'Puffer zum Pausieren und Zurückspulen pro Kanal (Minuten)',
+    liveTvBufferMinutesHelp: (r: RangeText) =>
+      `Benutzer können einen Kanal pausieren und bis zu dem Moment zurückspringen, an dem sie ihn eingeschaltet haben, höchstens so viele Minuten, in jellyfin-web und in den Apps, deren Player das erlauben. Der Puffer wird auf der Festplatte gehalten, solange jemand den Kanal schaut, und einige Minuten nachdem der letzte Zuschauer gegangen ist gelöscht. 0 schaltet ihn aus. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
+    liveTvBufferGigabytes: 'Speicherplatz für Pausenpuffer (GB)',
+    liveTvBufferGigabytesHelp: (r: RangeText) =>
+      `Die Puffer aller Kanäle zusammen bleiben innerhalb dieses Platzes und innerhalb der Hälfte des freien Platzes im Segmentordner; die ältesten Minuten werden zuerst entfernt. Von ${r.min} bis ${r.max}; standardmäßig ${r.default}.`,
     backupsFolder: (folder: string) => `Backups der Datenbank werden in ${folder} gespeichert.`,
     backups: 'Datenbank sichern',
     backupsHelp:
@@ -1330,7 +1336,8 @@ const settings: typeof en = {
       catalogs: 'Wie viel Polyfin aus den Katalogen der Add-ons liest und wie oft.',
       security:
         'Eigene Add-ons und Importe der Benutzer, gesperrte Konten, ungenutzte Geräte und Reverse-Proxys.',
-      liveTv: 'Wie oft die IPTV-Kanallisten und Fernsehprogramme erneut heruntergeladen werden.',
+      liveTv:
+        'Wie oft die IPTV-Kanallisten und Fernsehprogramme erneut heruntergeladen werden und wie viel von jedem Kanal zum Pausieren und Zurückspulen behalten wird.',
       diagnostics: 'Das detaillierte Protokoll und die wirksamen Umgebungsvariablen.',
       notifications:
         'Wohin Polyfin für alle Benutzer neue Folgen, Aufnahmen, Wiedergaben und abbrechende Verbindungen sowie Systemzustand-Probleme, neue Benutzer, neue Versionen und gesperrte Konten meldet und die Wochenzusammenfassung sowie den Monats- und Jahresrückblick sendet.',

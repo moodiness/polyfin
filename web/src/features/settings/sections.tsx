@@ -1586,6 +1586,32 @@ function LiveTv({ form, update, error, number, range, saved, minMax }: SectionFo
         )}
         saved={saved.liveTvRefreshHours}
       />
+      <SettingRow
+        kind="number"
+        anchor="live-tv-buffer-minutes"
+        label={s.liveTvBufferMinutes}
+        help={s.liveTvBufferMinutesHelp(range('liveTvBufferMinutes'))}
+        error={error('live-tv-buffer-minutes')}
+        {...minMax('liveTvBufferMinutes')}
+        step={1}
+        {...number('live-tv-buffer-minutes', form.liveTvBufferMinutes, (value) =>
+          update({ liveTvBufferMinutes: Math.trunc(value) }),
+        )}
+        saved={saved.liveTvBufferMinutes}
+      />
+      <SettingRow
+        kind="number"
+        anchor="live-tv-buffer-gigabytes"
+        label={s.liveTvBufferGigabytes}
+        help={s.liveTvBufferGigabytesHelp(range('liveTvBufferGigabytes'))}
+        error={error('live-tv-buffer-gigabytes')}
+        {...minMax('liveTvBufferGigabytes')}
+        step={1}
+        {...number('live-tv-buffer-gigabytes', form.liveTvBufferGigabytes, (value) =>
+          update({ liveTvBufferGigabytes: Math.trunc(value) }),
+        )}
+        saved={saved.liveTvBufferGigabytes}
+      />
     </SettingsGroup>
   )
 }
