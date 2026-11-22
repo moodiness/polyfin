@@ -60,8 +60,9 @@ import (
 //
 // Reading a library of 10,000 titles whole takes some 200 ms, sorting it
 // 5 ms: once Polyfin started and read the libraries' first pages, it
-// sorts by name the server's libraries each user sees, one at a time (see
-// sortAhead), so that the first listings after a start find their order.
+// sorts by name the server's libraries each user sees, one at a time,
+// once the apps' first screens are served (see sortAhead), so that the
+// first listings after a start find their order.
 //
 // GET /Polyfin/NameOrder lists a page of the order by name as /Items does,
 // from startIndex, limit titles, in ascending or descending order
@@ -242,6 +243,16 @@ const orderFresh = 2 * time.Minute
 
 // nameSortsAtOnce bounds the orders by name sorted at once on the server.
 const nameSortsAtOnce = 2
+
+// sortAheadQuiet is how long the apps' requests leave the server free
+// before the libraries are sorted ahead: the apps that come back after a
+// start load their first screens meanwhile, which the sorts would slow.
+const sortAheadQuiet = time.Second
+
+// sortAheadWait bounds how long the sorts ahead wait for the apps'
+// requests to leave the server free: one never free that long sorts its
+// libraries all the same.
+const sortAheadWait = time.Minute
 
 // nameBuilds are the orders by name being sorted, one for each key, which
 // the listings that ask for it wait for together.
@@ -600,8 +611,14 @@ func (h *Handler) firstPagesRead(ctx context.Context) {
 // alike are sorted once. It sorts one library at a time, leaving the other
 // places of nameSortsAtOnce to listings, reads only the catalog pages
 // kept, asking no addon for one, and stops once its orders hold half of
-// what the orders keep at most.
+// what the orders keep at most. Each user's libraries, and each library,
+// wait for the apps' requests to leave the server free for
+// sortAheadQuiet, sortAheadWait at most in all (see waitFree).
 func (h *Handler) sortAhead(ctx context.Context) {
+	deadline := time.Now().Add(sortAheadWait)
+	if !h.waitFree(ctx, deadline) {
+		return
+	}
 	started := time.Now()
 	users, err := h.Accounts.Users(ctx)
 	if err != nil {
@@ -629,6 +646,9 @@ func (h *Handler) sortAhead(ctx context.Context) {
 				h.Logger.Debug("Libraries sorted ahead up to their bound", "titles", titles, "took", time.Since(started).Round(time.Millisecond))
 				return
 			}
+			if !h.waitFree(ctx, deadline) {
+				return
+			}
 			order, err := h.sortLibraryAhead(ctx, user, parent)
 			if err != nil {
 				if ctx.Err() != nil {
@@ -641,6 +661,56 @@ func (h *Handler) sortAhead(ctx context.Context) {
 		}
 	}
 	h.Logger.Debug("Libraries sorted ahead", "titles", titles, "took", time.Since(started).Round(time.Millisecond))
+}
+
+// appRequests counts the apps' requests under way, and tells when the last
+// one ended, or when the handler was made.
+type appRequests struct {
+	mu      sync.Mutex
+	running int
+	ended   time.Time
+}
+
+func (a *appRequests) begin() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.running++
+}
+
+func (a *appRequests) end() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.running--
+	a.ended = time.Now()
+}
+
+// freeIn returns how long the apps' requests are yet to leave the server
+// free for quiet: none once they did, quiet while one is under way.
+func (a *appRequests) freeIn(quiet time.Duration) time.Duration {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.running > 0 {
+		return quiet
+	}
+	return quiet - time.Since(a.ended)
+}
+
+// waitFree waits until the apps' requests left the server free for
+// sortAheadQuiet, or until deadline. It reports false once ctx ended.
+func (h *Handler) waitFree(ctx context.Context, deadline time.Time) bool {
+	for {
+		wait := min(h.requests.freeIn(sortAheadQuiet), time.Until(deadline))
+		if wait <= 0 {
+			return ctx.Err() == nil
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false
+		case <-timer.C:
+		}
+	}
 }
 
 // sortLibraryAhead returns the order by name of the titles of library
