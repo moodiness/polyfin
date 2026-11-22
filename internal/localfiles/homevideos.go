@@ -705,10 +705,11 @@ func (s *Service) homeFrame(ctx context.Context, input string, duration float64,
 
 // videoMeta describes a home video from what its folder's scan stored: its
 // name, plot, date and year, and its length, in minutes, when it is one
-// at least.
+// at least. It was added when it was recorded, as its folder's catalog
+// sorts it.
 func videoMeta(id, name, plot string, released time.Time, duration float64) stremio.Meta {
 	meta := stremio.Meta{ID: id, Type: library.VideoType, Name: name, Description: plot, Released: released.UTC().Format(time.RFC3339),
-		Year: stremio.Text(strconv.Itoa(released.Year()))}
+		Year: stremio.Text(strconv.Itoa(released.Year())), Added: &released}
 	if minutes := int(math.Round(duration / 60)); minutes > 0 {
 		meta.Runtime = stremio.Text(strconv.Itoa(minutes) + " min")
 	}

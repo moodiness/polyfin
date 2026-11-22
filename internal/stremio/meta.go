@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Text decodes a JSON string or number, as addons send years and ratings
@@ -183,6 +184,10 @@ type Meta struct {
 	GuideID       string `json:"-"`
 	GuideNumber   string `json:"-"`
 	ChannelGroup  string `json:"-"`
+	// Added is when a title of Polyfin's own IPTV sources and local
+	// folders was added, as their catalogs sort it: the date an IPTV
+	// provider gives, a local folder's files' dates. Addons never send it.
+	Added *time.Time `json:"-"`
 }
 
 // The shapes of a poster an addon declares (Meta.PosterShape) other than

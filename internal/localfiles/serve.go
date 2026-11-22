@@ -38,7 +38,8 @@ func episodeVideoID(series string, season, episode int) string {
 // Catalog answers a folder's catalog: its titles and its plain videos (see
 // plainvideos.go), the latest found first, those whose name holds search
 // when given, from skip; a home videos folder's the latest recorded first
-// (see homeCatalog).
+// (see homeCatalog). A title's date added is its latest file's date, the
+// one the catalog sorts by.
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, id string, skip int, search string) ([]stremio.Meta, error) {
 	var kind string
 	err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind)
@@ -51,7 +52,7 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	if kind == KindHomeVideos {
 		return s.homeCatalog(ctx, source, skip, search)
 	}
-	rows, err := s.db.Query(ctx, `SELECT id, name, poster, year FROM (
+	rows, err := s.db.Query(ctx, `SELECT id, name, poster, year, modified FROM (
 			SELECT stremio_id AS id, max(name) AS name, max(poster) AS poster, max(title_year) AS year, max(modified) AS modified
 			FROM local_files WHERE addon_id = $1 AND stremio_id IS NOT NULL GROUP BY stremio_id
 			UNION ALL
@@ -66,9 +67,11 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) {
 		meta := stremio.Meta{Type: catalogType}
 		var year *int
-		if err := row.Scan(&meta.ID, &meta.Name, &meta.Poster, &year); err != nil {
+		var modified time.Time
+		if err := row.Scan(&meta.ID, &meta.Name, &meta.Poster, &year, &modified); err != nil {
 			return stremio.Meta{}, err
 		}
+		meta.Added = &modified
 		if year != nil {
 			meta.Year = stremio.Text(strconv.Itoa(*year))
 		}

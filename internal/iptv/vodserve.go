@@ -171,8 +171,8 @@ func syncManifest(ctx context.Context, tx pgx.Tx, source accounts.ID, kind, name
 // source shows: of a type turned on, in a category not excluded.
 const shownTitle = `(t.type = 'movie' AND i.movies OR t.type = 'series' AND i.series) AND NOT (t.type || ':' || t.category = ANY(i.vod_excluded))`
 
-const titleColumns = `t.type, t.key, t.name, t.category, t.poster, coalesce(t.year, 0), t.rating, t.tmdb, t.imdb, t.listing, t.version, t.extension,
-	t.quality, t.url, t.headers`
+const titleColumns = `t.type, t.key, t.name, t.category, t.poster, coalesce(t.year, 0), t.rating, t.added, t.tmdb, t.imdb, t.listing, t.version,
+	t.extension, t.quality, t.url, t.headers`
 
 // storedTitle is a title as stored, with its source's address.
 type storedTitle struct {
@@ -187,8 +187,8 @@ type storedTitle struct {
 
 // scanTitle reads a title of titleColumns, then extra columns.
 func scanTitle(row pgx.Row, t *storedTitle, extra ...any) error {
-	err := row.Scan(append([]any{&t.Type, &t.Key, &t.Name, &t.Category, &t.Poster, &t.Year, &t.Rating, &t.TMDB, &t.IMDb, &t.Listing, &t.Version,
-		&t.Extension, &t.Quality, &t.address, &t.Headers}, extra...)...)
+	err := row.Scan(append([]any{&t.Type, &t.Key, &t.Name, &t.Category, &t.Poster, &t.Year, &t.Rating, &t.Added, &t.TMDB, &t.IMDb, &t.Listing,
+		&t.Version, &t.Extension, &t.Quality, &t.address, &t.Headers}, extra...)...)
 	if t.address != nil {
 		t.URL = *t.address
 	}
@@ -199,7 +199,7 @@ func scanTitle(row pgx.Row, t *storedTitle, extra ...any) error {
 func listingMeta(source accounts.ID, t Title) stremio.Meta {
 	meta := stremio.Meta{ID: titleID(source, t.Type, t.Key), Type: t.Type, Name: t.Name, Poster: t.Poster, ImdbRating: stremio.Text(t.Rating),
 		ImdbID: t.IMDb, TmdbID: stremio.Text(t.TMDB), Description: t.Listing.Plot, Background: t.Listing.Background,
-		Cast: t.Listing.Cast, Director: t.Listing.Director}
+		Cast: t.Listing.Cast, Director: t.Listing.Director, Added: t.Added}
 	if t.Year > 0 {
 		meta.ReleaseInfo, meta.Year = stremio.Text(strconv.Itoa(t.Year)), stremio.Text(strconv.Itoa(t.Year))
 	}

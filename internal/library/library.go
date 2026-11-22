@@ -1913,7 +1913,7 @@ func (s *Service) titleItem(entry installed, catalog stremio.Catalog, meta strem
 	preview := meta
 	addon := entry.addon.ID
 	return item, record{ID: item.ID, Key: key, Kind: kind, Addon: &addon, CatalogType: catalog.Type, CatalogID: catalog.ID,
-		Parent: &parent, Meta: &preview, Confined: entry.confined}, nil
+		Parent: &parent, Meta: &preview, Added: meta.Added, Confined: entry.confined}, nil
 }
 
 // collectionChildren lists an addon's collection: the titles of the
@@ -2931,6 +2931,9 @@ func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, b
 	// The user's language changes what the title shows, never the facts
 	// judged above.
 	s.fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta), v.country)
+	// A local folder's title an addon describes was added when its catalog
+	// last told (see record.Added).
+	item.Added = cmp.Or(item.Added, r.Added)
 	item.OfficialRating = t.rating
 	switch {
 	case kind == KindSeries && len(meta.Videos) > 0:
@@ -3002,6 +3005,7 @@ func (s *Service) describedSeries(ctx context.Context, v view, id accounts.ID) (
 	shown := s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta)
 	item := Item{ID: id, Kind: KindSeries, ParentID: deref(r.Parent), Available: true}
 	s.fromMeta(&item, shown, v.country)
+	item.Added = cmp.Or(item.Added, r.Added)
 	item.Contents = contents(meta, nil, s.now())
 	owner := by.addon.ID
 	if completedBy.addon.ID != (accounts.ID{}) && !completedBy.shared {
@@ -3100,6 +3104,7 @@ func seasons(series Item, meta stremio.Meta, posters map[int]string, w words, no
 			Images:       Images{Primary: series.Images.Primary, Backdrop: series.Images.Backdrop},
 			Contents:     contents(meta, &number, now),
 			StremioType:  meta.Type,
+			Added:        series.Added,
 			StremioID:    meta.ID,
 		}
 		if poster := posters[number]; poster != "" {
@@ -3175,6 +3180,7 @@ func episodeItem(series Item, meta stremio.Meta, posters map[int]string, w words
 		Available:         released(video, now),
 		StremioType:       meta.Type,
 		StremioID:         video.ID,
+		Added:             series.Added,
 	}
 	item.SeasonID = item.ParentID
 	if item.Name == "" {

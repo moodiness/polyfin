@@ -101,9 +101,11 @@ type Item struct {
 	Runtime         time.Duration
 	CommunityRating float64
 	OfficialRating  string
-	// Added is when Polyfin first saw the title in the addon's catalog
-	// that lists it, set by the listings sorted by it (see CatalogPool);
-	// nil otherwise.
+	// Added is when the title was added: a title of an IPTV source or a
+	// local folder by the date its catalog sorts it by (see
+	// stremio.Meta.Added), with its seasons and episodes; one of an
+	// addon's catalog when Polyfin first saw it there, set by the
+	// listings sorted by it (see CatalogPool). nil when unknown.
 	Added *time.Time
 	// Language is the original language a title's addon gives, as it
 	// writes it, empty when it gives none.
@@ -539,6 +541,7 @@ func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 	item.CommunityRating = parseRating(string(meta.ImdbRating))
 	item.OfficialRating = certification(meta, country)
 	s.withFacts(item, meta, last)
+	item.Added = meta.Added
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
 	item.PosterShape = meta.Shape()
 	item.People = people(meta)
