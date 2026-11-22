@@ -110,6 +110,89 @@ func TestAPlayTakesOverTheEncodingStartedEarly(t *testing.T) {
 	}
 }
 
+// A play whose first request comes while the encoding started ahead of it
+// is still opening, as when Play is pressed as the version's analysis
+// ends, takes it over there: the request waits for the input, FFmpeg
+// starts once, and the play's segments come from it, its input read on.
+func TestAPlayArrivingAsTheEarlyEncodingOpensTakesItOver(t *testing.T) {
+	t.Parallel()
+	k := newKeptPlayback(t, FMP4)
+	key := k.key("early-1", 1)
+	gate, lifted := make(chan struct{}), make(chan struct{})
+	var lift sync.Once
+	open := func(ctx context.Context) (Remux, func(), error) {
+		<-gate
+		r, release, err := k.opener(key)(ctx)
+		r.Lift = func() { lift.Do(func() { close(lifted) }) }
+		return r, release, err
+	}
+	started := make(chan error, 1)
+	go func() { started <- k.m.Early(t.Context(), key, open) }()
+	e := waitFor(t, "the encoding started early to open", func() *encoding { return k.earlyEncoding(key) })
+
+	served := make(chan error, 1)
+	go func() {
+		f, err := k.m.Init(t.Context(), key, k.opener(key))
+		if err == nil {
+			f.Close()
+		}
+		served <- err
+	}()
+	waitFor(t, "the play to take the encoding over", func() *encoding {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if e.early {
+			return nil
+		}
+		return e
+	})
+	select {
+	case <-started:
+		t.Fatal("the encoding started early opened before its input did")
+	case <-served:
+		t.Fatal("the play was served before the input opened")
+	default:
+	}
+	close(gate)
+	if err := <-started; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+	if got := k.probe(k.segment(key, 0)).channels(); got != 2 {
+		t.Errorf("the play's first segment has %d channels, want 2", got)
+	}
+	select {
+	case <-lifted:
+	case <-time.After(10 * time.Second):
+		t.Error("the play did not read the input on")
+	}
+	e.mu.Lock()
+	early, runs := e.early, e.runs
+	e.mu.Unlock()
+	if k.earlyEncoding(key) != e || early || runs != 1 || len(k.m.Running()) != 1 {
+		t.Errorf("after the play's requests: kept %v, early %v, FFmpeg runs %d, running %d; want true, false, 1, 1",
+			k.earlyEncoding(key) == e, early, runs, len(k.m.Running()))
+	}
+}
+
+// waitFor polls get until it returns a value, for a minute at most.
+func waitFor[T comparable](t *testing.T, what string, get func() T) T {
+	t.Helper()
+	var zero T
+	deadline := time.Now().Add(time.Minute)
+	for {
+		if v := get(); v != zero {
+			return v
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiting for %s: timed out", what)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // A play that asks for another encoding, here another audio track, stops
 // the one started early for its device; another device's goes on.
 func TestAPlayWithOtherParametersStopsTheEarlyEncoding(t *testing.T) {

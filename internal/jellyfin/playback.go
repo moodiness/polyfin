@@ -634,11 +634,10 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	grant := playback.Grant{Version: chosen.version.ID, User: user.ID, Device: callerFrom(r.Context()).Device.ID,
 		Relay: tokenless || mustRelay(r, chosen.version)}
 	// A play over HLS from the start goes on from what was started for it
-	// as the title opened, in that play session (see startEarly).
-	session, early := h.earlySession(grant, chosen.decision.HLS && request.StartTimeTicks.value == 0)
-	if !early {
-		session = h.grant(grant)
-	}
+	// as the title opened, in that play session (see startEarly); else its
+	// FFmpeg starts as the app reads the answer (see startWithPlay).
+	fromStart := chosen.decision.HLS && !chosen.decision.Progressive && request.StartTimeTicks.value == 0
+	session, early := h.playSession(item.ID, grant, fromStart)
 	chosenSource := h.decidedSource(r, p, *chosen, request, session)
 	// Every version listed is named for the profile sent: the one chosen
 	// from its decision, the others from what is known of them.
@@ -650,6 +649,9 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 		// The bytes of the segment the play begins with are read while the
 		// app reads the answer.
 		h.Playback.Warm(chosen.version, time.Duration(request.StartTimeTicks.value)*100)
+	}
+	if fromStart && !early && chosenSource.TranscodingUrl != "" {
+		h.startWithPlay(r, user, item, chosen.version, chosenSource.TranscodingUrl, session)
 	}
 	if asFile {
 		h.asFile(r.Context(), &chosenSource, chosen.version)
