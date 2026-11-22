@@ -200,9 +200,10 @@ An administrator can put a user's or group's limits back to a new user's setting
 - every **Home rows** row shows again (see [Home rows](home-rows.md#home-rows));
 - track choices on series and movies are forgotten (see [Track choices](watch-state.md#track-choices));
 - **Remove from Continue Watching also takes the series off Next Up** turns off (see [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up));
-- preferences Jellyfin apps saved in the account are forgotten: audio and subtitle languages, subtitle mode, home screen (library order and hidden libraries) and display preferences such as each library's sorting and view.
+- preferences Jellyfin apps saved in the account are forgotten: audio and subtitle languages, subtitle mode, home screen (library order, hidden libraries and the sections of jellyfin-web's "Settings › Home"), display preferences such as each library's sorting and view, and LumaaGlaass's own settings;
+- the settings jellyfin-web keeps in each browser are forgotten the next time the web player loads there: its "Settings › Display" choices, such as the display theme, the user's custom CSS, the screensaver and the backdrops, its subtitle appearance, and its copies of the account's preferences. When the browser had some, the page loads again, once.
 
-Signed-in apps read the new user's preferences from their next request. Settings an app keeps on the device stay: jellyfin-web keeps its home sections in the browser and still shows them there.
+Signed-in apps read the new user's preferences from their next request. A web player page left open applies the reset when it loads again. Settings another app keeps on its device stay.
 
 It never touches watch history, favorites, resume points, hidden titles, series taken off Next Up, connections, tracking accounts, imports, or the administrator's limits.
 

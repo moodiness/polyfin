@@ -199,6 +199,11 @@ type User struct {
 	// InterfaceSizes: InterfaceCompact, the default, or InterfaceLarge.
 	// The user's own choice; the admin app applies it on every browser.
 	InterfaceSize string
+	// PreferencesResetAt is when the user last chose Reset my
+	// preferences, nil if never: Polyfin's script in jellyfin-web then
+	// forgets the settings each browser keeps for them, on its next load
+	// (see MarkPreferencesReset).
+	PreferencesResetAt *time.Time
 }
 
 // NewUser describes an account to create.
@@ -421,7 +426,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, own_sections, metadata_language, two_step, torrent_streams, " +
 	"provider_issuer, provider_link_allowed, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
-	"boost_volume, convert_sound, interface_size"
+	"boost_volume, convert_sound, interface_size, preferences_reset_at"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -436,7 +441,7 @@ func (user *User) fields() []any {
 		&user.GroupID, &user.OwnSections, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
 		(*zeronull.Text)(&user.ProviderIssuer), &user.ProviderLinkAllowed,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
-		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize}
+		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize, &user.PreferencesResetAt}
 }
 
 func scanUser(row pgx.Row) (User, error) {

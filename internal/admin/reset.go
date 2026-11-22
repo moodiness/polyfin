@@ -93,10 +93,13 @@ func (h *handler) resetGroup(w http.ResponseWriter, r *http.Request) {
 // saved in their account, the home rows they turned off, their metadata
 // language and their audio region, whether Remove from Continue Watching
 // also takes a series off Next Up, and their web player theme, unless
-// the administrator chose it for them. What they watched, their favorites
-// and resume points, the titles they took off their lists, their
-// connections and imports stay. Each part can be reset again alone, so a
-// failure part way leaves nothing that a second try does not finish.
+// the administrator chose it for them. It then records the reset, for
+// jellyfin-web's settings kept in each browser, which Polyfin's script
+// there forgets on its next load (see accounts.MarkPreferencesReset).
+// What they watched, their favorites and resume points, the titles they
+// took off their lists, their connections and imports stay. Each part can
+// be reset again alone, so a failure part way leaves nothing that a
+// second try does not finish.
 func (h *handler) resetOwnPreferences(w http.ResponseWriter, r *http.Request) {
 	session := sessionFrom(r.Context())
 	if h.Preferences != nil {
@@ -122,6 +125,14 @@ func (h *handler) resetOwnPreferences(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.Accounts.SetOwnWebTheme(r.Context(), session.User.ID, ""); err != nil && !errors.Is(err, accounts.ErrWebThemeLocked) {
+		h.internalError(w, r, err)
+		return
+	}
+	_, err = h.Accounts.MarkPreferencesReset(r.Context(), session.User.ID)
+	if accountError(w, err) {
+		return
+	}
+	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}

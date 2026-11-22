@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/webtheme"
@@ -161,11 +162,12 @@ func TestBrandingGivesTheCssOfTheThemeShown(t *testing.T) {
 }
 
 // GET /Polyfin/WebTheme answers the theme the web player shows the user
-// signed in, and their own, empty while they keep the server's.
+// signed in, and their own, empty while they keep the server's; once they
+// reset their preferences, when they did.
 func TestWebThemeAnswersTheUsersTheme(t *testing.T) {
 	t.Parallel()
 	s, _, member := administrated(t)
-	s.user("bob", func(c *accounts.UserChanges) { c.WebTheme = new(accounts.WebThemeNone) })
+	bobID := s.user("bob", func(c *accounts.UserChanges) { c.WebTheme = new(accounts.WebThemeNone) }).ID
 	bob := app("bob", s.signIn("bob", "bob"))
 	_, key, err := s.store.CreateAPIKey(t.Context(), "Theme")
 	if err != nil {
@@ -192,6 +194,14 @@ func TestWebThemeAnswersTheUsersTheme(t *testing.T) {
 	}
 	if status, _ := s.call(http.MethodGet, "/Polyfin/WebTheme", "", nil); status != http.StatusUnauthorized {
 		t.Errorf("signed out: %d", status)
+	}
+	reset, err := s.store.MarkPreferencesReset(t.Context(), bobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"Theme":"none","UserTheme":"none","PreferencesReset":"` + reset.PreferencesResetAt.UTC().Format(time.RFC3339Nano) + `"}`
+	if _, body := s.call(http.MethodGet, "/Polyfin/WebTheme", bob, nil); strings.TrimSpace(string(body)) != want {
+		t.Errorf("bob after resetting their preferences: %s, want %s", body, want)
 	}
 }
 

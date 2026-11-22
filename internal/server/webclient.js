@@ -12,9 +12,10 @@
 // shows titles' ratings on their posters for a sixteenth, writes how a
 // torrent starts under jellyfin-web's spinner for a seventeenth, offers
 // the identity provider's sign-in on the sign-in page for an eighteenth,
-// gives the page each user's web player theme for a nineteenth, boosts
-// the volume of videos for the users who ask for a twentieth, shows the
-// badges of the version picked or played for a twenty-first, brings
+// gives the page each user's web player theme, and forgets what the
+// browser keeps for a user who reset their preferences, for a nineteenth,
+// boosts the volume of videos for the users who ask for a twentieth,
+// shows the badges of the version picked or played for a twenty-first, brings
 // back the place of the home page and of search results on Back for a
 // twenty-second, and lets trailers play in YouTube's player for a
 // twenty-third.
@@ -789,6 +790,9 @@
   var storageKey = 'polyfinWebTheme'
   var reloadKey = 'polyfinWebThemeReload'
   var mostUsers = 20
+  // resetKey keeps [server/user, time] of the last Reset my preferences
+  // the browser applied for each user, the last first (see applyReset).
+  var resetKey = 'polyfinPreferencesReset'
   var linkId = 'polyfinWebThemeCss'
   function quietly(listener) {
     return function (event) {
@@ -1059,8 +1063,49 @@
     }
     applied = { theme: theme, css: files.css, js: files.js }
   }
+  // applyReset forgets what this browser keeps for the user, as
+  // server/user, by their ID, once they reset their preferences after the
+  // reset it last applied, mark being the time of their last one:
+  // jellyfin-web's settings kept in the browser for them ("<id>-<name>",
+  // such as its display theme, custom CSS, screensaver and backdrops),
+  // LumaaGlaass's copy of its settings and jellyfin-web's copy of its
+  // answers. It tells whether the page must load again for jellyfin-web
+  // to read the server's: never when the browser cannot keep the mark,
+  // which would load it again and again.
+  function applyReset(user, id, mark) {
+    if (typeof mark !== 'string' || !mark) return false
+    try {
+      var storage = window.localStorage
+      var marks = null
+      try {
+        marks = JSON.parse(storage.getItem(resetKey))
+      } catch (error) {}
+      if (Object.prototype.toString.call(marks) !== '[object Array]') marks = []
+      var after = [[user, mark]]
+      for (var i = 0; i < marks.length; i++) {
+        if (!marks[i]) continue
+        if (marks[i][0] === user && marks[i][1] === mark) return false
+        if (marks[i][0] !== user && after.length < mostUsers) after.push(marks[i])
+      }
+      var names = []
+      for (var j = 0; j < storage.length; j++) {
+        var name = storage.key(j)
+        if (name && name.indexOf(id + '-') === 0) names.push(name)
+      }
+      var lumaaGlaass = 'lumaaglaass-settings:' + user.replace('/', ':')
+      if (storage.getItem(lumaaGlaass) !== null) names.push(lumaaGlaass)
+      for (var k = 0; k < names.length; k++) storage.removeItem(names[k])
+      forgetKept()
+      var text = JSON.stringify(after)
+      storage.setItem(resetKey, text)
+      return names.length > 0 && storage.getItem(resetKey) === text
+    } catch (error) {
+      return false
+    }
+  }
   // follow asks the theme of the user jellyfin-web signed in, once for
-  // each, and shows it when the page shows another.
+  // each, and shows it when the page shows another. A reset of their
+  // preferences the browser has not applied yet loads the page again.
   function follow() {
     var api = window.ApiClient
     var id = api && api.getCurrentUserId()
@@ -1073,6 +1118,11 @@
         if (asked !== user || !answer || typeof answer.Theme !== 'string') return
         var value = kept()
         setOwnTheme(value, user, typeof answer.UserTheme === 'string' ? answer.UserTheme : '')
+        if (applyReset(user, id, answer.PreferencesReset)) {
+          keep(value)
+          location.reload()
+          return
+        }
         var theme = shown(answer.Theme)
         if (theme !== applied.theme) {
           show(user, id, theme, value)

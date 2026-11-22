@@ -783,6 +783,8 @@ const account: typeof en = {
     trackChoices: 'Spurauswahl: für alle Serien und Filme vergessen',
     appPreferences:
       'Die Einstellungen, die Jellyfin-Apps in Ihrem Konto gespeichert haben: Audio- und Untertitelsprachen und -modus, Startbildschirm- und Anzeigeeinstellungen',
+    browserSettings:
+      'Die Einstellungen des Web-Players, die jeder Browser speichert, etwa sein Anzeige-Theme, sein benutzerdefiniertes CSS, sein Bildschirmschoner und seine Hintergründe: vergessen, sobald der Web-Player dort das nächste Mal lädt',
     kept: 'Was Sie angesehen haben, Ihre Favoriten, Fortsetzungspunkte, Verbindungen und Importe bleiben.',
     confirm: 'Zurücksetzen',
     resetting: 'Wird zurückgesetzt…',

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/webtheme"
@@ -97,17 +98,25 @@ func (h *Handler) brandingTheme(r *http.Request) (theme string, page bool, err e
 // WebTheme is the web player theme of the user signed in, which Polyfin's
 // script asks once a user signs in to the web client: Theme, the theme the
 // web player shows them, lumaaglaass, none or custom, and UserTheme, their
-// own, empty when they keep the server's.
+// own, empty when they keep the server's. PreferencesReset is when they
+// last reset their preferences, left out if never: the script forgets the
+// settings jellyfin-web keeps in the browser for them when the browser
+// has not applied that reset yet.
 type WebTheme struct {
-	Theme     string
-	UserTheme string
+	Theme            string
+	UserTheme        string
+	PreferencesReset string `json:",omitempty"`
 }
 
 // webTheme answers GET /Polyfin/WebTheme. An API key, without a user,
 // gets the server's theme.
 func (h *Handler) webTheme(w http.ResponseWriter, r *http.Request) {
 	user := callerFrom(r.Context()).User
-	writeJSON(w, http.StatusOK, WebTheme{Theme: h.Accounts.Settings().WebThemeOf(user), UserTheme: user.WebTheme})
+	answer := WebTheme{Theme: h.Accounts.Settings().WebThemeOf(user), UserTheme: user.WebTheme}
+	if user.PreferencesResetAt != nil {
+		answer.PreferencesReset = user.PreferencesResetAt.UTC().Format(time.RFC3339Nano)
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // updateBranding saves the branding jellyfin-web's dashboard posts to

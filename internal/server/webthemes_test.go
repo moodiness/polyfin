@@ -195,8 +195,11 @@ type webThemeAnswer struct {
 // loaded, the script's goes. Once a user signs in, it asks their theme:
 // another one with a script before reloads the page, once, when the
 // browser keeps it; else it changes at once, and jellyfin-web's copy of the
-// stylesheet before is turned off. It runs in Node.js, in a context that
-// stands for the browser, the page being parsed, and jellyfin-web.
+// stylesheet before is turned off. A reset of the user's preferences the
+// browser has not applied yet forgets the settings jellyfin-web and
+// LumaaGlaass keep in it for them, and reloads the page when there were
+// some. It runs in Node.js, in a context that stands for the browser, the
+// page being parsed, and jellyfin-web.
 func TestThePageShowsEachUsersTheme(t *testing.T) {
 	t.Parallel()
 	node, err := exec.LookPath("node")
@@ -216,6 +219,9 @@ func TestThePageShowsEachUsersTheme(t *testing.T) {
 		database bool
 		// answers are what /Polyfin/WebTheme answers each user.
 		answers map[string]webThemeAnswer
+		// resets are when each user last reset their preferences, as the
+		// answers give it.
+		resets map[string]string
 		// steps: "head" logs the stylesheets and scripts of the head, and
 		// of the body when it has some; "kept" what the browser keeps;
 		// "styles" jellyfin-web's stylesheets; "signin <id>" signs the
@@ -224,7 +230,8 @@ func TestThePageShowsEachUsersTheme(t *testing.T) {
 		// jellyfin-web show the stylesheet at address, loaded,
 		// "jellyfin-loading <address>" not yet loaded, "loaded" loads them;
 		// "fetch <path>" has jellyfin-web's SDK fetch path; "tick" runs the
-		// timers; "load" loads the page again in the same browser.
+		// timers; "load" loads the page again in the same browser;
+		// "storage" the names the browser keeps, with the resets applied.
 		steps []string
 		want  []string
 	}
@@ -235,6 +242,11 @@ func TestThePageShowsEachUsersTheme(t *testing.T) {
 	const (
 		lumaaGlaassHead = "head: link lg/lumaaglaass.css, script lg/loader.js"
 		customHead      = "head: link custom.css?v=1, script custom.js?v=1"
+		// keptTheme is a browser that showed LumaaGlaass to u1 last.
+		keptTheme = `{"Users":[["s/u1",""]],"Last":"s/u1","Applied":"lg/lumaaglaass.css"}`
+		reset     = "2026-11-22T10:00:00.123456Z"
+		// appliedResets are u1's reset applied, before u2's older one.
+		appliedResets = `polyfinPreferencesReset=[["s/u1","` + reset + `"],["s/u2","2026-01-01T00:00:00Z"]]`
 	)
 	scenarios := map[string]scenario{
 		"a first visit shows the server's theme": {
@@ -307,6 +319,33 @@ func TestThePageShowsEachUsersTheme(t *testing.T) {
 			steps: []string{"fetch /Branding/Configuration", "fetch /Branding/Css.css?v=2", "fetch /Users/Me"},
 			want: []string{"cookie lumaaglaass", `fetch /Branding/Configuration {"cache":"no-store","credentials":"same-origin"}`,
 				`fetch /Branding/Css.css?v=2 {"cache":"no-store","credentials":"same-origin"}`, `fetch /Users/Me {"cache":"no-store"}`}},
+		"a reset not applied yet forgets what the browser keeps for the user, and reloads once": {database: true,
+			storage: map[string]string{"jellyfin_credentials": saved("u1"), "polyfinKeptFor": "s/u1", "polyfinWebTheme": keptTheme,
+				"u1-appTheme": "purplehaze", "u1-disableCustomCss": "true", "u2-appTheme": "dark",
+				"lumaaglaass-settings:s:u1": "{}", "lumaaglaass-settings:s:u2": "{}",
+				"polyfinPreferencesReset": `[["s/u2","2026-01-01T00:00:00Z"],["s/u1","2026-02-01T00:00:00Z"]]`},
+			answers: map[string]webThemeAnswer{"u1": {"lumaaglaass", ""}},
+			resets:  map[string]string{"u1": reset},
+			steps:   []string{"signin u1", "storage", "load", "signin u1", "head", "storage"},
+			want: []string{"cookie lumaaglaass", "asked for u1", "reload", "deleted jellyfin-query-cache",
+				"storage: jellyfin_credentials, lumaaglaass-settings:s:u2, polyfinKeptFor, " + appliedResets + ", polyfinWebTheme, u2-appTheme",
+				"cookie lumaaglaass", "asked for u1", lumaaGlaassHead,
+				"storage: jellyfin_credentials, lumaaglaass-settings:s:u2, polyfinKeptFor, " + appliedResets + ", polyfinWebTheme, u2-appTheme"}},
+		"a reset already applied leaves what the browser keeps": {
+			storage: map[string]string{"jellyfin_credentials": saved("u1"), "polyfinWebTheme": keptTheme, "u1-appTheme": "purplehaze",
+				"polyfinPreferencesReset": `[["s/u1","` + reset + `"]]`},
+			answers: map[string]webThemeAnswer{"u1": {"lumaaglaass", ""}},
+			resets:  map[string]string{"u1": reset},
+			steps:   []string{"signin u1", "storage"},
+			want: []string{"cookie lumaaglaass", "asked for u1",
+				`storage: jellyfin_credentials, polyfinKeptFor, polyfinPreferencesReset=[["s/u1","` + reset + `"]], polyfinWebTheme, u1-appTheme`}},
+		"a reset with nothing kept for the user loads no page again": {
+			storage: map[string]string{"jellyfin_credentials": saved("u1"), "polyfinWebTheme": keptTheme, "u2-appTheme": "dark"},
+			answers: map[string]webThemeAnswer{"u1": {"lumaaglaass", ""}},
+			resets:  map[string]string{"u1": reset},
+			steps:   []string{"signin u1", "storage"},
+			want: []string{"cookie lumaaglaass", "asked for u1",
+				`storage: jellyfin_credentials, polyfinKeptFor, polyfinPreferencesReset=[["s/u1","` + reset + `"]], polyfinWebTheme, u2-appTheme`}},
 	}
 	const harness = scriptRunner + `
 const { script, page, cssOnlyPage, scenarios } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'))
@@ -328,12 +367,15 @@ const storageOf = (values, failing) => ({
   getItem: (name) => (name in values ? values[name] : null),
   setItem: (name, value) => { if (failing) throw new Error('QuotaExceededError'); values[name] = String(value) },
   removeItem: (name) => { delete values[name] },
+  get length() { return Object.keys(values).length },
+  key: (index) => Object.keys(values)[index] ?? null,
 })
 async function run(scenario) {
   const log = []
   const local = Object.assign({}, scenario.storage)
   const session = {}
   const answers = scenario.answers || {}
+  const resets = scenario.resets || {}
   let current = null
   let styles = []
   const timers = new Map()
@@ -384,7 +426,8 @@ async function run(scenario) {
       getJSON: (url) => {
         if (!url.endsWith('/Polyfin/WebTheme')) return new Promise(() => {})
         log.push('asked for ' + current)
-        return Promise.resolve(answers[current])
+        const answer = answers[current]
+        return Promise.resolve(answer && resets[current] ? Object.assign({}, answer, { PreferencesReset: resets[current] }) : answer)
       },
     }
     const CSS = { supports: (query) => query === 'selector(:has(a))' && scenario.old !== 'css' }
@@ -459,6 +502,9 @@ async function run(scenario) {
     } else if (step === 'load') {
       current = null
       page_ = start()
+    } else if (step === 'storage') {
+      const resetKey = 'polyfinPreferencesReset'
+      log.push('storage: ' + Object.keys(local).sort().map((name) => (name === resetKey ? name + '=' + local[name] : name)).join(', '))
     } else log.push('unknown step ' + step)
     await flush()
     await flush()
@@ -484,11 +530,12 @@ async function run(scenario) {
 		Old           string                    `json:"old"`
 		Database      bool                      `json:"database"`
 		Answers       map[string]webThemeAnswer `json:"answers"`
+		Resets        map[string]string         `json:"resets"`
 		Steps         []string                  `json:"steps"`
 	}
 	inputs := map[string]input{}
 	for name, s := range scenarios {
-		inputs[name] = input{s.storage, s.failing, s.customCssOnly, s.old, s.database, s.answers, s.steps}
+		inputs[name] = input{s.storage, s.failing, s.customCssOnly, s.old, s.database, s.answers, s.resets, s.steps}
 	}
 	page := pageThemes{Cookie: webtheme.Cookie("s"), Theme: accounts.WebThemeLumaaGlaass, Themes: map[string]pageTheme{
 		accounts.WebThemeLumaaGlaass: {Css: lumaaGlaass, Js: "lg/loader.js"},

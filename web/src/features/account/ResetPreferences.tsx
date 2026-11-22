@@ -10,7 +10,8 @@ import { Button, ConfirmDialog, useToast } from '@/ui'
  * Reset my preferences, among the page's actions: asks first, listing what goes back to the
  * server's defaults and what stays, then resets the metadata language, the audio region, the web
  * player theme unless the administrator chose it, the home rows turned off, the track choices and
- * the preferences Jellyfin apps saved in the account.
+ * the preferences Jellyfin apps saved in the account; the web player's settings kept in each
+ * browser go the next time it loads there.
  */
 export default function ResetPreferences() {
   const { t } = useI18n()
@@ -66,6 +67,7 @@ export default function ResetPreferences() {
               <li>{text.nextUpWithResume}</li>
               <li>{text.trackChoices}</li>
               <li>{text.appPreferences}</li>
+              <li>{text.browserSettings}</li>
             </ul>
           </div>
           <p>{text.kept}</p>
