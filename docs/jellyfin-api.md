@@ -407,8 +407,12 @@ A library of an addon's catalog is read a page at a time, so its Sort menu works
 - The **Collections** view has CollectionType `boxsets`. A listing of BoxSets across the server includes user collections, and for apps other than jellyfin-web the addons' collections too (see [Collections from addons](collections-people-and-ratings.md#collections-from-addons)).
 - Hidden titles do not count in `ChildCount`, `RecursiveItemCount` or the played count.
 - Without the permission, `POST /Collections` and `POST` or `DELETE /Collections/{id}/Items` answer an empty 403, as in Jellyfin, administrators included.
-- Delete a collection with `DELETE /Items/{id}`, as in Jellyfin. Users without permission get 401.
+- Delete a collection with `DELETE /Items/{id}`, as in Jellyfin. Users without permission get 401. It leaves every collection that held it.
 - A missing name, or a title the user may not see, answers 400.
+- `ids` in `POST /Collections` and `POST /Collections/{id}/Items` may name collections made by users, and smart lists shown as collections, as well as titles. `DELETE /Collections/{id}/Items` takes them out. A collection the user is not shown, one that would hold itself at any depth, or nesting deeper than four levels, answers 400 and adds nothing.
+- `/Items?ParentId={collection}` lists the collections inside it as `BoxSet` items among its titles, by `PremiereDate`, a collection's being its earliest title's, then in the order they were added. Each has its own `ChildCount`, `RecursiveItemCount`, `UserData` and `ImageTags`; its `ParentId` stays the Collections view. A collection inside that the user is not shown is left out, and out of the outer one's counts.
+- With `Recursive=true`, the listing also brings the titles of the collections inside, each once, as apps ask for to play a collection.
+- The outer collection's `ChildCount` counts the collections inside it as one item each. Its `RecursiveItemCount`, played count, genres, rating, premiere date and Primary image take theirs into account.
 
 ### Filters by age rating for apps
 

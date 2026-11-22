@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -69,26 +70,42 @@ func ownView(id accounts.ID) bool {
 // collectionKinds are the items a collection holds. Like Jellyfin's, a
 // collection holds titles, home videos among them, their seasons and
 // episodes, folders of videos, other groups and channels; Polyfin leaves
-// out people and programmes, which its guide replaces.
+// out people and programmes, which its guide replaces. The collections
+// users make may hold each other too (see collectionItems).
 var collectionKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindSeries, library.KindSeason, library.KindEpisode,
 	library.KindFolder, library.KindCollection, library.KindChannel}
 
 // collectionItems checks the items ids names for a collection: each must be
-// an item user can reach that a collection may hold. Jellyfin answers an
-// item it does not know with a 400 and adds nothing, which Polyfin also
-// does for one the user may not see. ok is false once w was answered.
+// an item user can reach that a collection may hold, or a collection made
+// by users that user is shown. Jellyfin answers an item it does not know
+// with a 400 and adds nothing, which Polyfin also does for one the user
+// may not see. ok is false once w was answered.
 func (h *Handler) collectionItems(w http.ResponseWriter, r *http.Request, user accounts.User, ids []accounts.ID) ([]accounts.ID, bool) {
 	if len(ids) == 0 {
 		return nil, true
 	}
-	items, err := h.Library.Items(r.Context(), user, ids)
+	nested, err := h.Collections.Some(r.Context(), ids)
+	if err == nil {
+		nested, err = h.shownCollections(r.Context(), user, nested)
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return nil, false
 	}
-	found := make(map[accounts.ID]bool, len(items))
-	for _, item := range items {
-		found[item.ID] = slices.Contains(collectionKinds, item.Kind)
+	found := make(map[accounts.ID]bool, len(ids))
+	for _, c := range nested {
+		found[c.ID] = true
+	}
+	titles := slices.DeleteFunc(slices.Clone(ids), func(id accounts.ID) bool { return found[id] })
+	if len(titles) > 0 {
+		items, err := h.Library.Items(r.Context(), user, titles)
+		if err != nil {
+			h.internalError(w, r, err)
+			return nil, false
+		}
+		for _, item := range items {
+			found[item.ID] = slices.Contains(collectionKinds, item.Kind)
+		}
 	}
 	for _, id := range ids {
 		if !found[id] {
@@ -99,11 +116,11 @@ func (h *Handler) collectionItems(w http.ResponseWriter, r *http.Request, user a
 	return ids, true
 }
 
-// createCollection creates a collection, with titles or empty. Like
-// Jellyfin, it puts it among the server's collections whatever parentId
-// names. Unlike Jellyfin, which then fails with a 500, Polyfin refuses a
-// collection without a name, or an identifier that is not one, with a 400,
-// and creates nothing.
+// createCollection creates a collection, with titles, collections or
+// empty. Like Jellyfin, it puts it among the server's collections whatever
+// parentId names. Unlike Jellyfin, which then fails with a 500, Polyfin
+// refuses a collection without a name, an identifier that is not one, or
+// collections nested too deep, with a 400, and creates nothing.
 func (h *Handler) createCollection(w http.ResponseWriter, r *http.Request) {
 	b := bindErrors{}
 	b.guid(r, "parentId")
@@ -124,6 +141,10 @@ func (h *Handler) createCollection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := h.Collections.Create(r.Context(), name, isLocked, ids)
+	if errors.Is(err, collections.ErrTooDeep) {
+		processingError(w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		h.internalError(w, r, err)
 		return
@@ -148,10 +169,13 @@ func (h *Handler) changeCollection(w http.ResponseWriter, r *http.Request) (acco
 	return id, queryIDs(r, "ids"), true
 }
 
-// collectionChanged answers a change to a collection.
+// collectionChanged answers a change to a collection. A collection put
+// within itself, at any depth, or collections nested deeper than
+// collections.MaxDepth, are refused with a 400, as Jellyfin refuses an
+// item it cannot add.
 func (h *Handler) collectionChanged(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, collections.ErrNotFound):
+	case errors.Is(err, collections.ErrNotFound), errors.Is(err, collections.ErrCycle), errors.Is(err, collections.ErrTooDeep):
 		processingError(w, http.StatusBadRequest)
 	case err != nil:
 		h.internalError(w, r, err)
@@ -160,9 +184,9 @@ func (h *Handler) collectionChanged(w http.ResponseWriter, r *http.Request, err 
 	}
 }
 
-// addToCollection adds titles after those the collection has; those it
-// already has keep their place. A smart list's titles are its rules':
-// adding to one is refused with an empty 403.
+// addToCollection adds titles and collections after those the collection
+// has; those it already has keep their place. A smart list's titles are
+// its rules': adding to one is refused with an empty 403.
 func (h *Handler) addToCollection(w http.ResponseWriter, r *http.Request) {
 	if h.smartCollection(w, r) {
 		return
@@ -196,8 +220,9 @@ func (h *Handler) smartCollection(w http.ResponseWriter, r *http.Request) bool {
 	return smart
 }
 
-// removeFromCollection takes titles out of a collection; those it does not
-// have are ignored. A smart list's are refused, as adding is.
+// removeFromCollection takes titles and collections out of a collection;
+// those it does not have are ignored. A smart list's are refused, as
+// adding is.
 func (h *Handler) removeFromCollection(w http.ResponseWriter, r *http.Request) {
 	if h.smartCollection(w, r) {
 		return
@@ -209,10 +234,10 @@ func (h *Handler) removeFromCollection(w http.ResponseWriter, r *http.Request) {
 	h.collectionChanged(w, r, h.Collections.Remove(r.Context(), id, ids))
 }
 
-// deleteCollection deletes the collection id, which, as in Jellyfin's
-// DELETE /Items/{itemId}, administrators and the users who may manage
-// collections may do; anyone else is answered 401. It reports whether id
-// named a collection.
+// deleteCollection deletes the collection id, which also takes it out of
+// the collections that held it. As in Jellyfin's DELETE /Items/{itemId},
+// administrators and the users who may manage collections may; anyone
+// else is answered 401. It reports whether id named a collection.
 func (h *Handler) deleteCollection(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
 	_, err := h.Collections.Get(r.Context(), id)
 	switch {
@@ -332,11 +357,11 @@ func (h *Handler) collectionAncestors(w http.ResponseWriter, r *http.Request, us
 
 // collectionListing answers the listings that hold collections: the
 // Collections view's, a listing of collections across the server or of the
-// collections with titles from a library, and a collection's titles listed
-// as its children. Like Jellyfin, a listing asking only for BoxSet lists
-// collections whatever folder it names, keeping, for a library that does
-// not hold collections, those with a title listed in it. A listing across
-// the server lists the addons' collections too (see
+// collections with titles from a library, and a collection's titles and
+// collections listed as its children. Like Jellyfin, a listing asking only
+// for BoxSet lists collections whatever folder it names, keeping, for a
+// library that does not hold collections, those with a title listed in
+// it. A listing across the server lists the addons' collections too (see
 // writeCollectionsAcrossServer). It reports whether it answered.
 func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, hasParent bool, start, limit int) bool {
 	if hasParent && parent != collectionsViewID {
@@ -443,7 +468,8 @@ func (h *Handler) collectionListing(w http.ResponseWriter, r *http.Request, user
 	return true
 }
 
-// listedUnder keeps the collections with a title listed in folder.
+// listedUnder keeps the collections with a title of their own listed in
+// folder: one holding only collections is listed in no library.
 func (h *Handler) listedUnder(ctx context.Context, all []collections.Collection, folder accounts.ID) ([]collections.Collection, error) {
 	var kept []collections.Collection
 	for _, c := range all {
@@ -536,18 +562,21 @@ func (h *Handler) addonCollections(ctx context.Context, user accounts.User) ([]l
 }
 
 // writeCollectionTitles answers the titles of a collection that user may
-// see, in Jellyfin's order for collections: by premiere date. Listed
-// recursively, as apps play a collection, a series or season also brings
-// its seasons and released episodes. The request's type filters apply.
+// see, and the collections in it they are shown, as BoxSets, in Jellyfin's
+// order for collections: by premiere date, a collection's being its
+// earliest title's, then in the order they were added. Listed
+// recursively, as apps play a collection, a collection in it also brings
+// its own, and a series or season its seasons and released episodes. The
+// request's type filters apply.
 func (h *Handler) writeCollectionTitles(w http.ResponseWriter, r *http.Request, user accounts.User, c collections.Collection, start, limit int) {
-	titles, err := h.collectionTitles(r.Context(), user, c)
+	view, err := h.viewCollections(r.Context(), user, c)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
-	listed := titles[0]
+	listed := view.entries(c)
 	if recursive, _ := boolQuery(r, "recursive"); recursive {
-		if listed, err = h.withDescendants(r.Context(), user, listed); err != nil {
+		if listed, err = h.withDescendants(r.Context(), user, view.withNested(listed)); err != nil {
 			h.browseError(w, r, err)
 			return
 		}
@@ -564,12 +593,46 @@ func (h *Handler) writeCollectionTitles(w http.ResponseWriter, r *http.Request, 
 	}
 	slices.SortStableFunc(listed, func(a, b library.Item) int { return premiere(a).Compare(premiere(b)) })
 	from, to := bounds(len(listed), start, limit)
-	dtos, err := h.dtos(r, user, listed[from:to], requestedFields(r), nil)
+	dtos, err := h.entryDtos(r, user, view, listed[from:to])
 	if err != nil {
 		h.internalError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: dtos, TotalRecordCount: len(listed), StartIndex: start})
+}
+
+// entryDtos describes the entries of a collection of view: its titles as
+// any, and the collections in it as collections are (see collectionDtos).
+func (h *Handler) entryDtos(r *http.Request, user accounts.User, view *collectionView, entries []library.Item) ([]BaseItemDto, error) {
+	fields := requestedFields(r)
+	var titles []library.Item
+	var nested []collections.Collection
+	for _, entry := range entries {
+		if c, ok := view.nested(entry); ok {
+			nested = append(nested, c)
+		} else {
+			titles = append(titles, entry)
+		}
+	}
+	titleDtos, err := h.dtos(r, user, titles, fields, nil)
+	if err != nil {
+		return nil, err
+	}
+	var nestedDtos []BaseItemDto
+	if len(nested) > 0 {
+		if nestedDtos, err = h.collectionDtos(r, user, nested, fields, false); err != nil {
+			return nil, err
+		}
+	}
+	result := make([]BaseItemDto, 0, len(entries))
+	for _, entry := range entries {
+		if _, ok := view.nested(entry); ok {
+			result, nestedDtos = append(result, nestedDtos[0]), nestedDtos[1:]
+		} else {
+			result, titleDtos = append(result, titleDtos[0]), titleDtos[1:]
+		}
+	}
+	return result, nil
 }
 
 // withDescendants adds, after each series and season of titles, its
@@ -615,13 +678,48 @@ func premiere(item library.Item) time.Time {
 	return time.Time{}
 }
 
-// collectionTitles lists, for each collection, the titles in it user may
-// see, in the order they were added: the titles user hid are left out, and
-// those the request's rating filter does not keep.
-func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, lists ...collections.Collection) ([][]library.Item, error) {
+// collectionTree is collections by identifier, with the collections nested
+// in them at any depth.
+type collectionTree map[accounts.ID]collections.Collection
+
+// collectionTree returns lists with the collections nested in them, at
+// any depth.
+func (h *Handler) collectionTree(ctx context.Context, lists []collections.Collection) (collectionTree, error) {
+	tree := make(collectionTree, len(lists))
+	for _, c := range lists {
+		tree[c.ID] = c
+	}
+	next := lists
+	// Collections nest collections.MaxDepth levels deep at most.
+	for range collections.MaxDepth {
+		var ids []accounts.ID
+		for _, c := range next {
+			for _, id := range c.Collections {
+				if _, ok := tree[id]; !ok && !slices.Contains(ids, id) {
+					ids = append(ids, id)
+				}
+			}
+		}
+		if len(ids) == 0 {
+			break
+		}
+		found, err := h.Collections.Some(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range found {
+			tree[c.ID] = c
+		}
+		next = found
+	}
+	return tree, nil
+}
+
+// titles lists the titles of the collections of the tree, each once.
+func (t collectionTree) titles() []accounts.ID {
 	var ids []accounts.ID
 	seen := map[accounts.ID]bool{}
-	for _, c := range lists {
+	for _, c := range t {
 		for _, id := range c.Items {
 			if !seen[id] {
 				seen[id] = true
@@ -629,8 +727,44 @@ func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, list
 			}
 		}
 	}
-	byID := map[accounts.ID]library.Item{}
-	if len(ids) > 0 {
+	return ids
+}
+
+// collectionView is collections as a user sees them: those nested in
+// them, the titles of each the user may see, and whether the user is
+// shown each.
+type collectionView struct {
+	tree   collectionTree
+	titles map[accounts.ID]library.Item
+	shown  map[accounts.ID]bool
+	// country scores ratings (see collectionItem).
+	country string
+	// data and counts are what the user did with the titles, and the
+	// episodes they played of series and seasons; describing a collection
+	// adds to counts the movies and episodes it counts played.
+	data   map[accounts.ID]userdata.Data
+	counts map[accounts.ID]userdata.Counts
+	// described holds the collections described, the zero item while one
+	// is.
+	described map[accounts.ID]library.Item
+}
+
+// viewCollections returns lists as user sees them under ctx: the titles
+// user hid are left out, and those the request's rating filter does not
+// keep, and the collections nested in them that user is not shown (see
+// shownInTree).
+func (h *Handler) viewCollections(ctx context.Context, user accounts.User, lists ...collections.Collection) (*collectionView, error) {
+	tree, err := h.collectionTree(ctx, lists)
+	if err != nil {
+		return nil, err
+	}
+	shown, err := h.shownInTree(ctx, user, tree)
+	if err != nil {
+		return nil, err
+	}
+	view := &collectionView{tree: tree, titles: map[accounts.ID]library.Item{}, shown: shown, country: h.Accounts.RatingCountry(),
+		counts: map[accounts.ID]userdata.Counts{}, described: map[accounts.ID]library.Item{}}
+	if ids := tree.titles(); len(ids) > 0 {
 		items, err := h.Library.Items(ctx, user, ids)
 		if err == nil {
 			items, err = h.Library.RatingFiltered(ctx, user, items)
@@ -643,55 +777,118 @@ func (h *Handler) collectionTitles(ctx context.Context, user accounts.User, list
 			return nil, err
 		}
 		for _, item := range hidden.Without(items) {
-			byID[item.ID] = item
+			view.titles[item.ID] = item
 		}
 	}
-	result := make([][]library.Item, len(lists))
-	for i, c := range lists {
-		for _, id := range c.Items {
-			if item, ok := byID[id]; ok {
-				result[i] = append(result[i], item)
+	return view, nil
+}
+
+// entries lists the entries of c the user may see, in the order they were
+// added: its titles, and the collections in it the user is shown,
+// described (see describe).
+func (v *collectionView) entries(c collections.Collection) []library.Item {
+	var result []library.Item
+	for _, id := range c.Entries {
+		if item, ok := v.titles[id]; ok {
+			result = append(result, item)
+		} else if inner, ok := v.tree[id]; ok && v.shown[id] {
+			if item, ok := v.describe(inner); ok {
+				result = append(result, item)
 			}
 		}
 	}
-	return result, nil
+	return result
+}
+
+// nested returns the collection of the view entry is, when it is one.
+func (v *collectionView) nested(entry library.Item) (collections.Collection, bool) {
+	if entry.Kind != library.KindCollection {
+		return collections.Collection{}, false
+	}
+	c, ok := v.tree[entry.ID]
+	return c, ok
+}
+
+// describe describes c from its entries the user may see (see
+// collectionItem): a collection in it counts the videos it counts, and
+// those played. ok is false while c is being described, within itself,
+// which nesting refuses.
+func (v *collectionView) describe(c collections.Collection) (item library.Item, ok bool) {
+	if item, ok := v.described[c.ID]; ok {
+		return item, item.ID == c.ID
+	}
+	v.described[c.ID] = library.Item{}
+	entries := v.entries(c)
+	item, played := collectionItem(c, entries, v.data, v.counts, v.country)
+	for _, entry := range entries {
+		if _, ok := v.nested(entry); ok {
+			item.Contents.Released += entry.Contents.Released
+			played += v.counts[entry.ID].Played
+		}
+	}
+	v.counts[c.ID] = userdata.Counts{Played: played}
+	v.described[c.ID] = item
+	return item, true
+}
+
+// withNested adds, after each collection of the view among items, the
+// entries in it the user may see, and theirs; an entry named twice is
+// listed once.
+func (v *collectionView) withNested(items []library.Item) []library.Item {
+	seen := map[accounts.ID]bool{}
+	var result []library.Item
+	var add func(items []library.Item)
+	add = func(items []library.Item) {
+		for _, item := range items {
+			if seen[item.ID] {
+				continue
+			}
+			seen[item.ID] = true
+			result = append(result, item)
+			if c, ok := v.nested(item); ok {
+				add(v.entries(c))
+			}
+		}
+	}
+	add(items)
+	return result
 }
 
 // collectionDtos describes collections from the titles user may see in
-// them, as Jellyfin derives a collection's genres, rating and date from its
-// titles: their number, and the movies and episodes under them the user
-// played.
+// them, and the collections in them they are shown, as Jellyfin derives a
+// collection's genres, rating and date from its entries: their number,
+// and the movies and episodes under them the user played.
 func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []collections.Collection, fields fieldSet, detail bool) ([]BaseItemDto, error) {
-	titles, err := h.collectionTitles(r.Context(), user, lists...)
+	view, err := h.viewCollections(r.Context(), user, lists...)
 	if err != nil {
 		return nil, err
 	}
 	var ids, parents []accounts.ID
-	for i, c := range lists {
+	for _, c := range lists {
 		ids = append(ids, c.ID)
-		for _, title := range titles[i] {
-			ids = append(ids, title.ID)
-			if title.Kind == library.KindSeries || title.Kind == library.KindSeason {
-				parents = append(parents, title.ID)
-			}
-			if title.Kind == library.KindFolder && title.Contents != nil {
-				ids = append(ids, title.Contents.Videos...)
-			}
+	}
+	for _, title := range view.titles {
+		ids = append(ids, title.ID)
+		if title.Kind == library.KindSeries || title.Kind == library.KindSeason {
+			parents = append(parents, title.ID)
+		}
+		if title.Kind == library.KindFolder && title.Contents != nil {
+			ids = append(ids, title.Contents.Videos...)
 		}
 	}
-	data, err := h.UserData.Get(r.Context(), user.ID, ids)
-	if err != nil {
+	if view.data, err = h.UserData.Get(r.Context(), user.ID, ids); err != nil {
 		return nil, err
 	}
 	counts, err := h.UserData.EpisodeCounts(r.Context(), user.ID, parents)
 	if err != nil {
 		return nil, err
 	}
-	state := userState{reader: user.ID, data: data, counts: map[accounts.ID]userdata.Counts{}}
+	maps.Copy(view.counts, counts)
+	state := userState{reader: user.ID, data: view.data, counts: map[accounts.ID]userdata.Counts{}}
 	result := make([]BaseItemDto, 0, len(lists))
-	for i, c := range lists {
-		item, played := collectionItem(c, titles[i], data, counts, h.Accounts.RatingCountry())
-		state.counts[c.ID] = userdata.Counts{Played: played}
+	for _, c := range lists {
+		item, _ := view.describe(c)
+		state.counts[c.ID] = view.counts[c.ID]
 		dto := h.newItemDto(item, fields, detail, state)
 		if !detail && fields.has("ChildCount") {
 			dto.ChildCount = new(item.Contents.Children)
@@ -710,12 +907,13 @@ func (h *Handler) collectionDtos(r *http.Request, user accounts.User, lists []co
 	return result, nil
 }
 
-// collectionItem describes a collection from the titles in it a user may
-// see, and counts the movies and episodes under them the user played. Like
-// Jellyfin, a collection takes its titles' genres, their least restrictive
-// rating, scored under country, the server's rating country, and the
-// earliest premiere date or year; its poster is that of its first title
-// with one (see collectionArtwork).
+// collectionItem describes a collection from the entries in it a user may
+// see, and counts the movies and episodes under its titles the user
+// played. Like Jellyfin, a collection takes its entries' genres, their
+// least restrictive rating, scored under country, the server's rating
+// country, and the earliest premiere date or year; its poster is that of
+// its first entry with one, a collection in it showing its own (see
+// collectionArtwork).
 func collectionItem(c collections.Collection, titles []library.Item, data map[accounts.ID]userdata.Data, counts map[accounts.ID]userdata.Counts,
 	country string) (library.Item, int) {
 	item := library.Item{ID: c.ID, Kind: library.KindCollection, Name: c.Name, ParentID: collectionsViewID,
@@ -791,9 +989,10 @@ func compareRatings(a, b, country string) int {
 }
 
 // collectionArtwork returns the Primary image of the collection id: the
-// poster of the title among its own that tag names, as a user's listing
-// tagged it from the first title they see, else its first title's poster.
-// ok is false when id names no collection.
+// poster of the title among its own, or those of the collections in it,
+// that tag names, as a user's listing tagged it from the first title they
+// see, else its first title's poster, a collection in it before it giving
+// its own first. ok is false when id names no collection.
 func (h *Handler) collectionArtwork(r *http.Request, id accounts.ID, imageType string) (found library.Artwork, ok bool, err error) {
 	c, err := h.Collections.Get(r.Context(), id)
 	if errors.Is(err, collections.ErrNotFound) {
@@ -805,22 +1004,47 @@ func (h *Handler) collectionArtwork(r *http.Request, id accounts.ID, imageType s
 	if !strings.EqualFold(imageType, "Primary") {
 		return library.Artwork{}, true, library.ErrNotFound
 	}
+	tree, err := h.collectionTree(r.Context(), []collections.Collection{c})
+	if err != nil {
+		return library.Artwork{}, true, err
+	}
 	tag := query(r, "tag")
 	var first library.Artwork
-	for _, item := range c.Items {
-		poster, err := h.Library.Poster(r.Context(), item)
-		if errors.Is(err, library.ErrNotFound) {
-			continue
+	searched := map[accounts.ID]bool{}
+	// search reports whether it found the poster tag names among those of
+	// c, in the order of its entries.
+	var search func(c collections.Collection) (bool, error)
+	search = func(c collections.Collection) (bool, error) {
+		searched[c.ID] = true
+		for _, entry := range c.Entries {
+			if inner, ok := tree[entry]; ok {
+				if searched[entry] {
+					continue
+				}
+				if done, err := search(inner); done || err != nil {
+					return done, err
+				}
+				continue
+			}
+			poster, err := h.Library.Poster(r.Context(), entry)
+			if errors.Is(err, library.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return false, err
+			}
+			if tag == "" || library.ImageTag(poster.URL) == tag {
+				found = poster
+				return true, nil
+			}
+			if first.URL == "" {
+				first = poster
+			}
 		}
-		if err != nil {
-			return library.Artwork{}, true, err
-		}
-		if tag == "" || library.ImageTag(poster.URL) == tag {
-			return poster, true, nil
-		}
-		if first.URL == "" {
-			first = poster
-		}
+		return false, nil
+	}
+	if done, err := search(c); done || err != nil {
+		return found, true, err
 	}
 	if first.URL == "" {
 		return library.Artwork{}, true, library.ErrNotFound
