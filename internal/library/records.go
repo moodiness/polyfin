@@ -37,6 +37,10 @@ type record struct {
 	Parent *accounts.ID `json:"parent,omitempty"`
 	// Meta is the preview of a title or collection.
 	Meta *stremio.Meta `json:"meta,omitempty"`
+	// Added is when a title of an IPTV source or a local folder was added,
+	// as its catalog last listed it (see stremio.Meta.Added): its page
+	// shows it, whichever catalog lists the title since.
+	Added *time.Time `json:"added,omitempty"`
 	// SeriesID is the Stremio ID of the series of a season or episode.
 	// Poster is a season's own artwork when it was last listed (see
 	// seasonPosters).
@@ -652,9 +656,9 @@ func inLockOrder(records []record) []*record {
 }
 
 // keptData is the record an upsert stores: the new one, with the stored
-// folder, rating and genres when the new one has none.
+// folder, rating, genres and date added when the new one has none.
 const keptData = `coalesce((SELECT jsonb_object_agg(key, value) FROM jsonb_each(items.data)
-	WHERE key IN ('parent', 'rating', 'ratedAt', 'ratedFor', 'genres')), '{}'::jsonb) || excluded.data`
+	WHERE key IN ('parent', 'rating', 'ratedAt', 'ratedFor', 'genres', 'added')), '{}'::jsonb) || excluded.data`
 
 // isPreloaded reports whether withPreloaded read the row of id ahead in
 // ctx.

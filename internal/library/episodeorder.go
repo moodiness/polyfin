@@ -381,6 +381,7 @@ func (l *episodeLayout) seasonItem(season shownSeason, series Item, meta stremio
 		StremioType:  meta.Type,
 		StremioID:    meta.ID,
 		EpisodeGroup: l.group,
+		Added:        series.Added,
 	}
 	for _, id := range season.videos {
 		video, ok := videos[id]

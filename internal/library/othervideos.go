@@ -267,6 +267,9 @@ func (s *Service) folder(ctx context.Context, v view, id accounts.ID) (Item, str
 	}
 	item := Item{ID: id, Kind: otherKind(meta), ParentID: deref(r.Parent), Available: true}
 	s.fromMeta(&item, s.shown(ctx, v, r.Meta.Type, r.Meta.ID, meta), v.country)
+	if item.Added == nil {
+		item.Added = r.Added
+	}
 	item.OfficialRating = certification(meta, v.country)
 	if item.Kind == KindFolder {
 		item.Contents = folderContents(meta, s.now())

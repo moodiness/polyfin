@@ -39,9 +39,11 @@ import (
 // /Items lists a stored library's titles through its folders in the
 // orders of storedSortKeys (see storedListing), each sorted from the
 // order by name and kept as it is: by its first sortBy key, then by name.
-// The order by date added is the catalog's reversed, as a stored
-// library's catalog lists the titles added last first: an IPTV source's
-// by the date its provider gives, a local folder's by its files' dates.
+// The order by date added is by the date each title tells as its
+// DateCreated (see dateAdded): a stored library's catalog lists the titles
+// added last first, an IPTV source's by the date its provider gives, a
+// local folder's by its files' dates, and titles of one date keep its
+// order. A title its provider gives no date tells its premiere date.
 // As in Jellyfin, a title without a value comes first in ascending order
 // and last in descending order.
 //
@@ -133,15 +135,15 @@ func (o nameOrder) sortedBy(sort titleSort) nameOrder {
 	var compare func(a, b int32) int
 	switch sort.key {
 	case "DateCreated":
+		// Titles added together keep their catalog's order, which lists a
+		// stored library's titles added last first.
+		tie := func(a, b int32) int { return cmp.Compare(o.ranks[b], o.ranks[a]) }
 		if o.added {
-			// Titles added together keep their catalog's order.
-			compare = func(a, b int32) int {
-				return cmp.Or(compareDates(items[a].Added, items[b].Added), cmp.Compare(o.ranks[a], o.ranks[b]))
-			}
-			break
+			tie = func(a, b int32) int { return cmp.Compare(o.ranks[a], o.ranks[b]) }
 		}
-		// The catalog lists the titles added last first.
-		compare = func(a, b int32) int { return cmp.Compare(o.ranks[b], o.ranks[a]) }
+		compare = func(a, b int32) int {
+			return cmp.Or(compareDates(dateAdded(&items[a]), dateAdded(&items[b])), tie(a, b))
+		}
 	case "PremiereDate":
 		compare = func(a, b int32) int { return compareDates(items[a].PremiereDate, items[b].PremiereDate) }
 	case "ProductionYear":
@@ -172,6 +174,27 @@ func compareDates(a, b *time.Time) int {
 		return compareBool(a != nil, b != nil)
 	}
 	return a.Compare(*b)
+}
+
+// dateAdded is the date a title tells as added (DateCreated), and sorts
+// by: when it was added (see library.Item.Added), else, as a title is
+// added once out, a catalog title's premiere date; nil when neither is
+// known.
+func dateAdded(item *library.Item) *time.Time {
+	if item.Added != nil || !catalogTitle(item.Kind) {
+		return item.Added
+	}
+	return item.PremiereDate
+}
+
+// catalogTitle reports whether items of kind are titles of a catalog, or
+// their seasons and episodes, which tell no date added they do not know.
+func catalogTitle(kind library.Kind) bool {
+	switch kind {
+	case library.KindMovie, library.KindSeries, library.KindSeason, library.KindEpisode, library.KindVideo, library.KindFolder:
+		return true
+	}
+	return false
 }
 
 // productionYear is the year a title came out: its premiere date's when
@@ -291,8 +314,8 @@ func (sort titleSort) name() string {
 // its folders (see titlesThrough) asks for when its first sortBy key is
 // one of storedSortKeys. The keys after it change nothing but the order of
 // the titles of one value: by name, the way the listing asks the name, or
-// the first key's when it asks none. A sort by name or by date added has
-// no titles of one value.
+// the first key's when it asks none. A sort by name has no titles of one
+// value, and one by date added keeps their catalog's order.
 func storedSortOf(r *http.Request) (titleSort, bool) {
 	keys, orders := listQuery(r, "sortBy"), listQuery(r, "sortOrder")
 	if !titlesThrough(r) || len(keys) == 0 {

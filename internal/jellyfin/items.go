@@ -507,16 +507,19 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.ProviderIds = &providers
 	}
 	if detail || fields.has("DateCreated") {
-		created := time.Unix(0, 0).UTC()
-		// A replay was made when it aired; a title of an addon's library
-		// sorted by date added was added when Polyfin first saw it there.
+		// A replay was made when it aired; a title was added when
+		// dateAdded tells. A title of no known date has none, never 1970;
+		// another item, a library or a person, has 1970, as Jellyfin always
+		// gives a date.
+		added := dateAdded(&item)
 		switch {
 		case item.Kind == library.KindReplay:
-			created = *item.StartDate
-		case item.Added != nil:
-			created = *item.Added
+			dto.DateCreated = new(Time(*item.StartDate))
+		case added != nil:
+			dto.DateCreated = new(Time(*added))
+		case !catalogTitle(item.Kind):
+			dto.DateCreated = new(Time(time.Unix(0, 0).UTC()))
 		}
-		dto.DateCreated = new(Time(created))
 	}
 	if detail || fields.has("CanDelete") {
 		dto.CanDelete = new(false)
