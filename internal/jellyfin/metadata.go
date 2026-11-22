@@ -104,11 +104,11 @@ func (h *Handler) originalItem(r *http.Request, user accounts.User, id accounts.
 		return liveTvViewItem(), nil
 	}
 	if c, err := h.Collections.Get(ctx, id); err == nil {
-		titles, err := h.collectionTitles(ctx, user, c)
+		view, err := h.viewCollections(ctx, user, c)
 		if err != nil {
 			return library.Item{}, err
 		}
-		item, _ := collectionItem(c, titles[0], nil, nil, h.Accounts.RatingCountry())
+		item, _ := view.describe(c)
 		return item, nil
 	} else if !errors.Is(err, collections.ErrNotFound) {
 		return library.Item{}, err

@@ -1,6 +1,7 @@
 // Package collections keeps the collections of titles users make, as
 // Jellyfin's BoxSets: server-wide groups every user sees, which the users
-// allowed to manage collections create, change and delete.
+// allowed to manage collections create, change and delete. A collection
+// may hold other collections, as a box set holds box sets in Jellyfin.
 package collections
 
 import (
@@ -17,10 +18,27 @@ import (
 // ErrNotFound reports a collection that does not exist.
 var ErrNotFound = errors.New("collection not found")
 
+// ErrCycle reports a collection put inside itself, or inside a collection
+// it holds at any depth.
+var ErrCycle = errors.New("a collection cannot hold itself")
+
+// ErrTooDeep reports collections nested deeper than MaxDepth.
+var ErrTooDeep = errors.New("collections nested too deep")
+
 // MaxNameLength bounds a collection's name, in characters.
 const MaxNameLength = 500
 
-// Collection is a group of titles.
+// MaxDepth bounds how deep collections nest, counting the outermost: a
+// collection, the collections it holds, theirs, and theirs.
+const MaxDepth = 4
+
+// nestingLock is the advisory lock that changes nesting collections, and
+// deletions, take first: holding it, a change sees every other nesting
+// committed, so that two changes never make a cycle together, and no
+// collection is deleted while another is put into it.
+const nestingLock int64 = 0x706f6c79666e6573 // "polyfnes"
+
+// Collection is a group of titles and other collections.
 type Collection struct {
 	ID   accounts.ID
 	Name string
@@ -28,9 +46,16 @@ type Collection struct {
 	// collection. Polyfin looks up none anyway; apps send and read it.
 	IsLocked bool
 	// Items are the collection's titles, in the order they were added.
-	Items   []accounts.ID
+	Items []accounts.ID
+	// Collections are the collections it holds, in the order they were
+	// added.
+	Collections []accounts.ID
+	// Entries are its titles and collections together, in the order they
+	// were added.
+	Entries []accounts.ID
 	Created time.Time
-	// LastAdded is when titles were last added, nil before any.
+	// LastAdded is when titles or collections were last added, nil before
+	// any.
 	LastAdded *time.Time
 }
 
@@ -44,11 +69,19 @@ func New(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
-// Create stores a new collection of items and returns its identifier.
+// Create stores a new collection of items, titles and collections, and
+// returns its identifier. It returns ErrTooDeep for collections nested
+// too deep under it, and creates nothing.
 func (s *Store) Create(ctx context.Context, name string, isLocked bool, items []accounts.ID) (accounts.ID, error) {
 	var id accounts.ID
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockNesting(ctx, tx, items); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, "INSERT INTO collections (name, is_locked) VALUES ($1, $2) RETURNING id", name, isLocked).Scan(&id); err != nil {
+			return err
+		}
+		if err := checkNesting(ctx, tx, id, items); err != nil {
 			return err
 		}
 		_, err := insertItems(ctx, tx, id, items)
@@ -81,8 +114,17 @@ func (s *Store) Any(ctx context.Context) (bool, error) {
 	return found, err
 }
 
+// Some returns the collections among ids, by name; those that do not
+// exist are left out.
+func (s *Store) Some(ctx context.Context, ids []accounts.ID) ([]Collection, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return s.load(ctx, "WHERE id = ANY($1)", ids)
+}
+
 // load reads the collections a condition on the collections table selects,
-// by name, with their titles.
+// by name, with their titles and collections.
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Collection, error) {
 	rows, _ := s.db.Query(ctx, "SELECT id, name, is_locked, created_at, last_added_at FROM collections "+
 		where+" ORDER BY lower(name), id", args...)
@@ -100,9 +142,17 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Collecti
 		index[c.ID], ids[i] = i, c.ID
 	}
 	var collection, item accounts.ID
-	rows, _ = s.db.Query(ctx, "SELECT collection_id, item_id FROM collection_items WHERE collection_id = ANY($1) ORDER BY ordinal", ids)
-	if _, err := pgx.ForEachRow(rows, []any{&collection, &item}, func() error {
-		result[index[collection]].Items = append(result[index[collection]].Items, item)
+	var nested bool
+	rows, _ = s.db.Query(ctx, `SELECT i.collection_id, i.item_id, c.id IS NOT NULL FROM collection_items i
+		LEFT JOIN collections c ON c.id = i.item_id WHERE i.collection_id = ANY($1) ORDER BY i.ordinal`, ids)
+	if _, err := pgx.ForEachRow(rows, []any{&collection, &item, &nested}, func() error {
+		c := &result[index[collection]]
+		c.Entries = append(c.Entries, item)
+		if nested {
+			c.Collections = append(c.Collections, item)
+		} else {
+			c.Items = append(c.Items, item)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -110,45 +160,119 @@ func (s *Store) load(ctx context.Context, where string, args ...any) ([]Collecti
 	return result, nil
 }
 
-// Add adds items after the collection's titles; those it already has keep
-// their place.
+// Add adds items, titles and collections, after the collection's entries;
+// those it already has keep their place. It returns ErrCycle for a
+// collection that is this one or holds it at any depth, and ErrTooDeep
+// for collections nested too deep, and adds nothing.
 func (s *Store) Add(ctx context.Context, id accounts.ID, items []accounts.ID) error {
-	return s.change(ctx, id, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockNesting(ctx, tx, items); err != nil {
+			return err
+		}
+		if err := lockCollection(ctx, tx, id); err != nil {
+			return err
+		}
+		if err := checkNesting(ctx, tx, id, items); err != nil {
+			return err
+		}
 		_, err := insertItems(ctx, tx, id, items)
 		return err
 	})
 }
 
-// Remove takes items out of the collection; those it does not have are
-// ignored.
+// Remove takes items, titles and collections, out of the collection;
+// those it does not have are ignored.
 func (s *Store) Remove(ctx context.Context, id accounts.ID, items []accounts.ID) error {
-	return s.change(ctx, id, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockCollection(ctx, tx, id); err != nil {
+			return err
+		}
 		_, err := tx.Exec(ctx, "DELETE FROM collection_items WHERE collection_id = $1 AND item_id = ANY($2)", id, items)
 		return err
 	})
 }
 
-// Delete deletes a collection.
+// Delete deletes a collection, and takes it out of the collections that
+// held it.
 func (s *Store) Delete(ctx context.Context, id accounts.ID) error {
-	tag, err := s.db.Exec(ctx, "DELETE FROM collections WHERE id = $1", id)
-	if err == nil && tag.RowsAffected() == 0 {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", nestingLock); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, "DELETE FROM collections WHERE id = $1", id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		_, err = tx.Exec(ctx, "DELETE FROM collection_items WHERE item_id = $1", id)
+		return err
+	})
+}
+
+// lockCollection locks a collection against concurrent changes.
+func lockCollection(ctx context.Context, tx pgx.Tx, id accounts.ID) error {
+	err := tx.QueryRow(ctx, "SELECT id FROM collections WHERE id = $1 FOR UPDATE", id).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
 	return err
 }
 
-// change runs apply on a collection, locked against concurrent changes.
-func (s *Store) change(ctx context.Context, id accounts.ID, apply func(pgx.Tx) error) error {
-	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, "SELECT id FROM collections WHERE id = $1 FOR UPDATE", id).Scan(&id)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrNotFound
-		}
-		if err != nil {
-			return err
-		}
-		return apply(tx)
-	})
+// lockNesting takes the nesting lock before a change adds items, which
+// may be collections. It comes before any collection's lock, as in
+// Delete, so that no two changes wait on each other.
+func lockNesting(ctx context.Context, tx pgx.Tx, items []accounts.ID) error {
+	if len(items) == 0 {
+		return nil
+	}
+	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", nestingLock)
+	return err
+}
+
+// checkNesting checks that the collection id may hold the collections
+// among items, under the nesting lock: none of them is id or holds it at
+// any depth (ErrCycle), and the collections above id, id, and those
+// nested in the deepest of them make at most MaxDepth levels
+// (ErrTooDeep).
+func checkNesting(ctx context.Context, tx pgx.Tx, id accounts.ID, items []accounts.ID) error {
+	if len(items) == 0 {
+		return nil
+	}
+	rows, _ := tx.Query(ctx, "SELECT id FROM collections WHERE id = ANY($1)", items)
+	inner, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+	if err != nil || len(inner) == 0 {
+		return err
+	}
+	// The collections that hold id, at any depth, id included at level 1.
+	// Nesting never goes past MaxDepth, which bounds the walk.
+	var cycle bool
+	var above int
+	if err := tx.QueryRow(ctx, `WITH RECURSIVE up (id, level) AS (
+			SELECT $1::uuid, 1
+			UNION
+			SELECT i.collection_id, up.level + 1 FROM collection_items i JOIN up ON i.item_id = up.id WHERE up.level <= $3)
+		SELECT coalesce(bool_or(id = ANY($2)), false), max(level) FROM up`, id, inner, MaxDepth).Scan(&cycle, &above); err != nil {
+		return err
+	}
+	if cycle {
+		return ErrCycle
+	}
+	// The levels of the deepest of the collections added, itself included.
+	var below int
+	if err := tx.QueryRow(ctx, `WITH RECURSIVE down (id, level) AS (
+			SELECT unnest($1::uuid[]), 1
+			UNION
+			SELECT i.item_id, down.level + 1 FROM collection_items i JOIN down ON i.collection_id = down.id
+			WHERE down.level <= $2 AND EXISTS (SELECT 1 FROM collections c WHERE c.id = i.item_id))
+		SELECT max(level) FROM down`, inner, MaxDepth).Scan(&below); err != nil {
+		return err
+	}
+	if above+below > MaxDepth {
+		return ErrTooDeep
+	}
+	return nil
 }
 
 // insertItems adds the items the collection does not have yet, in order;

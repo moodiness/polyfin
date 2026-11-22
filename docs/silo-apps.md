@@ -151,9 +151,10 @@ Collections are read-only. To find them, open **Libraries**, then a library, the
 
 - **The Collections tab:** the collections with a title in that library, as the Jellyfin API lists a library's collections. A library of collections lists its own. Each opens on its titles.
 - **Counts:** each user sees and counts only the titles they may see, without those they hid.
+- **Collections inside collections:** Silo's apps show no collection inside another. A collection's page, and its count on the tab, hold its own movies, series, seasons, episodes and videos. A collection inside it shows on the tab on its own when it holds a title of that library (see [Collections inside collections](collections-people-and-ratings.md#collections-inside-collections)).
 - **Limited users:** a collection none of whose titles they may see is left out of the tab, as in Jellyfin apps (see [What a limited user sees](user-limits.md#what-a-limited-user-sees)). For a library of collections, it is judged on the first page of its catalogs.
 - **Home:** it shows the titles of collections, in the administrator's collection rows and in the row of a library of collections. It shows no collection itself, as the Apple app shows only cards of movies, series and episodes there.
-- **Box sets:** while the server has a **TMDB API key**, a movie's page and a search show box sets (see [Box sets](#box-sets)).
+- **Box sets:** while the server has a **TMDB API key**, a movie's page and a search show box sets (see [Box sets](#box-sets)). They are TMDB's collections, apart from the collections users make: a collection inside another changes none.
 
 ### Title pages and people
 

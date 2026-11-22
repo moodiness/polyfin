@@ -61,7 +61,7 @@ API details: [Collections from addons](jellyfin-api.md#collections-from-addons-f
 
 ### Collections made by users
 
-Users who may manage collections group titles into collections from their apps, with **Add to collection** in jellyfin-web. A collection can hold movies, series, seasons, episodes, an addon's collections and Live TV channels.
+Users who may manage collections group titles into collections from their apps, with **Add to collection** in jellyfin-web. A collection can hold movies, series, seasons, episodes, other collections, an addon's collections, smart lists shown as collections and Live TV channels.
 
 Collections belong to the server:
 
@@ -73,7 +73,7 @@ Each user sees only the titles they may see:
 
 - Titles hidden by parental control or blocked genres do not show in a collection. They do not count in its item counts or played count.
 - Allowed hours apply as everywhere.
-- A collection none of whose titles a user may see still shows to them, empty.
+- A collection none of whose titles a user may see is hidden from them (see [What a limited user sees](user-limits.md#what-a-limited-user-sees)). One without titles still shows.
 
 A collection:
 
@@ -88,8 +88,30 @@ Rules:
 
 - A collection needs a name.
 - The titles added must be ones the user adding them may see. Otherwise the request changes nothing.
-- Collections hold no people, programmes or other users' collections.
+- Collections hold no people or programmes.
 - The Collections view is not among the visible libraries an administrator chooses, as the Playlists view is not.
+
+#### Collections inside collections
+
+A collection can hold other collections, as a box set holds box sets in Jellyfin: an "Adventures" collection holding "Sea stories" and "Road trips", for example.
+
+- **Putting one inside another:** in jellyfin-web, open the collection to put inside, choose **Add to collection** in its menu, and pick the outer one. Apps that add titles to a collection add a collection the same way. **Remove from collection** takes it out again; it stays among the server's collections.
+- **What apps show:** the outer collection lists the collections inside it among its titles, by premiere date. A collection's date is its earliest title's. Two entries of the same date keep the order they were added in. jellyfin-web shows them in a **Collections** row of the outer collection's page, after its movies and series.
+- **Counts and details:** a collection inside counts as one item of the outer one. Its videos and those the user played count in the outer one's totals, and its genres, rating and premiere date go into the outer one's, as its titles' do.
+- **Poster:** the outer collection shows the poster of its first entry with one. A collection inside gives its own: that of its first title the user sees.
+- **Playing it:** the outer collection plays the titles of the collections inside it too, each once.
+- **Who sees what:** a user is shown a collection when it holds a title they may see, or a collection they are shown, or nothing at all. A collection inside that they are not shown is left out of the outer one for them, and out of its counts.
+- **Listings:** every collection stays in the **Collections** view, those inside others included. A library's Collections tab lists the collections with a title of their own from that library.
+- **Home rows and channels** made from a collection list the titles of the collections inside it too, each once.
+- **Deleting** a collection takes it out of every collection that held it.
+
+Limits:
+
+- No collection goes inside itself, directly or through others. With "Sea stories" inside "Adventures", putting "Adventures" inside "Sea stories" is refused.
+- Collections nest four levels deep at most: a collection, the collections inside it, theirs, and theirs.
+- A refused change answers an error, and nothing is added.
+- A smart list shown as a collection can go inside a collection. Nothing goes inside a smart list: its titles are those its rules keep.
+- Silo's apps open no collection from inside another. A collection's page there lists its own titles (see [Collections and box sets](silo-apps.md#collections-and-box-sets)).
 
 ### Permission
 
@@ -102,8 +124,8 @@ Rules:
 **Compared with Jellyfin**
 
 - User collections are Jellyfin's BoxSets. A collection lists its titles, takes genres, rating and premiere date, and plays a series' released episodes, as in Jellyfin.
+- A collection inside another is a BoxSet among the outer one's children, as in Jellyfin.
 - Jellyfin's IsLocked is kept as apps send it.
-- Polyfin shows a collection empty when none of its titles is visible to the user. Jellyfin hides it.
 - Polyfin refuses a missing name, or a title that does not exist, and changes nothing. Jellyfin creates the collection and then fails.
 - **Can manage collections** is Jellyfin's `EnableCollectionManagement`, which administrators' apps also set from the user's policy.
 

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -18,8 +19,11 @@ import (
 // every user sees, each counting and listing only the titles they may see.
 // Silo's apps list them on a library's Collections tab, those with a
 // title in the library, as the Jellyfin API lists a library's
-// collections, and page through a collection's titles. Home shows them
-// through the home rows (see homeSections). The apps' personal
+// collections, and page through a collection's titles. A collection's
+// page and its count on the tab hold the titles the apps show, its movies,
+// series, seasons, episodes and videos: the collections in it, which the
+// apps cannot open from there, are left out, as its channels are. Home
+// shows them through the home rows (see homeSections). The apps' personal
 // collections, of which Polyfin keeps none, list empty, and the
 // operations that make or change one answer that this server does not.
 
@@ -116,25 +120,21 @@ func (s *Server) libraryCollections(w http.ResponseWriter, r *http.Request, v vi
 }
 
 // collectionCounts are the numbers of titles of collections the user may
-// see: those the Jellyfin API counts, users' collections, and for an
-// addon's collections, which it does not count, the total of their first
-// page of titles, which counts them all unless they are many. It asks for
-// none once the request's context is done.
+// see, as their pages list them (see libraryCollectionItems): the total of
+// their first page of titles, which counts them all unless they are many.
+// The Jellyfin API's ChildCount counts the collections in a collection
+// too. It asks for none once the request's context is done.
 func (s *Server) collectionCounts(r *http.Request, v viewer, collections []item) ([]int, error) {
 	counts := make([]int, len(collections))
 	var group errgroup.Group
 	group.SetLimit(collectionReads)
 	for n, collection := range collections {
-		if collection.ChildCount != nil {
-			counts[n] = *collection.ChildCount
-			continue
-		}
 		group.Go(func() error {
 			if err := r.Context().Err(); err != nil {
 				return err
 			}
 			var listed queryResult
-			a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {collection.Id}, "IncludeItemTypes": {titleTypes},
+			a, err := s.call(r, v, http.MethodGet, "/Items?"+url.Values{"ParentId": {collection.Id}, "IncludeItemTypes": {collectionTitleTypes},
 				"Limit": {strconv.Itoa(sectionLimit)}, "EnableTotalRecordCount": {"true"}}.Encode(), nil, &listed)
 			if a.ok() {
 				counts[n] = max(listed.TotalRecordCount, len(listed.Items))
@@ -145,8 +145,12 @@ func (s *Server) collectionCounts(r *http.Request, v viewer, collections []item)
 	return counts, group.Wait()
 }
 
+// collectionTitleTypes are the Jellyfin API's types of the titles a
+// collection's page lists: those the apps browse.
+var collectionTitleTypes = strings.Join(browsable, ",")
+
 // libraryCollectionItems pages through the titles of a collection of a
-// library's Collections tab.
+// library's Collections tab (see collectionTitleTypes).
 func (s *Server) libraryCollectionItems(w http.ResponseWriter, r *http.Request, v viewer) {
 	q := r.URL.Query()
 	start, limit, ok := pageAsked(w, q)
@@ -161,8 +165,8 @@ func (s *Server) libraryCollectionItems(w http.ResponseWriter, r *http.Request, 
 		problem(w, http.StatusNotFound, "not_found", "Collection not found.")
 		return
 	}
-	page, a, err := s.listPage(r, v, url.Values{"ParentId": {collection}, "Fields": {listFields}, "StartIndex": {strconv.Itoa(start)},
-		"Limit": {strconv.Itoa(limit)}, "EnableTotalRecordCount": {"true"}}, start)
+	page, a, err := s.listPage(r, v, url.Values{"ParentId": {collection}, "IncludeItemTypes": {collectionTitleTypes}, "Fields": {listFields},
+		"StartIndex": {strconv.Itoa(start)}, "Limit": {strconv.Itoa(limit)}, "EnableTotalRecordCount": {"true"}}, start)
 	switch {
 	case err != nil:
 		s.internalError(w, r, err)
