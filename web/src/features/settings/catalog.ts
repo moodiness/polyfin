@@ -1564,6 +1564,13 @@ export const settingEntries: readonly SettingEntry[] = [
   // Web player
   {
     section: 'web-player',
+    anchor: 'web-player-defaults',
+    label: (t) => s(t).webPlayerDefaults.button,
+    help: (t) => s(t).webPlayerDefaults.help,
+    keywords: ['reset', 'defaults', 'theme', 'jellyfin-web'],
+  },
+  {
+    section: 'web-player',
     anchor: 'web-theme',
     label: (t) => s(t).webTheme,
     help: (t) => s(t).webThemeHelp,

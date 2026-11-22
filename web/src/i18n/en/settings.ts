@@ -1010,6 +1010,19 @@ const settings = {
     webPlayerHelp:
       'What the web player (jellyfin-web, at /web/) shows besides its own pages. The theme and the script apply the next time a page of the web player is loaded; the web player keeps the sign-in message for up to a minute.',
     openWebPlayer: 'Open the web player',
+    /** Restore the defaults, at the top of Settings › Web player. */
+    webPlayerDefaults: {
+      button: 'Restore the defaults',
+      help: 'Puts the theme, the Custom CSS and JavaScript, the sign-in message and the options of this section back to Polyfin’s defaults, after listing what changes.',
+      none: 'Every setting of this section is at its default.',
+      title: 'Restore the web player’s defaults?',
+      changes: 'These settings go back to their defaults:',
+      value: (setting: string, value: string) => `${setting}: ${value}`,
+      emptied: (setting: string) => `${setting}: emptied`,
+      kept: 'The home rows, the themes chosen on users’ pages and the copy kept in Polyfin stay. So do the settings each user chose in the web player: they reset theirs with Reset my preferences, in My account.',
+      save: 'The defaults go in the form: Save applies them, Discard changes keeps the settings as they were.',
+      confirm: 'Restore the defaults',
+    },
     webTheme: 'Server theme',
     webThemeHelp:
       'The web player’s look for the users who keep the server’s; each user can have their own, on their page under Users. LumaaGlaass is the theme Polyfin bundles. jellyfin-web’s own look has no custom CSS or script, and each user picks its display themes under Settings › Display. Custom uses your own CSS and JavaScript below, which are kept while another theme is chosen.',
