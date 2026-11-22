@@ -1,6 +1,6 @@
 # Large-library bench
 
-`bench.mjs` measures what a user of a large library waits for in the web player: its home page, its live TV guide and its search. It replays the requests jellyfin-web sends for those screens against Polyfin built from this repository, filled with a large IPTV library, prints their times, and exits with 1 when a screen's warm p95 passes its budget.
+`bench.mjs` measures what a user of a large library waits for in the web player: its home page, its live TV guide and its search. It replays the requests jellyfin-web sends for those screens against Polyfin built from this repository, filled with a large IPTV library, prints their times, and exits with 1 when a screen's warm p95 passes its budget. `fluidity.mjs` measures how fast a title opens and plays, in jellyfin-web and for a native app (see [Fluidity](#fluidity)).
 
 Run it before each minor release. CI does not run it: it takes several minutes and needs a quiet machine.
 
@@ -11,7 +11,8 @@ It sits next to the screenshot tools because it is the same kind of tool: Node s
 - **Node 24** or later.
 - **Go,** to build Polyfin and the synthetic provider of `internal/iptv`, a test binary.
 - **A PostgreSQL server** the tool may create a database on, such as the one of `compose.yaml`. The bench database is kept between runs (about 130 MB).
-- **For `capture.mjs` only:** Chrome or Chromium, and a built jellyfin-web, such as the one in the image (`/usr/share/polyfin/jellyfin-web`).
+- **For `capture.mjs` and `fluidity.mjs`:** Chrome or Chromium, and a built jellyfin-web, such as the one in the image (`/usr/share/polyfin/jellyfin-web`).
+- **For `fluidity.mjs`:** FFmpeg in `PATH`, or `POLYFIN_FFMPEG`, which makes the versions' files once.
 
 ## Run it
 
@@ -106,3 +107,69 @@ node docs/scripts/bench/capture.mjs \
 ```
 
 `--chrome` (or `CHROME_PATH`) gives another browser, and `--shots <folder>` keeps a screenshot of each screen as recorded, to check that it shows what it should. The capture takes half a minute on a seeded database.
+
+## Fluidity
+
+`fluidity.mjs` measures what a user waits for from a title's card to its video playing: in jellyfin-web, with Polyfin's theme and with jellyfin-web's own look, and in a native app, which calls the API itself. It tells where the time goes: Polyfin's answers, the addon's, the source file, pictures, jellyfin-web's files, and the page's own work. It has no budgets: it is for finding what to make faster, before and after a change.
+
+```sh
+make build
+npm --prefix docs/scripts/bench ci
+node docs/scripts/bench/fluidity.mjs \
+  --database-url postgresql://polyfin:password@127.0.0.1:5432/postgres \
+  --web /path/to/jellyfin-web --report fluidity.md
+```
+
+- **Stage:** a scratch database, `polyfin_fluidity`, dropped at the end; Polyfin on a temporary data folder; and a fixture addon on `127.0.0.1`, "Fluidity bench", with a catalog, a library, for each case.
+- **Files:** the fixture's versions are 3 minutes of 1080p at 24 pictures a second: H.264 at 8 Mbps and AAC in MP4, the same in Matroska, and HEVC at 6 Mbps in Matroska. FFmpeg makes them at the first run, in about 2 minutes, and they stay in the system's temporary folder, `polyfin-fluidity-media` (about 500 MB). Titles say they last 20 minutes, so that Polyfin takes the files for the title rather than for a clip.
+- **Addon:** every answer of the fixture waits `--latency`, as over the internet; stream lists wait `--stream-delay`, as an addon that gathers others does; files are sent at `--source-rate`.
+- **Browser:** Chrome plays Matroska and, on macOS, HEVC, which most browsers do not. The tool makes it say it plays neither, so that jellyfin-web asks for the Matroska version repackaged and the HEVC one converted. `--mkv` and `--hevc` let it play them.
+- **Time:** about 10 minutes a case with 10 runs, most of it in the cold runs' restarts. A run that fails is told, with a screenshot in `--shots`, and left out; the tool then exits with 1.
+
+| Option           | Default                         | What it does                                                                                 |
+| ---------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `--database-url` | `BENCH_DATABASE_URL`            | A PostgreSQL address whose user may create databases.                                        |
+| `--web`          | `POLYFIN_WEB_DIR`               | A folder of jellyfin-web, built.                                                             |
+| `--polyfin`      | `bin/polyfin`, or `POLYFIN_BIN` | The Polyfin executable.                                                                      |
+| `--chrome`       | `CHROME_PATH`, else the usual   | The Chrome or Chromium executable.                                                           |
+| `--runs`         | 10                              | The runs of each case, warm and cold.                                                        |
+| `--modes`        | `warm,cold`                     | The runs made: warm, cold or both.                                                           |
+| `--only`         | every case                      | Cases, or scenarios (`open`, `play`, `native`), separated by commas.                         |
+| `--stream-delay` | 1500                            | Milliseconds the fixture's stream lists take.                                                |
+| `--latency`      | 50                              | Milliseconds every answer of the fixture waits first, files and pictures included.           |
+| `--source-rate`  | 12                              | MB a second the fixture sends files at.                                                      |
+| `--mkv`          | off                             | Lets jellyfin-web play Matroska as it is.                                                    |
+| `--hevc`         | off                             | Lets Chrome play HEVC where it can.                                                          |
+| `--json`         | none                            | A file for every run, with its requests and the fixture's answers.                           |
+| `--report`       | none                            | A Markdown file with the table, the slowest requests and a waterfall for each case.          |
+| `--log`          | none                            | A file to keep Polyfin's log in.                                                             |
+| `--shots`        | none                            | A folder for a screenshot of each run that fails.                                            |
+| `--keep`         | off                             | Keeps the stage running, to look at it in a browser, until Ctrl-C; measures nothing.         |
+| `--from`         | none                            | `--json` files of earlier runs, separated by commas: writes their report, measuring nothing. |
+
+### The cases
+
+| Case                                         | From                                                          | To                                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Open,** with LumaaGlaass or without        | A click on the title's card on the home page                  | Its page shows its name, its backdrop drawn (with LumaaGlaass, the poster it shows in its place) and a Play button enabled |
+| **Play at once,** MP4, MKV or HEVC           | Play, pressed in the frame it is enabled                      | The video's `playing` event                                                                                                |
+| **Play 5 s after opening,** MP4, MKV or HEVC | Play, pressed 5 seconds after the card's click                | The same                                                                                                                   |
+| **Native app,** at once or 5 s after opening | The title's details, then its `PlaybackInfo`, 5 seconds later | The first MiB of its stream, as a direct play                                                                              |
+
+- **Play held:** Polyfin's script holds Play, disabled, until the title has a version, which a title never opened waits for its addons to list. The table's other column tells when the page was first shown, Play held or not (`shown`), and, for a play, the time from the card's click (`from card`).
+- **Warm:** a first run that is not counted, then `--runs` runs of the same title, in the same browser.
+- **Cold:** each run after a restart of Polyfin, in a browser that kept nothing, signed in afresh, on a title never opened.
+- **Native app:** it plays MP4 and Matroska, H.264 and HEVC, as players built on FFmpeg do, so every version plays as it is.
+
+### The report
+
+For each case and mode: p50 and p95, the requests and kilobytes until the end, not counting those served from the browser's cache, and how the version played. The split gives each millisecond of the runs to the first of these under way, then takes the p50 of each:
+
+- `api`: Polyfin answering an API request;
+- `media`: Polyfin's video, playlist or segment, until its first byte;
+- `addon`: Polyfin waiting for the fixture's metadata or stream lists;
+- `source`: Polyfin reading the fixture's file, to analyze it or to send it on;
+- `image`, `asset`, `theme`: pictures, jellyfin-web's files, and the theme's and Polyfin's script;
+- `client`: nothing under way, the page's own work.
+
+The report then lists each case's slowest requests, with the time Polyfin took before its first byte, and the waterfall of the median run, the fixture's answers among them.
