@@ -639,3 +639,23 @@ func TestADeadTMDBIdentifierIsFoundAgainByIMDb(t *testing.T) {
 		t.Errorf("TMDB was asked %v", asked)
 	}
 }
+
+// A TMDB identifier an administrator set that TMDB does not know is not
+// found again by the title's IMDb identifier, which the edit overrides:
+// the title keeps the identifier set and the addon's people.
+func TestAnEditedTMDBIdentifierIsNotFoundAgainByIMDb(t *testing.T) {
+	t.Parallel()
+	e := newCreditsEnv(t, "k3y", time.Hour)
+	e.service.UseTitleCredits(e.queue)
+	editIDs(t, e.service, KindMovie, e.addon.metas["movie/tt0882002"], new("9002"), nil)
+	item := e.open(e.admin, "Quiet Pier")
+	if got := item.ProviderIDs["Tmdb"]; got != "9002" {
+		t.Errorf("the page shows TMDB %q, want the 9002 set", got)
+	}
+	if got := cast(item.People, "Actor"); !slices.Equal(got, addonCast) {
+		t.Errorf("actors: %v, want the addon's %v", got, addonCast)
+	}
+	if asked := e.tmdb.requests("/3/"); len(asked) != 1 || !strings.HasPrefix(asked[0], "/3/movie/9002?") {
+		t.Errorf("TMDB was asked %v, want the identifier set alone", asked)
+	}
+}

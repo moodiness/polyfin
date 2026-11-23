@@ -645,7 +645,10 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 // askCredits asks TMDB for a title's credits, through its TMDB identifier,
 // found by its IMDb one when that is the key, and keeps the answer. A
 // TMDB identifier TMDB no longer knows, as when it merged two entries, is
-// found again by the IMDb identifier of the item title, when it has one.
+// found again by the IMDb identifier of the item title, when it has one,
+// unless an administrator set it: theirs wins over the title's sources
+// (see Overrides.identifiers), so the title has no TMDB credits rather
+// than those of the title its IMDb identifier finds.
 func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts.ID, language string) (keptCredits, error) {
 	id := key.id
 	var err error
@@ -658,7 +661,7 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts
 	if err == nil {
 		details, err = s.tmdb.TitleDetails(ctx, key.kind, id, language)
 	}
-	if errors.Is(err, tmdb.ErrNotFound) && key.provider == "tmdb" {
+	if errors.Is(err, tmdb.ErrNotFound) && key.provider == "tmdb" && s.Overrides(title).TmdbID == nil {
 		if imdb := s.listedIMDb(ctx, title); imdb != "" {
 			if id, err = s.tmdb.FindByIMDb(ctx, key.kind, imdb); err == nil {
 				details, err = s.tmdb.TitleDetails(ctx, key.kind, id, language)

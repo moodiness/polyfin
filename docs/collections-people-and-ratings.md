@@ -187,7 +187,7 @@ The people list holds the people credited in the titles of your addons that some
 
 ### Cast and crew from TMDB
 
-Metadata addons credit what they credit: some only a title's first actors, by name, and no crew but its directors and writers. While the server has a [TMDB API key](#tmdb-key), a movie or series TMDB knows takes its people from TMDB. TMDB knows it by its TMDB identifier, else by its IMDb one through TMDB's find.
+Metadata addons credit what they credit: some only a title's first actors, by name, and no crew but its directors and writers. While the server has a [TMDB API key](#tmdb-key), a movie or series TMDB knows takes its people from TMDB. TMDB knows it by its TMDB identifier, else by its IMDb one through TMDB's find. A TMDB identifier TMDB no longer knows, as after it merged two entries, is found again by the IMDb one, unless an administrator set it in **Edit metadata**: theirs wins, and the title keeps the addon's people.
 
 - **Who:** its first 15 actors in billing order. Then its first 15 directors, writers (of the script, screenplay or novel) and producers, in TMDB's order.
 - **Series:** a series' actors are those of its whole run. An actor of several characters is credited once a character, the one they played the longest first.
