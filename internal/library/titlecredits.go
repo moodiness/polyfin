@@ -35,8 +35,9 @@ import (
 // The same answer gives the title's networks, companies and tagline,
 // kept with the credits, which make its studios and tagline (see
 // titlesFromTMDB), and the networks' and companies' TMDB identifiers and
-// logos (see studiopages.go), and a movie's runtime, its length when its
-// description gives none (see lengths.go).
+// logos (see studiopages.go), a movie's runtime, its length when its
+// description gives none (see lengths.go), and the streaming services
+// that offer it in the server's rating country (see services.go).
 // The addon's people stay without a key, for a title of no TMDB or IMDb
 // identifier, one TMDB does not know or credits no one in, and until its
 // credits were read.
@@ -146,35 +147,46 @@ func (k creditsKey) lookup(title accounts.ID) string {
 // keptCredits is what is kept of a title's credits and details: found is
 // false for a title TMDB does not know; details is false while its
 // networks, companies, their TMDB identifiers, tagline and runtime were
-// not read, as of the credits kept before they were; titles are the items
-// whose people were saved from them.
+// not read, as of the credits kept before they were; serviceCountry is
+// the country its streaming services were read for, empty while they
+// were not; titles are the items whose people were saved from them.
 type keptCredits struct {
-	found      bool
-	language   string
-	credits    []tmdb.TitleCredit
-	details    bool
-	networks   []string
-	companies  []string
-	networkIDs []int
-	companyIDs []int
-	tagline    string
-	runtime    int
-	titles     []accounts.ID
-	asked      time.Time
+	found          bool
+	language       string
+	credits        []tmdb.TitleCredit
+	details        bool
+	networks       []string
+	companies      []string
+	networkIDs     []int
+	companyIDs     []int
+	tagline        string
+	runtime        int
+	serviceCountry string
+	services       []string
+	serviceIDs     []int
+	titles         []accounts.ID
+	asked          time.Time
+}
+
+// creditsAsk is what titles' credits are read for: the server's metadata
+// language, of roles and taglines, and its rating country, of streaming
+// services.
+type creditsAsk struct {
+	language, country string
 }
 
 // due reports whether TMDB is asked again about the title for title: its
-// credits are old, of another language, without their details, or not
-// saved on title's people.
-func (k keptCredits) due(now time.Time, language string, title accounts.ID) bool {
-	return now.Sub(k.asked) >= titleCreditsFresh || k.found && (k.language != language || !k.details || !slices.Contains(k.titles, title))
+// credits are old, of another language, without their details or the
+// services of the country, or not saved on title's people.
+func (k keptCredits) due(now time.Time, ask creditsAsk, title accounts.ID) bool {
+	return k.stale(now, ask) || k.found && !slices.Contains(k.titles, title)
 }
 
 // stale reports whether a title's kept credits are read again on TMDB
 // before they are saved on a title's people: they are old, of another
-// language, or without their details.
-func (k keptCredits) stale(now time.Time, language string) bool {
-	return now.Sub(k.asked) >= titleCreditsFresh || k.found && (k.language != language || !k.details)
+// language, or without their details or the services of the country.
+func (k keptCredits) stale(now time.Time, ask creditsAsk) bool {
+	return now.Sub(k.asked) >= titleCreditsFresh || k.found && (k.language != ask.language || !k.details || k.serviceCountry != ask.country)
 }
 
 // describes reports whether title shows the details: TMDB knows the title,
@@ -198,9 +210,12 @@ func (k keptCredits) shows(title accounts.ID) bool {
 	return k.found && len(k.credits) > 0 && slices.Contains(k.titles, title)
 }
 
-// creditsLanguage is the language roles are asked in: the server's
-// metadata language.
-func (s *Service) creditsLanguage() string { return s.settings().Language }
+// creditsAsk is what credits are read for now: the server's metadata
+// language and rating country, the US when it has none (see view.country).
+func (s *Service) creditsAsk() creditsAsk {
+	settings := s.settings()
+	return creditsAsk{language: settings.Language, country: serviceCountry(settings.RatingCountry)}
+}
 
 // keptCreditsMost bounds the titles whose kept credits titleCreditsMemory
 // remembers.
@@ -308,7 +323,8 @@ func (s *Service) readTitleCredits(ctx context.Context, keys []creditsKey) (map[
 		kinds[i], providers[i], ids[i] = string(key.kind), key.provider, key.id
 	}
 	rows, err := s.db.Query(ctx, `SELECT kind, provider, id, tmdb_id IS NOT NULL, language, credits, networks, companies, network_ids,
-			company_ids, tagline, runtime, titles, asked_at
+			company_ids, tagline, runtime, coalesce(service_country, ''), coalesce(services, '{}'), coalesce(service_ids, '{}'), titles,
+			asked_at
 		FROM title_credits JOIN unnest($1::text[], $2::text[], $3::text[]) AS asked (kind, provider, id) USING (kind, provider, id)`,
 		kinds, providers, ids)
 	if err != nil {
@@ -323,7 +339,7 @@ func (s *Service) readTitleCredits(ctx context.Context, keys []creditsKey) (map[
 		var tagline *string
 		var runtime *int
 		if err := rows.Scan(&kind, &key.provider, &key.id, &k.found, &k.language, &credits, &k.networks, &k.companies, &k.networkIDs,
-			&k.companyIDs, &tagline, &runtime, &k.titles, &k.asked); err != nil {
+			&k.companyIDs, &tagline, &runtime, &k.serviceCountry, &k.services, &k.serviceIDs, &k.titles, &k.asked); err != nil {
 			return nil, err
 		}
 		if k.details = tagline != nil && runtime != nil && k.networks != nil && k.companies != nil && k.networkIDs != nil &&
@@ -350,10 +366,12 @@ func (s *Service) keptOne(ctx context.Context, key creditsKey) (keptCredits, boo
 // people, the people they show: their TMDB credits while a key is saved
 // and they are saved on their people, else the addon's people, each under
 // the record they are kept as (see resolvedPeople). With their credits
-// come TMDB's studios and tagline, before an administrator's edits, which
-// win (see Overrides); the tagline only while it is in the server's
-// metadata language. The credits kept and the records of the people of
-// them all are read at once.
+// come TMDB's studios, tagline and streaming services, as tags (see
+// services.go), before an administrator's edits, which win (see
+// Overrides); the tagline only while it is in the server's metadata
+// language, the services while they were read for its rating country.
+// The credits kept and the records of the people of them all are read at
+// once.
 func (s *Service) titlesFromTMDB(ctx context.Context, titles []*Item) {
 	if len(titles) == 0 {
 		return
@@ -369,7 +387,7 @@ func (s *Service) titlesFromTMDB(ctx context.Context, titles []*Item) {
 			}
 		}
 		if kept, err := s.keptTitleCredits(ctx, asked); err == nil {
-			language := s.creditsLanguage()
+			ask := s.creditsAsk()
 			for i, title := range titles {
 				k, ok := kept[keys[i]]
 				if !valid[i] || !ok {
@@ -384,8 +402,11 @@ func (s *Service) titlesFromTMDB(ctx context.Context, titles []*Item) {
 				if studios := k.studios(title.Kind); len(studios) > 0 {
 					title.Studios = studios
 				}
-				if k.tagline != "" && k.language == language {
+				if k.tagline != "" && k.language == ask.language {
 					title.Taglines = []string{k.tagline}
+				}
+				if services := k.servicesIn(ask.country); len(services) > 0 {
+					title.Tags = services
 				}
 				// A movie's description gives its length first.
 				if title.Kind == KindMovie && title.Runtime == 0 {
@@ -521,7 +542,7 @@ func (s *Service) AwaitTitleCredits(ctx context.Context, item Item) bool {
 		return corrected
 	}
 	k, kept, err := s.keptOne(ctx, key)
-	if err != nil || kept && !k.due(s.now(), s.creditsLanguage(), item.ID) {
+	if err != nil || kept && !k.due(s.now(), s.creditsAsk(), item.ID) {
 		return corrected
 	}
 	lookup := s.creditsLookup(key, item.ID)
@@ -607,13 +628,13 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 	if !s.tmdb.Enabled() {
 		return nil
 	}
-	language := s.creditsLanguage()
+	ask := s.creditsAsk()
 	k, kept, err := s.keptOne(ctx, key)
 	if err != nil {
 		return err
 	}
-	if !kept || k.stale(s.now(), language) {
-		if k, err = s.askCredits(ctx, key, title, language); err != nil {
+	if !kept || k.stale(s.now(), ask) {
+		if k, err = s.askCredits(ctx, key, title, ask); err != nil {
 			return err
 		}
 	}
@@ -643,13 +664,15 @@ func (s *Service) lookUpCredits(ctx context.Context, key creditsKey, title accou
 }
 
 // askCredits asks TMDB for a title's credits, through its TMDB identifier,
-// found by its IMDb one when that is the key, and keeps the answer. A
-// TMDB identifier TMDB no longer knows, as when it merged two entries, is
-// found again by the IMDb identifier of the item title, when it has one,
-// unless an administrator set it: theirs wins over the title's sources
-// (see Overrides.identifiers), so the title has no TMDB credits rather
-// than those of the title its IMDb identifier finds.
-func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts.ID, language string) (keptCredits, error) {
+// found by its IMDb one when that is the key, and keeps the answer, with
+// the streaming services of ask's country. A TMDB identifier TMDB no
+// longer knows, as when it merged two entries, is found again by the IMDb
+// identifier of the item title, when it has one, unless an administrator
+// set it: theirs wins over the title's sources (see
+// Overrides.identifiers), so the title has no TMDB credits rather than
+// those of the title its IMDb identifier finds.
+func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts.ID, ask creditsAsk) (keptCredits, error) {
+	language := ask.language
 	id := key.id
 	var err error
 	if key.provider == "imdb" {
@@ -683,12 +706,15 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts
 	// A title TMDB does not know has no details: its row is due by its age
 	// alone. TitleDetails gives empty lists, never nil, for a title it
 	// knows.
-	var networks, companies []string
-	var networkIDs, companyIDs []int
+	var networks, companies, services []string
+	var networkIDs, companyIDs, serviceIDs []int
+	var country *string
 	tagline, runtime := &details.Tagline, &details.Runtime
+	offered := details.Services[ask.country]
 	if found {
 		networks, companies = tmdb.StudioNames(details.Networks), tmdb.StudioNames(details.Companies)
 		networkIDs, companyIDs = studioIDs(details.Networks), studioIDs(details.Companies)
+		services, serviceIDs, country = serviceNames(offered), serviceIDsOf(offered), &ask.country
 	} else {
 		tagline, runtime = nil, nil
 	}
@@ -700,23 +726,31 @@ func (s *Service) askCredits(ctx context.Context, key creditsKey, title accounts
 	if err := s.keepStudios(ctx, details, now); err != nil {
 		return keptCredits{}, err
 	}
+	if err := s.keepServices(ctx, offered, now); err != nil {
+		return keptCredits{}, err
+	}
 	var titles []accounts.ID
 	if err := s.db.QueryRow(ctx, `INSERT INTO title_credits (kind, provider, id, tmdb_id, language, credits, networks, companies,
-			network_ids, company_ids, tagline, runtime, asked_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			network_ids, company_ids, tagline, runtime, service_country, services, service_ids, asked_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (kind, provider, id) DO UPDATE SET tmdb_id = excluded.tmdb_id, language = excluded.language,
 			credits = excluded.credits, networks = excluded.networks, companies = excluded.companies,
 			network_ids = excluded.network_ids, company_ids = excluded.company_ids, tagline = excluded.tagline,
-			runtime = excluded.runtime, asked_at = excluded.asked_at,
+			runtime = excluded.runtime, service_country = excluded.service_country, services = excluded.services,
+			service_ids = excluded.service_ids, asked_at = excluded.asked_at,
 			titles = CASE WHEN title_credits.tmdb_id IS NOT DISTINCT FROM excluded.tmdb_id THEN title_credits.titles ELSE '{}' END
 		RETURNING titles`,
 		string(key.kind), key.provider, key.id, tmdbID, language, encoded, networks, companies, networkIDs, companyIDs, tagline,
-		runtime, now).Scan(&titles); err != nil {
+		runtime, country, services, serviceIDs, now).Scan(&titles); err != nil {
 		s.forgetCredits(key)
 		return keptCredits{}, err
 	}
 	kept := keptCredits{found: found, language: language, credits: credits, details: found, networks: networks, companies: companies,
-		networkIDs: networkIDs, companyIDs: companyIDs, tagline: details.Tagline, runtime: details.Runtime, titles: titles, asked: now}
+		networkIDs: networkIDs, companyIDs: companyIDs, tagline: details.Tagline, runtime: details.Runtime, services: services,
+		serviceIDs: serviceIDs, titles: titles, asked: now}
+	if country != nil {
+		kept.serviceCountry = *country
+	}
 	// Remembered as a read gives it: the database keeps microseconds, and
 	// tells a title TMDB knows by its TMDB identifier.
 	remembered := kept
@@ -780,7 +814,7 @@ func (s *Service) creditsPass(ctx context.Context) error {
 		s.logger.Info("No library of movies or series: the pass of titles' credits reads none; a title's are read when its page opens")
 		return nil
 	}
-	language, now := s.creditsLanguage(), s.now()
+	ask, now := s.creditsAsk(), s.now()
 	queued, known := 0, 0
 	// Kept credits are read a thousand titles at a time.
 	for start := 0; start < len(titles); start += 1000 {
@@ -801,7 +835,7 @@ func (s *Service) creditsPass(ctx context.Context) error {
 			if !valid[i] {
 				continue
 			}
-			if k, ok := kept[keys[i]]; !ok || k.due(now, language, title.ID) {
+			if k, ok := kept[keys[i]]; !ok || k.due(now, ask, title.ID) {
 				lookups = append(lookups, s.creditsLookup(keys[i], title.ID))
 			} else {
 				known++

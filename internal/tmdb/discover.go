@@ -35,7 +35,7 @@ type Discovered struct {
 // networks, else of the companies when no network is given. Without
 // either, TMDB is asked nothing.
 func (c *Client) Discover(ctx context.Context, kind Kind, networks, companies []int, page int, today string) ([]Discovered, error) {
-	query := url.Values{"sort_by": {"popularity.desc"}, "include_adult": {"false"}, "page": {strconv.Itoa(max(page, 1))}}
+	query := url.Values{}
 	switch {
 	case kind == TV && len(networks) > 0:
 		query.Set("with_networks", joinIDs(networks))
@@ -44,6 +44,31 @@ func (c *Client) Discover(ctx context.Context, kind Kind, networks, companies []
 	default:
 		return nil, errors.New("no TMDB network or company to discover titles of")
 	}
+	return c.discover(ctx, kind, query, page, today)
+}
+
+// DiscoverServices returns the page (from 1) of the movies or series
+// (kind) the streaming services given by their TMDB identifiers offer in
+// country (ISO 3166-1), any of them, by subscription, free or free with
+// ads, as Discover lists them. Without a service or a country, TMDB is
+// asked nothing.
+func (c *Client) DiscoverServices(ctx context.Context, kind Kind, services []int, country string, page int,
+	today string) ([]Discovered, error) {
+	if len(services) == 0 || country == "" {
+		return nil, errors.New("no streaming service or country to discover titles of")
+	}
+	query := url.Values{"with_watch_providers": {joinIDs(services)}, "watch_region": {country},
+		"with_watch_monetization_types": {"flatrate|free|ads"}}
+	return c.discover(ctx, kind, query, page, today)
+}
+
+// discover asks TMDB's discover for the page of the movies or series
+// (kind) query narrows to, the most popular first, released or first
+// aired by today, none for adults.
+func (c *Client) discover(ctx context.Context, kind Kind, query url.Values, page int, today string) ([]Discovered, error) {
+	query.Set("sort_by", "popularity.desc")
+	query.Set("include_adult", "false")
+	query.Set("page", strconv.Itoa(max(page, 1)))
 	if kind == TV {
 		query.Set("first_air_date.lte", today)
 	} else {

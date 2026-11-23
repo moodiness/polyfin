@@ -106,7 +106,7 @@ func TestAMoviesCreditsAreItsBilledCastAndCrew(t *testing.T) {
 	if !slices.Equal(crewKept, want) {
 		t.Errorf("crew %v, want %v", crewKept, want)
 	}
-	if got := asked(); len(got) != 1 || got[0] != "/3/movie/1001?append_to_response=credits&language=fr-FR" {
+	if got := asked(); len(got) != 1 || got[0] != "/3/movie/1001?append_to_response=credits%2Cwatch%2Fproviders&language=fr-FR" {
 		t.Errorf("TMDB was asked %v", got)
 	}
 }
@@ -162,7 +162,8 @@ func TestASeriesCreditsAreItsAggregateCast(t *testing.T) {
 	if got := names(credits, Producer); !slices.Equal(got, []string{"Shaun Runner/Producer"}) || len(names(credits, Director)) != 0 {
 		t.Errorf("crew %+v", credits[len(actors):])
 	}
-	if got := asked(); len(got) != 1 || !strings.HasPrefix(got[0], "/3/tv/2031?") || !strings.Contains(got[0], "append_to_response=aggregate_credits%2Ccredits") {
+	if got := asked(); len(got) != 1 || !strings.HasPrefix(got[0], "/3/tv/2031?") ||
+		!strings.Contains(got[0], "append_to_response=aggregate_credits%2Ccredits%2Cwatch%2Fproviders") {
 		t.Errorf("TMDB was asked %v", got)
 	}
 	details, err = client.TitleDetails(t.Context(), TV, "2032", "en")

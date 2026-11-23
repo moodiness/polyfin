@@ -71,47 +71,50 @@ type credits struct {
 // people (see TitleDetails), the networks a series aired on and the
 // companies that made the title, each once, with their TMDB identifier
 // and logo (see Studio), its tagline, empty when TMDB has none in the
-// language asked, and a movie's runtime in minutes, 0 when TMDB gives
-// none or for a series.
+// language asked, a movie's runtime in minutes, 0 when TMDB gives
+// none or for a series, and the streaming services that offer it, by
+// country (see StreamingService).
 type TitleDetails struct {
 	Credits   []TitleCredit
 	Networks  []Studio
 	Companies []Studio
 	Tagline   string
 	Runtime   int
+	Services  map[string][]StreamingService
 }
 
 // TitleDetails returns the details of the movie or series (kind) TMDB
-// identifies as id, in one request: its networks, companies and tagline,
-// and its people, as Jellyfin 12.4's TMDB providers keep them: actors
-// in billing order, at most MaxCast, then the directors, writers and
-// producers, at most MaxCrew, in TMDB's order
+// identifies as id, in one request: its networks, companies, tagline and
+// streaming services, and its people, as Jellyfin 12.4's TMDB providers
+// keep them: actors in billing order, at most MaxCast, then the
+// directors, writers and producers, at most MaxCrew, in TMDB's order
 // (Plugins/Tmdb/Movies/TmdbMovieProvider.cs lines 276-360). A series'
 // actors are those of its aggregate credits, over its whole run, each
 // role an actor played a credit of its own, the one they played the
 // longest first; its crew is that of its credits, and its actors too when
 // TMDB has no aggregate ones (Plugins/Tmdb/TV/TmdbSeriesProvider.cs lines
-// 365-420, TmdbUtils.cs lines 292-329). Credits are asked with the
-// details. Roles and the tagline are in language (an ISO 639-1 code, with
-// a region or not), TMDB's default when empty.
+// 365-420, TmdbUtils.cs lines 292-329). Credits and watch providers are
+// asked with the details. Roles and the tagline are in language (an ISO
+// 639-1 code, with a region or not), TMDB's default when empty.
 func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language string) (TitleDetails, error) {
 	query := url.Values{}
 	if language != "" {
 		query.Set("language", language)
 	}
 	var details struct {
-		Networks  []Studio `json:"networks"`
-		Companies []Studio `json:"production_companies"`
-		Tagline   string   `json:"tagline"`
-		Runtime   int      `json:"runtime"`
-		Aggregate credits  `json:"aggregate_credits"`
-		Credits   credits  `json:"credits"`
+		Networks  []Studio       `json:"networks"`
+		Companies []Studio       `json:"production_companies"`
+		Tagline   string         `json:"tagline"`
+		Runtime   int            `json:"runtime"`
+		Aggregate credits        `json:"aggregate_credits"`
+		Credits   credits        `json:"credits"`
+		Providers watchProviders `json:"watch/providers"`
 	}
 	path := "/movie/" + url.PathEscape(id)
-	query.Set("append_to_response", "credits")
+	query.Set("append_to_response", "credits,watch/providers")
 	if kind == TV {
 		path = "/tv/" + url.PathEscape(id)
-		query.Set("append_to_response", "aggregate_credits,credits")
+		query.Set("append_to_response", "aggregate_credits,credits,watch/providers")
 	}
 	if err := c.get(ctx, path, query, &details); err != nil {
 		return TitleDetails{}, err
@@ -121,7 +124,49 @@ func (c *Client) TitleDetails(ctx context.Context, kind Kind, id, language strin
 		cast = details.Credits.Cast
 	}
 	return TitleDetails{Credits: keptCredits(cast, crew), Networks: studiosOf(details.Networks),
-		Companies: studiosOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline), Runtime: max(details.Runtime, 0)}, nil
+		Companies: studiosOf(details.Companies), Tagline: strings.TrimSpace(details.Tagline), Runtime: max(details.Runtime, 0),
+		Services: details.Providers.services()}, nil
+}
+
+// StreamingService is a streaming service TMDB's watch providers name:
+// its TMDB identifier, its name, and the path of its logo on the image
+// server, empty when TMDB has none.
+type StreamingService struct {
+	ID       int    `json:"provider_id"`
+	Name     string `json:"provider_name"`
+	LogoPath string `json:"logo_path"`
+}
+
+// watchProviders is TMDB's answer about where a title is offered, by
+// country (ISO 3166-1), each kind of offer apart: by subscription
+// (flatrate), free, free with ads, to rent and to buy.
+type watchProviders struct {
+	Results map[string]struct {
+		Flatrate []StreamingService `json:"flatrate"`
+		Free     []StreamingService `json:"free"`
+		Ads      []StreamingService `json:"ads"`
+	} `json:"results"`
+}
+
+// services returns, by country in upper case, the services that offer the
+// title by subscription, free or free with ads, in that order and each in
+// TMDB's, each once; those to rent or buy are left out. Never nil.
+func (w watchProviders) services() map[string][]StreamingService {
+	byCountry := map[string][]StreamingService{}
+	for country, offers := range w.Results {
+		country = strings.ToUpper(strings.TrimSpace(country))
+		var kept []StreamingService
+		for _, s := range slices.Concat(offers.Flatrate, offers.Free, offers.Ads) {
+			s.Name, s.LogoPath = strings.TrimSpace(s.Name), strings.TrimSpace(s.LogoPath)
+			if s.ID > 0 && s.Name != "" && !slices.ContainsFunc(kept, func(k StreamingService) bool { return k.ID == s.ID }) {
+				kept = append(kept, s)
+			}
+		}
+		if country != "" && len(kept) > 0 {
+			byCountry[country] = kept
+		}
+	}
+	return byCountry
 }
 
 // keptCredits keeps the people of TMDB's credits a title shows (see

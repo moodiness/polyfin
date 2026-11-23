@@ -305,6 +305,36 @@ jellyfin-web's Studios tab of a library lists the studios of its first 2,000 tit
 - Jellyfin's studio images are wide only, ready-made pictures from its own artwork repository, matched by name ([StudiosImageProvider.cs, lines 54 to 56](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/StudiosImageProvider.cs#L54-L56), [Plugin.cs, line 22](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/Plugin.cs#L22)). Polyfin draws TMDB's logos, wide and square.
 - Jellyfin's studio page and Studios tab list the items of its libraries ([StudiosController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/StudiosController.cs)). Polyfin also lists the studio's catalog titles and TMDB's most popular titles of it that your addons describe.
 
+### Streaming services from TMDB
+
+While the server has a [TMDB API key](#tmdb-key), a movie or series whose credits were read from TMDB (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) also gets the streaming services that offer it in the server's **Rating country**, in **Settings › General** (see [Rating country](user-limits.md#rating-country)), the US when none is set.
+
+- **Which services:** those that offer the title with a subscription, for free, or for free with ads, in TMDB's order, each once. A service that only rents or sells the title is left out: a "titles on this service" list is meant for what you can watch with what you already have, and rentals and purchases would put nearly every title on every store.
+- **Where they show:** Jellyfin has no field for streaming services, so a title carries them as its tags. jellyfin-web shows them on the title's page, each a link to the service's page (see [Service pages](#service-pages)), and a library's filter menu offers them (see [Tags for apps](jellyfin-api.md#tags-for-apps)).
+- **Smart lists:** the **Streaming service** rule keeps the titles a service offers (see [Smart lists](smart-lists-and-search.md#smart-lists)).
+- **Cost:** none of its own. They come in the same request as the credits, kept and read again with them, every 30 days, in the same background passes and the same queue of TMDB's lookups. Credits read before Polyfin kept services are read again once, at a title's page or in the next pass.
+- **Another country:** after the Rating country changes, a title shows no services until it is read again for the new country, at its page or in the next pass.
+- **Edits win:** tags set in the metadata editor replace the services. Saving the editor without changing them keeps following TMDB.
+- **Fallback:** no services without a key, for a title whose credits are not read, or one TMDB lists in no streaming service of the country.
+
+TMDB takes these lists from a partner and does not say how fresh they are: a title may have just left a service, or not appear yet.
+
+#### Service pages
+
+A service's link opens a list of its titles, in this order and each title once, as a studio's page (see [Studio pages](#studio-pages)):
+
+1. **Catalogs:** the titles of the catalogs that offer its name in their genre filter, as some addons offer a catalog per service.
+2. **Your titles:** the titles you reach whose services from TMDB, in the Rating country, name it, or whose tags an administrator set to it, at most 1,000.
+3. **From TMDB:** the 40 most popular movies and the 40 most popular series the service offers in the Rating country, with a subscription, for free or for free with ads, from TMDB's discover, as they open on a studio's page.
+
+The same rules and requests apply as on a studio's page. Without a key, the page lists the catalogs' titles and your titles only.
+
+**Why tags rather than studios:** a studio in Jellyfin is who made the title, and apps show it so. Listing a service among the studios would mix the two, on the title's page and in the Studios tab. Tags are free-form in Jellyfin: apps show them, filter libraries by them, and jellyfin-web links each to a list of its titles.
+
+**Compared with Jellyfin**
+
+- Jellyfin does not read where a title is offered: a title's tags are those of its metadata, NFO files or an administrator.
+
 ### Lengths and "Ends at"
 
 jellyfin-web shows a movie's length and the time it would end if played now, such as "1h 52m · Ends at 10:45 PM", on the movie's page. It shows each episode's beside its thumbnail on a season's page. A movie or episode without a length shows neither. A movie's or episode's length is, from the first that gives one:
@@ -482,11 +512,12 @@ The key is kept with the server's other secrets (see [Configuration](configurati
 | A title's cast and crew | TMDB's credits, in billing order, with photos (see [Cast and crew from TMDB](#cast-and-crew-from-tmdb)) | What the addon gives |
 | Person pages | Every library title they are credited in, and the titles TMDB knows them best for (see [Titles a person is known for](#titles-a-person-is-known-for)) | Only titles people searches find and titles Polyfin knows them in |
 | Studios | TMDB's studios and logos on titles, and studio pages with TMDB's most popular titles of each (see [Studios and taglines from TMDB](#studios-and-taglines-from-tmdb)) | Only studios an administrator set; studio pages list catalog titles and titles whose details were kept |
+| Streaming services | The services offering each title in the Rating country, as tags, and their pages (see [Streaming services from TMDB](#streaming-services-from-tmdb)) | None |
 | Lengths | TMDB's, for movies and episodes whose description gives none (see [Lengths and "Ends at"](#lengths-and-ends-at)) | The description's, else a local file's |
 | Posters | TMDB's, for movies and series whose addon gives none or a dead one (see [Posters from TMDB](artwork-and-editing.md#posters-from-tmdb)) | None for such titles |
 | **Edit images** | TMDB's images too (see [Edit images](artwork-and-editing.md#edit-images)) | Only the addons' images |
 | Unmatched local files | Matched through TMDB's search when every metadata addon's fails (see [Through TMDB, when every addon fails](unmatched-files.md#through-tmdb-when-every-addon-fails)) | Stay unmatched |
-| Smart list rules | **Studio or network** and **Home release** look titles up on TMDB (see [Smart lists](smart-lists-and-search.md#smart-lists)) | Studio rules see only those an administrator set; no movie has a home release |
+| Smart list rules | **Studio or network**, **Streaming service** and **Home release** look titles up on TMDB (see [Smart lists](smart-lists-and-search.md#smart-lists)) | Studio rules see only those an administrator set; no title is on a streaming service; no movie has a home release |
 | **Wait for the digital release** | Hides movies until TMDB says they are out (see [Movies waiting for their digital release](smart-lists-and-search.md#movies-waiting-for-their-digital-release)) | No movie waits; the switch is greyed out |
 | Episode orders | TMDB's episode groups (see [Episode orders](artwork-and-editing.md#episode-orders)) | Every series shows as aired |
 | **Identify** | Turns TMDB and TVDB identifiers into IMDb ones (see [Identify](artwork-and-editing.md#identify)) | TMDB and TVDB identifiers are not turned into IMDb ones |

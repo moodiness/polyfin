@@ -456,6 +456,26 @@ func (s *Service) studioDiscovered(ctx context.Context, v view, refs studioRefs,
 	if !s.tmdb.Enabled() || len(refs.networks) == 0 && len(refs.companies) == 0 {
 		return nil
 	}
+	var asked []tmdb.Kind
+	if slices.Contains(kinds, KindMovie) && len(refs.companies) > 0 {
+		asked = append(asked, tmdb.Movie)
+	}
+	if slices.Contains(kinds, KindSeries) {
+		asked = append(asked, tmdb.TV)
+	}
+	discover := func(ctx context.Context, kind tmdb.Kind, page int, today string) ([]tmdb.Discovered, error) {
+		return s.tmdb.Discover(ctx, kind, refs.networks, refs.companies, page, today)
+	}
+	return s.discoveredTitles(ctx, v, asked, shown, discover)
+}
+
+// discoveredTitles returns the records of the titles of the given kinds
+// discover lists, studioDiscoverPages pages of each, that the user may
+// open and see, but those of shown, the most popular first,
+// studioDiscoverMost of each kind at most. Titles for adults, not out yet
+// or of no date are left out. It waits studioWait at most.
+func (s *Service) discoveredTitles(ctx context.Context, v view, kinds []tmdb.Kind, shown map[tmdbTitle]bool,
+	discover func(ctx context.Context, kind tmdb.Kind, page int, today string) ([]tmdb.Discovered, error)) []record {
 	deadline := time.Now().Add(studioWait)
 	asking, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
@@ -465,14 +485,9 @@ func (s *Service) studioDiscovered(ctx context.Context, v view, refs studioRefs,
 		page int
 	}
 	var pages []asked
-	if slices.Contains(kinds, KindMovie) && len(refs.companies) > 0 {
+	for _, kind := range kinds {
 		for page := 1; page <= studioDiscoverPages; page++ {
-			pages = append(pages, asked{tmdb.Movie, page})
-		}
-	}
-	if slices.Contains(kinds, KindSeries) {
-		for page := 1; page <= studioDiscoverPages; page++ {
-			pages = append(pages, asked{tmdb.TV, page})
+			pages = append(pages, asked{kind, page})
 		}
 	}
 	found := make([][]tmdb.Discovered, len(pages))
@@ -480,7 +495,7 @@ func (s *Service) studioDiscovered(ctx context.Context, v view, refs studioRefs,
 	for i, p := range pages {
 		wg.Go(func() {
 			var err error
-			if found[i], err = s.tmdb.Discover(asking, p.kind, refs.networks, refs.companies, p.page, today); err != nil && ctx.Err() == nil {
+			if found[i], err = discover(asking, p.kind, p.page, today); err != nil && ctx.Err() == nil {
 				s.logger.Debug("TMDB's discover could not be read", "kind", p.kind, "page", p.page, "error", err)
 			}
 		})
@@ -512,7 +527,7 @@ func (s *Service) studioDiscovered(ctx context.Context, v view, refs studioRefs,
 	records, _ = s.visible(ctx, v, records)
 	records, _ = s.released(ctx, v, records)
 	if err := s.saveNew(ctx, records); err != nil {
-		s.logger.Debug("The titles of a studio could not be recorded", "error", err)
+		s.logger.Debug("The titles TMDB's discover lists could not be recorded", "error", err)
 	}
 	return records
 }

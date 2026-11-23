@@ -620,13 +620,17 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 	}
 	genre, ok := h.genreFilter(r, user, parent)
 	if !ok {
-		// Genres its catalog does not offer narrow a library's first
-		// titles by their own genres (see titleGenreListing).
+		// Genres or tags its catalog does not offer narrow a library's
+		// first titles by their own genres or tags (see titleGenreListing
+		// and titleTagListing).
 		if names.genresOnly() && h.titleGenreListing(w, r, user, parent, names, fields, keep, start, limit) {
 			return
 		}
-		// The library cannot be narrowed to the requested genre, studio or
-		// year.
+		if names.tagsOnly() && h.titleTagListing(w, r, user, parent, names, fields, keep, start, limit) {
+			return
+		}
+		// The library cannot be narrowed to the requested genre, studio,
+		// tag or year.
 		writeJSON(w, http.StatusOK, QueryResult{Items: []BaseItemDto{}, StartIndex: start})
 		return
 	}
@@ -1120,23 +1124,27 @@ func (h *Handler) CatalogGenres(ctx context.Context, user accounts.User, library
 	return genres, err
 }
 
-// filters lists the genres a library's catalog offers, and the official
-// ratings of the titles the user sees in the folder, among the first ones
-// listed (scanLimit), as the rating filter judges them (see
-// library.Service.OfficialRatings).
+// filters lists the genres a library's catalog offers, the tags of its
+// first titles (see titleTags), and the official ratings of the titles the
+// user sees in the folder, among the first ones listed (scanLimit), as
+// the rating filter judges them (see library.Service.OfficialRatings).
 func (h *Handler) filters(w http.ResponseWriter, r *http.Request) {
 	genres, user, parent, ok := h.libraryGenres(w, r)
 	if !ok {
 		return
 	}
 	ratings, err := h.officialRatings(r, user, parent)
+	var tags []string
+	if err == nil {
+		tags, err = h.titleTags(r, user, parent)
+	}
 	if err != nil {
 		h.browseError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]any{
 		"Genres":          toAny(nonNil(genres)),
-		"Tags":            {},
+		"Tags":            toAny(tags),
 		"OfficialRatings": toAny(ratings),
 		"Years":           {},
 	})
@@ -1182,13 +1190,18 @@ func toAny(values []string) []any {
 }
 
 func (h *Handler) filters2(w http.ResponseWriter, r *http.Request) {
-	genres, user, _, ok := h.libraryGenres(w, r)
+	genres, user, parent, ok := h.libraryGenres(w, r)
 	if !ok {
+		return
+	}
+	tags, err := h.titleTags(r, user, parent)
+	if err != nil {
+		h.browseError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"Genres":            h.namedPairs(user.ID, genreNamed, genres),
-		"Tags":              []string{},
+		"Tags":              tags,
 		"AudioLanguages":    []NameValuePair{},
 		"SubtitleLanguages": []NameValuePair{},
 	})

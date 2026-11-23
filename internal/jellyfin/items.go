@@ -757,15 +757,21 @@ type QueryResult struct {
 // folders too: jellyfin-web lists a library without content type, as an
 // addon's collection library is to most apps (see appCollectionType), by
 // its folders, movies and series. A request that leaves folders out still
-// keeps it, as Jellyfin keeps collections.
+// keeps it, as Jellyfin keeps collections. A type that is none of
+// Jellyfin's BaseItemKind names is ignored, as Jellyfin's binding of the
+// parameters drops it: jellyfin-web lists a tag's titles with
+// IncludeItemTypes=tag (see tags.go).
 func itemTypeFilter(r *http.Request) func(library.Item) bool {
-	include := listQuery(r, "includeItemTypes")
-	exclude := listQuery(r, "excludeItemTypes")
-	media := listQuery(r, "mediaTypes")
-	filters := listQuery(r, "filters")
 	matches := func(list []string, value string) bool {
 		return slices.ContainsFunc(list, func(t string) bool { return strings.EqualFold(t, value) })
 	}
+	known := func(list []string) []string {
+		return slices.DeleteFunc(list, func(t string) bool { return !matches(itemKinds, t) })
+	}
+	include := known(listQuery(r, "includeItemTypes"))
+	exclude := known(listQuery(r, "excludeItemTypes"))
+	media := listQuery(r, "mediaTypes")
+	filters := listQuery(r, "filters")
 	folders, others := matches(filters, "IsFolder"), matches(filters, "IsNotFolder")
 	return func(item library.Item) bool {
 		named := func(list []string) bool {

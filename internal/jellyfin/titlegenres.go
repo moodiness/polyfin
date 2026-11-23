@@ -27,10 +27,11 @@ import (
 // remote catalog is read a page at a time.
 
 // genresOnly reports whether the listing is narrowed to genres alone, by
-// name or by identifier: neither studios nor years, which no title's
-// genres stand for.
+// name or by identifier: neither studios, tags nor years, which no
+// title's genres stand for.
 func (f nameFilter) genresOnly() bool {
-	return (len(f.genres) > 0 || len(f.genreIDs) > 0) && len(f.studios) == 0 && len(f.studioIDs) == 0 && len(f.years) == 0
+	return (len(f.genres) > 0 || len(f.genreIDs) > 0) && len(f.studios) == 0 && len(f.studioIDs) == 0 && len(f.tags) == 0 &&
+		len(f.years) == 0
 }
 
 // hasGenre reports whether a title has one of the genres the listing asks
@@ -52,6 +53,21 @@ func (f nameFilter) hasGenre(item library.Item) bool {
 // otherwise.
 func (h *Handler) titleGenreListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID, f nameFilter,
 	fields fieldSet, keep func(library.Item) bool, start, limit int) bool {
+	has := func(items []library.Item) []bool {
+		kept := make([]bool, len(items))
+		for i, item := range items {
+			kept[i] = f.hasGenre(item)
+		}
+		return kept
+	}
+	return h.titleNameListing(w, r, user, parent, has, fields, keep, start, limit)
+}
+
+// titleNameListing lists the titles of library parent among its first
+// titles that has keeps, has telling for each of them, as
+// titleGenreListing does.
+func (h *Handler) titleNameListing(w http.ResponseWriter, r *http.Request, user accounts.User, parent accounts.ID,
+	has func(items []library.Item) []bool, fields fieldSet, keep func(library.Item) bool, start, limit int) bool {
 	start = max(start, 0)
 	// A listing that asks for no limit gets every title kept.
 	end, reach := start+limit, start+limit
@@ -66,7 +82,13 @@ func (h *Handler) titleGenreListing(w http.ResponseWriter, r *http.Request, user
 	if !isLibrary {
 		return false
 	}
-	kept := slices.DeleteFunc(slices.Clone(pool.Items), func(item library.Item) bool { return !keep(item) || !f.hasGenre(item) })
+	candidates := slices.DeleteFunc(slices.Clone(pool.Items), func(item library.Item) bool { return !keep(item) })
+	var kept []library.Item
+	for i, named := range has(candidates) {
+		if named {
+			kept = append(kept, candidates[i])
+		}
+	}
 	if len(listQuery(r, "sortBy")) > 0 {
 		state, err := h.userState(r.Context(), user, kept)
 		if err != nil {

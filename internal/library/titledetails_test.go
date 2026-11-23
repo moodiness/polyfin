@@ -140,7 +140,7 @@ func TestCreditsKeptWithoutDetailsAreDue(t *testing.T) {
 	e.service.forgetCredits(creditsKey{kind: "movie", provider: "imdb", id: "tt0882002"})
 	kept, err := e.service.readTitleCredits(t.Context(), []creditsKey{{kind: "movie", provider: "imdb", id: "tt0882002"}})
 	k := kept[creditsKey{kind: "movie", provider: "imdb", id: "tt0882002"}]
-	if err != nil || k.details || !k.due(time.Now(), "fr", e.titles["Quiet Pier"]) {
+	if err != nil || k.details || !k.due(time.Now(), e.service.creditsAsk(), e.titles["Quiet Pier"]) {
 		t.Fatalf("an old row: %+v %v", k, err)
 	}
 	if item := e.open(e.admin, "Quiet Pier"); !slices.Equal(item.Studios, []string{"North Pictures"}) {
