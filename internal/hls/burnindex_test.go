@@ -128,13 +128,21 @@ func TestBurnIndexIsAlwaysACopy(t *testing.T) {
 }
 
 // FFmpeg burns in a copy of an .idx file with the pair's .sub file read
-// where it is, by path or http URL.
+// where it is, by path or http URL. The pair has its sentinel, as the copy
+// of an encoding has (see writeBurnCopy): FFmpeg 9.0.2 drops the end of a
+// subtitle file that reaches its filter graph before the first frame of
+// the video, and overlay then waits forever for what ends the last
+// picture, which the frame at 16 s needs.
 func TestBurnIndexCopyReadsItsSubFile(t *testing.T) {
 	t.Parallel()
 	ffmpeg, _ := tools(t)
 	idx, sub := sentinelRectangle.VobSub()
+	idx, packs, err := vobSubSentinel(idx, int64(len(sub)), sentinelTime(20*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
 	served, copied := t.TempDir(), t.TempDir()
-	if err := os.WriteFile(filepath.Join(served, "Movie.sub"), sub, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(served, "Movie.sub"), append(sub, packs...), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(copied, "burn-0.idx")
@@ -152,7 +160,14 @@ func TestBurnIndexCopyReadsItsSubFile(t *testing.T) {
 				encoding.burnFileArgs(), []string{"-filter_complex",
 					"[0:v][1:0]overlay=eof_action=pass,select=gte(t\\," + strconv.FormatFloat(c.at, 'f', 3, 64) + "),format=rgb24,crop=1:1:160:140",
 					"-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"})
-			out, err := exec.Command(ffmpeg, args...).CombinedOutput()
+			// An FFmpeg that never ends fails this test, not the package.
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			out, err := exec.CommandContext(ctx, ffmpeg, args...).CombinedOutput()
+			stuck := ctx.Err() != nil
+			cancel()
+			if stuck {
+				t.Fatalf("%s: pixel at %.1f s: FFmpeg did not end within a minute: %s", sub, c.at, out)
+			}
 			if err != nil || len(out) != 3 {
 				t.Fatalf("%s: pixel at %.1f s: %v: %s", sub, c.at, err, out)
 			}
