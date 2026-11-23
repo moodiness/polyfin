@@ -367,7 +367,7 @@ Polyfin keeps these fields:
 - A value that is not a positive whole number, or a TVDB identifier typed for a movie, is ignored: an identifier already set stays, and the other fields still save.
 - A title known by its TMDB identifier (`tmdb:…`) keeps that one, and a title known by its TVDB identifier (`tvdb:…`) keeps that one: those fields are read-only.
 - Seasons and episodes have no identifiers to edit.
-- Everything follows the identifiers set, for every user: the links and identifiers apps show, the [poster address template](#poster-address-template), ratings, TMDB people and artwork, skip segment lookups, the tracking services and imports.
+- Everything follows the identifiers set, for every user: the links and identifiers apps show, the [poster address template](#poster-address-template), ratings, TMDB people and artwork, skip segment lookups, the tracking services and imports. A TMDB identifier set that TMDB does not know is not found again by the title's IMDb identifier: the title keeps its addon's people (see [Cast and crew from TMDB](collections-people-and-ratings.md#cast-and-crew-from-tmdb)).
 
 ### Episode orders
 
