@@ -2044,24 +2044,39 @@ export type SmartField =
   | 'contentRating'
   | 'person'
   | 'studio'
+  | 'service'
+  | 'tag'
+  | 'country'
+  | 'critics'
+  | 'metacritic'
+  | 'localFile'
   | 'released'
   | 'homeRelease'
   | 'type'
   | 'rank'
   | 'state'
 
-/** How a smart list orders its titles. */
+/** How a smart list orders its titles; `datePlayed`: the user's latest played first. */
 export type SmartSort =
-  'catalog' | 'premiere' | 'latestEpisode' | 'seasonPremiere' | 'rating' | 'name' | 'random'
+  | 'catalog'
+  | 'premiere'
+  | 'latestEpisode'
+  | 'seasonPremiere'
+  | 'rating'
+  | 'name'
+  | 'random'
+  | 'datePlayed'
 
 /**
  * A rule of a smart list, or a group of them. `not` negates it. `value` is a genre, an ISO 639
- * language code, the highest content rating, a person's or a studio's name, `movie` or `series`,
- * for a `state` rule `played`, `unplayed`, `started` or `favorite` (for the user who opens the
- * list), or for a `homeRelease` rule `released`, `upcoming` or `both` (titles out at home in the
- * last days, in the next, or either); `min` and `max` bound a year, a rating, its votes, a
- * runtime in minutes, or a release in days from today (negative: past), and `max` is the place in
- * its catalog or a home release's days. A group matches `all` or `any` of its `rules`.
+ * language code, an ISO 3166-1 alpha-2 country code, the highest content rating, a person's, a
+ * studio's or a streaming service's name, a tag, `movie` or `series`, for a `state` rule `played`,
+ * `unplayed`, `started`, `favorite` or `watchlist` (for the user who opens the list), or for a
+ * `homeRelease` rule `released`, `upcoming` or `both` (titles out at home in the last days, in the
+ * next, or either); `min` and `max` bound a year, a rating, its votes, a critics' or Metacritic
+ * score (0 to 100), a runtime in minutes, or a release in days from today (negative: past), and
+ * `max` is the place in its catalog or a home release's days. A `localFile` rule has no value. A
+ * group matches `all` or `any` of its `rules`.
  */
 export type SmartRule = {
   field: SmartField
@@ -2097,12 +2112,14 @@ export type SmartListDraft = Omit<SmartList, 'id' | 'itemId' | 'updatedAt'>
 
 /**
  * A catalog a scope's smart lists may draw from. `shared`: one of the server's addons, which a
- * user's own list may use while they use the server's sources.
+ * user's own list may use while they use the server's sources. `source`: what it belongs to, an
+ * addon, a local folder or network share, or an IPTV source.
  */
 export type SmartCatalogChoice = {
   addonId: string
   addonName: string
   shared: boolean
+  source: 'addon' | 'folder' | 'iptv'
   catalogType: string
   catalogId: string
   catalogName: string
@@ -2111,12 +2128,14 @@ export type SmartCatalogChoice = {
 }
 
 /**
- * What a smart list may draw from, the ISO 639-1 codes of the languages its rules may name, and the
- * content ratings a rule may set as the highest, from the youngest.
+ * What a smart list may draw from, the ISO 639-1 codes of the languages its rules may name, the
+ * ISO 3166-1 alpha-2 codes of the countries, and the content ratings a rule may set as the
+ * highest, from the youngest.
  */
 export type SmartChoices = {
   catalogs: SmartCatalogChoice[]
   languages: string[]
+  countries: string[]
   contentRatings: string[]
 }
 

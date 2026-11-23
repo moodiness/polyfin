@@ -381,3 +381,83 @@ func TestListsKeepTheirExclusions(t *testing.T) {
 		t.Errorf("rules and exclusions past the bound together: %v", err)
 	}
 }
+
+// The rules on a title's tags, countries, critics' and Metacritic scores,
+// local files, streaming services and place on the user's watchlist are
+// validated and judged; the scores are unknown until MDBList answered, and
+// a title known to have none matches neither a rule nor its negation. A
+// list sorted by date played is kept.
+func TestScopeRulesJudgeWhatTitlesAre(t *testing.T) {
+	t.Parallel()
+	valid := group(MatchAll,
+		Rule{Field: FieldTag, Value: "Award"},
+		Rule{Field: FieldCountry, Value: "FR"},
+		Rule{Field: FieldCritics, Min: new(70.0)},
+		Rule{Field: FieldMetacritic, Max: new(100.0)},
+		Rule{Field: FieldLocalFile, Not: true},
+		Rule{Field: FieldService, Value: "Some Service"},
+		Rule{Field: FieldState, Value: StateWatchlist},
+	)
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid: %v", err)
+	}
+	for _, rule := range []Rule{
+		{Field: FieldTag},
+		{Field: FieldCountry, Value: "fr"},
+		{Field: FieldCountry, Value: "France"},
+		{Field: FieldCountry, Value: "XK"},
+		{Field: FieldCritics},
+		{Field: FieldCritics, Min: new(101.0)},
+		{Field: FieldMetacritic, Min: new(50.5)},
+		{Field: FieldLocalFile, Value: "yes"},
+		{Field: FieldService, Value: " "},
+	} {
+		if err := group(MatchAll, rule).Validate(); !errors.Is(err, ErrInvalidRules) {
+			t.Errorf("%+v: %v", rule, err)
+		}
+	}
+
+	title := Title{Described: true, Tags: []string{"Award"}, Countries: []string{"FR", "BE"}, Critics: 75, Metacritic: 0, CriticsKnown: true,
+		LocalFile: true, Services: []string{"Some Service"}, ServicesKnown: true, State: State{Watchlist: true}}
+	for _, c := range []struct {
+		name  string
+		rule  Rule
+		title Title
+		want  Verdict
+	}{
+		{"tag in any case", Rule{Field: FieldTag, Value: "award"}, title, Yes},
+		{"other tag", Rule{Field: FieldTag, Value: "Cult"}, title, No},
+		{"no tag", Rule{Field: FieldTag, Value: "Cult", Not: true}, Title{}, Absent},
+		{"country", Rule{Field: FieldCountry, Value: "BE"}, title, Yes},
+		{"other country", Rule{Field: FieldCountry, Value: "US"}, title, No},
+		{"country not read", Rule{Field: FieldCountry, Value: "FR"}, Title{}, Unknown},
+		{"country described as none", Rule{Field: FieldCountry, Value: "FR", Not: true}, Title{Described: true}, Absent},
+		{"critics", Rule{Field: FieldCritics, Min: new(70.0)}, title, Yes},
+		{"critics too low", Rule{Field: FieldCritics, Min: new(80.0)}, title, No},
+		{"no Metacritic score", Rule{Field: FieldMetacritic, Min: new(10.0), Not: true}, title, Absent},
+		{"scores waiting for MDBList", Rule{Field: FieldCritics, Min: new(10.0)}, Title{}, Unknown},
+		{"local file", Rule{Field: FieldLocalFile}, title, Yes},
+		{"no local file", Rule{Field: FieldLocalFile, Not: true}, title, No},
+		{"service", Rule{Field: FieldService, Value: "some service"}, title, Yes},
+		{"services not known", Rule{Field: FieldService, Value: "Some Service"}, Title{}, Unknown},
+		{"on the watchlist", Rule{Field: FieldState, Value: StateWatchlist}, title, Yes},
+		{"off the watchlist", Rule{Field: FieldState, Value: StateWatchlist}, Title{}, No},
+	} {
+		if got := c.rule.Judge(c.title); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	if !valid.UsesState(StateWatchlist) || valid.UsesState(StateFavorite) {
+		t.Error("UsesState")
+	}
+
+	store := New(migrated.New(t))
+	saved, err := store.Create(t.Context(), List{Name: "History", ShownAs: ShownAsLibrary, Catalogs: []Catalog{{AddonID: accounts.ID{1}, Type: "movie", ID: "top"}},
+		Rules: group(MatchAll, Rule{Field: FieldState, Value: StatePlayed}), Sort: SortDatePlayed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.Get(t.Context(), nil, saved.ID); err != nil || got.Sort != SortDatePlayed {
+		t.Errorf("read back: %+v %v", got, err)
+	}
+}

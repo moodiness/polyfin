@@ -41,6 +41,17 @@ func episodeVideoID(series string, season, episode int) string {
 // (see homeCatalog). A title's date added is its latest file's date, the
 // one the catalog sorts by.
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, id string, skip int, search string) ([]stremio.Meta, error) {
+	return s.catalogWindow(ctx, source, catalogType, id, skip, catalogPage, search)
+}
+
+// CatalogWindow lists the titles [start, start+count) of a folder's
+// catalog, as Catalog orders them, in one query: smart lists read a
+// folder's titles whole so.
+func (s *Service) CatalogWindow(ctx context.Context, source accounts.ID, catalogType, id string, start, count int) ([]stremio.Meta, error) {
+	return s.catalogWindow(ctx, source, catalogType, id, start, count, "")
+}
+
+func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalogType, id string, skip, limit int, search string) ([]stremio.Meta, error) {
 	var kind string
 	err := s.db.QueryRow(ctx, "SELECT kind FROM local_folders WHERE addon_id = $1", source).Scan(&kind)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && (id != catalogID || catalogType != metaType(kind)) {
@@ -50,7 +61,7 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 		return nil, err
 	}
 	if kind == KindHomeVideos {
-		return s.homeCatalog(ctx, source, skip, search)
+		return s.homeCatalog(ctx, source, skip, limit, search)
 	}
 	rows, err := s.db.Query(ctx, `SELECT id, name, poster, year, modified FROM (
 			SELECT stremio_id AS id, max(name) AS name, max(poster) AS poster, max(title_year) AS year, max(modified) AS modified
@@ -60,7 +71,7 @@ func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, 
 			FROM local_files f JOIN local_folders l ON l.addon_id = f.addon_id WHERE f.addon_id = $1 AND `+plainListed+`
 			GROUP BY f.plain_id) t
 		WHERE $2 = '' OR strpos(lower(name), lower($2)) > 0
-		ORDER BY modified DESC, id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), catalogPage)
+		ORDER BY modified DESC, id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), max(limit, 0))
 	if err != nil {
 		return nil, err
 	}

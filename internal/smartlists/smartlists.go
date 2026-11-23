@@ -1,10 +1,13 @@
 // Package smartlists keeps the smart lists: lists of titles drawn from
-// catalogs of addons, which keep the titles that match their rules over
-// what the titles are (genre, year, IMDb rating and its votes, language,
-// runtime, content rating, people, studio, release date, home release,
-// movie or series, place in their catalog) and over what the user who
-// opens them did with them (played, unplayed, started, favorite), but
-// those their exclusions match. Apps see a list as a library or as a
+// catalogs of addons, of IPTV sources' movies and series, and of local
+// folders and network shares, which keep the titles that match their
+// rules over what the titles are (genre, year, IMDb rating and its votes,
+// critics' and Metacritic scores, language, country, runtime, content
+// rating, people, studio, streaming service, tag, release date, home
+// release, movie or series, place in their catalog, whether a local file
+// holds them) and over what the user who opens them did with them
+// (played, unplayed, started, favorite, on their watchlist), but those
+// their exclusions match. Apps see a list as a library or as a
 // collection. The server's lists, made by administrators, are seen by
 // every user; a user's own lists only by them.
 //
@@ -40,7 +43,7 @@ var (
 	// Rule.Validate).
 	ErrInvalidRules = errors.New("a smart list's rules are not valid")
 	// ErrInvalidSort reports an unknown sort.
-	ErrInvalidSort = errors.New("a smart list's sort is catalog, premiere, latest episode, season premiere, rating, name or random")
+	ErrInvalidSort = errors.New("a smart list's sort is catalog, premiere, latest episode, season premiere, rating, name, random or date played")
 	// ErrInvalidMaxItems reports a maximum outside 1 to MaxItems.
 	ErrInvalidMaxItems = errors.New("a smart list's maximum is a whole number from 1 to 20,000")
 	// ErrInvalidShownAs reports a list shown as neither a library nor a
@@ -72,7 +75,9 @@ const (
 // collection lists them; by premiere date, the latest first; by the latest
 // regular episode aired, or the latest season premiere aired, the latest
 // first, a movie by its premiere date; by IMDb rating, the highest first;
-// by name; or at random, in an order drawn again each day.
+// by name; at random, in an order drawn again each day; or by the date
+// the user who opens the list last played a title, the latest first, those
+// never played last.
 const (
 	SortCatalog        = "catalog"
 	SortPremiere       = "premiere"
@@ -81,9 +86,11 @@ const (
 	SortRating         = "rating"
 	SortName           = "name"
 	SortRandom         = "random"
+	SortDatePlayed     = "datePlayed"
 )
 
-// Catalog names a catalog of an addon a list draws from.
+// Catalog names a catalog a list draws from: of an addon, an IPTV source
+// or a local folder, all of which AddonID names.
 type Catalog struct {
 	AddonID accounts.ID
 	Type    string
@@ -142,6 +149,12 @@ func (l List) Uses(field string) bool {
 	return l.Rules.Uses(field) || l.Exclude.Uses(field)
 }
 
+// UsesState reports whether the list's rules or exclusions hold a state
+// rule of value.
+func (l List) UsesState(value string) bool {
+	return l.Rules.UsesState(value) || l.Exclude.UsesState(value)
+}
+
 // Keeps tells whether the list keeps a title (see Keeps).
 func (l List) Keeps(t Title) Verdict {
 	return Keeps(l.Rules, l.Exclude, t)
@@ -178,7 +191,7 @@ func (l List) Validate() error {
 		}
 	}
 	switch l.Sort {
-	case SortCatalog, SortPremiere, SortLatestEpisode, SortSeasonPremiere, SortRating, SortName, SortRandom:
+	case SortCatalog, SortPremiere, SortLatestEpisode, SortSeasonPremiere, SortRating, SortName, SortRandom, SortDatePlayed:
 	default:
 		return ErrInvalidSort
 	}

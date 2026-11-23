@@ -239,7 +239,12 @@ const libraries: typeof en = {
     },
     catalogs: 'Catálogos',
     catalogsHelp:
-      'Sus títulos proceden de estos catálogos, cada uno leído hasta su máximo: el de la biblioteca cuando el catálogo es una de sus bibliotecas; si no, Títulos leídos por catálogo de películas y series.',
+      'Sus títulos proceden de los catálogos de addons, de carpetas locales y recursos compartidos de red, y de las películas y series de las fuentes IPTV. El catálogo de un addon se lee hasta su máximo: el de la biblioteca cuando el catálogo es una de sus bibliotecas; si no, Títulos leídos por catálogo de películas y series. Los títulos de una carpeta o de una fuente IPTV se leen enteros. La música no se ofrece.',
+    sourceKinds: {
+      addon: 'Addons',
+      folder: 'Carpetas locales y recursos compartidos de red',
+      iptv: 'Fuentes IPTV',
+    } as Record<string, string>,
     catalogFilter: 'Filtrar catálogos',
     catalogFilterPlaceholder: 'Nombre del catálogo o de la extensión',
     serverBadge: 'Servidor',
@@ -276,6 +281,12 @@ const libraries: typeof en = {
       contentRating: 'Clasificación por edad',
       person: 'Actor o director',
       studio: 'Estudio o cadena',
+      service: 'Servicio de streaming',
+      tag: 'Etiqueta',
+      country: 'País',
+      critics: 'Nota de la crítica (Rotten Tomatoes)',
+      metacritic: 'Nota de Metacritic',
+      localFile: 'Tiene un archivo local',
     } as Record<string, string>,
     negation: 'Cumple o no',
     is: 'es',
@@ -286,6 +297,7 @@ const libraries: typeof en = {
     language: 'Idioma',
     rankMax: 'Entre sus primeros',
     minutes: 'minutos',
+    outOf100: 'sobre 100',
     atMost: 'Como mucho',
     releasedWhen: 'Cuándo',
     releasedWithin: { last: 'En los últimos', next: 'En los próximos' } as Record<string, string>,
@@ -295,22 +307,35 @@ const libraries: typeof en = {
       both: 'A menos de',
     } as Record<string, string>,
     days: 'días',
-    namePlaceholder: { person: 'Su nombre', studio: 'Su nombre' } as Record<string, string>,
+    namePlaceholder: {
+      person: 'Su nombre',
+      studio: 'Su nombre',
+      service: 'Su nombre',
+      tag: 'La etiqueta',
+    } as Record<string, string>,
     types: { movie: 'Una película', series: 'Una serie' } as Record<string, string>,
     states: {
       played: 'Reproducido',
       unplayed: 'No reproducido',
       started: 'Empezado, sin terminar',
       favorite: 'Favorito',
+      watchlist: 'En Para ver',
     } as Record<string, string>,
     stateHelp:
-      'Las reglas de reproducido, empezado y favorito siguen lo que hizo cada usuario: cada uno ve su propia lista.',
+      'Las reglas de reproducido, empezado, favorito y Para ver siguen lo que hizo cada usuario: cada uno ve su propia lista. Una serie está en Para ver mientras uno de sus episodios lo esté.',
     describedHelp:
-      'El idioma de un título, y su duración, su clasificación, sus personas y su fecha de estreno cuando su catálogo no las da, llegan con su descripción, que Polyfin lee en segundo plano: un título aún sin describir queda fuera hasta que lo esté. Un título al que le falta lo que mira una regla no cumple ni la regla ni su contrario.',
+      'El idioma y los países de un título, y su duración, su clasificación, sus personas y su fecha de estreno cuando su catálogo no las da, llegan con su descripción, que Polyfin lee en segundo plano: un título aún sin describir queda fuera hasta que lo esté. Un título de una carpeta local o de una fuente IPTV lo describen los addons que lo describen; un título IPTV sin identificador de IMDb solo tiene su ficha de lista. Un título al que le falta lo que mira una regla no cumple ni la regla ni su contrario.',
     votesHelp:
       'Los votos de IMDb vienen de MDBList, con la clave API de MDBList para valoraciones en Ajustes › Contenido, consultados en segundo plano. Sin esa clave, ningún título tiene votos.',
+    criticsHelp:
+      'Las notas de la crítica (Rotten Tomatoes) y de Metacritic, de 0 a 100, vienen de MDBList, con la clave API de MDBList para valoraciones en Ajustes › Contenido, consultadas en segundo plano. Sin esa clave, ningún título las tiene.',
     studioHelp:
       'Los estudios y las cadenas vienen de TMDB, con la clave API de TMDB en Ajustes › Contenido, consultados en segundo plano y guardados: la lista crece a medida que llegan. Sin esa clave, solo cuentan los estudios que un administrador puso en los metadatos de un título.',
+    serviceHelp:
+      'Los servicios de streaming vienen de TMDB, con la clave API de TMDB en Ajustes › Contenido, para el país de las clasificaciones de Ajustes › General, solo suscripciones y ofertas gratuitas, consultados en segundo plano y guardados: la lista crece a medida que llegan. Sin esa clave, ningún título tiene uno.',
+    tagHelp: 'Las etiquetas son las que un administrador puso en los metadatos de un título.',
+    localFileHelp:
+      'Un título tiene un archivo local cuando una carpeta local o un recurso compartido de red contiene uno, sea cual sea el catálogo que lo lista.',
     homeReleaseHelp:
       'El estreno en casa de una película es su primer estreno digital o físico, o si no 90 días después de su estreno en cines, según TMDB, con la clave API de TMDB en Ajustes › Contenido, consultado en segundo plano y guardado: la lista crece a medida que llegan. El de una serie es su fecha de estreno. Con Esperar al estreno digital activado, una película aún no estrenada solo aparece en las listas con una regla de títulos próximos.',
     sort: 'Ordenar',
@@ -322,9 +347,12 @@ const libraries: typeof en = {
       rating: 'Valoración de IMDb, más alta primero',
       name: 'Nombre',
       random: 'Al azar, sorteado de nuevo cada día',
+      datePlayed: 'Fecha de reproducción, la más reciente primero',
     } as Record<string, string>,
     episodeSortHelp:
       'Las series van según su último episodio regular emitido, o el estreno de su última temporada, según su descripción, sin especiales ni episodios por venir; las películas según su fecha de estreno. Una serie cuya descripción aún no se ha leído va al final hasta que se lea.',
+    datePlayedHelp:
+      'Cada usuario ve primero los títulos que reprodujo más recientemente, una serie según su último episodio visto entero, y luego los demás como los listan los catálogos. Con una regla Reproducido, es su historial.',
     maxItems: 'Máximo de títulos',
     maxHelp: (max: string) => `De 1 a ${max}. Vacío: sin máximo.`,
     create: 'Crear la lista',
@@ -345,8 +373,8 @@ const libraries: typeof en = {
     firstOf: (shown: string, listed: string) => `Los primeros ${shown} de ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 título aún espera lo que miran sus reglas: su descripción, sus votos o sus estudios. La lista crece a medida que llegan.'
-        : `${count} títulos aún esperan lo que miran sus reglas: su descripción, sus votos o sus estudios. La lista crece a medida que llegan.`,
+        ? '1 título aún espera lo que miran sus reglas: su descripción, sus notas, sus estudios o sus servicios de streaming. La lista crece a medida que llegan.'
+        : `${count} títulos aún esperan lo que miran sus reglas: su descripción, sus notas, sus estudios o sus servicios de streaming. La lista crece a medida que llegan.`,
     incomplete:
       'Algunos catálogos no respondieron a tiempo: la lista muestra lo leído hasta ahora y lee el resto.',
     previewEmpty: 'Por ahora, ningún título cumple estas reglas.',

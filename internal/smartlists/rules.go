@@ -51,6 +51,10 @@ const (
 	// FieldStudio matches a title made by the studio or aired on the
 	// network Value, in any letter case.
 	FieldStudio = "studio"
+	// FieldService matches a title offered by the streaming service
+	// Value, in any letter case, by subscription or free, in the server's
+	// rating country, as TMDB tells.
+	FieldService = "service"
 	// FieldReleased matches a title released from Min to Max days after
 	// today: Min -30 and Max 0 for the last 30 days, Min 0 and Max 60 for
 	// the next 60.
@@ -62,17 +66,33 @@ const (
 	// the one rule that lists the movies the wait for their digital
 	// release holds back (see Rule.Upcoming).
 	FieldHomeRelease = "homeRelease"
+	// FieldTag matches a title an administrator gave the tag Value, in
+	// any letter case.
+	FieldTag = "tag"
+	// FieldCountry matches a title whose description names the country
+	// Value, an ISO 3166-1 alpha-2 code, among those it was made in.
+	FieldCountry = "country"
+	// FieldCritics matches a title whose critics' score on Rotten
+	// Tomatoes is from Min to Max, from 0 to 100, and FieldMetacritic one
+	// whose Metacritic score is, as MDBList tells them.
+	FieldCritics    = "critics"
+	FieldMetacritic = "metacritic"
+	// FieldLocalFile matches a title a local folder or a network share
+	// holds a file of.
+	FieldLocalFile = "localFile"
 )
 
 // What a state rule matches: a title the user played (a series once every
 // episode released is), one they did not, one they started without
 // finishing it (a movie with a resume point, a series with an episode
-// played or started, not every one played), or one they marked favorite.
+// played or started, not every one played), one they marked favorite, or
+// one on their watchlist (a movie, or a series one of whose episodes is).
 const (
-	StatePlayed   = "played"
-	StateUnplayed = "unplayed"
-	StateStarted  = "started"
-	StateFavorite = "favorite"
+	StatePlayed    = "played"
+	StateUnplayed  = "unplayed"
+	StateStarted   = "started"
+	StateFavorite  = "favorite"
+	StateWatchlist = "watchlist"
 )
 
 // What a home release rule matches: a title out at home in the last Max
@@ -100,10 +120,12 @@ const (
 	// studio's name, in characters.
 	maxGenreLength = 100
 	// maxRuntime bounds a runtime rule, in minutes, maxVotes a votes
-	// rule, and maxDays a released rule, in days either way.
+	// rule, maxDays a released rule, in days either way, and maxScore a
+	// critics' or Metacritic score rule.
 	maxRuntime = 1000
 	maxVotes   = 100_000_000
 	maxDays    = 36500
+	maxScore   = 100
 )
 
 // Rule is a condition on titles, or a group of them. Not negates it: a
@@ -158,9 +180,15 @@ func (r Rule) valid(depth int, count *int) bool {
 			}
 		}
 		return true
-	case FieldGenre, FieldPerson, FieldStudio:
+	case FieldGenre, FieldPerson, FieldStudio, FieldService, FieldTag:
 		value := strings.TrimSpace(r.Value)
 		return plain && value != "" && utf8.RuneCountInString(value) <= maxGenreLength && r.Min == nil && r.Max == nil
+	case FieldCountry:
+		return plain && knownCountry(r.Value) && r.Min == nil && r.Max == nil
+	case FieldCritics, FieldMetacritic:
+		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(0, maxScore)
+	case FieldLocalFile:
+		return plain && r.Value == "" && r.Min == nil && r.Max == nil
 	case FieldYear:
 		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(1800, 2200)
 	case FieldRating:
@@ -172,8 +200,8 @@ func (r Rule) valid(depth int, count *int) bool {
 	case FieldRank:
 		return plain && r.Value == "" && r.Min == nil && r.Max != nil && whole(r.Max) && *r.Max >= 1 && *r.Max <= MaxItems
 	case FieldState:
-		return plain && r.Min == nil && r.Max == nil &&
-			(r.Value == StatePlayed || r.Value == StateUnplayed || r.Value == StateStarted || r.Value == StateFavorite)
+		return plain && r.Min == nil && r.Max == nil && (r.Value == StatePlayed || r.Value == StateUnplayed || r.Value == StateStarted ||
+			r.Value == StateFavorite || r.Value == StateWatchlist)
 	case FieldRuntime:
 		return plain && r.Value == "" && whole(r.Min) && whole(r.Max) && bounded(1, maxRuntime)
 	case FieldVotes:
@@ -192,17 +220,38 @@ func (r Rule) valid(depth int, count *int) bool {
 	return false
 }
 
+// knownCountry reports whether code is the ISO 3166-1 alpha-2 code of a
+// country, in capitals.
+func knownCountry(code string) bool {
+	return slices.ContainsFunc(localization.Countries(), func(c localization.Country) bool { return c.Alpha2 == code })
+}
+
+// Countries lists the ISO 3166-1 alpha-2 codes of the countries a country
+// rule may name.
+func Countries() []string {
+	countries := localization.Countries()
+	codes := make([]string, 0, len(countries))
+	for _, c := range countries {
+		codes = append(codes, c.Alpha2)
+	}
+	return codes
+}
+
 // Uses reports whether the rules look at field, at any level.
 func (r Rule) Uses(field string) bool {
 	if r.Field == field {
 		return true
 	}
-	for _, rule := range r.Rules {
-		if rule.Uses(field) {
-			return true
-		}
+	return slices.ContainsFunc(r.Rules, func(rule Rule) bool { return rule.Uses(field) })
+}
+
+// UsesState reports whether the rules hold a state rule of value, at any
+// level.
+func (r Rule) UsesState(value string) bool {
+	if r.Field == FieldState && r.Value == value {
+		return true
 	}
-	return false
+	return slices.ContainsFunc(r.Rules, func(rule Rule) bool { return rule.UsesState(value) })
 }
 
 // Upcoming reports whether the rules may match a title not out at home
@@ -294,6 +343,22 @@ type Title struct {
 	// once StudiosKnown.
 	Studios      []string
 	StudiosKnown bool
+	// Services are the streaming services offering it, once ServicesKnown.
+	Services      []string
+	ServicesKnown bool
+	// Tags are the tags an administrator gave it.
+	Tags []string
+	// Countries are the ISO 3166-1 alpha-2 codes of the countries its
+	// description names as those it was made in.
+	Countries []string
+	// Critics is its critics' score on Rotten Tomatoes, and Metacritic
+	// its Metacritic score, from 0 to 100, once CriticsKnown: MDBList
+	// answered for it, 0 for a score MDBList does not have.
+	Critics, Metacritic float64
+	CriticsKnown        bool
+	// LocalFile is set when a local folder or a network share holds a
+	// file of it.
+	LocalFile bool
 	// Rank is its place in its catalog from 1, the best of its catalogs.
 	Rank  int
 	State State
@@ -301,9 +366,12 @@ type Title struct {
 	Today time.Time
 }
 
-// State is what the user who opens a list did with a title.
+// State is what the user who opens a list did with a title: Watchlist is
+// set while it is on their watchlist, and LastPlayed is when they last
+// played it, or an episode of a series, zero when never.
 type State struct {
-	Played, Started, Favorite bool
+	Played, Started, Favorite, Watchlist bool
+	LastPlayed                           time.Time
 }
 
 // Verdict is whether a title matches rules: Unknown while what they look
@@ -428,6 +496,8 @@ func (r Rule) judge(t Title) Verdict {
 			return verdictOf(t.State.Started)
 		case StateFavorite:
 			return verdictOf(t.State.Favorite)
+		case StateWatchlist:
+			return verdictOf(t.State.Watchlist)
 		}
 	case FieldRuntime:
 		if t.Runtime <= 0 {
@@ -478,17 +548,50 @@ func (r Rule) judge(t Title) Verdict {
 		}
 		return verdictOf(within(float64(t.Votes)))
 	case FieldStudio:
+		return judgeNames(named, t.Studios, t.StudiosKnown)
+	case FieldService:
+		return judgeNames(named, t.Services, t.ServicesKnown)
+	case FieldTag:
+		// Tags are an administrator's edits, always known.
+		return judgeNames(named, t.Tags, true)
+	case FieldCountry:
 		switch {
-		case !t.StudiosKnown:
-			return Unknown
-		case named(t.Studios):
+		case slices.Contains(t.Countries, r.Value):
 			return Yes
-		case len(t.Studios) > 0:
+		case len(t.Countries) > 0:
 			return No
 		}
-		return Absent
+		return missing
+	case FieldCritics, FieldMetacritic:
+		score := t.Critics
+		if r.Field == FieldMetacritic {
+			score = t.Metacritic
+		}
+		switch {
+		case !t.CriticsKnown:
+			return Unknown
+		case score <= 0:
+			return Absent
+		}
+		return verdictOf(within(score))
+	case FieldLocalFile:
+		return verdictOf(t.LocalFile)
 	}
 	return No
+}
+
+// judgeNames judges names, those of a title's studios, services or tags,
+// known or not yet, against a rule that names one of them.
+func judgeNames(named func([]string) bool, names []string, known bool) Verdict {
+	switch {
+	case !known:
+		return Unknown
+	case named(names):
+		return Yes
+	case len(names) > 0:
+		return No
+	}
+	return Absent
 }
 
 // daysAfter counts the days from the day of today to the day of at,

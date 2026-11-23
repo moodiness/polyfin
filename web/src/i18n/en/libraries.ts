@@ -230,7 +230,12 @@ const libraries = {
     },
     catalogs: 'Catalogs',
     catalogsHelp:
-      'Its titles come from these catalogs, each read up to its maximum: the library’s own when the catalog is one of your libraries, else Titles read per movie and series catalog.',
+      'Its titles come from the catalogs of addons, local folders and network shares, and IPTV sources’ movies and series. An addon’s catalog is read up to its maximum: the library’s own when the catalog is one of your libraries, else Titles read per movie and series catalog. A folder’s or an IPTV source’s titles are read whole. Music is not offered.',
+    sourceKinds: {
+      addon: 'Addons',
+      folder: 'Local folders and network shares',
+      iptv: 'IPTV sources',
+    } as Record<string, string>,
     catalogFilter: 'Filter catalogs',
     catalogFilterPlaceholder: 'Catalog or addon name',
     serverBadge: 'Server',
@@ -267,6 +272,12 @@ const libraries = {
       contentRating: 'Content rating',
       person: 'Actor or director',
       studio: 'Studio or network',
+      service: 'Streaming service',
+      tag: 'Tag',
+      country: 'Country',
+      critics: 'Critics’ score (Rotten Tomatoes)',
+      metacritic: 'Metacritic score',
+      localFile: 'Has a local file',
     } as Record<string, string>,
     negation: 'Matches or not',
     is: 'is',
@@ -277,6 +288,7 @@ const libraries = {
     language: 'Language',
     rankMax: 'Among its first',
     minutes: 'minutes',
+    outOf100: 'out of 100',
     atMost: 'At most',
     releasedWhen: 'When',
     releasedWithin: { last: 'In the last', next: 'In the next' } as Record<string, string>,
@@ -286,22 +298,35 @@ const libraries = {
       both: 'Within',
     } as Record<string, string>,
     days: 'days',
-    namePlaceholder: { person: 'Their name', studio: 'Its name' } as Record<string, string>,
+    namePlaceholder: {
+      person: 'Their name',
+      studio: 'Its name',
+      service: 'Its name',
+      tag: 'The tag',
+    } as Record<string, string>,
     types: { movie: 'A movie', series: 'A series' } as Record<string, string>,
     states: {
       played: 'Played',
       unplayed: 'Not played',
       started: 'Started, not finished',
       favorite: 'Favorite',
+      watchlist: 'On the Watchlist',
     } as Record<string, string>,
     stateHelp:
-      'Played, started and favorite rules follow what each user did: everyone sees their own list.',
+      'Played, started, favorite and Watchlist rules follow what each user did: everyone sees their own list. A series is on the Watchlist while one of its episodes is.',
     describedHelp:
-      'A title’s language, and its runtime, content rating, people and release date when its catalog does not give them, come with its description, which Polyfin reads in the background: a title not yet described is left out until it is. A title that lacks what a rule looks at matches neither the rule nor its opposite.',
+      'A title’s language and countries, and its runtime, content rating, people and release date when its catalog does not give them, come with its description, which Polyfin reads in the background: a title not yet described is left out until it is. A local folder’s or an IPTV source’s title is described by the addons that describe it; an IPTV title without an IMDb identifier has its listing alone. A title that lacks what a rule looks at matches neither the rule nor its opposite.',
     votesHelp:
       'IMDb votes come from MDBList, with the MDBList API key for ratings under Settings › Content, looked up in the background. Without that key, no title has votes.',
+    criticsHelp:
+      'Critics’ (Rotten Tomatoes) and Metacritic scores, from 0 to 100, come from MDBList, with the MDBList API key for ratings under Settings › Content, looked up in the background. Without that key, no title has them.',
     studioHelp:
       'Studios and networks come from TMDB, with the TMDB API key under Settings › Content, looked up in the background and kept: the list grows as they come. Without that key, only the studios an administrator set in a title’s metadata count.',
+    serviceHelp:
+      'Streaming services come from TMDB, with the TMDB API key under Settings › Content, for the rating country under Settings › General, subscriptions and free offers only, looked up in the background and kept: the list grows as they come. Without that key, no title has one.',
+    tagHelp: 'Tags are those an administrator set in a title’s metadata.',
+    localFileHelp:
+      'A title has a local file when a local folder or network share holds one of it, whichever catalog lists it.',
     homeReleaseHelp:
       'A movie’s home release is its first digital or physical release, else 90 days after it came out in cinemas, as TMDB tells with the TMDB API key under Settings › Content, looked up in the background and kept: the list grows as they come. A series’ is its premiere date. With Wait for the digital release on, a movie not out yet is listed only by lists with a rule of upcoming titles.',
     sort: 'Sort',
@@ -313,9 +338,12 @@ const libraries = {
       rating: 'IMDb rating, highest first',
       name: 'Name',
       random: 'At random, drawn again each day',
+      datePlayed: 'Date played, latest first',
     } as Record<string, string>,
     episodeSortHelp:
       'Series come by their latest regular episode aired, or their latest season premiere, as their description tells, specials and episodes to come left out; movies by their premiere date. A series whose description is not read yet comes last until it is.',
+    datePlayedHelp:
+      'Each user sees the titles they played the latest first, a series by its latest episode played through, then the others as the catalogs list them. With a Played rule, it is their watch history.',
     maxItems: 'Maximum titles',
     maxHelp: (max: string) => `From 1 to ${max}. Empty: no maximum.`,
     create: 'Create the list',
@@ -335,8 +363,8 @@ const libraries = {
     firstOf: (shown: string, listed: string) => `The first ${shown} of ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 title still waits for what its rules look at: its description, its votes or its studios. The list grows as they come.'
-        : `${count} titles still wait for what their rules look at: their description, their votes or their studios. The list grows as they come.`,
+        ? '1 title still waits for what its rules look at: its description, its ratings, its studios or its streaming services. The list grows as they come.'
+        : `${count} titles still wait for what their rules look at: their description, their ratings, their studios or their streaming services. The list grows as they come.`,
     incomplete:
       'Some catalogs had not answered in time: the list shows what was read so far, and reads the rest.',
     previewEmpty: 'No title matches these rules for now.',

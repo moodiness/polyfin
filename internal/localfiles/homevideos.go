@@ -717,13 +717,13 @@ func videoMeta(id, name, plot string, released time.Time, duration float64) stre
 }
 
 // homeCatalog answers a home videos folder's catalog: its videos, the
-// latest recorded first, those whose name holds search when given, from
-// skip.
-func (s *Service) homeCatalog(ctx context.Context, source accounts.ID, skip int, search string) ([]stremio.Meta, error) {
+// latest recorded first, those whose name holds search when given, limit
+// of them from skip.
+func (s *Service) homeCatalog(ctx context.Context, source accounts.ID, skip, limit int, search string) ([]stremio.Meta, error) {
 	rows, err := s.db.Query(ctx, `SELECT f.stremio_id, f.name, v.plot, v.released, v.duration FROM local_files f
 		JOIN local_videos v ON v.addon_id = f.addon_id AND v.path = f.path
 		WHERE f.addon_id = $1 AND f.stremio_id IS NOT NULL AND ($2 = '' OR strpos(lower(f.name), lower($2)) > 0)
-		ORDER BY v.released DESC, f.stremio_id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), catalogPage)
+		ORDER BY v.released DESC, f.stremio_id OFFSET $3 LIMIT $4`, source, strings.TrimSpace(search), max(skip, 0), max(limit, 0))
 	if err != nil {
 		return nil, err
 	}

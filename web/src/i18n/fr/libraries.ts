@@ -242,7 +242,12 @@ const libraries: typeof en = {
     },
     catalogs: 'Catalogues',
     catalogsHelp:
-      'Ses titres viennent de ces catalogues, chacun lu jusqu’à son maximum\u202f: celui de la bibliothèque quand le catalogue en est une, sinon Titres lus par catalogue de films et séries.',
+      'Ses titres viennent des catalogues des addons, des dossiers locaux et partages réseau, et des films et séries des sources IPTV. Le catalogue d’un addon est lu jusqu’à son maximum\u202f: celui de la bibliothèque quand le catalogue en est une, sinon Titres lus par catalogue de films et séries. Les titres d’un dossier ou d’une source IPTV sont lus en entier. La musique n’est pas proposée.',
+    sourceKinds: {
+      addon: 'Addons',
+      folder: 'Dossiers locaux et partages réseau',
+      iptv: 'Sources IPTV',
+    } as Record<string, string>,
     catalogFilter: 'Filtrer les catalogues',
     catalogFilterPlaceholder: 'Nom du catalogue ou de l’addon',
     serverBadge: 'Serveur',
@@ -279,6 +284,12 @@ const libraries: typeof en = {
       contentRating: 'Classification',
       person: 'Acteur ou réalisateur',
       studio: 'Studio ou chaîne',
+      service: 'Service de streaming',
+      tag: 'Étiquette',
+      country: 'Pays',
+      critics: 'Note des critiques (Rotten Tomatoes)',
+      metacritic: 'Note Metacritic',
+      localFile: 'A un fichier local',
     } as Record<string, string>,
     negation: 'Suit ou non',
     is: 'est',
@@ -289,6 +300,7 @@ const libraries: typeof en = {
     language: 'Langue',
     rankMax: 'Parmi ses premiers',
     minutes: 'minutes',
+    outOf100: 'sur 100',
     atMost: 'Au plus',
     releasedWhen: 'Quand',
     releasedWithin: { last: 'Depuis', next: 'D’ici' } as Record<string, string>,
@@ -298,22 +310,36 @@ const libraries: typeof en = {
       both: 'À moins de',
     } as Record<string, string>,
     days: 'jours',
-    namePlaceholder: { person: 'Son nom', studio: 'Son nom' } as Record<string, string>,
+    namePlaceholder: {
+      person: 'Son nom',
+      studio: 'Son nom',
+      service: 'Son nom',
+      tag: 'L’étiquette',
+    } as Record<string, string>,
     types: { movie: 'Un film', series: 'Une série' } as Record<string, string>,
     states: {
       played: 'Vu',
       unplayed: 'Pas vu',
       started: 'Commencé, pas fini',
       favorite: 'Favori',
+      watchlist: 'Dans «\u202fÀ regarder\u202f»',
     } as Record<string, string>,
     stateHelp:
-      'Les règles vu, commencé et favori suivent ce qu’a fait chaque utilisateur\u202f: chacun voit sa propre liste.',
+      'Les règles vu, commencé, favori et «\u202fÀ regarder\u202f» suivent ce qu’a fait chaque utilisateur\u202f: chacun voit sa propre liste. Une série est dans «\u202fÀ regarder\u202f» tant qu’un de ses épisodes y est.',
     describedHelp:
-      'La langue d’un titre, et sa durée, sa classification, ses personnes et sa date de sortie quand son catalogue ne les donne pas, viennent avec sa description, que Polyfin lit en arrière-plan\u202f: un titre pas encore décrit est écarté jusqu’à ce qu’il le soit. Un titre à qui manque ce que regarde une règle ne suit ni la règle ni son contraire.',
+      'La langue et les pays d’un titre, et sa durée, sa classification, ses personnes et sa date de sortie quand son catalogue ne les donne pas, viennent avec sa description, que Polyfin lit en arrière-plan\u202f: un titre pas encore décrit est écarté jusqu’à ce qu’il le soit. Un titre d’un dossier local ou d’une source IPTV est décrit par les addons qui le décrivent\u202f; un titre IPTV sans identifiant IMDb n’a que sa fiche de liste. Un titre à qui manque ce que regarde une règle ne suit ni la règle ni son contraire.',
     votesHelp:
       'Les votes IMDb viennent de MDBList, avec la clé d’API MDBList des notes dans Paramètres › Contenu, cherchés en arrière-plan. Sans cette clé, aucun titre n’a de votes.',
+    criticsHelp:
+      'Les notes des critiques (Rotten Tomatoes) et Metacritic, de 0 à 100, viennent de MDBList, avec la clé d’API MDBList des notes dans Paramètres › Contenu, cherchées en arrière-plan. Sans cette clé, aucun titre n’en a.',
     studioHelp:
       'Les studios et les chaînes viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchés en arrière-plan et gardés\u202f: la liste grandit à mesure qu’ils arrivent. Sans cette clé, seuls comptent les studios qu’un administrateur a donnés dans les métadonnées d’un titre.',
+    serviceHelp:
+      'Les services de streaming viennent de TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, pour le pays des classifications de Paramètres › Général, abonnements et offres gratuites seulement, cherchés en arrière-plan et gardés\u202f: la liste grandit à mesure qu’ils arrivent. Sans cette clé, aucun titre n’en a.',
+    tagHelp:
+      'Les étiquettes sont celles qu’un administrateur a données dans les métadonnées d’un titre.',
+    localFileHelp:
+      'Un titre a un fichier local quand un dossier local ou un partage réseau en contient un, quel que soit le catalogue qui le liste.',
     homeReleaseHelp:
       'La sortie en vidéo d’un film est sa première sortie numérique ou physique, sinon 90 jours après sa sortie en salles, selon TMDB, avec la clé d’API TMDB dans Paramètres › Contenu, cherchée en arrière-plan et gardée\u202f: la liste grandit à mesure qu’elles arrivent. Celle d’une série est sa date de première diffusion. Avec «\u202fAttendre la sortie numérique\u202f», un film pas encore sorti n’apparaît que dans les listes avec une règle de titres à venir.',
     sort: 'Tri',
@@ -325,9 +351,12 @@ const libraries: typeof en = {
       rating: 'Note IMDb, la plus haute d’abord',
       name: 'Nom',
       random: 'Au hasard, tiré à nouveau chaque jour',
+      datePlayed: 'Date de visionnage, la plus récente d’abord',
     } as Record<string, string>,
     episodeSortHelp:
       'Les séries viennent selon leur dernier épisode régulier diffusé, ou le début de leur dernière saison, comme le dit leur description, sans les épisodes spéciaux ni ceux à venir\u202f; les films selon leur date de sortie. Une série dont la description n’est pas encore lue vient en dernier jusqu’à ce qu’elle le soit.',
+    datePlayedHelp:
+      'Chaque utilisateur voit d’abord les titres qu’il a vus le plus récemment, une série selon son dernier épisode vu en entier, puis les autres comme les catalogues les listent. Avec une règle Vu, c’est son historique.',
     maxItems: 'Nombre maximum de titres',
     maxHelp: (max: string) => `De 1 à ${max}. Vide\u202f: pas de maximum.`,
     create: 'Créer la liste',
@@ -349,8 +378,8 @@ const libraries: typeof en = {
     firstOf: (shown: string, listed: string) => `Les ${shown} premiers sur ${listed}.`,
     unknown: (count: string) =>
       count === '1'
-        ? '1 titre attend encore ce que regardent ses règles\u202f: sa description, ses votes ou ses studios. La liste grandit à mesure qu’ils arrivent.'
-        : `${count} titres attendent encore ce que regardent leurs règles\u202f: leur description, leurs votes ou leurs studios. La liste grandit à mesure qu’ils arrivent.`,
+        ? '1 titre attend encore ce que regardent ses règles\u202f: sa description, ses notes, ses studios ou ses services de streaming. La liste grandit à mesure qu’ils arrivent.'
+        : `${count} titres attendent encore ce que regardent leurs règles\u202f: leur description, leurs notes, leurs studios ou leurs services de streaming. La liste grandit à mesure qu’ils arrivent.`,
     incomplete:
       'Certains catalogues n’ont pas répondu à temps\u202f: la liste montre ce qui a été lu jusqu’ici, et lit le reste.',
     previewEmpty: 'Aucun titre ne suit ces règles pour l’instant.',

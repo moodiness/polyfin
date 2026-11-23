@@ -141,34 +141,37 @@ func (p *Posters) UnmarshalJSON(data []byte) error {
 // Meta describes a title, as returned by catalogs (a preview) and by the
 // meta resource (complete).
 type Meta struct {
-	ID              string        `json:"id"`
-	Type            string        `json:"type"`
-	Name            string        `json:"name"`
-	Poster          string        `json:"poster,omitempty"`
-	Background      string        `json:"background,omitempty"`
-	Logo            string        `json:"logo,omitempty"`
-	LandscapePoster string        `json:"landscapePoster,omitempty"`
-	PosterShape     string        `json:"posterShape,omitempty"` // see Shape
-	Description     string        `json:"description,omitempty"`
-	ReleaseInfo     Text          `json:"releaseInfo,omitempty"`
-	Year            Text          `json:"year,omitempty"`
-	Released        string        `json:"released,omitempty"`
-	Runtime         Text          `json:"runtime,omitempty"`
-	Genres          Names         `json:"genres,omitempty"`
-	Director        Names         `json:"director,omitempty"`
-	Writer          Names         `json:"writer,omitempty"`
-	Cast            Names         `json:"cast,omitempty"`
-	ImdbRating      Text          `json:"imdbRating,omitempty"`
-	Status          string        `json:"status,omitempty"`
-	Language        string        `json:"language,omitempty"`
-	ImdbID          string        `json:"imdb_id,omitempty"`
-	TmdbID          Text          `json:"_tmdbId,omitempty"`
-	TvdbID          Text          `json:"_tvdbId,omitempty"`
-	Trailers        []Trailer     `json:"trailers,omitempty"`
-	Videos          []Video       `json:"videos,omitempty"`
-	Collection      *Collection   `json:"collection,omitempty"`
-	Extras          *Extras       `json:"app_extras,omitempty"`
-	BehaviorHints   *MetaBehavior `json:"behaviorHints,omitempty"`
+	ID              string `json:"id"`
+	Type            string `json:"type"`
+	Name            string `json:"name"`
+	Poster          string `json:"poster,omitempty"`
+	Background      string `json:"background,omitempty"`
+	Logo            string `json:"logo,omitempty"`
+	LandscapePoster string `json:"landscapePoster,omitempty"`
+	PosterShape     string `json:"posterShape,omitempty"` // see Shape
+	Description     string `json:"description,omitempty"`
+	ReleaseInfo     Text   `json:"releaseInfo,omitempty"`
+	Year            Text   `json:"year,omitempty"`
+	Released        string `json:"released,omitempty"`
+	Runtime         Text   `json:"runtime,omitempty"`
+	Genres          Names  `json:"genres,omitempty"`
+	Director        Names  `json:"director,omitempty"`
+	Writer          Names  `json:"writer,omitempty"`
+	Cast            Names  `json:"cast,omitempty"`
+	ImdbRating      Text   `json:"imdbRating,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Language        string `json:"language,omitempty"`
+	// Country names the countries the title was made in, as Cinemeta
+	// writes them ("United States, France"), which smart lists judge.
+	Country       Names         `json:"country,omitempty"`
+	ImdbID        string        `json:"imdb_id,omitempty"`
+	TmdbID        Text          `json:"_tmdbId,omitempty"`
+	TvdbID        Text          `json:"_tvdbId,omitempty"`
+	Trailers      []Trailer     `json:"trailers,omitempty"`
+	Videos        []Video       `json:"videos,omitempty"`
+	Collection    *Collection   `json:"collection,omitempty"`
+	Extras        *Extras       `json:"app_extras,omitempty"`
+	BehaviorHints *MetaBehavior `json:"behaviorHints,omitempty"`
 	// TmdbFromMoviedb is Polyfin's own mark, kept with the description,
 	// that TmdbID was read from its moviedb_id (see described.ids),
 	// which a metadata addon may give wrong, and which the library checks

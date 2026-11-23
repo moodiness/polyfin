@@ -17,28 +17,38 @@ import (
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/cache"
 	"github.com/moodiness/polyfin/internal/localization"
+	"github.com/moodiness/polyfin/internal/ratings"
 	"github.com/moodiness/polyfin/internal/smartlists"
 	"github.com/moodiness/polyfin/internal/stremio"
+	"github.com/moodiness/polyfin/internal/userdata"
 )
 
 // Smart lists (see package smartlists) draw from catalogs of the addons a
-// user reaches and keep the titles that match their rules. Each catalog is
-// read up to its maximum, the library's own when it is one of the user's
-// libraries, else the catalog limit, from the pages kept and refreshed as
-// any library's; a single genre the rules require, which the catalog offers
-// in its genre filter, is asked of the addon instead of reading the whole
-// catalog. The rules are applied when the list is listed, those on what the
-// user did with the titles at each listing.
+// user reaches, of their IPTV sources' movies and series, and of their
+// local folders and network shares, and keep the titles that match their
+// rules. Each addon's catalog is read up to its maximum, the library's own
+// when it is one of the user's libraries, else the catalog limit, from the
+// pages kept and refreshed as any library's; a single genre the rules
+// require, which the catalog offers in its genre filter, is asked of the
+// addon instead of reading the whole catalog. Polyfin's own sources store
+// their titles: each of their catalogs is read whole in one query (see
+// smartStored). The rules are applied when the list is listed, those on
+// what the user did with the titles at each listing.
 //
 // What a catalog page gives of a title (genres, year, IMDb rating,
 // runtime, content rating, people, release date) is completed by its
-// description, when one is kept: the language, and the episodes of a
-// series a list sorts by its latest episode, come only with it.
-// Descriptions missing are read in the background, a few at a time, so
-// that the list grows as they come; until then, a title whose rules depend
-// on them is left out, and a series sorted by its episodes comes last. The
-// votes of a title's IMDb rating come from MDBList (see ratings.go), and
-// its studios from TMDB (see studios.go), the same way.
+// description, when one is kept: the language, the countries, and the
+// episodes of a series a list sorts by its latest episode, come only with
+// it. A local folder's title is described by the addons that describe its
+// identifier, an IPTV source's by those that describe its IMDb identifier;
+// one of neither has its listing alone. Descriptions missing are read in
+// the background, a few at a time, so that the list grows as they come;
+// until then, a title whose rules depend on them is left out, and a series
+// sorted by its episodes comes last. The votes of a title's IMDb rating
+// and its critics' and Metacritic scores come from MDBList (see
+// ratings.go), and its studios from TMDB (see studios.go), the same way.
+// Its tags are an administrator's, and whether a local folder holds a file
+// of it is asked of the folders in one query (see smartLocalFiles).
 
 const (
 	// smartWait bounds how long a listing of a list waits for the pages it
@@ -278,6 +288,9 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 	if err := s.smartReleases(ctx, v, list, candidates); err != nil {
 		return smartResult{}, err
 	}
+	if err := s.smartLocalFiles(ctx, v, list, candidates); err != nil {
+		return smartResult{}, err
+	}
 	upcoming := list.Rules.Upcoming()
 	result := smartResult{complete: complete}
 	var undescribed []record
@@ -289,19 +302,18 @@ func (s *Service) smartMatches(ctx context.Context, v view, list smartlists.List
 		if v.hidden.Hides(c.item) || c.held && !upcoming {
 			continue
 		}
-		t := c.title
-		t.State, t.Today = states[c.item.ID], today
-		switch list.Keeps(t) {
+		c.title.State, c.title.Today = states[c.item.ID], today
+		switch list.Keeps(c.title) {
 		case smartlists.Yes:
 			result.titles = append(result.titles, c)
 			// A series sorted by its episodes waits for them, listed last.
 			if !c.described && c.title.Series && sortsByEpisodes(list.Sort) {
-				undescribed = append(undescribed, c.record)
+				undescribed = append(undescribed, v.describedAs(c.record))
 			}
 		case smartlists.Unknown:
 			result.unknown++
 			if !c.described {
-				undescribed = append(undescribed, c.record)
+				undescribed = append(undescribed, v.describedAs(c.record))
 			}
 		}
 	}
@@ -379,7 +391,7 @@ func (s *Service) smartCandidates(ctx context.Context, v view, list smartlists.L
 	read := make([]bool, len(sources))
 	whole := !found || s.now().Sub(kept.at) >= s.catalogLife()
 	for i, src := range sources {
-		read[i] = whole || kept.missing[i] || kept.versions[i] != s.catalogVersions.of(src)
+		read[i] = whole || kept.missing[i] || kept.versions[i] != s.smartVersion(src)
 	}
 	if found && !slices.Contains(read, true) {
 		titles := s.smartFacts(sources, kept.lists, v.country)
@@ -450,20 +462,54 @@ func (s *Service) smartSources(v view, list smartlists.List) []source {
 }
 
 // smartCatalog reports whether a list may draw from catalog: a catalog of
-// titles that can be read without a search, not of collections or
-// channels.
+// titles that can be read without a search, not of collections, channels
+// or home videos.
 func smartCatalog(catalog stremio.Catalog) bool {
-	return !LiveCatalog(catalog.Type) && catalog.Type != "collection" && catalog.Browsable()
+	return !LiveCatalog(catalog.Type) && catalog.Type != "collection" && catalog.Type != VideoType && catalog.Browsable()
+}
+
+// smartVersion is the version of a source's titles a list reads (see
+// smartCandidates): its catalog's pages' (see catalogVersions), or for
+// Polyfin's own sources, which keep no pages, the count of the changes to
+// what they store, so that a list follows a scan or a refresh at once.
+func (s *Service) smartVersion(src source) uint64 {
+	switch {
+	case src.addon.addon.IPTV():
+		return s.storedChanges.Load()
+	case src.addon.addon.Local() && s.local != nil:
+		return s.local.Changes()
+	}
+	return s.catalogVersions.of(src)
+}
+
+// smartStored reads a catalog of Polyfin's own sources up to its maximum,
+// as stored, in one query: an IPTV source's movies or series, or a local
+// folder's titles. ok is false for an addon's catalog, and for a view
+// that narrows its listings (see view.narrows), which reads it page by
+// page to leave titles out.
+func (s *Service) smartStored(ctx context.Context, v view, src source) (metas []stremio.Meta, ok bool, err error) {
+	switch a := src.addon.addon; {
+	case v.narrows() || src.date != "" || src.search != "":
+		return nil, false, nil
+	case a.IPTV() && s.iptv != nil && !LiveCatalog(src.catalog.Type):
+		metas, _, err = s.iptv.CatalogWindow(ctx, a.ID, src.catalog.Type, src.catalog.ID, src.genre, "", 0, v.limit(src))
+	case a.Local() && s.local != nil:
+		metas, err = s.local.CatalogWindow(ctx, a.ID, src.catalog.Type, src.catalog.ID, 0, v.limit(src))
+	default:
+		return nil, false, nil
+	}
+	return metas, true, err
 }
 
 // smartRead reads each source that read marks up to its maximum, a few at
-// a time, and tells the version of its catalog once read (see
-// catalogVersions): a page its read fetched counts in it, and one that
+// a time, and tells the version of its titles once read (see
+// smartVersion): a page its read fetched counts in it, and one that
 // changes later has the next listing read it again. The others' lists
 // stay nil. A listing waits smartWait at most, then takes the pages kept
 // of the catalogs that did not answer in time, and reads them on in the
 // background: missing marks them. A read that refreshes (see
-// ReadCollections) waits for every page.
+// ReadCollections) waits for every page. Polyfin's own sources are read
+// in one query each (see smartStored).
 func (s *Service) smartRead(ctx context.Context, v view, sources []source, read []bool) (lists [][]stremio.Meta, versions []uint64, missing []bool) {
 	lists = make([][]stremio.Meta, len(sources))
 	versions = make([]uint64, len(sources))
@@ -480,8 +526,20 @@ func (s *Service) smartRead(ctx context.Context, v view, sources []source, read 
 			continue
 		}
 		group.Go(func() error {
+			// The version is taken before the read: a change while it
+			// reads has the next listing read again.
+			version := s.smartVersion(src)
+			metas, stored, err := s.smartStored(waiting, v, src)
+			if stored {
+				if err != nil && ctx.Err() == nil {
+					s.logger.Debug("A stored catalog of a smart list could not be read", "catalog", src.catalog.ID, "error", err)
+					missing[i] = true
+				}
+				lists[i], versions[i] = metas, version
+				return nil
+			}
 			limit := v.limit(src)
-			metas, _, err := s.window(waiting, v, src, 0, limit)
+			metas, _, err = s.window(waiting, v, src, 0, limit)
 			if err != nil || waiting.Err() != nil {
 				if ctx.Err() != nil {
 					return nil
@@ -519,8 +577,9 @@ func (s *Service) smartReadLater(ctx context.Context, v view, src source) {
 // smartFacts merges the titles of the sources' lists, one of each in turn
 // without duplicates, as an addon's collection does, each at its best place
 // in a catalog, and tells what their listing gives of them, with
-// administrators' edits, rated as country rates them. Movies and series
-// only are kept.
+// administrators' edits, their tags among them, rated as country rates
+// them; a local folder's titles have a local file. Movies and series only
+// are kept.
 func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta, country string) []smartTitle {
 	var titles []smartTitle
 	seen := map[string]bool{}
@@ -541,7 +600,8 @@ func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta, country s
 				continue
 			}
 			r.Parent = nil
-			titles = append(titles, smartTitle{item: item, record: r, title: smartlists.Title{Rank: rank + 1, RatingCountry: country}, genre: sources[i].genre})
+			titles = append(titles, smartTitle{item: item, record: r, genre: sources[i].genre,
+				title: smartlists.Title{Rank: rank + 1, RatingCountry: country, LocalFile: sources[i].addon.addon.Local()}})
 		}
 		if !added {
 			break
@@ -563,6 +623,7 @@ func (s *Service) smartFacts(sources []source, lists [][]stremio.Meta, country s
 		t.title.ContentRating = t.item.OfficialRating
 		t.title.People = creditedPeople(t.item.People)
 		t.title.Released = releasedDay(t.item, t.record.Meta)
+		t.title.Tags = t.item.Tags
 		t.narrow()
 	}
 	return titles
@@ -621,12 +682,13 @@ func (t *smartTitle) narrow() {
 }
 
 // needsDescription reports whether a list looks at what a title's listing
-// does not give: its language, or a series' episodes it sorts by, which
-// only its description gives, or its genres, year, rating, runtime,
-// content rating, people or release date when its listing lacks them, a
-// series' release date standing for its home release.
+// does not give: its language or its countries, or a series' episodes it
+// sorts by, which only its description gives, or its genres, year,
+// rating, runtime, content rating, people or release date when its
+// listing lacks them, a series' release date standing for its home
+// release.
 func needsDescription(list smartlists.List, t smartlists.Title) bool {
-	return list.Uses(smartlists.FieldLanguage) || t.Series && sortsByEpisodes(list.Sort) ||
+	return list.Uses(smartlists.FieldLanguage) || list.Uses(smartlists.FieldCountry) || t.Series && sortsByEpisodes(list.Sort) ||
 		list.Uses(smartlists.FieldGenre) && !t.GenresKnown || list.Uses(smartlists.FieldYear) && t.Year == 0 ||
 		list.Uses(smartlists.FieldRating) && !t.Rated || list.Uses(smartlists.FieldRuntime) && t.Runtime == 0 ||
 		list.Uses(smartlists.FieldContentRating) && t.ContentRating == "" || list.Uses(smartlists.FieldPerson) && len(t.People) == 0 ||
@@ -634,23 +696,29 @@ func needsDescription(list smartlists.List, t smartlists.Title) bool {
 }
 
 // smartDescribed completes the titles whose description the rules need,
-// not described yet, with the descriptions kept since.
+// not described yet, with the descriptions kept since. A title no addon
+// describes (see view.describable) is described by its listing alone.
 func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.List, titles []smartTitle) error {
 	var wanted []record
 	var indexes []int
 	for i, t := range titles {
-		if !t.described && needsDescription(list, t.title) {
-			wanted, indexes = append(wanted, t.record), append(indexes, i)
+		if t.described || !needsDescription(list, t.title) {
+			continue
 		}
+		if !v.describable(t.record) {
+			titles[i].described, titles[i].title.Described = true, true
+			continue
+		}
+		wanted, indexes = append(wanted, v.describedAs(t.record)), append(indexes, i)
 	}
 	descriptions, err := s.keptDescriptions(ctx, v, list.Owner == nil, wanted, sortsByEpisodes(list.Sort))
 	if err != nil {
 		return err
 	}
 	now := s.now()
-	for _, i := range indexes {
+	for n, i := range indexes {
 		t := &titles[i]
-		meta, ok := descriptions[metaKey{*t.record.Addon, t.record.Meta.Type, t.record.Meta.ID}]
+		meta, ok := descriptions[metaKey{*wanted[n].Addon, wanted[n].Meta.Type, wanted[n].Meta.ID}]
 		if !ok {
 			continue
 		}
@@ -680,6 +748,7 @@ func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.Li
 			t.title.Released = releasedDay(full, &meta)
 		}
 		t.title.Languages = localization.LanguageCodes(meta.Language)
+		t.title.Countries = countryCodes(meta.Country)
 		t.episodes = episodeDatesOf(meta.Videos, now)
 	}
 	return nil
@@ -687,29 +756,43 @@ func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.Li
 
 // smartElsewhere completes the titles a list judges with what neither
 // their listing nor their description gives, when its rules look at it:
-// the votes of their IMDb rating, from MDBList, and their studios, from
-// TMDB. Those not known yet are asked about in the background.
+// the votes of their IMDb rating and their critics' and Metacritic
+// scores, from MDBList, and their studios, from TMDB. Those not known yet
+// are asked about in the background.
 func (s *Service) smartElsewhere(ctx context.Context, list smartlists.List, titles []smartTitle) error {
 	votes, studios := list.Uses(smartlists.FieldVotes), list.Uses(smartlists.FieldStudio)
-	if !votes && !studios {
+	critics := list.Uses(smartlists.FieldCritics) || list.Uses(smartlists.FieldMetacritic)
+	if !votes && !critics && !studios {
 		return nil
 	}
 	items := make([]Item, len(titles))
 	for i, t := range titles {
 		items[i] = t.item
 	}
-	if votes {
+	if votes || critics {
 		scores := s.keptScores(items)
+		// Without MDBList, or once it answered without a score, a title
+		// has none; it is unknown while waiting for MDBList.
+		answered := func(item Item) bool {
+			r, ok := ratingsTitle(item)
+			return !ok || !s.ratings.Enabled() || !s.ratings.Pending(r)
+		}
 		for i := range titles {
 			t := &titles[i]
-			if scores != nil && scores[i].IMDbVotes != nil {
-				t.title.Votes, t.title.VotesKnown = *scores[i].IMDbVotes, true
-				continue
+			var score ratings.Scores
+			if scores != nil {
+				score = scores[i]
 			}
-			// Without MDBList, or once it answered without votes, a title
-			// has none; it is unknown while waiting for MDBList.
-			r, ok := ratingsTitle(t.item)
-			t.title.Votes, t.title.VotesKnown = 0, !ok || !s.ratings.Enabled() || !s.ratings.Pending(r)
+			if votes {
+				t.title.Votes, t.title.VotesKnown = 0, score.IMDbVotes != nil || answered(t.item)
+				if score.IMDbVotes != nil {
+					t.title.Votes = *score.IMDbVotes
+				}
+			}
+			if critics {
+				t.title.CriticsKnown = score.Critics != nil || score.Metacritic != nil || answered(t.item)
+				t.title.Critics, t.title.Metacritic = scoreOf(score.Critics), scoreOf(score.Metacritic)
+			}
 		}
 	}
 	if studios {
@@ -722,6 +805,14 @@ func (s *Service) smartElsewhere(ctx context.Context, list smartlists.List, titl
 		}
 	}
 	return nil
+}
+
+// scoreOf is a score MDBList gives, 0 for none.
+func scoreOf(score *float64) float64 {
+	if score == nil {
+		return 0
+	}
+	return *score
 }
 
 // smartReleases completes the movies a list judges with the day they are
@@ -774,7 +865,9 @@ func (s *Service) smartReleases(ctx context.Context, v view, list smartlists.Lis
 // titles give of them that smart lists look at, by the addon that listed
 // them: that addon's description, else one of another of the view's
 // addons, the server's only when shared. The dates of a series' episodes
-// come only when videos is set. Polyfin's own sources keep no description.
+// come only when videos is set. Polyfin's own sources keep no description:
+// their titles are found by the identifier other addons describe them by
+// (see view.describedAs).
 func (s *Service) keptDescriptions(ctx context.Context, v view, shared bool, titles []record, videos bool) (map[metaKey]stremio.Meta, error) {
 	if len(titles) == 0 {
 		return nil, nil
@@ -793,7 +886,7 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, shared bool, tit
 	}
 	rows, err := s.db.Query(ctx, `SELECT addon_id, meta_type, meta_id, config,
 		jsonb_strip_nulls(jsonb_build_object('genres', meta->'genres', 'releaseInfo', meta->'releaseInfo', 'year', meta->'year',
-			'released', meta->'released', 'imdbRating', meta->'imdbRating', 'language', meta->'language',
+			'released', meta->'released', 'imdbRating', meta->'imdbRating', 'language', meta->'language', 'country', meta->'country',
 			'runtime', meta->'runtime', 'director', meta->'director', 'cast', meta->'cast',
 			'app_extras', jsonb_build_object('cast', meta->'app_extras'->'cast', 'certification', meta->'app_extras'->'certification',
 				'certificationLocal', meta->'app_extras'->'certificationLocal', 'certifications', meta->'app_extras'->'certifications'),
@@ -848,10 +941,71 @@ func (s *Service) keptDescriptions(ctx context.Context, v view, shared bool, tit
 	return result, nil
 }
 
+// describedAs is the record of a title that the descriptions of addons
+// are looked for by: its own, but for an IPTV source's title, the record
+// of its IMDb identifier, of none for a title without one.
+func (v view) describedAs(r record) record {
+	if entry, ok := v.addon(*r.Addon); ok && entry.addon.IPTV() {
+		r.Meta = &stremio.Meta{Type: r.Meta.Type, ID: r.Meta.ImdbID}
+	}
+	return r
+}
+
+// describable reports whether an addon may describe a title: an IPTV
+// source's title without IMDb identifier, and a local folder's plain
+// video, are described by their listing alone.
+func (v view) describable(r record) bool {
+	entry, ok := v.addon(*r.Addon)
+	switch {
+	case !ok:
+		return true
+	case entry.addon.IPTV():
+		return r.Meta.ImdbID != ""
+	case entry.addon.Local():
+		return !strings.HasPrefix(r.Meta.ID, PlainIDPrefix)
+	}
+	return true
+}
+
+// countryAliases are the names descriptions give countries that are not
+// their English short names (see localization.Countries), in lower case.
+var countryAliases = map[string]string{
+	"usa": "US", "united states of america": "US", "uk": "GB", "great britain": "GB", "england": "GB",
+	"czech republic": "CZ", "hong kong": "HK", "macau": "MO", "macao": "MO", "south korea": "KR", "korea": "KR",
+	"republic of korea": "KR", "korea, republic of": "KR", "russian federation": "RU", "turkey": "TR", "west germany": "DE",
+	"iran, islamic republic of": "IR", "viet nam": "VN", "ivory coast": "CI", "the netherlands": "NL", "holland": "NL",
+	"taiwan, province of china": "TW", "palestine": "PS",
+}
+
+// countryCodes reads the countries a description names, by their English
+// names, their usual other names or their ISO 3166-1 codes, as their
+// alpha-2 codes, each once; those it does not know are left out.
+func countryCodes(names []string) []string {
+	var codes []string
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		code, ok := countryAliases[strings.ToLower(name)]
+		if !ok {
+			for _, c := range localization.Countries() {
+				if strings.EqualFold(c.Name, name) || strings.EqualFold(c.Alpha2, name) || strings.EqualFold(c.Alpha3, name) {
+					code, ok = c.Alpha2, true
+					break
+				}
+			}
+		}
+		if ok && !slices.Contains(codes, code) {
+			codes = append(codes, code)
+		}
+	}
+	return codes
+}
+
 // describeLater reads in the background the descriptions of titles, at
 // most smartLookups of them, smartFetches at a time across lists: the
 // next listings know them. The server's lists, shared, ask the server's
-// addons.
+// addons. A title of Polyfin's own sources, by the identifier addons
+// describe it by (see view.describedAs), is described by the other
+// addons that describe it (see describeElsewhere).
 func (s *Service) describeLater(ctx context.Context, v view, shared bool, records []record) {
 	if keptOnly(ctx) {
 		return
@@ -861,7 +1015,8 @@ func (s *Service) describeLater(ctx context.Context, v view, shared bool, record
 		if asked >= smartLookups {
 			return
 		}
-		if entry, ok := v.addon(*r.Addon); !ok || own(entry.addon) {
+		entry, ok := v.addon(*r.Addon)
+		if !ok || r.Meta.ID == "" {
 			continue
 		}
 		asked++
@@ -874,20 +1029,43 @@ func (s *Service) describeLater(ctx context.Context, v view, shared bool, record
 			case <-ctx.Done():
 				return ctx.Err()
 			}
+			if own(entry.addon) {
+				s.describeElsewhere(ctx, v.withoutWait(), r, shared)
+				return nil
+			}
 			s.describe(ctx, v.withoutWait(), r, shared)
 			return nil
 		})
 	}
 }
 
+// describeElsewhere has the first of the view's addons, but Polyfin's own
+// sources, that describes a title of those sources describe it, by the
+// identifier of r, so that its description is kept (see keptMeta).
+func (s *Service) describeElsewhere(ctx context.Context, v view, r record, shared bool) {
+	elsewhere := r
+	elsewhere.Addon = nil
+	for _, candidate := range describers(v, elsewhere, shared) {
+		if own(candidate.addon) {
+			continue
+		}
+		if _, err := s.keptMeta(ctx, candidate, r.Meta.Type, r.Meta.ID); err == nil || ctx.Err() != nil {
+			return
+		}
+	}
+}
+
 // smartStates tells what the user of v did with the titles a list reads,
-// when its rules look at it: nothing for a request made with an API key.
-// A series is played once the user played as many of its episodes as its
-// description, when kept, tells are released, and started while they
-// played or started some, not all; a movie is started while it has a
-// resume point.
+// when its rules look at it, or when it sorts by the date they last played
+// them: nothing for a request made with an API key. A series is played
+// once the user played as many of its episodes as its description, when
+// kept, tells are released, and started while they played or started
+// some, not all; a movie is started while it has a resume point. A title
+// is on the user's watchlist as watchlisted tells. A series was last
+// played when the user last played one of its episodes through.
 func (s *Service) smartStates(ctx context.Context, v view, list smartlists.List, titles []smartTitle) (map[accounts.ID]smartlists.State, error) {
-	if !list.Uses(smartlists.FieldState) || v.user == (accounts.ID{}) || len(titles) == 0 {
+	rules, played := list.Uses(smartlists.FieldState), list.Sort == smartlists.SortDatePlayed
+	if !rules && !played || v.user == (accounts.ID{}) || len(titles) == 0 {
 		return nil, nil
 	}
 	ids := make([]accounts.ID, 0, len(titles))
@@ -902,25 +1080,43 @@ func (s *Service) smartStates(ctx context.Context, v view, list smartlists.List,
 	if err != nil {
 		return nil, err
 	}
-	counts, err := s.userData.EpisodeCounts(ctx, v.user, series)
-	if err != nil {
-		return nil, err
+	var counts map[accounts.ID]userdata.Counts
+	if rules {
+		if counts, err = s.userData.EpisodeCounts(ctx, v.user, series); err != nil {
+			return nil, err
+		}
 	}
-	states := make(map[accounts.ID]smartlists.State, len(data)+len(counts))
+	var lastPlayed map[accounts.ID]time.Time
+	if played {
+		if lastPlayed, err = s.userData.SeriesLastPlayed(ctx, v.user, series); err != nil {
+			return nil, err
+		}
+	}
+	var watchlisted map[accounts.ID]bool
+	if list.UsesState(smartlists.StateWatchlist) {
+		if watchlisted, err = s.watchlisted(ctx, v.user); err != nil {
+			return nil, err
+		}
+	}
+	states := make(map[accounts.ID]smartlists.State, len(data)+len(counts)+len(watchlisted))
 	for _, t := range titles {
 		d, c := data[t.item.ID], counts[t.item.ID]
-		state := smartlists.State{Favorite: d.Favorite, Played: d.Played}
+		state := smartlists.State{Favorite: d.Favorite, Played: d.Played, Watchlist: watchlisted[t.item.ID]}
 		switch t.item.Kind {
 		case KindMovie:
 			state.Started = !d.Played && d.Position > 0
+			if d.LastPlayed != nil {
+				state.LastPlayed = *d.LastPlayed
+			}
 		case KindSeries:
-			if !state.Played && c.Played > 0 {
+			if rules && !state.Played && c.Played > 0 {
 				if meta, _, ok := s.describedMeta(ctx, v, t.record, false, inDatabase); ok {
 					released := contents(meta, nil, s.now()).Released
 					state.Played = released > 0 && c.Played >= released
 				}
 			}
 			state.Started = !state.Played && (c.Played > 0 || c.Resumable > 0)
+			state.LastPlayed = lastPlayed[t.item.ID]
 		}
 		if state != (smartlists.State{}) {
 			states[t.item.ID] = state
@@ -929,13 +1125,78 @@ func (s *Service) smartStates(ctx context.Context, v view, list smartlists.List,
 	return states, nil
 }
 
+// watchlisted tells the titles on user's watchlist: its movies, the
+// series of its episodes, and the titles waiting for their entries (see
+// watchlist.Store.Pending).
+func (s *Service) watchlisted(ctx context.Context, user accounts.ID) (map[accounts.ID]bool, error) {
+	held, err := s.watchlist.Held(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := s.watchlist.Pending(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	on := make(map[accounts.ID]bool, len(held)+len(pending))
+	for _, h := range held {
+		on[h.ID] = true
+		if h.Series != (accounts.ID{}) {
+			on[h.Series] = true
+		}
+	}
+	for _, p := range pending {
+		on[p.ID] = true
+	}
+	return on, nil
+}
+
+// smartLocalFiles marks the titles a list judges that a local folder or a
+// network share of the view holds a file of, when its rules look at it,
+// in one query: those a folder listed do; the others are looked for by
+// the identifier addons describe them by (see view.describedAs).
+func (s *Service) smartLocalFiles(ctx context.Context, v view, list smartlists.List, titles []smartTitle) error {
+	if !list.Uses(smartlists.FieldLocalFile) || s.local == nil {
+		return nil
+	}
+	var folders []accounts.ID
+	for _, entry := range v.addons {
+		if entry.addon.Local() && !entry.addon.HasMusic() {
+			folders = append(folders, entry.addon.ID)
+		}
+	}
+	keys := make([]string, len(titles))
+	var ids []string
+	for i, t := range titles {
+		if t.title.LocalFile {
+			continue
+		}
+		if keys[i] = v.describedAs(t.record).Meta.ID; keys[i] != "" {
+			ids = append(ids, keys[i])
+		}
+	}
+	if len(folders) == 0 || len(ids) == 0 {
+		return nil
+	}
+	held, err := s.local.HeldTitles(ctx, folders, ids)
+	if err != nil {
+		return err
+	}
+	for i := range titles {
+		if keys[i] != "" && held[keys[i]] {
+			titles[i].title.LocalFile = true
+		}
+	}
+	return nil
+}
+
 // sortSmart orders the titles a list keeps as it says: as its catalogs
 // list them, merged; by premiere date, the latest first; by the latest
 // regular episode aired, or season premiere aired, the latest first, a
 // movie by its premiere date and a series whose episodes are not known
 // last; by IMDb rating, the highest first, those without one last; by
-// name; or at random, in an order drawn again each day, the same for every
-// page of a listing.
+// name; at random, in an order drawn again each day, the same for every
+// page of a listing; or by the date the user last played them, the latest
+// first, those never played last, as their catalogs list them.
 func sortSmart(titles []smartTitle, list smartlists.List, user accounts.ID, now time.Time) {
 	switch list.Sort {
 	case smartlists.SortPremiere:
@@ -961,6 +1222,8 @@ func sortSmart(titles []smartTitle, list smartlists.List, user accounts.ID, now 
 		_, _ = seed.Write([]byte(list.ID.String() + user.String() + now.Format(time.DateOnly)))
 		random := rand.New(rand.NewPCG(seed.Sum64(), 0))
 		random.Shuffle(len(titles), func(i, j int) { titles[i], titles[j] = titles[j], titles[i] })
+	case smartlists.SortDatePlayed:
+		slices.SortStableFunc(titles, func(a, b smartTitle) int { return b.title.State.LastPlayed.Compare(a.title.State.LastPlayed) })
 	}
 }
 
@@ -1012,20 +1275,31 @@ func (s *Service) PreviewSmartList(ctx context.Context, user accounts.User, list
 	return preview, nil
 }
 
-// SmartCatalog is a catalog a list may draw from, of one of the addons of
-// a scope's lists: the server's addons for the server's lists, the user's
-// own and the server's they use for theirs. Genres are those its genre
-// filter offers.
+// What a catalog a list may draw from belongs to: an addon, a local folder
+// or network share, or an IPTV source.
+const (
+	SmartSourceAddon  = "addon"
+	SmartSourceFolder = "folder"
+	SmartSourceIPTV   = "iptv"
+)
+
+// SmartCatalog is a catalog a list may draw from, of one of the addons or
+// own sources of a scope's lists: the server's for the server's lists, the
+// user's own and the server's they use for theirs. Source is what it
+// belongs to (see SmartSourceAddon). Genres are those its genre filter
+// offers.
 type SmartCatalog struct {
 	AddonID   accounts.ID
 	AddonName string
 	Shared    bool
+	Source    string
 	Catalog   stremio.Catalog
 	Genres    []string
 }
 
 // SmartCatalogs lists the catalogs user's lists of a scope may draw from,
-// by addon in order.
+// by addon in order: catalogs of movies and series, not of music, whose
+// titles lists judge by rules on movies and series.
 func (s *Service) SmartCatalogs(ctx context.Context, user accounts.User, shared bool) ([]SmartCatalog, error) {
 	v, err := s.smartView(ctx, user, shared)
 	if err != nil {
@@ -1036,10 +1310,17 @@ func (s *Service) SmartCatalogs(ctx context.Context, user accounts.User, shared 
 		if entry.addon.HasMusic() {
 			continue
 		}
+		source := SmartSourceAddon
+		switch {
+		case entry.addon.Local():
+			source = SmartSourceFolder
+		case entry.addon.IPTV():
+			source = SmartSourceIPTV
+		}
 		for _, catalog := range entry.addon.Manifest.Catalogs {
 			if smartCatalog(catalog) {
 				result = append(result, SmartCatalog{AddonID: entry.addon.ID, AddonName: entry.addon.Name(), Shared: entry.shared,
-					Catalog: catalog, Genres: slices.Clone(addons.GenreChoices(catalog))})
+					Source: source, Catalog: catalog, Genres: slices.Clone(addons.GenreChoices(catalog))})
 			}
 		}
 	}
