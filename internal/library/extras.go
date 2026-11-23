@@ -17,7 +17,8 @@ import (
 // and identifier, which only its folder describes and streams (see
 // serves): no catalog lists it, and no addon hears of it. An extra is
 // reached through its title: the user must see the title, and the folder
-// must be one of the user's addons, as for the title's versions.
+// must be one of the user's addons, as for the title's versions. A
+// title's addon trailers are extras as well (see addontrailers.go).
 
 // The Stremio type and the prefix of the identifiers of extras.
 const (
@@ -106,10 +107,11 @@ func (s *Service) Extras(ctx context.Context, user accounts.User, id accounts.ID
 	return s.extrasOf(ctx, v, item)
 }
 
-// ExtraCounts counts the local trailers and the special features of a
-// movie, a series or a season the user sees, as its details show them.
+// ExtraCounts counts the local trailers, addon trailers included, and the
+// special features of a movie, a series or a season the user sees, as its
+// details show them.
 func (s *Service) ExtraCounts(ctx context.Context, user accounts.User, item Item) (trailers, features int, err error) {
-	if _, ok := extraOwner(item); !ok || s.local == nil {
+	if _, ok := extraOwner(item); !ok {
 		return 0, 0, nil
 	}
 	v, err := s.view(ctx, user)
@@ -157,30 +159,37 @@ func extraOwner(item Item) (ExtraOwner, bool) {
 	return ExtraOwner{}, false
 }
 
-// extrasOf lists the extras of item, described in v.
+// extrasOf lists the extras of item, described in v: those of its local
+// folders, by name, then its addon trailers (see addontrailers.go), in
+// its description's order.
 func (s *Service) extrasOf(ctx context.Context, v view, item Item) ([]Item, error) {
 	owner, ok := extraOwner(item)
-	if !ok || s.local == nil {
+	if !ok {
 		return nil, nil
 	}
-	folders := localFolders(v)
-	if len(folders) == 0 {
-		return nil, nil
+	var items []Item
+	if folders := localFolders(v); s.local != nil && len(folders) > 0 {
+		extras, err := s.local.Extras(ctx, folders, owner)
+		if err != nil {
+			return nil, err
+		}
+		seen := map[accounts.ID]bool{}
+		for _, extra := range extras {
+			if seen[extra.ID] {
+				continue
+			}
+			seen[extra.ID] = true
+			items = append(items, extraItem(extra, item))
+		}
+		slices.SortStableFunc(items, func(a, b Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	}
-	extras, err := s.local.Extras(ctx, folders, owner)
+	trailers, err := s.addonTrailers(ctx, v, item)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]Item, 0, len(extras))
-	seen := map[accounts.ID]bool{}
-	for _, extra := range extras {
-		if seen[extra.ID] {
-			continue
-		}
-		seen[extra.ID] = true
-		items = append(items, extraItem(extra, item))
+	for _, trailer := range trailers {
+		items = append(items, trailer.item)
 	}
-	slices.SortStableFunc(items, func(a, b Item) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	return items, nil
 }
 
@@ -204,10 +213,21 @@ func extraItem(extra Extra, owner Item) Item {
 	return item
 }
 
-// extra describes the extra of item id, when one of v's local folders
-// holds it and v sees one of the titles it belongs to; ErrNotFound
-// otherwise.
+// extra describes the extra of item id, a local folder's or an addon
+// trailer, when v sees the title it belongs to; ErrNotFound otherwise.
 func (s *Service) extra(ctx context.Context, v view, id accounts.ID) (Item, error) {
+	item, err := s.localExtra(ctx, v, id)
+	if !errors.Is(err, ErrNotFound) {
+		return item, err
+	}
+	trailer, err := s.addonTrailer(ctx, v, id)
+	return trailer.item, err
+}
+
+// localExtra describes the extra of item id, when one of v's local
+// folders holds it and v sees one of the titles it belongs to;
+// ErrNotFound otherwise.
+func (s *Service) localExtra(ctx context.Context, v view, id accounts.ID) (Item, error) {
 	if s.local == nil {
 		return Item{}, ErrNotFound
 	}
@@ -236,12 +256,15 @@ func (s *Service) extra(ctx context.Context, v view, id accounts.ID) (Item, erro
 // listing shows its title's backdrop (see extraItem). False when id is no
 // extra's item, or imageType another image.
 func (s *Service) extraArtwork(ctx context.Context, id accounts.ID, imageType string) (Artwork, bool, error) {
-	if s.local == nil || !strings.EqualFold(imageType, "Primary") && !strings.EqualFold(imageType, "Backdrop") {
+	if !strings.EqualFold(imageType, "Primary") && !strings.EqualFold(imageType, "Backdrop") {
 		return Artwork{}, false, nil
+	}
+	if s.local == nil {
+		return s.trailerArtwork(ctx, id, imageType)
 	}
 	extra, err := s.local.Extra(ctx, id)
 	if errors.Is(err, ErrNotFound) {
-		return Artwork{}, false, nil
+		return s.trailerArtwork(ctx, id, imageType)
 	}
 	if err != nil {
 		return Artwork{}, true, err
@@ -259,9 +282,12 @@ func (s *Service) extraArtwork(ctx context.Context, id accounts.ID, imageType st
 // of a title, or season, it belongs to whose tag is tag.
 func (s *Service) taggedExtraArtwork(ctx context.Context, id accounts.ID, tag string) (Artwork, bool) {
 	if s.local == nil {
-		return Artwork{}, false
+		return s.taggedTrailerArtwork(ctx, id, tag)
 	}
 	extra, err := s.local.Extra(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return s.taggedTrailerArtwork(ctx, id, tag)
+	}
 	if err != nil {
 		return Artwork{}, false
 	}

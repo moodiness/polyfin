@@ -618,9 +618,9 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 
 ### Extras and theme media for apps
 
-- `/Items/{id}/LocalTrailers` lists a movie's, series' or season's local trailers, and `/Items/{id}/SpecialFeatures` its other extras, theme media left out, both as arrays of items; the `/Users/{userId}/Items/{id}/…` forms jellyfin-web calls answer the same.
+- `/Items/{id}/LocalTrailers` lists a movie's, series' or season's local trailers, a local folder's by name, then the addons' video links in their description's order, and `/Items/{id}/SpecialFeatures` its other extras, theme media left out, both as arrays of items; the `/Users/{userId}/Items/{id}/…` forms jellyfin-web calls answer the same. A local trailer is of `Type` `Trailer`, as in Jellyfin.
 - `/Items/{id}/ThemeSongs` and `/Items/{id}/ThemeVideos` answer a `ThemeMediaResult`, and `/Items/{id}/ThemeMedia` both, with no soundtrack songs. With `inheritFromParent=true`, a season without any gets its series', and an episode its season's, else its series'; `OwnerId` is the item they were found on. `sortBy=Random` shuffles them.
-- An item's details give `LocalTrailerCount` and `SpecialFeatureCount`; `RemoteTrailers` stay the addons' trailers.
+- An item's details give `LocalTrailerCount`, the addons' video links included, and `SpecialFeatureCount`; `RemoteTrailers` are the addons' trailers on video sites (see [Trailers](addons-and-libraries.md#trailers)).
 
 ### Refresh metadata for apps
 

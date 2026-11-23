@@ -1,11 +1,13 @@
 package stremio
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -163,15 +165,16 @@ type Meta struct {
 	Language        string `json:"language,omitempty"`
 	// Country names the countries the title was made in, as Cinemeta
 	// writes them ("United States, France"), which smart lists judge.
-	Country       Names         `json:"country,omitempty"`
-	ImdbID        string        `json:"imdb_id,omitempty"`
-	TmdbID        Text          `json:"_tmdbId,omitempty"`
-	TvdbID        Text          `json:"_tvdbId,omitempty"`
-	Trailers      []Trailer     `json:"trailers,omitempty"`
-	Videos        []Video       `json:"videos,omitempty"`
-	Collection    *Collection   `json:"collection,omitempty"`
-	Extras        *Extras       `json:"app_extras,omitempty"`
-	BehaviorHints *MetaBehavior `json:"behaviorHints,omitempty"`
+	Country        Names         `json:"country,omitempty"`
+	ImdbID         string        `json:"imdb_id,omitempty"`
+	TmdbID         Text          `json:"_tmdbId,omitempty"`
+	TvdbID         Text          `json:"_tvdbId,omitempty"`
+	Trailers       []Trailer     `json:"trailers,omitempty"`
+	TrailerStreams []Stream      `json:"trailerStreams,omitempty"` // see TrailerLinks
+	Videos         []Video       `json:"videos,omitempty"`
+	Collection     *Collection   `json:"collection,omitempty"`
+	Extras         *Extras       `json:"app_extras,omitempty"`
+	BehaviorHints  *MetaBehavior `json:"behaviorHints,omitempty"`
 	// TmdbFromMoviedb is Polyfin's own mark, kept with the description,
 	// that TmdbID was read from its moviedb_id (see described.ids),
 	// which a metadata addon may give wrong, and which the library checks
@@ -211,11 +214,94 @@ func (m Meta) Shape() string {
 	return ""
 }
 
-// Trailer points to a YouTube video.
+// Trailer is a trailer a description lists: Source is a YouTube video's
+// identifier or a link (see TrailerLinks).
 type Trailer struct {
 	Source string `json:"source"`
 	Type   string `json:"type,omitempty"`
 	Name   string `json:"name,omitempty"`
+}
+
+// TrailerLink is a trailer of a title: a video site's page, Page, which
+// apps open in that site's player, or a link to the video itself, which
+// plays as the stream Stream, of the addon that gave it.
+type TrailerLink struct {
+	Name   string
+	Page   string
+	Stream Stream
+}
+
+// youTubeWatch is the address of the page of a YouTube video by its
+// identifier.
+const youTubeWatch = "https://www.youtube.com/watch?v="
+
+// TrailerLinks lists the trailers a description gives, each once: its
+// trailer streams first, as Stremio apps prefer them, then its trailers.
+// A YouTube identifier, or a link to a page of YouTube, is a page; a
+// link to another web address is a video to play. A trailer stream of
+// another kind, as a torrent, is left out.
+func (m Meta) TrailerLinks() []TrailerLink {
+	var links []TrailerLink
+	add := func(link TrailerLink) {
+		if !slices.ContainsFunc(links, func(l TrailerLink) bool { return l.Page == link.Page && l.Stream.URL == link.Stream.URL }) {
+			links = append(links, link)
+		}
+	}
+	for _, stream := range m.TrailerStreams {
+		name := strings.TrimSpace(cmp.Or(stream.Title, stream.Name))
+		switch {
+		case stream.YouTubeID != "":
+			add(TrailerLink{Name: name, Page: youTubeWatch + stream.YouTubeID})
+		case youTubePage(stream.URL):
+			add(TrailerLink{Name: name, Page: stream.URL})
+		case webLink(stream.URL):
+			add(TrailerLink{Name: name, Stream: stream})
+		}
+	}
+	for _, trailer := range m.Trailers {
+		name := strings.TrimSpace(cmp.Or(trailer.Name, trailer.Type))
+		switch source := strings.TrimSpace(trailer.Source); {
+		case source == "":
+		case youTubePage(source):
+			add(TrailerLink{Name: name, Page: source})
+		case webLink(source):
+			add(TrailerLink{Name: name, Stream: Stream{Title: name, URL: source}})
+		case !strings.Contains(source, "://"):
+			add(TrailerLink{Name: name, Page: youTubeWatch + source})
+		}
+	}
+	return links
+}
+
+// SiteTrailers lists the trailers of the description that are pages of a
+// video site, as trailers whose source is the page: those any addon's
+// description may give another's (see TrailerLinks).
+func (m Meta) SiteTrailers() []Trailer {
+	var trailers []Trailer
+	for _, link := range m.TrailerLinks() {
+		if link.Page != "" {
+			trailers = append(trailers, Trailer{Source: link.Page, Name: link.Name})
+		}
+	}
+	return trailers
+}
+
+// webLink reports whether link is an http or https address.
+func webLink(link string) bool {
+	parsed, err := url.Parse(link)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+}
+
+// youTubePage reports whether link is a web address of YouTube, which
+// plays in its player only.
+func youTubePage(link string) bool {
+	if !webLink(link) {
+		return false
+	}
+	parsed, _ := url.Parse(link)
+	host := strings.ToLower(parsed.Hostname())
+	return host == "youtu.be" || host == "youtube.com" || strings.HasSuffix(host, ".youtube.com") || host == "youtube-nocookie.com" ||
+		strings.HasSuffix(host, ".youtube-nocookie.com")
 }
 
 // Video is an episode of a series, a video of another title, or a
@@ -410,13 +496,15 @@ type described struct {
 	// addon may give in place of _tmdbId and _tvdbId (see ids).
 	MoviedbID Text `json:"moviedb_id"`
 	TVDBID    Text `json:"tvdb_id"`
-	// Videos, Trailers, Collection and Extras are read apart, within the
-	// bounds of the answer (see decode), into Meta's fields of the same
-	// names: shallower than those, they take the values.
-	Videos     json.RawMessage `json:"videos"`
-	Trailers   json.RawMessage `json:"trailers"`
-	Collection json.RawMessage `json:"collection"`
-	Extras     json.RawMessage `json:"app_extras"`
+	// Videos, Trailers, TrailerStreams, Collection and Extras are read
+	// apart, within the bounds of the answer (see decode), into Meta's
+	// fields of the same names: shallower than those, they take the
+	// values.
+	Videos         json.RawMessage `json:"videos"`
+	Trailers       json.RawMessage `json:"trailers"`
+	TrailerStreams json.RawMessage `json:"trailerStreams"`
+	Collection     json.RawMessage `json:"collection"`
+	Extras         json.RawMessage `json:"app_extras"`
 }
 
 // meta is the meta described, its cast, directors and writers read from

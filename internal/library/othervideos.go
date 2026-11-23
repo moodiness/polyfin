@@ -339,8 +339,15 @@ func (s *Service) FolderVideos(ctx context.Context, user accounts.User, id accou
 }
 
 // videoStreams are the streams a description embeds for one of its
-// videos.
+// videos, or the stream of one of its addon trailers (see
+// addontrailers.go).
 func videoStreams(meta stremio.Meta, videoID string) []stremio.Stream {
+	if n, ok := trailerNumber(videoID); ok {
+		if streams := trailerStreams(meta); n < len(streams) {
+			return streams[n : n+1]
+		}
+		return nil
+	}
 	for _, video := range meta.Videos {
 		if video.ID == videoID {
 			return video.Streams

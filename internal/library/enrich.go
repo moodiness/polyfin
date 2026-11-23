@@ -94,8 +94,11 @@ func enriched(own, addon stremio.Meta) stremio.Meta {
 			result.Genres = append(result.Genres, genre)
 		}
 	}
-	if len(addon.Trailers) > 0 {
-		result.Trailers = addon.Trailers
+	// An addon's links to trailers are its own to play (see
+	// addontrailers.go): only its pages of video sites complete the
+	// source's description.
+	if trailers := addon.SiteTrailers(); len(trailers) > 0 {
+		result.Trailers, result.TrailerStreams = trailers, nil
 	}
 	if addon.Extras != nil {
 		extras := *addon.Extras

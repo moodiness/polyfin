@@ -335,9 +335,20 @@ var itemTypes = map[library.Kind]string{
 	library.KindAudiobook:     "AudioBook",
 	library.KindMusicPlaylist: "Playlist",
 	// Jellyfin's extras are videos, and its theme songs audio, told
-	// apart by their ExtraType.
+	// apart by their ExtraType; its local trailers are Trailer items (see
+	// itemType).
 	library.KindExtra:     "Video",
 	library.KindThemeSong: "Audio",
+}
+
+// itemType is an item's Jellyfin type: that of its kind, but Trailer for
+// a trailer extra, a local folder's or an addon's, as Jellyfin resolves a
+// local trailer's file as a Trailer item, of ExtraType Trailer.
+func itemType(item library.Item) string {
+	if item.Kind == library.KindExtra && item.ExtraType == library.ExtraTrailer {
+		return "Trailer"
+	}
+	return itemTypes[item.Kind]
 }
 
 // typeAliases are the other names apps ask item types by: Jellyfin's
@@ -411,7 +422,7 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		Id:                item.ID.String(),
 		OfficialRating:    item.OfficialRating,
 		IsFolder:          folder,
-		Type:              itemTypes[item.Kind],
+		Type:              itemType(item),
 		Status:            item.Status,
 		CollectionType:    appCollectionType(item, state.collectionLibraries),
 		SeriesName:        item.SeriesName,

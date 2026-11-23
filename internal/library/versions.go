@@ -254,8 +254,16 @@ func (s *Service) target(ctx context.Context, user accounts.User, id accounts.ID
 	}
 	r, err := s.loadListed(ctx, v, id)
 	if errors.Is(err, ErrNotFound) {
-		// An extra plays its file, as its folder streams it.
-		extra, err := s.extra(ctx, v, id)
+		// An extra plays its file, as its folder streams it; an addon
+		// trailer its link, as its title's description gives it.
+		extra, err := s.localExtra(ctx, v, id)
+		if errors.Is(err, ErrNotFound) {
+			trailer, err := s.addonTrailer(ctx, v, id)
+			if err != nil {
+				return target{}, view{}, err
+			}
+			return trailer.target(), v, nil
+		}
 		if err != nil {
 			return target{}, view{}, err
 		}
@@ -1211,10 +1219,14 @@ func streamsFlight(key streamKey) string {
 // serves reports whether an addon serves a resource for a title: a home
 // video's and a plain video's are its folder's alone, whatever other
 // addons declare, so that none of them ever hears of it; an extra's
-// stream is its local folder's, which answers for its own extras only.
+// stream is its local folder's, which answers for its own extras only;
+// an addon trailer is no addon's to answer for (see addontrailers.go).
 func serves(entry installed, resource, metaType, id string) bool {
 	if metaType == ExtraType || strings.HasPrefix(id, ExtraIDPrefix) {
 		return entry.addon.Local() && resource == "stream"
+	}
+	if strings.HasPrefix(id, TrailerIDPrefix) {
+		return false
 	}
 	if (metaType == VideoType || strings.HasPrefix(id, VideoIDPrefix) || strings.HasPrefix(id, PlainIDPrefix)) && !entry.addon.Local() {
 		return false

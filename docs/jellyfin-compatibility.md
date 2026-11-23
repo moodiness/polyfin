@@ -200,9 +200,11 @@ API details: [Remote images for apps](jellyfin-api.md#remote-images-for-apps).
 
 ### Trailers, channels and theme media
 
-Trailer items and plugin channels answer empty lists, as on a Jellyfin server without them. Addons give trailers only with their titles, as `RemoteTrailers`.
+Trailer items and plugin channels answer empty lists, as on a Jellyfin server without them. Addons give trailers only with their titles: a trailer on a video site is one of the title's `RemoteTrailers`, and a trailer given as a link to the video is one of its local trailers (see [Trailers](addons-and-libraries.md#trailers)).
 
-The extras, local trailers and theme media local folders keep beside their titles are served as Jellyfin serves them (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)): each is a `Video` item, or `Audio` for a theme song, with its `ExtraType` (`Trailer`, `BehindTheScenes`, `DeletedScene`, `Interview`, `Scene`, `Sample`, `Short`, `Featurette`, `Clip`, `Unknown`, `ThemeSong` or `ThemeVideo`) and its title, or season, as `ParentId`. No listing holds them; they play, with their own user data, as the title's local versions do.
+The extras, local trailers and theme media local folders keep beside their titles are served as Jellyfin serves them (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)): each is a `Video` item, a `Trailer` item for a local trailer, or `Audio` for a theme song, with its `ExtraType` (`Trailer`, `BehindTheScenes`, `DeletedScene`, `Interview`, `Scene`, `Sample`, `Short`, `Featurette`, `Clip`, `Unknown`, `ThemeSong` or `ThemeVideo`) and its title, or season, as `ParentId`. No listing holds them; they play, with their own user data, as the title's local versions do.
+
+A local trailer, a local folder's or an addon's, is a `Trailer` item of `ExtraType` `Trailer` and `MediaType` `Video`, as Jellyfin resolves a local trailer's file. The title's details count it in `LocalTrailerCount`, and `/Items/{id}/LocalTrailers` lists it. Apps play it from the title's Trailer button through `PlaybackInfo` and the media addresses, as they play the title. An addon's local trailer plays its link as the addon's streams play, relayed or sent to its source.
 
 API details: [Extras and theme media for apps](jellyfin-api.md#extras-and-theme-media-for-apps).
 
