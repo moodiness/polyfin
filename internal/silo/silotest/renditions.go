@@ -38,8 +38,9 @@ var containerTrack = regexp.MustCompile(`^[1-9][0-9]{0,9}$`)
 //     row has, or whose index is under 1. The contract numbers them from 1
 //     in inventory order.
 //   - container_track_id: embedded rows only, written as Android's
-//     isCanonicalContainerTrackId takes it, used once
-//     (nativeSwitchTrackId).
+//     isCanonicalContainerTrackId takes it, used once (nativeSwitchTrackId,
+//     and sourceContainerTrackId, with which the TV's subtitle menu lists
+//     the file's track of a row played as it is as the row itself).
 //   - native_selectable: sent only when true (Android nativeSwitchTrackId
 //     reads a row with stream_index and without it as false), on an
 //     embedded row with a container_track_id of a plan playing the file as

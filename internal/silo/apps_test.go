@@ -560,8 +560,9 @@ func TestEpisodeCardsCarryTheirParentsArtwork(t *testing.T) {
 // The documents the apps read of features Polyfin does not offer hold the
 // keys the contract requires: no reset of an Apple push installation, no
 // Discover rows of requests, no box sets in a library or a search, and
-// the members the contract added since, all off or empty. The rating
-// sources are not shown.
+// the members the contract added since, all off or empty: no notification
+// channels of plugins and no stable sign-in callback among them. The
+// rating sources are not shown.
 func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t, browsing)
@@ -572,7 +573,8 @@ func TestDocumentsSayWhatPolyfinDoesNotOffer(t *testing.T) {
 		{"/api/v2/notifications/push/devices/capabilities", "binds_login_session"},
 		{"/api/v2/settings/contract/capabilities", "supports_overlay_images"}, {"/api/v2/settings/overlay-config", "images"},
 		{"/api/v2/settings/overlay-config", "image_uploads_available"}, {"/api/v2/notifications/capabilities", "series.bulk_mute"},
-		{"/api/v2/capabilities/ratings", "sources"}} {
+		{"/api/v2/capabilities/ratings", "sources"}, {"/api/v2/notifications/capabilities", "plugin_destinations.available"},
+		{"/api/v2/auth/oauth/capabilities", "stable_callback"}} {
 		var doc map[string]any
 		w := h.do(http.MethodGet, tc.path, nil)
 		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &doc) != nil {

@@ -935,6 +935,11 @@ func TestSiloAppsPlayRepackagedOrConverted(t *testing.T) {
 	if err := silotest.CheckMediaPlaylist([]byte(master), d.Plan.Stream.URL); status != http.StatusOK || err != nil {
 		t.Fatalf("master playlist: %d %v %s", status, err, master)
 	}
+	// A player that checks the playlist first, with HEAD, is answered as
+	// the GET is, without a body.
+	if status, data := a.do(t, http.MethodHead, d.Plan.Stream.URL, token, "", nil); status != http.StatusOK || len(data) != 0 {
+		t.Errorf("HEAD of the master playlist: %d %q", status, data)
+	}
 
 	converted := a.start(t, token, profile, siloStart(file, profile, installation, []string{"mp4"}, []string{"hevc"}, []string{"aac"},
 		map[string]any{"playback_attempt_id": "attempt-2"}))

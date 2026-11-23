@@ -3,6 +3,7 @@ package silo
 import (
 	"cmp"
 	"encoding/base64"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -1047,7 +1048,9 @@ func pageOf(all []catalogItem, start, limit, total int) catalogPage {
 // movie's box set only then), and the letters of a list in title order
 // (letter_index, see letters.go), which neither app reads: both ask for
 // the letters, which a library Polyfin does not store declines with 501,
-// and take a 404, 405 or 501 as no index.
+// and take a 404, 405 or 501 as no index. It leaves out item_collections:
+// Polyfin does not list the collections a title is in, and the Android
+// app shows them on a title's page only when it is true.
 func (s *Server) searchCapabilities(w http.ResponseWriter, _ *http.Request, _ viewer) {
 	writeJSON(w, http.StatusOK, struct {
 		Allowed          bool   `json:"allowed"`
@@ -1156,6 +1159,7 @@ type itemDetail struct {
 	TmdbID        string         `json:"tmdb_id,omitempty"`
 	TvdbID        string         `json:"tvdb_id,omitempty"`
 	UserData      *rollup        `json:"user_data,omitempty"`
+	UserRating    *int64         `json:"user_rating,omitempty"`
 }
 
 type rating struct {
@@ -1182,6 +1186,17 @@ func ratingsOf(i item) []rating {
 	return ratings
 }
 
+// userRatingOf is the user's rating of an item, 1 to 10 as the apps show
+// it, of their Jellyfin rating from 0 to 10 rounded: a dislike's 1 is half
+// a star, and a rating below it the lowest the apps show. Absent when the
+// item is not rated.
+func userRatingOf(i item) *int64 {
+	if i.UserData == nil || i.UserData.Rating == nil {
+		return nil
+	}
+	return new(min(max(int64(math.Round(*i.UserData.Rating)), 1), 10))
+}
+
 // catalogItem describes a title for its page.
 func (s *Server) catalogItem(w http.ResponseWriter, r *http.Request, v viewer) {
 	i, ok := s.itemOf(w, r, v, r.PathValue("id"))
@@ -1195,7 +1210,7 @@ func (s *Server) catalogItem(w http.ResponseWriter, r *http.Request, v viewer) {
 	}
 	detail := itemDetail{catalogItem: catalogItemOf(r, i), OriginalTitle: i.OriginalTitle, Cast: []castCredit{}, Crew: []crewCredit{},
 		Ratings: ratingsOf(i), Subtitles: subtitlesOf(i.MediaSources), Versions: versions, UserData: rollupOf(i),
-		ImdbID: i.ProviderIds["Imdb"], TmdbID: i.ProviderIds["Tmdb"], TvdbID: i.ProviderIds["Tvdb"]}
+		UserRating: userRatingOf(i), ImdbID: i.ProviderIds["Imdb"], TmdbID: i.ProviderIds["Tmdb"], TvdbID: i.ProviderIds["Tvdb"]}
 	if len(i.Taglines) > 0 {
 		detail.Tagline = i.Taglines[0]
 	}
