@@ -13,6 +13,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/collections"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/localization"
 	"github.com/moodiness/polyfin/internal/userdata"
@@ -67,13 +68,41 @@ func ownView(id accounts.ID) bool {
 	return id == liveTvViewID || id == playlistsViewID || id == recordingsFolderID
 }
 
-// collectionKinds are the items a collection holds. Like Jellyfin's, a
+// CollectionKinds are the items a collection holds. Like Jellyfin's, a
 // collection holds titles, home videos among them, their seasons and
 // episodes, folders of videos, other groups and channels; Polyfin leaves
 // out people and programmes, which its guide replaces. The collections
-// users make may hold each other too (see collectionItems).
-var collectionKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindSeries, library.KindSeason, library.KindEpisode,
+// users make may hold each other too (see collectionItems). The admin
+// app's collection pages add the same.
+var CollectionKinds = []library.Kind{library.KindMovie, library.KindVideo, library.KindSeries, library.KindSeason, library.KindEpisode,
 	library.KindFolder, library.KindCollection, library.KindChannel}
+
+// CollectionSearch finds the items whose name holds term that the admin
+// app's collection pages offer to add, as jellyfin-web's search finds
+// them for user (see the searchTerm listing): the movies, series, videos
+// and folders of videos of their libraries, whether an addon's, an IPTV
+// source's or a local folder's (see library.Service.Search), then their
+// Live TV channels, case and accents aside; at most limit of each. The
+// rating filter of ctx applies, as to a listing.
+func (h *Handler) CollectionSearch(ctx context.Context, user accounts.User, term string, limit int) ([]library.Item, error) {
+	found, err := h.Library.Search(ctx, user, term, searchKinds(func(library.Item) bool { return true }), limit)
+	if err != nil {
+		return nil, err
+	}
+	has, err := h.Library.HasChannels(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	if has {
+		folded := iptv.Fold(term)
+		channels, err := h.Library.SearchChannels(ctx, user, func(name string) bool { return strings.Contains(iptv.Fold(name), folded) }, limit)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, channels...)
+	}
+	return h.Library.RatingFiltered(ctx, user, found)
+}
 
 // collectionItems checks the items ids names for a collection: each must be
 // an item user can reach that a collection may hold, or a collection made
@@ -104,7 +133,7 @@ func (h *Handler) collectionItems(w http.ResponseWriter, r *http.Request, user a
 			return nil, false
 		}
 		for _, item := range items {
-			found[item.ID] = slices.Contains(collectionKinds, item.Kind)
+			found[item.ID] = slices.Contains(CollectionKinds, item.Kind)
 		}
 	}
 	for _, id := range ids {
@@ -564,10 +593,11 @@ func (h *Handler) addonCollections(ctx context.Context, user accounts.User) ([]l
 // writeCollectionTitles answers the titles of a collection that user may
 // see, and the collections in it they are shown, as BoxSets, in Jellyfin's
 // order for collections: by premiere date, a collection's being its
-// earliest title's, then in the order they were added. Listed
-// recursively, as apps play a collection, a collection in it also brings
-// its own, and a series or season its seasons and released episodes. The
-// request's type filters apply.
+// earliest title's, then in the collection's order. A collection whose
+// display order an administrator set to the chosen one lists in its own
+// order alone. Listed recursively, as apps play a collection, a
+// collection in it also brings its own, after it, and a series or season
+// its seasons and released episodes. The request's type filters apply.
 func (h *Handler) writeCollectionTitles(w http.ResponseWriter, r *http.Request, user accounts.User, c collections.Collection, start, limit int) {
 	view, err := h.viewCollections(r.Context(), user, c)
 	if err != nil {
@@ -591,7 +621,9 @@ func (h *Handler) writeCollectionTitles(w http.ResponseWriter, r *http.Request, 
 		}
 		listed = slices.DeleteFunc(listed, func(item library.Item) bool { return !filter.keeps(item, state) })
 	}
-	slices.SortStableFunc(listed, func(a, b library.Item) int { return premiere(a).Compare(premiere(b)) })
+	if c.DisplayOrder != collections.OrderChosen {
+		slices.SortStableFunc(listed, func(a, b library.Item) int { return premiere(a).Compare(premiere(b)) })
+	}
 	from, to := bounds(len(listed), start, limit)
 	dtos, err := h.entryDtos(r, user, view, listed[from:to])
 	if err != nil {
