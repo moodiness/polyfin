@@ -2,13 +2,13 @@
   "contract": {
     "repository": "Silo-Server/silo-server",
     "path": "contracts/api/v2/openapi.json",
-    "commit": "c58c0bb9394868f42d058cf8749de46921886420",
-    "sha256": "8115f78349b0e39c8d9bab832e86b4b8ddedb9491301f9dc212247c94080dedc"
+    "commit": "a2ec40945ddfcbbda62fbde69368e1e0b8d40a47",
+    "sha256": "e9fc1d87a0353aa83e8d209ba72ed4d26a7a726c6b45a3c299dac1137ffd4d77"
   },
   "apps": [
     {
       "repository": "Silo-Server/silo-apple",
-      "commit": "6eea7cf74eef8359b736561513b3160e5274a99f",
+      "commit": "80ae94379024a5acc7b363717de0a7fa07aa9f03",
       "files": [
         "iosApp/iosApp/Components/ProfileMenuRow.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2AuthModels.swift",
@@ -46,6 +46,7 @@
         "iosApp/iosApp/Screens/Browse/Filtering/CatalogQueryBuilder.swift",
         "iosApp/iosApp/Screens/Browse/Filtering/CatalogSortKey.swift",
         "iosApp/iosApp/Screens/Calendar/CalendarModels.swift",
+        "iosApp/iosApp/Screens/Detail/ItemDetailViewModel.swift",
         "iosApp/iosApp/Screens/Player/PlaybackMediaAuthorization.swift",
         "iosApp/iosApp/Screens/Player/PlaybackSessionBridge.swift",
         "iosApp/iosApp/Screens/Player/PlayerMarkerTimeline.swift",
@@ -60,7 +61,7 @@
     },
     {
       "repository": "Silo-Server/silo-android",
-      "commit": "db87f835ff908dd31a8473c66408ddeeb2e926ba",
+      "commit": "137fca3109bb8991ffc328d7097cd739c7cb1202",
       "files": [
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/AppNavigation.kt",
         "androidApp/src/androidMain/kotlin/org/siloserver/silo/android/ui/navigation/DeviceLoginRouteParser.kt",

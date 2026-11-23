@@ -10,14 +10,15 @@ import (
 	"time"
 )
 
-// Favorites, the watchlist and the watch history.
+// Favorites, the watchlist, ratings and the watch history.
 //
 // A user's favorites are their Jellyfin favorites, which all their apps
 // share. Their watchlist is Polyfin's, a playlist of theirs (see package
 // watchlist): Silo's apps list it as Jellyfin apps do, in its order, and
 // put titles on it and take them off through Polyfin's own routes of the
-// Jellyfin API. Their history is what they played. Each is read from the
-// Jellyfin API as the user, under the same limits.
+// Jellyfin API. Their ratings are their Jellyfin ratings, from 0 to 10,
+// which a like or a dislike also sets. Their history is what they played.
+// Each is read from the Jellyfin API as the user, under the same limits.
 
 func (s *Server) personalRoutes() {
 	s.mux.HandleFunc("GET /api/v2/favorites", s.profiled(s.favorites))
@@ -30,6 +31,8 @@ func (s *Server) personalRoutes() {
 	s.mux.HandleFunc("GET /api/v2/watchlist/{id}/membership", s.profiled(s.membership(watchlistEntry, true)))
 	s.mux.HandleFunc("PUT /api/v2/watchlist/{id}", s.profiled(s.markWatchlist(true)))
 	s.mux.HandleFunc("DELETE /api/v2/watchlist/{id}", s.profiled(s.markWatchlist(false)))
+	s.mux.HandleFunc("PUT /api/v2/ratings/{id}", s.profiled(s.rate))
+	s.mux.HandleFunc("DELETE /api/v2/ratings/{id}", s.profiled(s.unrate))
 	s.mux.HandleFunc("GET /api/v2/history", s.profiled(s.history))
 	// Polyfin keeps what was played as played marks, which the apps take
 	// off by marking titles unplayed.
@@ -222,7 +225,7 @@ func (s *Server) markFavorite(favorite bool) func(http.ResponseWriter, *http.Req
 		if !favorite {
 			method = http.MethodDelete
 		}
-		s.change(w, r, v, method, "/UserFavoriteItems/"+i.Id)
+		s.change(w, r, v, method, "/UserFavoriteItems/"+i.Id, nil)
 	}
 }
 
@@ -238,9 +241,9 @@ func (s *Server) markWatchlist(add bool) func(http.ResponseWriter, *http.Request
 		}
 		switch {
 		case watchable(i) && add:
-			s.change(w, r, v, http.MethodPost, "/Polyfin/UserItems/"+i.Id+"/Watchlist")
+			s.change(w, r, v, http.MethodPost, "/Polyfin/UserItems/"+i.Id+"/Watchlist", nil)
 		case watchable(i):
-			s.change(w, r, v, http.MethodDelete, "/Polyfin/UserItems/"+i.Id+"/Watchlist")
+			s.change(w, r, v, http.MethodDelete, "/Polyfin/UserItems/"+i.Id+"/Watchlist", nil)
 		case add:
 			validationProblem(w, "path.item_id", "unsupported", "Only movies, episodes, seasons and series go on the watchlist.")
 		default:
@@ -250,10 +253,40 @@ func (s *Server) markWatchlist(add bool) func(http.ResponseWriter, *http.Request
 	}
 }
 
-// change asks the Jellyfin API for a change of the user's data, answering
-// 204 once made.
-func (s *Server) change(w http.ResponseWriter, r *http.Request, v viewer, method, target string) {
-	a, err := s.call(r, v, method, target, nil, nil)
+// rate sets the user's rating of an item, 1 to 10 (the apps' stars times
+// two), as the Jellyfin API's user data takes it: on the same scale, and
+// sent on to the tracking services that keep ratings.
+func (s *Server) rate(w http.ResponseWriter, r *http.Request, v viewer) {
+	var body struct {
+		Rating *int64 `json:"rating"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.Rating == nil || *body.Rating < 1 || *body.Rating > 10 {
+		validationProblem(w, "body.rating", "out_of_range", "A rating is from 1 to 10.")
+		return
+	}
+	i, ok := s.itemOf(w, r, v, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	s.change(w, r, v, http.MethodPost, "/UserItems/"+i.Id+"/UserData", map[string]float64{"Rating": float64(*body.Rating)})
+}
+
+// unrate removes the user's rating of an item, rated or not.
+func (s *Server) unrate(w http.ResponseWriter, r *http.Request, v viewer) {
+	i, ok := s.itemOf(w, r, v, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	s.change(w, r, v, http.MethodDelete, "/UserItems/"+i.Id+"/Rating", nil)
+}
+
+// change asks the Jellyfin API for a change of the user's data, with body
+// when not nil, answering 204 once made.
+func (s *Server) change(w http.ResponseWriter, r *http.Request, v viewer, method, target string, body any) {
+	a, err := s.call(r, v, method, target, body, nil)
 	switch {
 	case err != nil:
 		s.internalError(w, r, err)

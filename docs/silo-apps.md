@@ -177,6 +177,7 @@ Tapping someone in a cast opens their page, with their titles that the user may 
 - **Watchlist:** the watchlist button puts a title on the user's [Watchlist playlist](tracking-imports.md#the-watchlist-playlist), as the web player's "Add to Watchlist" does: a movie or an episode itself, a series or a season as its aired episodes, at the top. A series or a season shows as on the watchlist while the playlist holds one of its episodes.
   - Taking a movie or an episode off removes that entry; taking a series or a season off removes all its entries. Either stays off while a list still holds it; a list that newly holds it brings it back.
   - The Watchlist screen lists the playlist, in its order, as Jellyfin apps show it. Started and played titles stay on it.
+- **Your rating:** the stars on a movie's or a series' page in the Apple apps are the user's own rating, the one Jellyfin apps keep from 0 to 10, which goes to the [tracking services](tracking-imports.md) that keep ratings. A like from a Jellyfin app shows as five stars, a dislike as half a star.
 - **History:** what the user played, the latest first.
 
 ### For You and the calendar
@@ -239,6 +240,7 @@ During and after a playback:
 - **Taking a series off Next Up:** refused as not supported. Playing the series moves it on.
 - **Hiding watches from the history:** mark a title unplayed instead.
 - **Other features:** refreshing a person's details, trending or popular titles, and trickplay.
+- **Not interested:** the Apple apps offer it on movies and series, and Polyfin refuses it for now.
 - **Playback features the apps can use but Polyfin does not offer, and so does not announce:**
   - the app's own player showing the file's subtitles, when it plays the file as it is;
   - quality adapting itself to buffering and to the measured speed during a playback;
@@ -439,7 +441,7 @@ Polyfin follows Silo's published OpenAPI contract, `contracts/api/v2/openapi.jso
 - Polyfin serves neither the contract file nor the list of capabilities those links name.
 - Silo has no release yet, and its contract still changes. A later version of the apps may need operations or fields Polyfin does not answer.
 
-Polyfin's tests also check what it gives against the rules the apps apply. They cover the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, people, similar titles, For You, the calendar, skip markers and the discovery documents.
+Polyfin's tests also check what it gives against the rules the apps apply. They cover the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, ratings, people, similar titles, For You, the calendar, skip markers, where the end credits finish a title, and the discovery documents.
 
 Those rules are read from the apps' code: Silo-Server/silo-apple and Silo-Server/silo-android, at the commits that file records. Among them:
 

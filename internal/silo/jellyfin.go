@@ -182,6 +182,7 @@ type userData struct {
 	Played                bool
 	UnplayedItemCount     *int
 	LastPlayedDate        *time.Time
+	Rating                *float64
 }
 
 type mediaSource struct {
