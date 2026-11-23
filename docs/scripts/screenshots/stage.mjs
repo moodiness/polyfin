@@ -622,7 +622,9 @@ export async function seed(stage) {
     method: 'DirectStream',
   })
   const playingSince = Date.now()
-  const more = stage.rich ? await enrich(stage, { addon: addon.id, iptv: iptv.id, users }) : {}
+  const more = stage.rich
+    ? await enrich(stage, { addon: addon.id, iptv: iptv.id, users, title })
+    : {}
   return { addon: addon.id, iptv: iptv.id, users, playingSince, title, ...more }
 }
 
@@ -631,13 +633,14 @@ export async function seed(stage) {
  * others have: ten users in two groups, one with 23 devices; more sources, with logos, long names
  * and one that fails; six libraries hidden in menus; a folder source and a missing one; a failing
  * notification target and backup destination; tracking services connected; expired invites; a
- * long activity log; a smart list, an own channel and a member's own source.
+ * long activity log; a smart list, an own channel, a member's own source, and two collections,
+ * one holding the other.
  *
  * Tracking connections, the backup destination's failure, the invites' expiry and the activity
  * log are written in the database: the services are not reached from the demo, no backup runs
  * without pg_dump, and none of these can be made old through the API.
  */
-async function enrich(stage, { addon, iptv, users }) {
+async function enrich(stage, { addon, iptv, users, title }) {
   const { api, demo, scratch, databaseUrl } = stage
 
   for (const member of members.slice(3)) {
@@ -865,6 +868,12 @@ async function enrich(stage, { addon, iptv, users }) {
     sort: 'name',
     maxItems: 50,
   })
+  // Two collections of the server, the first holding Night Train, the second the first, which
+  // Content › Libraries lists and each collection's page links to.
+  const trains = await api.post('/admin/api/collections', { name: 'Night trains' })
+  await api.post(`/admin/api/collections/${trains.id}/entries`, { ids: [title] })
+  const evenings = await api.post('/admin/api/collections', { name: 'Quiet evenings' })
+  await api.post(`/admin/api/collections/${evenings.id}/entries`, { ids: [trains.id] })
 
   return {
     sources: added,
@@ -875,6 +884,7 @@ async function enrich(stage, { addon, iptv, users }) {
     channel: channel.id,
     own: own.id,
     ownSmartList: ownSmart.id,
+    collections: [trains.id, evenings.id],
   }
 }
 

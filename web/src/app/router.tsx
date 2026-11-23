@@ -155,6 +155,10 @@ export const router = createBrowserRouter(
                     scope: 'shared',
                   }),
                 },
+                {
+                  path: 'libraries/collections/:id',
+                  lazy: page(() => import('@/features/libraries/CollectionRoute')),
+                },
                 { path: 'live-tv', lazy: page(() => import('@/features/livetv/LiveTvRoute')) },
                 {
                   path: 'live-tv/channels/:id',
