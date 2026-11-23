@@ -757,12 +757,13 @@ func (s *Service) smartDescribed(ctx context.Context, v view, list smartlists.Li
 // smartElsewhere completes the titles a list judges with what neither
 // their listing nor their description gives, when its rules look at it:
 // the votes of their IMDb rating and their critics' and Metacritic
-// scores, from MDBList, and their studios, from TMDB. Those not known yet
-// are asked about in the background.
+// scores, from MDBList, and their studios and streaming services, from
+// TMDB. Those not known yet are asked about in the background.
 func (s *Service) smartElsewhere(ctx context.Context, list smartlists.List, titles []smartTitle) error {
 	votes, studios := list.Uses(smartlists.FieldVotes), list.Uses(smartlists.FieldStudio)
 	critics := list.Uses(smartlists.FieldCritics) || list.Uses(smartlists.FieldMetacritic)
-	if !votes && !critics && !studios {
+	services := list.Uses(smartlists.FieldService)
+	if !votes && !critics && !studios && !services {
 		return nil
 	}
 	items := make([]Item, len(titles))
@@ -802,6 +803,15 @@ func (s *Service) smartElsewhere(ctx context.Context, list smartlists.List, titl
 		}
 		for i := range titles {
 			titles[i].title.Studios, titles[i].title.StudiosKnown = names[i], known[i]
+		}
+	}
+	if services {
+		names, known, err := s.keptServices(ctx, items)
+		if err != nil {
+			return err
+		}
+		for i := range titles {
+			titles[i].title.Services, titles[i].title.ServicesKnown = names[i], known[i]
 		}
 	}
 	return nil
