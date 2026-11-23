@@ -190,6 +190,9 @@ type Service struct {
 	// thumbnails a play extends: neither works on the other's version.
 	working               bool
 	generating, extending accounts.ID
+	// changed is closed, and replaced, each time a version leaves the
+	// queue (see Changed).
+	changed chan struct{}
 	// playing lists the playbacks under way: images wait for them.
 	playing func() []Playing
 	// decoding runs one FFmpeg decoding keyframes at a time.
@@ -239,6 +242,7 @@ func New(options Options) *Service {
 		cancel:     cancel,
 		done:       make(chan struct{}),
 		wake:       make(chan struct{}, 1),
+		changed:    make(chan struct{}),
 		gate:       newGate(options.Pace, perHour, time.Hour, options.Poll),
 		failed:     cache.New[accounts.ID, error](2000, failureTTL),
 		refused:    cache.New[accounts.ID, error](2000, refusalTTL),
@@ -506,11 +510,24 @@ func (s *Service) next() (job, bool) {
 	return job{}, false
 }
 
-// finished marks the version next took as done.
+// finished marks the version next took as done, and tells those waiting
+// for the queue to change (see Changed).
 func (s *Service) finished() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.working, s.generating = false, accounts.ID{}
+	close(s.changed)
+	s.changed = make(chan struct{})
+}
+
+// Changed returns what is closed once the version under way, else the
+// next one, leaves the queue, its images made or not, and its result
+// kept: what waits for images made in the background, as tests do, looks
+// again then rather than at a time.
+func (s *Service) Changed() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.changed
 }
 
 // busyHost reports whether a playback reads host: one of a version not
