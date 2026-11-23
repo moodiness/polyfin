@@ -608,8 +608,9 @@ func (h *Handler) traktRowTitles(ctx context.Context, user accounts.User, start,
 
 // collectionRowTitles lists the titles of a collection row: those of a
 // collection made by users that user may see, and of the collections in
-// it they are shown, each once, by premiere date; else those of a smart
-// list or an addon's collection, as their listings give them. An addon's
+// it they are shown, each once, by premiere date, or in the collection's
+// own order when it is the one chosen for it; else those of a smart list
+// or an addon's collection, as their listings give them. An addon's
 // collection listed by a library of the server hidden from the user is
 // ErrNotFound.
 func (h *Handler) collectionRowTitles(ctx context.Context, user accounts.User, id accounts.ID, start, count int, first bool) (library.Page, error) {
@@ -623,7 +624,9 @@ func (h *Handler) collectionRowTitles(ctx context.Context, user accounts.User, i
 			_, nested := view.nested(item)
 			return nested
 		})
-		slices.SortStableFunc(listed, func(a, b library.Item) int { return premiere(a).Compare(premiere(b)) })
+		if c.DisplayOrder != collections.OrderChosen {
+			slices.SortStableFunc(listed, func(a, b library.Item) int { return premiere(a).Compare(premiere(b)) })
+		}
 		return pageOfItems(listed, start, count), nil
 	}
 	if !errors.Is(err, collections.ErrNotFound) {

@@ -142,3 +142,76 @@ func TestCollectionsRefuseCyclesMadeAtOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestCollectionsAreRenamedReorderedAndToldWhatHoldsThem(t *testing.T) {
+	t.Parallel()
+	store := New(migrated.New(t))
+	ctx := t.Context()
+	inner := create(t, store, "Inner")
+	outer := create(t, store, "Outer", title(1), inner, title(2))
+	if c := get(t, store, outer); c.DisplayOrder != OrderPremiere {
+		t.Errorf("a new collection's order: %q", c.DisplayOrder)
+	}
+	name, order := "Renamed", OrderChosen
+	if err := store.Change(ctx, outer, Changes{Name: &name, DisplayOrder: &order}); err != nil {
+		t.Fatal(err)
+	}
+	if c := get(t, store, outer); c.Name != "Renamed" || c.DisplayOrder != OrderChosen {
+		t.Errorf("changed: %+v", c)
+	}
+	if err := store.Change(ctx, title(9), Changes{Name: &name}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("changing an unknown collection: %v", err)
+	}
+
+	if err := store.Reorder(ctx, outer, []accounts.ID{title(2), inner, title(1)}); err != nil {
+		t.Fatal(err)
+	}
+	if c := get(t, store, outer); !slices.Equal(c.Entries, []accounts.ID{title(2), inner, title(1)}) ||
+		!slices.Equal(c.Items, []accounts.ID{title(2), title(1)}) {
+		t.Errorf("reordered: %v", c.Entries)
+	}
+	for _, wrong := range [][]accounts.ID{{title(2), inner}, {title(2), inner, title(1), title(3)}, {title(2), title(2), inner}} {
+		if err := store.Reorder(ctx, outer, wrong); !errors.Is(err, ErrEntriesChanged) {
+			t.Errorf("reordering as %v: %v", wrong, err)
+		}
+	}
+	if err := store.Add(ctx, outer, []accounts.ID{title(3)}); err != nil {
+		t.Fatal(err)
+	}
+	if c := get(t, store, outer); !slices.Equal(c.Entries, []accounts.ID{title(2), inner, title(1), title(3)}) {
+		t.Errorf("added after reordering: %v", c.Entries)
+	}
+	if holders, err := store.Holders(ctx, inner); err != nil || len(holders) != 1 || holders[0].ID != outer {
+		t.Errorf("holders: %v %v", holders, err)
+	}
+}
+
+// Refusal tells, without the database, what Add would refuse.
+func TestRefusalTellsWhatNestingRefuses(t *testing.T) {
+	t.Parallel()
+	id := func(n byte) accounts.ID { return accounts.ID{0: 1, 15: n} }
+	// 1 > 2 > 3 > 4; 5 apart.
+	all := []Collection{
+		{ID: id(1), Collections: []accounts.ID{id(2)}},
+		{ID: id(2), Collections: []accounts.ID{id(3)}},
+		{ID: id(3), Collections: []accounts.ID{id(4)}},
+		{ID: id(4)},
+		{ID: id(5)},
+	}
+	for _, tc := range []struct {
+		into, item byte
+		want       error
+	}{
+		{1, 1, ErrCycle},
+		{4, 1, ErrCycle},
+		{3, 2, ErrCycle},
+		{4, 5, ErrTooDeep},
+		{5, 1, ErrTooDeep},
+		{3, 5, nil},
+		{1, 4, nil},
+	} {
+		if got := Refusal(all, id(tc.into), id(tc.item)); !errors.Is(got, tc.want) || got != nil && tc.want == nil {
+			t.Errorf("%d into %d: %v, want %v", tc.item, tc.into, got, tc.want)
+		}
+	}
+}

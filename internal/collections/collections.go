@@ -7,6 +7,7 @@ package collections
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,6 +39,25 @@ const MaxDepth = 4
 // collection is deleted while another is put into it.
 const nestingLock int64 = 0x706f6c79666e6573 // "polyfnes"
 
+// DisplayOrder is the order apps list a collection in.
+type DisplayOrder string
+
+const (
+	// OrderPremiere lists a collection by premiere date, as Jellyfin
+	// orders a collection; the default.
+	OrderPremiere DisplayOrder = "premiere"
+	// OrderChosen lists it in the order of its entries, which an
+	// administrator may choose in the admin app (see Reorder).
+	OrderChosen DisplayOrder = "chosen"
+)
+
+// Valid reports whether o is one of the orders.
+func (o DisplayOrder) Valid() bool { return o == OrderPremiere || o == OrderChosen }
+
+// ErrEntriesChanged reports an order that does not name the entries a
+// collection has, as when they changed since it was read.
+var ErrEntriesChanged = errors.New("the collection's entries changed")
+
 // Collection is a group of titles and other collections.
 type Collection struct {
 	ID   accounts.ID
@@ -45,13 +65,14 @@ type Collection struct {
 	// IsLocked is Jellyfin's IsLocked: no metadata is looked up for the
 	// collection. Polyfin looks up none anyway; apps send and read it.
 	IsLocked bool
-	// Items are the collection's titles, in the order they were added.
+	// DisplayOrder is the order apps list it in.
+	DisplayOrder DisplayOrder
+	// Items are the collection's titles, in its order: that they were
+	// added in, unless an administrator chose another.
 	Items []accounts.ID
-	// Collections are the collections it holds, in the order they were
-	// added.
+	// Collections are the collections it holds, in its order.
 	Collections []accounts.ID
-	// Entries are its titles and collections together, in the order they
-	// were added.
+	// Entries are its titles and collections together, in its order.
 	Entries []accounts.ID
 	Created time.Time
 	// LastAdded is when titles or collections were last added, nil before
@@ -123,14 +144,121 @@ func (s *Store) Some(ctx context.Context, ids []accounts.ID) ([]Collection, erro
 	return s.load(ctx, "WHERE id = ANY($1)", ids)
 }
 
+// Holders returns the collections that hold the collection id itself, by
+// name.
+func (s *Store) Holders(ctx context.Context, id accounts.ID) ([]Collection, error) {
+	return s.load(ctx, "WHERE id IN (SELECT collection_id FROM collection_items WHERE item_id = $1)", id)
+}
+
+// Changes are what Change changes of a collection; nil leaves a value as
+// it is.
+type Changes struct {
+	Name         *string
+	DisplayOrder *DisplayOrder
+}
+
+// Change renames a collection, or sets its display order.
+func (s *Store) Change(ctx context.Context, id accounts.ID, changes Changes) error {
+	var order *string
+	if changes.DisplayOrder != nil {
+		order = new(string(*changes.DisplayOrder))
+	}
+	tag, err := s.db.Exec(ctx, "UPDATE collections SET name = coalesce($2, name), display_order = coalesce($3, display_order) WHERE id = $1",
+		id, changes.Name, order)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+// Reorder puts the entries of a collection in the order of entries,
+// which must name each of them once: else it returns ErrEntriesChanged
+// and changes nothing. Entries added later come after them.
+func (s *Store) Reorder(ctx context.Context, id accounts.ID, entries []accounts.ID) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := lockCollection(ctx, tx, id); err != nil {
+			return err
+		}
+		rows, _ := tx.Query(ctx, "SELECT item_id FROM collection_items WHERE collection_id = $1", id)
+		held, err := pgx.CollectRows(rows, pgx.RowTo[accounts.ID])
+		if err != nil {
+			return err
+		}
+		named := make(map[accounts.ID]bool, len(entries))
+		for _, entry := range entries {
+			named[entry] = true
+		}
+		if len(named) != len(entries) || len(held) != len(entries) ||
+			slices.ContainsFunc(held, func(entry accounts.ID) bool { return !named[entry] }) {
+			return ErrEntriesChanged
+		}
+		// The ordinal is an identity: each entry takes the next value, in
+		// the order asked.
+		batch := &pgx.Batch{}
+		for _, entry := range entries {
+			batch.Queue("UPDATE collection_items SET ordinal = DEFAULT WHERE collection_id = $1 AND item_id = $2", id, entry)
+		}
+		return tx.SendBatch(ctx, batch).Close()
+	})
+}
+
+// Refusal tells why the collection into may not hold the collection item,
+// as Add would refuse it, from all, every collection: ErrCycle when item
+// is into or holds it at any depth, ErrTooDeep when they would nest
+// deeper than MaxDepth; nil when it may.
+func Refusal(all []Collection, into, item accounts.ID) error {
+	byID := make(map[accounts.ID]Collection, len(all))
+	parents := map[accounts.ID][]accounts.ID{}
+	for _, c := range all {
+		byID[c.ID] = c
+		for _, inner := range c.Collections {
+			parents[inner] = append(parents[inner], c.ID)
+		}
+	}
+	// The levels from the outermost collection holding into down to into,
+	// and whether item is among them. Nesting never goes past MaxDepth,
+	// which bounds the walks.
+	above, cycle := 0, false
+	var up func(id accounts.ID, level int)
+	up = func(id accounts.ID, level int) {
+		above = max(above, level)
+		cycle = cycle || id == item
+		if level <= MaxDepth {
+			for _, parent := range parents[id] {
+				up(parent, level+1)
+			}
+		}
+	}
+	up(into, 1)
+	if cycle {
+		return ErrCycle
+	}
+	var down func(id accounts.ID, level int) int
+	down = func(id accounts.ID, level int) int {
+		deepest := level
+		if level <= MaxDepth {
+			for _, inner := range byID[id].Collections {
+				deepest = max(deepest, down(inner, level+1))
+			}
+		}
+		return deepest
+	}
+	if above+down(item, 1) > MaxDepth {
+		return ErrTooDeep
+	}
+	return nil
+}
+
 // load reads the collections a condition on the collections table selects,
 // by name, with their titles and collections.
 func (s *Store) load(ctx context.Context, where string, args ...any) ([]Collection, error) {
-	rows, _ := s.db.Query(ctx, "SELECT id, name, is_locked, created_at, last_added_at FROM collections "+
+	rows, _ := s.db.Query(ctx, "SELECT id, name, is_locked, display_order, created_at, last_added_at FROM collections "+
 		where+" ORDER BY lower(name), id", args...)
 	var result []Collection
 	var c Collection
-	if _, err := pgx.ForEachRow(rows, []any{&c.ID, &c.Name, &c.IsLocked, &c.Created, &c.LastAdded}, func() error {
+	var order string
+	if _, err := pgx.ForEachRow(rows, []any{&c.ID, &c.Name, &c.IsLocked, &order, &c.Created, &c.LastAdded}, func() error {
+		c.DisplayOrder = DisplayOrder(order)
 		result = append(result, c)
 		return nil
 	}); err != nil || len(result) == 0 {
