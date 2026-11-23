@@ -902,7 +902,13 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 		// users saved, with what the Jellyfin API remembers of them.
 		LibraryOrders: jellyfinAPI,
 		EpisodeOrders: lib,
-		Sharing:       lib,
+		// Content › Libraries lists and changes the collections users make,
+		// with the titles the library describes, and finds what to add as
+		// jellyfin-web's search finds it.
+		Collections:      collections.New(pool),
+		CollectionTitles: lib,
+		CollectionSearch: jellyfinAPI,
+		Sharing:          lib,
 		// Users' and groups' Live TV channel rules name the channels of the
 		// server's line-ups.
 		ChannelChoices: lib,

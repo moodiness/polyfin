@@ -61,7 +61,7 @@ API details: [Collections from addons](jellyfin-api.md#collections-from-addons-f
 
 ### Collections made by users
 
-Users who may manage collections group titles into collections from their apps, with **Add to collection** in jellyfin-web. A collection can hold movies, series, seasons, episodes, other collections, an addon's collections, smart lists shown as collections and Live TV channels.
+Users who may manage collections group titles into collections from their apps, with **Add to collection** in jellyfin-web. Administrators also make and change them in the admin app (see [Collections in the admin app](#collections-in-the-admin-app)). A collection can hold movies, series, seasons, episodes, other collections, an addon's collections, smart lists shown as collections and Live TV channels.
 
 Collections belong to the server:
 
@@ -77,7 +77,7 @@ Each user sees only the titles they may see:
 
 A collection:
 
-- lists its titles by premiere date;
+- lists its titles by premiere date, unless an administrator chose its own order for it;
 - takes their genres, their least restrictive rating and the earliest premiere date;
 - brings a series' released episodes when played as a whole;
 - uses as its poster that of the first title the user sees, as their listing tags it. An episode shows its series' poster. Without a tag, it uses its first title's poster.
@@ -112,6 +112,25 @@ Limits:
 - A refused change answers an error, and nothing is added.
 - A smart list shown as a collection can go inside a collection. Nothing goes inside a smart list: its titles are those its rules keep.
 - Silo's apps open no collection from inside another. A collection's page there lists its own titles (see [Collections and box sets](silo-apps.md#collections-and-box-sets)).
+
+#### Collections in the admin app
+
+**Collections**, under **Content › Libraries**, lists every collection of the server by name, with its number of entries, and the collections among them. Polyfin keeps no collection of a user's own: the list holds every collection users made, in the admin app or in their apps.
+
+- **New collection** asks for a name, then opens the new collection's page.
+- A collection's page renames it, sets its display order, orders, adds and removes its entries, and deletes it. Deleting it takes it out of the collections that held it; its titles stay in the library.
+- **Entries** lists its titles and the collections inside it together, in the collection's own order. Drag an entry by its handle to move it, or use its arrow buttons from the keyboard. A collection inside opens its own page. A title the library no longer has shows as no longer available, until it is removed.
+- **Held by** lists the collections that hold this one, each opening its page.
+- **Add entries** finds what the web player's search finds by name: the movies, series and videos of every library, those of IPTV sources and local folders included, and the Live TV channels. It also lists the other collections. One already in the collection says so. A collection that cannot go in is greyed out with the reason: it holds this one, directly or through others, or the collections would nest more than four levels deep.
+
+| Setting | Where | Default | What it does |
+|---|---|---|---|
+| **Display order** | A collection's page | Release date | **Release date** lists the collection by premiere date, as Jellyfin does. **Chosen order** lists it in the order of its entries on the page. It applies to Jellyfin apps, Silo's apps, home rows and channels made from the collection. |
+
+- The order of the entries is kept whatever the display order: choosing **Chosen order** later uses it.
+- Entries added from apps, or from the page, come after the others.
+- The change applies to the next listing.
+- The page is for administrators, whether or not they may manage collections in their apps.
 
 ### Permission
 

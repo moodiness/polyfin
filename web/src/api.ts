@@ -2145,6 +2145,77 @@ export type SmartPreview = {
   complete: boolean
 }
 
+/** How Jellyfin apps list a collection's entries: by premiere date, or in the order stored. */
+export type CollectionDisplayOrder = 'premiere' | 'chosen'
+
+/** A collection of the server, in the list of all: `entries` counts its titles and collections. */
+export type CollectionSummary = {
+  id: string
+  name: string
+  entries: number
+  titles: number
+  collections: number
+  displayOrder: CollectionDisplayOrder
+}
+
+/** What a collection entry is: a collection held, a title's kind, or a title no longer there. */
+export type CollectionEntryKind =
+  | 'collection'
+  | 'movie'
+  | 'series'
+  | 'season'
+  | 'episode'
+  | 'video'
+  | 'folder'
+  | 'channel'
+  | 'smartList'
+  | 'addonCollection'
+  | 'missing'
+
+/** An entry of a collection; `entries` counts those of a collection held, null for a title. */
+export type CollectionEntry = {
+  id: string
+  kind: CollectionEntryKind
+  name: string
+  year: number | null
+  posterId: string | null
+  entries: number | null
+}
+
+/** A collection with its entries in stored order and the collections that hold it. */
+export type CollectionDetail = {
+  id: string
+  name: string
+  displayOrder: CollectionDisplayOrder
+  entries: CollectionEntry[]
+  holders: { id: string; name: string }[]
+}
+
+/** A movie or series a collection may take. */
+export type CollectionChoiceTitle = {
+  id: string
+  name: string
+  /** As jellyfin-web's search finds them: titles, videos, folders of videos and channels. */
+  kind: 'movie' | 'series' | 'video' | 'folder' | 'channel'
+  year: number | null
+  posterId: string | null
+  held: boolean
+}
+
+/**
+ * Another collection a collection may take. `refusal`: why it may not, as it is the collection
+ * itself, holds it (a loop), or would nest collections more than four levels deep.
+ */
+export type CollectionChoice = {
+  id: string
+  name: string
+  entries: number
+  held: boolean
+  refusal: null | 'self' | 'holds' | 'tooDeep'
+}
+
+export type CollectionChoices = { titles: CollectionChoiceTitle[]; collections: CollectionChoice[] }
+
 /**
  * `parentalControl`: the user's parental control keeps them on the server's addons only.
  * `personalAddons`: false while the server or the user's permission turns their own addons off;
@@ -4631,6 +4702,43 @@ export const deleteSmartList = (scope: Scope, id: string) =>
 export const previewSmartList = (scope: Scope, list: SmartListDraft, signal?: AbortSignal) =>
   request<SmartPreview>('POST', `${scopePath(scope)}/smart-lists/preview`, list, signal)
 
+/** The server's collections, by name. */
+export const fetchCollections = (signal?: AbortSignal) =>
+  request<CollectionSummary[]>('GET', '/collections', undefined, signal)
+
+export const fetchCollection = (id: string, signal?: AbortSignal) =>
+  request<CollectionDetail>('GET', `/collections/${seg(id)}`, undefined, signal)
+
+export const createCollection = (name: string) =>
+  request<CollectionDetail>('POST', '/collections', { name })
+
+export const updateCollection = (
+  id: string,
+  change: { name?: string; displayOrder?: CollectionDisplayOrder },
+) => request<CollectionDetail>('PATCH', `/collections/${seg(id)}`, change)
+
+/** Deletes a collection; it leaves every collection that held it. */
+export const deleteCollection = (id: string) => request<void>('DELETE', `/collections/${seg(id)}`)
+
+export const addCollectionEntries = (id: string, ids: string[]) =>
+  request<CollectionDetail>('POST', `/collections/${seg(id)}/entries`, { ids })
+
+export const removeCollectionEntries = (id: string, ids: string[]) =>
+  request<CollectionDetail>('DELETE', `/collections/${seg(id)}/entries`, { ids })
+
+/** Stores the order of a collection's entries: `ids` holds every entry, in the new order. */
+export const orderCollectionEntries = (id: string, ids: string[]) =>
+  request<CollectionDetail>('PUT', `/collections/${seg(id)}/entries/order`, { ids })
+
+/** The titles matching `q` (none without it) and the other collections a collection may take. */
+export const fetchCollectionChoices = (id: string, q: string, signal?: AbortSignal) =>
+  request<CollectionChoices>(
+    'GET',
+    `/collections/${seg(id)}/choices?${new URLSearchParams({ q }).toString()}`,
+    undefined,
+    signal,
+  )
+
 /** Query parameters, without those left undefined. */
 function params(values: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams()
@@ -6269,6 +6377,9 @@ export const queryKeys = {
   /** What removing an addon loses, asked as its removal is confirmed; outside the scope prefix. */
   addonRemoval: (scope: Scope, id: string) => ['addon-removal', scope, id] as const,
   smartChoices: (scope: Scope) => ['scopes', scope, 'smart-choices'] as const,
+  collections: ['collections'] as const,
+  collection: (id: string) => ['collections', id] as const,
+  collectionChoices: (id: string, q: string) => ['collections', id, 'choices', q] as const,
   smartPreview: (scope: Scope, list: SmartListDraft) =>
     ['scopes', scope, 'smart-preview', JSON.stringify(list)] as const,
   addonPreferences: ['account', 'addon-preferences'] as const,

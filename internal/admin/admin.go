@@ -22,6 +22,7 @@ import (
 	"github.com/moodiness/polyfin/internal/appimport/nuvio"
 	stremioimport "github.com/moodiness/polyfin/internal/appimport/stremio"
 	"github.com/moodiness/polyfin/internal/backup"
+	"github.com/moodiness/polyfin/internal/collections"
 	"github.com/moodiness/polyfin/internal/config"
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/importlinks"
@@ -255,6 +256,13 @@ type Options struct {
 	// EpisodeOrders shows and sets the order series show their episodes
 	// in, under Content › Libraries; nil offers none.
 	EpisodeOrders EpisodeOrders
+	// Collections keeps the collections users make, which Content ›
+	// Libraries lists and changes; CollectionTitles describes their
+	// titles, and CollectionSearch finds what may be added, as
+	// jellyfin-web's search does. Any nil offers none.
+	Collections      *collections.Store
+	CollectionTitles CollectionTitles
+	CollectionSearch CollectionSearch
 	// ChannelChoices lists the channel groups and channels of the server's
 	// Live TV sources, which users' and groups' channel rules name; nil
 	// lists none.
@@ -646,6 +654,15 @@ func New(options Options) http.Handler {
 	mux.Handle("DELETE /admin/api/scopes/shared/libraries/user-orders", h.administrator(h.clearLibraryOrders))
 	mux.Handle("GET /admin/api/episode-orders", h.administrator(h.episodeOrders))
 	mux.Handle("GET /admin/api/episode-orders/series", h.administrator(h.searchOrderedSeries))
+	mux.Handle("GET /admin/api/collections", h.administrator(h.listCollections))
+	mux.Handle("POST /admin/api/collections", h.administrator(h.createCollection))
+	mux.Handle("GET /admin/api/collections/{id}", h.administrator(h.collectionOf))
+	mux.Handle("PATCH /admin/api/collections/{id}", h.administrator(h.changeCollection))
+	mux.Handle("DELETE /admin/api/collections/{id}", h.administrator(h.deleteCollection))
+	mux.Handle("GET /admin/api/collections/{id}/choices", h.administrator(h.collectionChoices))
+	mux.Handle("POST /admin/api/collections/{id}/entries", h.administrator(h.addCollectionEntries))
+	mux.Handle("DELETE /admin/api/collections/{id}/entries", h.administrator(h.removeCollectionEntries))
+	mux.Handle("PUT /admin/api/collections/{id}/entries/order", h.administrator(h.orderCollectionEntries))
 	mux.Handle("GET /admin/api/titles/{id}/episode-order", h.administrator(h.episodeOrder))
 	mux.Handle("PUT /admin/api/titles/{id}/episode-order", h.administrator(h.setEpisodeOrder))
 	mux.Handle("GET /admin/api/scopes/{scope}/smart-lists", h.signedIn(h.smartLists))
