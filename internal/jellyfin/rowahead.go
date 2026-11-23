@@ -31,9 +31,10 @@ const (
 // listRowAhead lists ahead, in the background, the stream lists of the
 // first rowAheadTitles items of a home row's answer, with playback
 // prepared ahead: its movies and episodes, and the episode each of its
-// series plays first (see seriesStarts). It returns at once: the answer
-// never waits.
-func (h *Handler) listRowAhead(user accounts.User, items []library.Item) {
+// series plays first (see seriesStarts). It is called once the answer is
+// written, which never waits for them, and shares the view the row's
+// request, ctx's, built (see library.SharedViews).
+func (h *Handler) listRowAhead(ctx context.Context, user accounts.User, items []library.Item) {
 	if !h.Accounts.Settings().PrepareAhead {
 		return
 	}
@@ -52,10 +53,11 @@ func (h *Handler) listRowAhead(user accounts.User, items []library.Item) {
 	if !h.rowsAhead.start() {
 		return
 	}
+	row := library.SharedViews(ctx)
 	go func() {
 		defer h.rowsAhead.done()
 		defer logPanic(h.Logger, "Listing a home row's titles ahead ended on a panic")
-		ctx, cancel := context.WithTimeout(library.Background(stremio.WithOrigin(context.Background(), stremio.OriginCatalogs)), preparationTimeout)
+		ctx, cancel := context.WithTimeout(library.Background(stremio.WithOrigin(row, stremio.OriginCatalogs)), preparationTimeout)
 		defer cancel()
 		h.Library.ListRowAhead(ctx, user, append(titles, h.seriesStarts(ctx, user, series)...))
 	}()

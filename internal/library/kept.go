@@ -1114,13 +1114,19 @@ func (s *Service) learnPageSize(ctx context.Context, src source, size int) {
 // requestViewsKey holds the views a request built (see PerRequest).
 type requestViewsKey struct{}
 
-// requestViews are the views a request built, kept for viewReuse after
-// it started: a request that lasts, as a WebSocket does, sees changes to
+// requestViews are the views a request built, each kept for viewReuse
+// after it was built: a request that lasts, as a WebSocket does, or the
+// background work a request left (see SharedViews), sees changes to
 // addons and libraries.
 type requestViews struct {
-	mu      sync.Mutex
-	started time.Time
-	views   map[accounts.ID]view
+	mu    sync.Mutex
+	views map[accounts.ID]keptView
+}
+
+// keptView is a view a request built, and when it began building it.
+type keptView struct {
+	view  view
+	built time.Time
 }
 
 const viewReuse = 10 * time.Second
@@ -1130,7 +1136,20 @@ const viewReuse = 10 * time.Second
 // The Jellyfin API serves each request under one, so that a listing whose
 // items each need the view builds it once.
 func PerRequest(ctx context.Context) context.Context {
-	return context.WithValue(ctx, requestViewsKey{}, &requestViews{started: time.Now(), views: map[accounts.ID]view{}})
+	return context.WithValue(ctx, requestViewsKey{}, &requestViews{views: map[accounts.ID]keptView{}})
+}
+
+// SharedViews returns a context free of ctx's end and values but for the
+// views ctx's request built (see PerRequest), which the work it holds
+// shares: the background work a request leaves for its titles, as a home
+// row's queue, builds no view of its own while the request's is reused. A
+// ctx served under none gives a context of its own views.
+func SharedViews(ctx context.Context) context.Context {
+	views, _ := ctx.Value(requestViewsKey{}).(*requestViews)
+	if views == nil {
+		return PerRequest(context.Background())
+	}
+	return context.WithValue(context.Background(), requestViewsKey{}, views)
 }
 
 // WarmInterval is how often the first pages of libraries are read again

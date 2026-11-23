@@ -1,6 +1,7 @@
 package jellyfin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -301,7 +302,7 @@ func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
 	// The first two of them are prepared too.
 	var mu sync.Mutex
 	var listed, prepared []accounts.ID
-	rs.handler.listings = newListings(func(_ accounts.User, title accounts.ID, prepare bool) {
+	rs.handler.listings = newListings(func(_ context.Context, _ accounts.User, title accounts.ID, prepare bool) {
 		mu.Lock()
 		defer mu.Unlock()
 		listed = append(listed, title)
@@ -310,7 +311,7 @@ func TestHomeRowsListTheirTitlesAhead(t *testing.T) {
 		}
 	})
 	movies3 := []accounts.ID{{3}, {4}, {5}}
-	rs.handler.listAhead(rs.member, []library.Item{{ID: accounts.ID{1}, Kind: library.KindChannel},
+	rs.handler.listAhead(t.Context(), rs.member, []library.Item{{ID: accounts.ID{1}, Kind: library.KindChannel},
 		{ID: accounts.ID{2}, Kind: library.KindTrack}, {ID: movies3[0], Kind: library.KindMovie},
 		{ID: movies3[1], Kind: library.KindEpisode}, {ID: movies3[2], Kind: library.KindMovie}})
 	rs.listedAhead(t)

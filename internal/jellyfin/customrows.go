@@ -686,9 +686,6 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fields := requestedFields(r)
-	for _, items := range titles {
-		h.listRowAhead(user, items)
-	}
 	seen := map[accounts.ID]bool{}
 	if len(rows) > 0 {
 		if seen, err = h.HomeRows.Seen(r.Context(), user.ID); err != nil {
@@ -719,6 +716,9 @@ func (h *Handler) customRowsAnswer(w http.ResponseWriter, r *http.Request) {
 		result = append(result, dto)
 	}
 	writeJSON(w, http.StatusOK, struct{ Items []CustomRowDto }{result})
+	for _, items := range titles {
+		h.listRowAhead(r.Context(), user, items)
+	}
 }
 
 // seenCustomRow answers POST /Polyfin/HomeRows/{rowId}/Seen: the user saw
@@ -1033,8 +1033,8 @@ func (h *Handler) customRowLatest(w http.ResponseWriter, r *http.Request, user a
 		h.internalError(w, r, err)
 		return true
 	}
-	h.listRowAhead(user, items)
 	writeJSON(w, http.StatusOK, dtos)
+	h.listRowAhead(r.Context(), user, items)
 	return true
 }
 

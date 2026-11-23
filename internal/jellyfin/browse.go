@@ -850,8 +850,8 @@ func (h *Handler) latest(w http.ResponseWriter, r *http.Request) {
 	if explicit {
 		items = slices.DeleteFunc(items, func(item library.Item) bool { return state.of(item).Played != played })
 	}
-	h.listRowAhead(user, items)
 	writeJSON(w, http.StatusOK, h.listDtos(r, user, items, requestedFields(r), state))
+	h.listRowAhead(r.Context(), user, items)
 }
 
 func (h *Handler) item(w http.ResponseWriter, r *http.Request) {

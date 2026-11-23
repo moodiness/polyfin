@@ -672,21 +672,22 @@ func (v view) limit(src source) int {
 }
 
 // view returns what user can browse, built once per request served under
-// PerRequest.
+// PerRequest, and again once it is older than viewReuse.
 func (s *Service) view(ctx context.Context, user accounts.User) (view, error) {
 	views, _ := ctx.Value(requestViewsKey{}).(*requestViews)
-	if views == nil || time.Since(views.started) > viewReuse {
+	if views == nil {
 		v, err := s.buildView(ctx, user)
 		return v.withRatingFilter(ctx), err
 	}
 	views.mu.Lock()
 	defer views.mu.Unlock()
-	if v, ok := views.views[user.ID]; ok {
-		return v.withRatingFilter(ctx), nil
+	if kept, ok := views.views[user.ID]; ok && time.Since(kept.built) <= viewReuse {
+		return kept.view.withRatingFilter(ctx), nil
 	}
+	built := time.Now()
 	v, err := s.buildView(ctx, user)
 	if err == nil {
-		views.views[user.ID] = v
+		views.views[user.ID] = keptView{view: v, built: built}
 	}
 	return v.withRatingFilter(ctx), err
 }
