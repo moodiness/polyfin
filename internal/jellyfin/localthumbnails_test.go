@@ -108,16 +108,32 @@ func (l localThumbnailsSetup) thumbnailCount(t *testing.T) int {
 	return manifest[l.local.ID][320].ThumbnailCount
 }
 
-// remadeWithin reports whether the local file's thumbnails were made
-// again from its file within d: 4 for its 15 s.
-func (l localThumbnailsSetup) remadeWithin(t *testing.T, d time.Duration) bool {
+// remadeBackstop bounds how long a test waits for thumbnails made again,
+// however loaded the machine: only a test that would wait forever meets
+// it.
+const remadeBackstop = 2 * time.Minute
+
+// remade reports whether the local file's thumbnails were made again from
+// its file, 4 for its 15 s, and that result kept. It looks again each
+// time a version leaves the queue, until remadeBackstop.
+func (l localThumbnailsSetup) remade(t *testing.T) bool {
 	t.Helper()
-	for deadline := time.Now().Add(d); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		if l.thumbnailCount(t) == 4 {
+	backstop := time.After(remadeBackstop)
+	for {
+		changed := l.handler.Thumbnails.Changed()
+		results, err := l.handler.Thumbnails.Results(t.Context(), []accounts.ID{l.local.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if results[l.local.ID].State == thumbnails.StateMade && l.thumbnailCount(t) == 4 {
 			return true
 		}
+		select {
+		case <-changed:
+		case <-backstop:
+			return false
+		}
 	}
-	return false
 }
 
 // Make again replaces a local file's thumbnails with those of its file,
@@ -134,29 +150,24 @@ func TestMakeThumbnailsAgainRemakesALocalFile(t *testing.T) {
 	if err != nil || result.State != thumbnails.StateWaiting && result.State != thumbnails.StateWorking {
 		t.Fatalf("make again: %+v %v", result, err)
 	}
-	if !l.remadeWithin(t, 8*time.Second) {
+	if !l.remade(t) {
 		t.Fatalf("the thumbnails were not made again: %d", l.thumbnailCount(t))
 	}
+	explained, err := l.handler.ExplainVersions(t.Context(), l.admin, l.movieID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var local *thumbnails.Result
-	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		explained, err := l.handler.ExplainVersions(t.Context(), l.admin, l.movieID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, source := range explained.Sources {
-			for _, stream := range source.Streams {
-				switch stream.Version {
-				case l.local.ID:
-					local = stream.Thumbnails
-				case l.versions[0].ID, l.versions[1].ID:
-					if stream.Thumbnails != nil {
-						t.Fatalf("an addon's link: %+v", stream.Thumbnails)
-					}
+	for _, source := range explained.Sources {
+		for _, stream := range source.Streams {
+			switch stream.Version {
+			case l.local.ID:
+				local = stream.Thumbnails
+			case l.versions[0].ID, l.versions[1].ID:
+				if stream.Thumbnails != nil {
+					t.Fatalf("an addon's link: %+v", stream.Thumbnails)
 				}
 			}
-		}
-		if local != nil && local.State == thumbnails.StateMade {
-			break
 		}
 	}
 	if local == nil || local.State != thumbnails.StateMade || local.Count != 4 || local.At == nil {
@@ -194,7 +205,7 @@ func TestRefreshRegeneratesLocalThumbnails(t *testing.T) {
 		t.Fatalf("a default refresh made the thumbnails again: %d", n)
 	}
 	refresh("FullRefresh")
-	if !l.remadeWithin(t, 8*time.Second) {
+	if !l.remade(t) {
 		t.Errorf("a full refresh did not make the thumbnails again: %d", l.thumbnailCount(t))
 	}
 }
