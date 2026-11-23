@@ -11,7 +11,9 @@ A smart list gathers titles by what they are, from the catalogs it names, such a
 | The server | **Content › Libraries**, with **Add a smart list** | Every user, unless their visible libraries leave out a list shown as a library |
 | A user | **My sources** | That user only (see [Users' own addons](sign-in-and-security.md#users-own-addons)) |
 
-A list draws from any catalog of movies or series of the server's addons, turned on as a library or not. A user's own list may also draw from their own addons. A list whose catalogs are all gone, removed with their addons or dropped by them, is kept and lists nothing until other catalogs are chosen: its editor and **System › Health** show it (see [Smart list without catalogs](health.md#smart-list-without-catalogs)).
+A list draws from any catalog of movies or series of the server's sources, turned on as a library or not: addons' catalogs, local folders and network shares (see [Local folders](local-folders.md) and [Network shares](network-shares.md)), and IPTV sources' movies and series. The editor groups them under **Addons**, **Local folders and network shares** and **IPTV sources**, and one list may draw from all three at once. A user's own list may also draw from their own sources. A list whose catalogs are all gone, removed with their sources or dropped by them, is kept and lists nothing until other catalogs are chosen: its editor and **System › Health** show it (see [Smart list without catalogs](health.md#smart-list-without-catalogs)).
+
+Music is not offered: the rules judge movies and series (IMDb ratings, people, content ratings, release dates, episodes), which albums and tracks do not have, and apps show a list as a library or collection of movies and series. Home videos folders are not offered either. Music has its own playlists (see [Music](music.md)).
 
 ### Rules
 
@@ -25,14 +27,20 @@ A list keeps the titles that match its rules:
 | **Home release** | A title out at home in the last so many days (today included), in the next so many days, or either. See [Home release rule](#home-release-rule). |
 | **IMDb rating** | A title whose IMDb rating is within the bounds given. |
 | **IMDb votes** | A title whose IMDb rating counts a number of votes within the bounds given, as MDBList tells it (see [Ratings](collections-people-and-ratings.md#ratings)). Without the server's **MDBList API key for ratings**, no title has votes. |
+| **Critics' score (Rotten Tomatoes)** | A title whose Rotten Tomatoes critics' score, from 0 to 100, is within the bounds given, as MDBList tells it. Without the server's **MDBList API key for ratings**, no title has one. |
+| **Metacritic score** | A title whose Metacritic score, from 0 to 100, is within the bounds given, as MDBList tells it. Without that key, no title has one. |
 | **Language** | A title whose description gives this language. |
+| **Country** | A title whose description names this country among those it was made in. |
 | **Runtime** | A title whose runtime is within the bounds given, in minutes. |
 | **Content rating** | A title rated at most this rating, such as PG-13, on the scale parental control uses (see [Parental control](user-limits.md#parental-control)). The ratings offered are those of the server's **Rating country** (see [Rating country](user-limits.md#rating-country)). PG-13 matches PG-13, PG and G titles, and the ratings of other countries for the same ages. **is not** matches the titles rated above it. |
 | **Actor or director** | A title that credits this person as an actor or a director, in any letter case. |
 | **Studio or network** | A title made by this studio, or a series aired on this network, in any letter case. Names are as TMDB gives them, or as an administrator set a title's studios in its metadata. Without the server's **TMDB API key**, only those an administrator set count. |
+| **Streaming service** | A title offered by this streaming service, in any letter case, by subscription, free or free with ads, in the server's **Rating country** (**Settings › General**), as TMDB tells. Without the server's **TMDB API key** (**Settings › Content**), no title has one. |
+| **Tag** | A title an administrator gave this tag in its metadata, in any letter case (see [Artwork and editing](artwork-and-editing.md)). |
 | **Movie or series** | Movies, or series. |
 | **Place in its catalog** | A title among the first so many of its catalog, in the catalog's order: by popularity for a popular catalog. |
-| **Watch state** | A title the user opening the list played, did not play, started without finishing, or marked favorite. A series is played once every released episode is. |
+| **Watch state** | A title the user opening the list played, did not play, started without finishing, marked favorite, or has on their Watchlist. A series is played once every released episode is, and on the Watchlist while one of its episodes is. |
+| **Has a local file** | A title a local folder or network share holds a file of, whichever catalog lists it: an addon's title too, by its identifier, and an IPTV source's by its IMDb identifier. |
 
 How rules combine:
 
@@ -62,9 +70,11 @@ How rules combine:
 | **IMDb rating, highest first** | Titles without one come last |
 | **Name** | |
 | **At random, drawn again each day** | |
+| **Date played, latest first** | For each user, the titles they played the latest first, then the others as the catalogs list them; see below |
 
 - **Latest episode aired, latest first** orders series by their latest regular episode that has aired. **Latest season premiere, latest first** orders them by the first episode of their latest season that has aired. Both use the dates in the series' descriptions.
 - For both, specials (season 0) and episodes to come do not count. A movie comes by its premiere date. A series whose description is not read yet comes last until it is. So does a series without a dated episode.
+- **Date played, latest first** orders a movie by when the user last played it, and a series by when they last played one of its episodes through. With a **Watch state** rule of played titles, the list is the user's watch history.
 - **Maximum titles:** from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
 - **Shown as:** a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](artwork-and-editing.md#generated-images)). A list shown as a library shows each user an image of the first titles it keeps for them (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)).
 
@@ -74,10 +84,11 @@ The list's page shows a preview of its titles as they stand now, before you save
 
 **Reading the catalogs:**
 
-- Polyfin reads each catalog up to its maximum, from the catalog pages it keeps and reads again after **Refresh catalogs after (minutes)**.
+- Polyfin reads each addon's catalog up to its maximum, from the catalog pages it keeps and reads again after **Refresh catalogs after (minutes)**.
+- **Local folders, network shares and IPTV sources:** Polyfin stores their titles, so it reads each of their catalogs whole in one query, and a scan or a refresh of the source shows in the list at its next listing. Whether a title has a local file is one query for all the titles of a listing. A list of 10,000 stored titles takes a few queries, not one per title.
 - That maximum is the library's own, when the catalog is one of the user's libraries with a maximum. Otherwise it is **Titles read per movie and series catalog**.
 - When the rules require a genre the catalog offers in its genre filter, Polyfin asks the catalog for that genre's titles, as for a library's genre. It does not read it whole. A place in that catalog is then a place among that genre's titles.
-- A listing waits for the addons 3 seconds at most. Past that, it lists the titles of the pages already kept, and reads the others in the background.
+- A listing waits for its catalogs 3 seconds at most. Past that, it lists the titles of the pages already kept, and reads the others in the background.
 - **Kept between listings:** the titles read for a list serve its next listings, for every user who reads its catalogs the same way, as long as their catalog pages stay as they were. A page an addon changes when it is read again has only its catalog read again. Editing the list, or changing **Titles read per movie and series catalog** or a library's maximum, has it read again whole, and so does a listing past **Refresh catalogs after (minutes)**. The titles of all lists kept take 128 MB of memory at most; a list larger than that is read again at each listing.
 - **A catalog that does not answer:** a list whose addon did not answer in time, or asks to wait, lists the titles of the other catalogs. Its next listings read again only that catalog, until its addon answers.
 
@@ -89,11 +100,14 @@ The list's page shows a preview of its titles as they stand now, before you save
 
 **Filling in what titles lack:**
 
-- **Descriptions:** a catalog page usually gives a title's genres, year and IMDb rating. It sometimes gives its runtime, content rating, people and release date. The language, and a series' episodes, come only with the title's full description.
+- **Descriptions:** a catalog page usually gives a title's genres, year and IMDb rating. It sometimes gives its runtime, content rating, people and release date. The language, the countries, and a series' episodes, come only with the title's full description.
 - Polyfin reads the missing descriptions in the background, a few at a time, as it looks up ratings for users under parental control. The server's lists ask the server's addons only. Once read, what a description does not give, the title does not have.
 - Until then, a title whose rules need its description is left out, negated rules included. The list grows as descriptions come.
 - **Votes:** a title's IMDb votes come with its MDBList ratings, looked up in the background in batches (see [Ratings](collections-people-and-ratings.md#ratings)). A title still waiting for MDBList is left out until it is answered.
+- **Local folders and IPTV sources:** a local folder's title is described by the addons that describe its identifier, and an IPTV source's title by those that describe its IMDb identifier, read in the background the same way. An IPTV title without an IMDb identifier, and a folder's video matched to no title, have their listing alone.
+- **Critics' and Metacritic scores:** they come with a title's MDBList ratings, as the votes do. A title still waiting for MDBList is left out until it is answered.
 - **Studios and networks:** they come from TMDB, by a title's TMDB identifier, else its IMDb one. Polyfin asks TMDB in the background for at most 50 titles at each listing, within the requests to TMDB it allows at once. It keeps the answers for every user, and asks again after 30 days. A title waiting for TMDB is left out until it is answered. A title TMDB does not know has no studio.
+- **Streaming services:** they come from TMDB with the title's credits, in the server's rating country, subscription, free and free with ads offers only, kept and asked again after 30 days. A title not known yet is left out until it is.
 - **Home release:** a movie's comes from TMDB the same way, kept and asked again as for [the wait for the digital release](#movies-waiting-for-their-digital-release). A movie not known yet is left out until it is. One TMDB does not know, or knows no date of, has none. A movie to come shows the day it is out as its premiere date, and first in its overview.
 
 ### Limits

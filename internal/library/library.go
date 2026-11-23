@@ -359,6 +359,9 @@ func (s *Service) UseIPTV(iptv IPTV) { s.iptv = iptv }
 // LocalArtworkKey).
 type Local interface {
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, search string) ([]stremio.Meta, error)
+	// CatalogWindow lists the titles [start, start+count) of a folder's
+	// catalog, as Catalog orders them, in one query (see smartStored).
+	CatalogWindow(ctx context.Context, source accounts.ID, catalogType, catalogID string, start, count int) ([]stremio.Meta, error)
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
 	MusicCatalog(ctx context.Context, source accounts.ID, catalog eclipse.Catalog, skip int) ([]eclipse.Item, int, error)

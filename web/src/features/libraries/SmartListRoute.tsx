@@ -66,14 +66,20 @@ const fields: Exclude<SmartField, 'group'>[] = [
   'homeRelease',
   'rating',
   'votes',
+  'critics',
+  'metacritic',
   'language',
+  'country',
   'runtime',
   'contentRating',
   'person',
   'studio',
+  'service',
+  'tag',
   'type',
   'rank',
   'state',
+  'localFile',
 ]
 const sorts: SmartSort[] = [
   'catalog',
@@ -83,11 +89,22 @@ const sorts: SmartSort[] = [
   'rating',
   'name',
   'random',
+  'datePlayed',
 ]
-const states = ['unplayed', 'played', 'started', 'favorite']
+const states = ['unplayed', 'played', 'started', 'favorite', 'watchlist']
+
+/** The kinds of sources a list draws from, in the order the editor shows their catalogs. */
+const sourceKinds: SmartCatalogChoice['source'][] = ['addon', 'folder', 'iptv']
 
 /** The fields a title's description may have to tell, when its catalog does not. */
-const describedFields: SmartField[] = ['language', 'runtime', 'contentRating', 'person', 'released']
+const describedFields: SmartField[] = [
+  'language',
+  'country',
+  'runtime',
+  'contentRating',
+  'person',
+  'released',
+]
 
 /** Groups go this deep: the list's own, and groups within it. */
 const maxDepth = 2
@@ -116,12 +133,17 @@ function newRule(field: Exclude<SmartField, 'group'>): SmartRule {
       return { field, value: 'unplayed' }
     case 'language':
       return { field, value: 'fr' }
+    case 'country':
+      return { field, value: 'FR' }
     case 'rank':
       return { field, max: 100 }
     case 'runtime':
       return { field, min: 90 }
     case 'votes':
       return { field, min: 1000 }
+    case 'critics':
+    case 'metacritic':
+      return { field, min: 70 }
     case 'contentRating':
       return { field, value: 'PG-13' }
     case 'released':
@@ -131,6 +153,8 @@ function newRule(field: Exclude<SmartField, 'group'>): SmartRule {
     case 'genre':
     case 'person':
     case 'studio':
+    case 'service':
+    case 'tag':
       return { field, value: '' }
     default:
       return { field }
@@ -148,6 +172,8 @@ function complete(rule: SmartRule, depth = 1): boolean {
     case 'genre':
     case 'person':
     case 'studio':
+    case 'service':
+    case 'tag':
       return (rule.value ?? '').trim() !== ''
     case 'released':
       return rule.min !== undefined && rule.max !== undefined && rule.min <= rule.max
@@ -157,12 +183,16 @@ function complete(rule: SmartRule, depth = 1): boolean {
     case 'rating':
     case 'runtime':
     case 'votes':
+    case 'critics':
+    case 'metacritic':
       return (
         (rule.min !== undefined || rule.max !== undefined) &&
         (rule.min === undefined || rule.max === undefined || rule.min <= rule.max)
       )
     case 'rank':
       return rule.max !== undefined && rule.max >= 1
+    case 'localFile':
+      return true
     default:
       return Boolean(rule.value)
   }
@@ -338,6 +368,12 @@ function Editor({
       .map((code) => ({ value: code, label: names.of(code) ?? code }))
       .sort((a, b) => a.label.localeCompare(b.label, language))
   }, [choices.languages, language])
+  const countries = useMemo(() => {
+    const names = new Intl.DisplayNames([language], { type: 'region' })
+    return choices.countries
+      .map((code) => ({ value: code, label: names.of(code) ?? code }))
+      .sort((a, b) => a.label.localeCompare(b.label, language))
+  }, [choices.countries, language])
   const maxValid =
     draft.maxItems === null ||
     (Number.isInteger(draft.maxItems) && draft.maxItems >= 1 && draft.maxItems <= MAX_LIBRARY_ITEMS)
@@ -401,7 +437,9 @@ function Editor({
             help={
               draft.sort === 'latestEpisode' || draft.sort === 'seasonPremiere'
                 ? t.smartLists.episodeSortHelp
-                : undefined
+                : draft.sort === 'datePlayed'
+                  ? t.smartLists.datePlayedHelp
+                  : undefined
             }
             value={draft.sort}
             saved={saved?.sort}
@@ -456,6 +494,7 @@ function Editor({
               depth={1}
               genres={genres}
               languages={languages}
+              countries={countries}
               contentRatings={choices.contentRatings}
               onChange={(rules) => change({ rules })}
             />
@@ -475,6 +514,7 @@ function Editor({
               label={t.smartLists.excludeMatch}
               genres={genres}
               languages={languages}
+              countries={countries}
               contentRatings={choices.contentRatings}
               onChange={(exclude) => change({ exclude })}
             />
@@ -482,7 +522,13 @@ function Editor({
           <div className="mt-4 flex flex-col gap-3 empty:hidden">
             {listUses(draft, ...describedFields) && <Notice>{t.smartLists.describedHelp}</Notice>}
             {listUses(draft, 'votes') && <Notice>{t.smartLists.votesHelp}</Notice>}
+            {listUses(draft, 'critics', 'metacritic') && (
+              <Notice>{t.smartLists.criticsHelp}</Notice>
+            )}
             {listUses(draft, 'studio') && <Notice>{t.smartLists.studioHelp}</Notice>}
+            {listUses(draft, 'service') && <Notice>{t.smartLists.serviceHelp}</Notice>}
+            {listUses(draft, 'tag') && <Notice>{t.smartLists.tagHelp}</Notice>}
+            {listUses(draft, 'localFile') && <Notice>{t.smartLists.localFileHelp}</Notice>}
             {listUses(draft, 'homeRelease') && <Notice>{t.smartLists.homeReleaseHelp}</Notice>}
             {listUses(draft, 'state') && <Notice>{t.smartLists.stateHelp}</Notice>}
           </div>
@@ -516,7 +562,10 @@ function Editor({
   )
 }
 
-/** Ticks the catalogs a list draws from, by addon, with a filter once there are many. */
+/**
+ * Ticks the catalogs a list draws from, grouped by what they belong to (addons, local folders and
+ * shares, IPTV sources), with a filter once there are many.
+ */
 function CatalogPicker({
   choices,
   chosen,
@@ -572,17 +621,28 @@ function CatalogPicker({
             help={t.libraries.missing}
           />
         ))}
-        {shown.map((c) => {
-          const ref = { addonId: c.addonId, type: c.catalogType, id: c.catalogId }
+        {sourceKinds.map((kind) => {
+          const ofKind = shown.filter((c) => c.source === kind)
+          if (ofKind.length === 0) return null
           return (
-            <Checkbox
-              key={catalogKey(ref)}
-              checked={keys.has(catalogKey(ref))}
-              onChange={(on) => toggle(ref, on)}
-              label={c.catalogName || c.catalogId}
-              help={`${c.addonName} · ${catalogTypeLabel(t, c.catalogType)}`}
-              aside={mine && c.shared ? <Badge>{t.smartLists.serverBadge}</Badge> : undefined}
-            />
+            <div key={kind} className="contents">
+              <p className="col-span-full pt-3 pb-1 text-small font-medium text-ink-2 first:pt-0">
+                {t.smartLists.sourceKinds[kind]}
+              </p>
+              {ofKind.map((c) => {
+                const ref = { addonId: c.addonId, type: c.catalogType, id: c.catalogId }
+                return (
+                  <Checkbox
+                    key={catalogKey(ref)}
+                    checked={keys.has(catalogKey(ref))}
+                    onChange={(on) => toggle(ref, on)}
+                    label={c.catalogName || c.catalogId}
+                    help={`${c.addonName} · ${catalogTypeLabel(t, c.catalogType)}`}
+                    aside={mine && c.shared ? <Badge>{t.smartLists.serverBadge}</Badge> : undefined}
+                  />
+                )
+              })}
+            </div>
           )
         })}
       </div>
@@ -604,6 +664,7 @@ function GroupEditor({
   label,
   genres,
   languages,
+  countries,
   contentRatings,
   onChange,
   onRemove,
@@ -614,6 +675,7 @@ function GroupEditor({
   label?: string
   genres: string[]
   languages: Option[]
+  countries: Option[]
   contentRatings: string[]
   onChange: (group: SmartRule) => void
   onRemove?: () => void
@@ -674,6 +736,7 @@ function GroupEditor({
             depth={depth + 1}
             genres={genres}
             languages={languages}
+            countries={countries}
             contentRatings={contentRatings}
             onChange={(next) => set(index, next)}
             onRemove={() => drop(index)}
@@ -684,6 +747,7 @@ function GroupEditor({
             rule={rule}
             genres={genres}
             languages={languages}
+            countries={countries}
             contentRatings={contentRatings}
             onChange={(next) => set(index, next)}
             onRemove={() => drop(index)}
@@ -726,6 +790,7 @@ function RuleEditor({
   rule,
   genres,
   languages,
+  countries,
   contentRatings,
   onChange,
   onRemove,
@@ -733,6 +798,7 @@ function RuleEditor({
   rule: SmartRule
   genres: string[]
   languages: Option[]
+  countries: Option[]
   contentRatings: string[]
   onChange: (rule: SmartRule) => void
   onRemove: () => void
@@ -758,8 +824,12 @@ function RuleEditor({
     case 'year':
     case 'rating':
     case 'runtime':
-    case 'votes': {
+    case 'votes':
+    case 'critics':
+    case 'metacritic': {
       const step = rule.field === 'rating' ? 0.1 : 1
+      // Critics' and Metacritic scores run from 0 to 100.
+      const most = rule.field === 'critics' || rule.field === 'metacritic' ? 100 : undefined
       value = (
         <span className="flex flex-wrap items-center gap-2 text-control text-ink-2">
           <NumberInput
@@ -768,6 +838,7 @@ function RuleEditor({
             placeholder={t.smartLists.from}
             value={rule.min ?? null}
             min={0}
+            max={most}
             step={step}
             className="w-[7.5rem]"
             onValue={(n) => bound('min', n)}
@@ -778,11 +849,13 @@ function RuleEditor({
             placeholder={t.smartLists.to}
             value={rule.max ?? null}
             min={0}
+            max={most}
             step={step}
             className="w-[7.5rem]"
             onValue={(n) => bound('max', n)}
           />
           {rule.field === 'runtime' && t.smartLists.minutes}
+          {most !== undefined && t.smartLists.outOf100}
         </span>
       )
       break
@@ -870,6 +943,8 @@ function RuleEditor({
       break
     case 'person':
     case 'studio':
+    case 'service':
+    case 'tag':
       value = (
         <TextInput
           size="sm"
@@ -891,6 +966,18 @@ function RuleEditor({
           value={rule.value ?? ''}
           onValue={(code) => onChange({ ...rule, value: code })}
           options={languages}
+        />
+      )
+      break
+    case 'country':
+      value = (
+        <Select
+          size="sm"
+          aria-label={t.smartLists.fields.country}
+          className="w-[13.75rem]"
+          value={rule.value ?? 'FR'}
+          onValue={(code) => onChange({ ...rule, value: code })}
+          options={countries}
         />
       )
       break
@@ -940,7 +1027,7 @@ function RuleEditor({
       <Select
         size="sm"
         aria-label={t.smartLists.field}
-        className="w-[12.5rem]"
+        className="w-[16rem]"
         value={rule.field}
         onValue={(field) =>
           onChange({ ...newRule(field as (typeof fields)[number]), not: rule.not })

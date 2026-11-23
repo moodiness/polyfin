@@ -57,7 +57,8 @@ func media(imdb string, tmdb int, released string, ratings string) string {
 }
 
 // allRatings are the ratings of a title MDBList knows well, its IMDb
-// rating 8.1, its critics' score 97 and its audience score 92.
+// rating 8.1, its critics' score 97, its audience score 92 and its
+// Metacritic score 87.
 const allRatings = `{"source": "imdb", "value": 8.1, "score": 81, "votes": 673852, "url": 99},
 	{"source": "metacritic", "value": 87, "score": 87, "votes": 21, "url": "/m"},
 	{"source": "metacriticuser", "value": null, "score": null, "votes": null, "url": null},
@@ -261,7 +262,7 @@ func TestTitlesAreAskedInBatchesAndKept(t *testing.T) {
 	again := New(s.db, f.server.URL, "test", s.logger, s.settings)
 	t.Cleanup(again.Close)
 	if got := again.Kept(t.Context(), titles); len(got) != len(want) || got[0].String() != want[0] ||
-		got[0].IMDbVotes == nil || *got[0].IMDbVotes != 673852 {
+		got[0].IMDbVotes == nil || *got[0].IMDbVotes != 673852 || value(got[0].Metacritic) != "87" || got[1].Metacritic != nil {
 		t.Errorf("after a restart: %v", got)
 	}
 	time.Sleep(100 * time.Millisecond)

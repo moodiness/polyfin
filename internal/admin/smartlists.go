@@ -268,11 +268,14 @@ func (h *handler) previewSmartList(w http.ResponseWriter, r *http.Request) {
 
 // smartCatalogJSON is a catalog a scope's lists may draw from. Shared is
 // set for one of the server's addons, which a user's own list may draw
-// from while they use the server's sources.
+// from while they use the server's sources. Source tells what it belongs
+// to: an addon, a local folder or network share, or an IPTV source (see
+// library.SmartSourceAddon).
 type smartCatalogJSON struct {
 	AddonID     string   `json:"addonId"`
 	AddonName   string   `json:"addonName"`
 	Shared      bool     `json:"shared"`
+	Source      string   `json:"source"`
 	CatalogType string   `json:"catalogType"`
 	CatalogID   string   `json:"catalogId"`
 	CatalogName string   `json:"catalogName"`
@@ -280,9 +283,9 @@ type smartCatalogJSON struct {
 }
 
 // smartCatalogs answers the catalogs a scope's lists may draw from, the
-// languages their rules may name, by ISO 639-1 code, and the content
-// ratings, those apps offer as a user's limit under the server's rating
-// country.
+// languages their rules may name, by ISO 639-1 code, the countries, by
+// ISO 3166-1 alpha-2 code, and the content ratings, those apps offer as a
+// user's limit under the server's rating country.
 func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 	scope, ok := h.scope(w, r)
 	if !ok {
@@ -299,7 +302,7 @@ func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 		if genres == nil {
 			genres = []string{}
 		}
-		result = append(result, smartCatalogJSON{AddonID: c.AddonID.String(), AddonName: c.AddonName, Shared: c.Shared,
+		result = append(result, smartCatalogJSON{AddonID: c.AddonID.String(), AddonName: c.AddonName, Shared: c.Shared, Source: c.Source,
 			CatalogType: c.Catalog.Type, CatalogID: c.Catalog.ID, CatalogName: c.Catalog.Name, Genres: genres})
 	}
 	ratings := []string{}
@@ -311,6 +314,7 @@ func (h *handler) smartCatalogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Catalogs       []smartCatalogJSON `json:"catalogs"`
 		Languages      []string           `json:"languages"`
+		Countries      []string           `json:"countries"`
 		ContentRatings []string           `json:"contentRatings"`
-	}{result, smartlists.Languages(), ratings})
+	}{result, smartlists.Languages(), smartlists.Countries(), ratings})
 }
