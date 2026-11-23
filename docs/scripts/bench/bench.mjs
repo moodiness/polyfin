@@ -4,6 +4,8 @@
 // more before autovacuum's first visit, under the same budgets. See README.md.
 import { readFile, writeFile } from 'node:fs/promises'
 import {
+  admin,
+  adminClient,
   jellyfinClient,
   log,
   options,
@@ -14,6 +16,9 @@ import {
   viewer,
 } from './lib.mjs'
 import { percentile, replayScreen, requestName } from './replay.mjs'
+
+/** Each Polyfin's metrics token, as readHeap gets it: null when the metrics cannot be read. */
+const metricsTokens = new WeakMap()
 
 await run(async () => {
   const values = options({
@@ -199,9 +204,14 @@ async function measureWhileImporting(file, polyfin, settled, since, results) {
   }
 }
 
-/** Runs task, keeping Polyfin's processor use and peak memory under process[name]. */
+/**
+ * Runs task, keeping Polyfin's processor use and peak memory under process[name]: its resident
+ * memory, and its Go heap's from /metrics. On macOS the resident memory follows the heap's
+ * highest point since Polyfin started, the seed's included; the heap in use is the phase's own.
+ */
 async function measured(polyfin, process, name, task) {
   const samples = []
+  const heaps = []
   let before = polyfin.usage()
   const started = performance.now()
   let cpu = 0
@@ -222,26 +232,92 @@ async function measured(polyfin, process, name, task) {
       // Restarting.
     }
   }
-  const timer = setInterval(sample, 500)
+  let reading = null
+  const sampleHeap = () => {
+    reading ??= readHeap(polyfin)
+      .then((heap) => heap && heaps.push(heap))
+      .finally(() => (reading = null))
+    return reading
+  }
+  const timer = setInterval(() => {
+    sample()
+    sampleHeap()
+  }, 500)
   try {
     await task()
   } finally {
     clearInterval(timer)
     sample()
+    await reading
+    await sampleHeap()
   }
   const seconds = (performance.now() - started) / 1000
+  const peak = (list) => (list.length ? Math.max(...list) : null)
   process[name] = {
     seconds,
     cpuSeconds: cpu,
     cores: cpu / seconds,
     rssPeakMb: Math.max(...samples),
     rssLastMb: samples.at(-1),
+    heapInusePeakMb: peak(heaps.map((heap) => heap.inuse)),
+    heapInuseLastMb: heaps.at(-1)?.inuse ?? null,
+    heapSysPeakMb: peak(heaps.map((heap) => heap.sys)),
   }
+}
+
+/**
+ * Polyfin's Go heap in MB, in use and held from the system (HeapInuse and HeapSys), from
+ * /metrics, or null when it cannot be read, as while Polyfin restarts. The first read turns
+ * the metrics on as the bench's administrator; a Polyfin without them gives no heap figures.
+ */
+async function readHeap(polyfin) {
+  if (!metricsTokens.has(polyfin)) {
+    metricsTokens.set(
+      polyfin,
+      metricsToken(polyfin).catch((error) => {
+        log(`No Go heap figures: ${error.message}`)
+        return null
+      }),
+    )
+  }
+  const token = await metricsTokens.get(polyfin)
+  if (!token) return null
+  try {
+    const response = await fetch(`${polyfin.url}/metrics`, {
+      headers: { authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) return null
+    const text = await response.text()
+    const mb = (metric) => {
+      const line = text.match(new RegExp(`^${metric} (\\S+)$`, 'm'))
+      return line ? Number(line[1]) / 2 ** 20 : null
+    }
+    const inuse = mb('go_memstats_heap_inuse_bytes')
+    const sys = mb('go_memstats_heap_sys_bytes')
+    return inuse === null || sys === null ? null : { inuse, sys }
+  } catch {
+    return null
+  }
+}
+
+/** Turns Polyfin's metrics on, making their token if needed, and returns the token. */
+async function metricsToken(polyfin) {
+  const api = adminClient(polyfin.url)
+  await api.signIn(admin)
+  let settings = await api.get('/admin/api/settings')
+  if (!settings.metrics)
+    settings = await api.put('/admin/api/settings', { ...settings, metrics: true })
+  if (!settings.metricsTokenSet) await api.post('/admin/api/settings/metrics-token')
+  return (await api.post('/admin/api/settings/secrets/metricsToken/reveal')).value
 }
 
 function describeProcess(p, name) {
   if (!p) return ''
-  return `${name}, ${p.cpuSeconds.toFixed(1)} s of CPU in ${p.seconds.toFixed(0)} s (${(p.cores * 100).toFixed(0)} % of a core), memory up to ${p.rssPeakMb.toFixed(0)} MB`
+  const heap =
+    p.heapInusePeakMb == null
+      ? ''
+      : `, Go heap in use up to ${p.heapInusePeakMb.toFixed(0)} MB of ${p.heapSysPeakMb.toFixed(0)} MB held`
+  return `${name}, ${p.cpuSeconds.toFixed(1)} s of CPU in ${p.seconds.toFixed(0)} s (${(p.cores * 100).toFixed(0)} % of a core), memory up to ${p.rssPeakMb.toFixed(0)} MB${heap}`
 }
 
 function ms(value) {
