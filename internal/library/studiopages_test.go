@@ -229,13 +229,14 @@ func TestDetailsKeptWithoutStudioIdentifiersAreDueOnce(t *testing.T) {
 	}
 	e.service.forgetCredits(key)
 	kept, err := e.service.readTitleCredits(t.Context(), []creditsKey{key})
-	if k := kept[key]; err != nil || k.details || !k.due(time.Now(), "fr", e.titles["Quiet Pier"]) {
+	if k := kept[key]; err != nil || k.details || !k.due(time.Now(), e.service.creditsAsk(), e.titles["Quiet Pier"]) {
 		t.Fatalf("a row kept before: %+v %v", k, err)
 	}
 	e.open(e.admin, "Quiet Pier")
 	e.settle()
 	kept, err = e.service.readTitleCredits(t.Context(), []creditsKey{key})
-	if k := kept[key]; err != nil || !k.details || k.due(time.Now(), "fr", e.titles["Quiet Pier"]) || !slices.Equal(k.companyIDs, []int{72}) ||
+	if k := kept[key]; err != nil || !k.details || k.due(time.Now(), e.service.creditsAsk(), e.titles["Quiet Pier"]) ||
+		!slices.Equal(k.companyIDs, []int{72}) ||
 		k.networkIDs == nil {
 		t.Errorf("read again: %+v %v", k, err)
 	}

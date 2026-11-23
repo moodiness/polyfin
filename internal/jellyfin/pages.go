@@ -240,23 +240,26 @@ func (h *Handler) namedItem(page namedPage) namedItemDto {
 
 // nameFilter is what a listing asks its titles to be narrowed to: genres
 // (genres, pipe-separated, or genreIds), studios (studios, pipe-separated,
-// or studioIds) and years. A genre option matches when it is any of them.
-// genres and studios are the names the genres and studios parameters
-// give.
+// or studioIds), tags (tags, pipe-separated) and years. A genre option
+// matches when it is any of them. genres, studios and tags are the names
+// the genres, studios and tags parameters give.
 type nameFilter struct {
-	names, genres, studios, years, genreIDs, studioIDs []string
+	names, genres, studios, tags, years, genreIDs, studioIDs []string
 }
 
 // nameFilterOf reads the filter of a listing; ok is false when a year is
 // not a number, which Jellyfin refuses.
 func nameFilterOf(r *http.Request) (f nameFilter, ok bool) {
-	for _, param := range []string{"genres", "studios"} {
+	for _, param := range []string{"genres", "studios", "tags"} {
 		for name := range strings.SplitSeq(query(r, param), "|") {
 			if name = strings.TrimSpace(name); name != "" {
 				f.names = append(f.names, name)
-				if param == "studios" {
+				switch param {
+				case "studios":
 					f.studios = append(f.studios, name)
-				} else {
+				case "tags":
+					f.tags = append(f.tags, name)
+				default:
 					f.genres = append(f.genres, name)
 				}
 			}
@@ -303,15 +306,19 @@ func (f nameFilter) matches(option string) bool {
 }
 
 // narrowedListing lists, across the user's libraries, the titles of a genre,
-// studio or year; a listing asking for studios lists theirs as their page
-// does (see library.Service.StudioTitles), else one asking for genres
-// theirs (see library.Service.GenreTitles).
+// studio, tag or year; a listing asking for tags lists theirs as a
+// streaming service's page (see library.Service.ServiceTitles), one
+// asking for studios theirs as their page does (see
+// library.Service.StudioTitles), else one asking for genres theirs (see
+// library.Service.GenreTitles).
 func (h *Handler) narrowedListing(w http.ResponseWriter, r *http.Request, user accounts.User, f nameFilter, start, limit int) {
 	keep := itemTypeFilter(r)
 	kinds := searchKinds(keep)
 	var page library.Page
 	var err error
 	switch {
+	case len(f.tags) > 0:
+		page, err = h.Library.ServiceTitles(r.Context(), user, f.tags, f.matches, kinds, max(start, 0), limit)
 	case len(f.studios) > 0 || len(f.studioIDs) > 0:
 		studios := slices.Clone(f.studios)
 		for _, id := range f.studioIDs {

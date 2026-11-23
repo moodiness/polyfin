@@ -579,6 +579,12 @@ A title's details come from metadata addons, local files and TMDB. These notes c
 - `/Items/{id}/Images/Thumb` answers the studio's logo on a 960 by 540 PNG, and `/Images/Primary` on a 600 by 600 one, resized for smaller asks as other artwork. With `margin=narrow`, a Polyfin parameter, the plate leaves a sixteenth of each side free around the logo rather than an eighth, for a logo shown small; it is kept apart from the other. A studio of no logo answers `404`. As every item image, they need no credentials.
 - Jellyfin's `/Studios` lists the studios of its library items, and their images are wide only ([StudiosController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/StudiosController.cs), [StudiosImageProvider.cs, lines 54 to 56](https://github.com/jellyfin/jellyfin/blob/v12.4/MediaBrowser.Providers/Plugins/StudioImages/StudiosImageProvider.cs#L54-L56)). Polyfin's ignores `includeItemTypes` and `excludeItemTypes`.
 
+### Tags for apps
+
+- A movie's or series' `Tags` are the streaming services TMDB lists for it in the Rating country, unless an administrator set its tags (see [Streaming services from TMDB](collections-people-and-ratings.md#streaming-services-from-tmdb)). They show in its details, `/Items/{id}` and `/Users/{userId}/Items/{id}`; a library's listing gives the tags an administrator set only.
+- `/Items` with `tags` (names separated by `|`) and no `parentId` lists the service's titles, as its page does (see [Service pages](collections-people-and-ratings.md#service-pages)). jellyfin-web asks it with `IncludeItemTypes=tag`: as in Jellyfin, an item type that is none of Jellyfin's is ignored ([CommaDelimitedArrayModelBinder.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/ModelBinders/CommaDelimitedArrayModelBinder.cs)).
+- `/Items/Filters` and `/Items/Filters2` with a library's `parentId` give, in `Tags`, the tags of its first 100 titles, sorted by name. `/Items` with that `parentId` and `tags` keeps those of its first titles that have one of them, as for genres the library's catalog does not offer, unless its catalog offers the name as a genre option.
+
 ### Artwork requests for apps
 
 - An image its artwork server does not have (`404` or `410`) answers `404`, and an artwork server that fails otherwise (no answer, a `5xx`) makes it answer `502`. An artwork server that answered `429`, or `503`, with a `Retry-After` has its images answer `503` at once, with a `Retry-After` of the time left.
