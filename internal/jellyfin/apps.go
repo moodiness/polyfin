@@ -177,7 +177,7 @@ func (h *Handler) searchHint(item library.Item, badges map[accounts.ID]string) S
 		Id:                      item.ID.String(),
 		Name:                    item.Name,
 		PrimaryImageTag:         images.ImageTags["Primary"],
-		Type:                    itemTypes[item.Kind],
+		Type:                    itemType(item),
 		MediaType:               mediaType(item.Kind),
 		Artists:                 []string{},
 		PrimaryImageAspectRatio: images.PrimaryImageAspectRatio,
@@ -226,7 +226,8 @@ func (h *Handler) searchHint(item library.Item, badges map[accounts.ID]string) S
 
 // trailers lists trailer items. Jellyfin lists those of its trailer
 // libraries and channels; addons give trailers only with their titles,
-// which apps get as RemoteTrailers, so Polyfin has no trailer item.
+// which apps get as RemoteTrailers or as the titles' local trailers (see
+// extras.go), so Polyfin lists no trailer item.
 func (h *Handler) trailers(w http.ResponseWriter, r *http.Request) {
 	emptyPage(w, r, bindErrors{})
 }

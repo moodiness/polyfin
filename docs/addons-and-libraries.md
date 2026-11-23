@@ -2,7 +2,7 @@
 
 # Libraries
 
-This page is for administrators who turn addon catalogs into Jellyfin libraries. It covers what catalogs become, how libraries are ordered and narrowed, how Polyfin reads and refreshes catalogs, and the genre and similar titles pages.
+This page is for administrators who turn addon catalogs into Jellyfin libraries. It covers what catalogs become, how libraries are ordered and narrowed, how Polyfin reads and refreshes catalogs, the genre and similar titles pages, and addons' trailers.
 
 Stremio catalogs become Jellyfin libraries. Stremio streams become versions of the same item (see [Playback](playback.md)). Addon subtitles become external subtitle tracks, and an app's subtitle search lists the subtitles from the user's subtitle addons (see [Subtitles](subtitles.md)).
 
@@ -460,9 +460,27 @@ Similar titles keep the type of the title open:
 
 The change applies at once.
 
-Trailers reach apps as remote trailers. Addons give no other extras. Local folders give the extras, local trailers and theme media beside their titles (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)).
-
 API details: [Similar titles](jellyfin-api.md#similar-titles-for-apps).
+
+## Trailers
+
+A movie's or a series' page shows the trailers its addon's description gives:
+
+- **On a video site:** a trailer given by its video's identifier, or by a link to its page on the site, is a remote trailer. Apps open it in the site's own player.
+- **As a video link:** a trailer given as a link to the video itself is a local trailer of the title. The Trailer button plays it in the app's own player, as the title's versions play. A title has up to 8 of them, in its description's order.
+
+Addons give trailers in their descriptions' `trailers`, and as trailer streams (`trailerStreams`), each with its title and a video's identifier or a link. Trailer streams come first. A trailer given twice shows once.
+
+A local trailer is a link of the addon that described its title:
+
+- It plays, is relayed and is sent to its source as that addon's streams are (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)). No addon is asked for its streams.
+- It shows its title's backdrop and has its own watch state.
+- A user reaches it while they see its title, and plays it while that addon is one of their sources.
+- An IPTV source's title keeps its own trailers: a description that completes it gives only its video sites' trailers.
+
+Addons give no other extras. Local folders give the extras, local trailers and theme media beside their titles (see [Extras and theme media](naming-and-matching.md#extras-and-theme-media)).
+
+API details: [Extras and theme media](jellyfin-api.md#extras-and-theme-media-for-apps).
 
 <div class="moved-sections">
 

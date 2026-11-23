@@ -133,9 +133,10 @@ func TestLocalMovieExtras(t *testing.T) {
 			t.Errorf("a special feature: %+v", feature)
 		}
 	}
+	// A local trailer is a Trailer item, as Jellyfin resolves it.
 	var trailers []BaseItemDto
 	p.get(t, "/Users/"+user+"/Items/"+p.movie+"/LocalTrailers", p.token, &trailers)
-	if got := extraNames(trailers); !slices.Equal(got, []string{"trailer Video Trailer"}) || trailers[0].ParentId != p.movie {
+	if got := extraNames(trailers); !slices.Equal(got, []string{"trailer Trailer Trailer"}) || trailers[0].ParentId != p.movie {
 		t.Errorf("local trailers: %v", got)
 	}
 	var videos themeMediaResult

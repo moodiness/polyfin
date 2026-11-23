@@ -193,9 +193,10 @@ func (d *described) UnmarshalJSON(data []byte) error {
 }
 
 // decode decodes a meta an addon sends, as unmarshal does, then its
-// videos, trailers, collection and extras within the bounds of the answer,
-// of which within is the room left. A list of another type than read, or
-// with such an element, never loses the title.
+// videos, trailers, trailer streams, collection and extras within the
+// bounds of the answer, of which within is the room left. A list of
+// another type than read, or with such an element, never loses the
+// title.
 func (d *described) decode(decoder *json.Decoder, within *room) error {
 	// Without described's methods, lest UnmarshalJSON be called again.
 	type plain described
@@ -205,13 +206,14 @@ func (d *described) decode(decoder *json.Decoder, within *room) error {
 	}
 	d.Meta.Videos, _ = decodeList(d.Videos, MaxVideos, within, decodeVideo, nil)
 	d.Meta.Trailers, _ = decodeList(d.Trailers, maxNested, within, whole[Trailer], nil)
+	d.Meta.TrailerStreams, _ = decodeList(d.TrailerStreams, maxNested, within, decodeStream, tells)
 	d.Meta.Collection = decodeCollection(d.Collection, within)
 	if present(d.Extras) {
 		d.Meta.Extras = &Extras{}
 		_ = d.Meta.Extras.decode(d.Extras, within)
 	}
 	d.Meta.bound()
-	d.Videos, d.Trailers, d.Collection, d.Extras = nil, nil, nil, nil
+	d.Videos, d.Trailers, d.TrailerStreams, d.Collection, d.Extras = nil, nil, nil, nil, nil
 	return err
 }
 

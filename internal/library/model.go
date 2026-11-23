@@ -310,7 +310,8 @@ type Person struct {
 	TMDB  string      `json:"-"`
 }
 
-// Trailer is a video presenting a title.
+// Trailer is a video presenting a title on a video site's page, which
+// apps open in that site's player (see addontrailers.go for the others).
 type Trailer struct {
 	Name string
 	URL  string
@@ -545,15 +546,12 @@ func (s *Service) fromMeta(item *Item, meta stremio.Meta, country string) {
 	item.Images = Images{Primary: meta.Poster, Backdrop: meta.Background, Logo: meta.Logo, Thumb: meta.LandscapePoster}
 	item.PosterShape = meta.Shape()
 	item.People = people(meta)
-	for _, trailer := range meta.Trailers {
-		if trailer.Source == "" {
-			continue
+	// A trailer that links to the video itself is an addon trailer, an
+	// extra of its own (see addontrailers.go).
+	for _, trailer := range meta.TrailerLinks() {
+		if trailer.Page != "" {
+			item.Trailers = append(item.Trailers, Trailer{Name: trailer.Name, URL: trailer.Page})
 		}
-		name := trailer.Name
-		if name == "" {
-			name = trailer.Type
-		}
-		item.Trailers = append(item.Trailers, Trailer{Name: name, URL: "https://www.youtube.com/watch?v=" + trailer.Source})
 	}
 	item.StremioType, item.StremioID = meta.Type, meta.ID
 }

@@ -16,8 +16,9 @@ import (
 // titles (see library.Extras): a title's local trailers, which apps play
 // from its Trailer button, its special features, and its theme songs and
 // videos, which apps play in the background of its page for the users who
-// turned them on. Addons give trailers too, which apps get as
-// RemoteTrailers, and no other extras.
+// turned them on. Addons give trailers too: those on a video site, which
+// apps get as RemoteTrailers, and links to videos, which are local
+// trailers as well (see library's addontrailers.go); and no other extras.
 func (h *Handler) extrasRoutes(rt *router) {
 	signedIn := func(method, pattern string, handler http.HandlerFunc) {
 		rt.handle(method, pattern, h.authenticated(handler))
