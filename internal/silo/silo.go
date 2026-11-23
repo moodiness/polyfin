@@ -113,6 +113,7 @@ func New(options Options) *Server {
 	s.personalRoutes()
 	s.peopleRoutes()
 	s.discoverRoutes()
+	s.notInterestedRoutes()
 	s.probeRoutes()
 	s.shuffleRoutes()
 	s.deviceLoginRoutes()
@@ -161,7 +162,7 @@ func (s *Server) signedIn(next func(http.ResponseWriter, *http.Request, viewer))
 	return func(w http.ResponseWriter, r *http.Request) {
 		v, ok := s.session(w, r, true)
 		if ok {
-			next(w, s.withWatchlist(r, v), v)
+			next(w, s.withMarks(s.withWatchlist(r, v), v), v)
 		}
 	}
 }

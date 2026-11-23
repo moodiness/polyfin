@@ -10,6 +10,9 @@
       "repository": "Silo-Server/silo-apple",
       "commit": "80ae94379024a5acc7b363717de0a7fa07aa9f03",
       "files": [
+        "iosApp/iosApp/Components/MediaCardPersonalState.swift",
+        "iosApp/iosApp/Components/NotInterestedMenuButton.swift",
+        "iosApp/iosApp/Components/PersonalListActions.swift",
         "iosApp/iosApp/Components/ProfileMenuRow.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2AuthModels.swift",
         "iosApp/iosApp/Networking/APIv2/APIv2CatalogModels.swift",

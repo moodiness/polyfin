@@ -15,10 +15,11 @@ import (
 // Similar titles are those the Jellyfin API gives a title's page. For You
 // is Jellyfin's movie recommendations, which Polyfin makes from the movies
 // the user played last: a row of the titles similar to each, without those
-// played. The calendar lists the coming episodes of the series the user
-// watches or marked favorite, as the Jellyfin API's Upcoming lists them to
-// Jellyfin apps. Polyfin knows no popular, trending or other recommended
-// titles: it offers none.
+// played. Both leave out the titles the user marked Not interested (see
+// notinterested.go). The calendar lists the coming episodes of the series
+// the user watches or marked favorite, as the Jellyfin API's Upcoming
+// lists them to Jellyfin apps. Polyfin knows no popular, trending or other
+// recommended titles: it offers none.
 
 func (s *Server) discoverRoutes() {
 	s.mux.HandleFunc("GET /api/v2/recommendations/similar/{id}", s.profiled(s.similar))
@@ -27,7 +28,8 @@ func (s *Server) discoverRoutes() {
 }
 
 // similar lists the titles similar to a title, as its page in Jellyfin
-// apps does: without those the user played, nor those they may not see.
+// apps does: without those the user played, nor those they may not see,
+// nor those they marked Not interested.
 func (s *Server) similar(w http.ResponseWriter, r *http.Request, v viewer) {
 	limit := 12
 	if text := r.URL.Query().Get("limit"); text != "" {
@@ -43,7 +45,7 @@ func (s *Server) similar(w http.ResponseWriter, r *http.Request, v viewer) {
 		return
 	}
 	var result queryResult
-	a, err := s.call(r, v, http.MethodGet, "/Items/"+i.Id+"/Similar?"+url.Values{"Limit": {strconv.Itoa(limit)},
+	a, err := s.call(r, v, http.MethodGet, "/Items/"+i.Id+"/Similar?"+url.Values{"Limit": {strconv.Itoa(limit + headroom(r, limit))},
 		"Fields": {listFields}}.Encode(), nil, &result)
 	if err != nil {
 		s.internalError(w, r, err)
@@ -55,7 +57,7 @@ func (s *Server) similar(w http.ResponseWriter, r *http.Request, v viewer) {
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items []catalogItem `json:"items"`
-	}{uniqueCards(cards(r, result.Items), limit)})
+	}{uniqueCards(unmarked(r, cards(r, result.Items)), limit)})
 }
 
 // uniqueCards are cards, each once, at most limit of them.
@@ -88,16 +90,16 @@ var becauseTitles = map[string]string{
 }
 
 // discover answers For You: a row of the titles similar to each of the
-// movies the user played last, those they played left out, as Jellyfin's
-// movie recommendations give them.
+// movies the user played last, those they played or marked Not interested
+// left out, as Jellyfin's movie recommendations give them.
 func (s *Server) discover(w http.ResponseWriter, r *http.Request, v viewer) {
 	var categories []struct {
 		Items              []item
 		RecommendationType string
 		BaselineItemName   string
 	}
-	a, err := s.call(r, v, http.MethodGet, "/Movies/Recommendations?"+url.Values{"categoryLimit": {"6"}, "itemLimit": {strconv.Itoa(sectionLimit)},
-		"Fields": {listFields}}.Encode(), nil, &categories)
+	a, err := s.call(r, v, http.MethodGet, "/Movies/Recommendations?"+url.Values{"categoryLimit": {"6"},
+		"itemLimit": {strconv.Itoa(sectionLimit + headroom(r, sectionLimit))}, "Fields": {listFields}}.Encode(), nil, &categories)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -109,7 +111,7 @@ func (s *Server) discover(w http.ResponseWriter, r *http.Request, v viewer) {
 	title := cmp.Or(becauseTitles[s.options.Accounts.Settings().Language], becauseTitles["en"])
 	rows := []discoverRow{}
 	for _, category := range categories {
-		items := uniqueCards(sectionCards(r, category.Items), sectionLimit)
+		items := uniqueCards(unmarked(r, sectionCards(r, category.Items)), sectionLimit)
 		if len(items) > 0 {
 			// A row of titles gathered around one the user watched.
 			rows = append(rows, discoverRow{Type: "cluster", Title: fmt.Sprintf(title, category.BaselineItemName), Items: items})
