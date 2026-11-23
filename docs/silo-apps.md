@@ -158,7 +158,7 @@ Collections are read-only. To find them, open **Libraries**, then a library, the
 
 ### Title pages and people
 
-Title pages show details, cast and crew, versions, a series' seasons and episodes, artwork, and similar titles, as the web player does. Similar titles leave out those the user played.
+Title pages show details, cast and crew, versions, a series' seasons and episodes, artwork, and similar titles, as the web player does. Similar titles leave out those the user played or marked [Not interested](#favorites-watchlist-and-history).
 
 An episode's card also carries its series' poster and backdrop, and its season's poster when the season has one. The apps show these in place of the episode's still.
 
@@ -179,10 +179,15 @@ Tapping someone in a cast opens their page, with their titles that the user may 
   - The Watchlist screen lists the playlist, in its order, as Jellyfin apps show it. Started and played titles stay on it.
 - **Your rating:** the stars on a movie's or a series' page in the Apple apps are the user's own rating, the one Jellyfin apps keep from 0 to 10, which goes to the [tracking services](tracking-imports.md) that keep ratings. A like from a Jellyfin app shows as five stars, a dislike as half a star.
 - **History:** what the user played, the latest first.
+- **Not interested:** the Apple apps mark a movie or a series Not interested from its card or page, a series for all its episodes.
+  - The title leaves the user's For You and similar titles at once.
+  - It stays in their libraries, searches, its page, playback, favorites and watchlist, and the list of the titles marked shows it, the latest marked first.
+  - Silo's server also ranks the titles similar to a marked one lower. Polyfin does not: its recommendations are ranked as for Jellyfin apps, which know nothing of the mark.
+  - Jellyfin apps and other users are unaffected.
 
 ### For You and the calendar
 
-- **For You:** a row of titles similar to each of the movies the user played last, without those they played, as Jellyfin's movie recommendations give them.
+- **For You:** a row of titles similar to each of the movies the user played last, without those they played or marked [Not interested](#favorites-watchlist-and-history), as Jellyfin's movie recommendations give them.
   - It stays empty until the user played a movie, or while similar titles are turned off in the settings.
 - **Calendar:** the coming episodes of the series the user watches or marked favorite, from yesterday on, as Jellyfin's Upcoming lists them.
   - Each episode shows on its air date: Polyfin knows air dates, not times.
@@ -240,7 +245,6 @@ During and after a playback:
 - **Taking a series off Next Up:** refused as not supported. Playing the series moves it on.
 - **Hiding watches from the history:** mark a title unplayed instead.
 - **Other features:** refreshing a person's details, trending or popular titles, and trickplay.
-- **Not interested:** the Apple apps offer it on movies and series, and Polyfin refuses it for now.
 - **Playback features the apps can use but Polyfin does not offer, and so does not announce:**
   - the app's own player showing the file's subtitles, when it plays the file as it is;
   - quality adapting itself to buffering and to the measured speed during a playback;
@@ -441,7 +445,7 @@ Polyfin follows Silo's published OpenAPI contract, `contracts/api/v2/openapi.jso
 - Polyfin serves neither the contract file nor the list of capabilities those links name.
 - Silo has no release yet, and its contract still changes. A later version of the apps may need operations or fields Polyfin does not answer.
 
-Polyfin's tests also check what it gives against the rules the apps apply. They cover the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, ratings, people, similar titles, For You, the calendar, skip markers, where the end credits finish a title, and the discovery documents.
+Polyfin's tests also check what it gives against the rules the apps apply. They cover the capabilities, plans, libraries, rows, Home's layout, catalog pages, Collections tabs, favorites and watchlist, ratings, Not interested, people, similar titles, For You, the calendar, skip markers, where the end credits finish a title, and the discovery documents.
 
 Those rules are read from the apps' code: Silo-Server/silo-apple and Silo-Server/silo-android, at the commits that file records. Among them:
 

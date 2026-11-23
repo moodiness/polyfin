@@ -134,7 +134,7 @@ func appsAccept(path string, data []byte) error {
 		return silotest.CheckCollectionTab(data, segments[1])
 	case target.Path == "/api/v2/playback/capabilities":
 		return silotest.CheckCapabilities(data)
-	case target.Path == "/api/v2/favorites", target.Path == "/api/v2/watchlist":
+	case target.Path == "/api/v2/favorites", target.Path == "/api/v2/watchlist", target.Path == "/api/v2/not-interested":
 		return silotest.CheckPersonalList(data)
 	case len(segments) == 2 && (segments[0] == "favorites" || segments[0] == "watchlist"):
 		return silotest.CheckMembershipEntry(data, segments[1])
@@ -157,7 +157,7 @@ func appsAccept(path string, data []byte) error {
 	case (strings.HasSuffix(target.Path, "/capabilities") || strings.HasSuffix(target.Path, "/status") ||
 		strings.HasPrefix(target.Path, "/api/v2/capabilities/")) &&
 		!slices.Contains([]string{"/api/v2/catalog/search/capabilities", "/api/v2/shuffles/capabilities",
-			"/api/v2/collections/capabilities"}, target.Path):
+			"/api/v2/collections/capabilities", "/api/v2/capabilities/not-interested"}, target.Path):
 		return silotest.CheckUnsupported(data, target.Path)
 	}
 	return nil

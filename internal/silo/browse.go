@@ -194,7 +194,8 @@ func catalogItemOf(r *http.Request, i item) catalogItem {
 		}
 	}
 	if i.UserData != nil {
-		c.UserState = &userState{IsFavorite: i.UserData.IsFavorite, Played: i.UserData.Played, InWatchlist: inWatchlist(r, i)}
+		c.UserState = &userState{IsFavorite: i.UserData.IsFavorite, Played: i.UserData.Played, InWatchlist: inWatchlist(r, i),
+			NotInterested: notInterested(r, i)}
 		if i.UserData.PlaybackPositionTicks > 0 {
 			c.PositionSeconds = float64(i.UserData.PlaybackPositionTicks) / 1e7
 		}
