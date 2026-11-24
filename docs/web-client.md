@@ -24,6 +24,7 @@ Polyfin adds these to the web player's pages:
   - When no target of the user receives reminders and their apps do not show them, a line under the button says so. It links to **My account › Notifications**.
 - **Louder videos:** for a user with **Boost the volume in the web player**, videos play louder, and the player's settings menu offers **Boost the volume**. See [Louder videos in the web player](#louder-videos-in-the-web-player).
 - **Recent searches:** on the search page, while the field is empty, the user's recent searches show above the Suggestions. See [Recent searches](#recent-searches).
+- **Type filter on collection pages:** a collection that holds movies and series, or other types, shows a row of buttons above its sections, **All** then one for each type. See [Type filter on collection pages](#type-filter-on-collection-pages).
 - **Ratings on posters:** while **Show ratings on posters** is on, a movie's or a series' poster shows its ratings as the pointer or the focus comes to it. See [Ratings on posters](#ratings-on-posters).
 - **Version badges:** while **Version badges** is on, a title's page shows badges for the version picked under its version menu, and a video shows those of the version it plays. See [Version badges](#version-badges).
 
@@ -65,6 +66,25 @@ Recent searches stay in the browser: nothing goes to the server.
 **Compared with Jellyfin**
 
 - jellyfin-web on a Jellyfin server keeps no recent searches.
+
+### Type filter on collection pages
+
+jellyfin-web asks for every title of a collection's page in one request, up to 500, then groups them in sections: **Movies**, **Series**, **Episodes**, **Videos**, then **Collections** for the collections inside it. When a collection holds more than one type, a row of buttons shows above the sections: **All**, then one for each of those types it holds. This works for collections made by users, smart lists shown as collections and addons' collections.
+
+- **All** is the default. It lists everything, as jellyfin-web does on its own. Other entries, such as Live TV channels, show under **All** only.
+- **A type** has the page load that type alone: the web player asks Polyfin for those titles only, so a phone or a low-memory box receives and draws fewer cards. The page's 500 titles are then all of that type, so titles **All** leaves past the 500 show too. For an addon's collection, Polyfin also reads only the catalogs that list that type.
+- **The choice** is kept in the browser, for the server, the user and the collection, for the last 100 collections, and applies as soon as the page opens again. It stays with the device rather than the account, as small screens are what it is for: a phone can keep **Series** while the TV shows **All**. Other apps, other users and other browsers list every title.
+- **A collection of one type** shows no buttons. A type the collection no longer holds is forgotten, and the page shows **All** again.
+
+The buttons work with the keyboard and the TV layout's arrows, as jellyfin-web's own. Their words follow the web player's language, as the script's other words do (see [Dashboard links and single sign-on](#dashboard-links-and-single-sign-on)).
+
+With the [LumaaGlaass](themes-and-custom-code.md#lumaaglaass) theme, the buttons take the look of the theme's own collection filter, which they replace: the theme's offers movies and series only, and hides the cards already loaded rather than loading fewer. Its **Collection filter** setting changes nothing on a page that shows these buttons.
+
+**Compared with Jellyfin**
+
+- jellyfin-web on a Jellyfin server has no type filter on a collection's page, and always loads every title.
+
+API details: [Types of a collection for apps](jellyfin-api.md#types-of-a-collection-for-apps).
 
 ### Ratings on posters
 
