@@ -414,6 +414,16 @@ A library of an addon's catalog is read a page at a time, so its Sort menu works
 - With `Recursive=true`, the listing also brings the titles of the collections inside, each once, as apps ask for to play a collection.
 - The outer collection's `ChildCount` counts the collections inside it as one item each. Its `RecursiveItemCount`, played count, genres, rating, premiere date and Primary image take theirs into account.
 
+### Types of a collection for apps
+
+The web player's [type filter on collection pages](web-client.md#type-filter-on-collection-pages) asks which types a collection holds, then lists the type chosen alone.
+
+- `GET /Polyfin/Items/{id}/CollectionTypes` answers `{"Types": [...]}`: the Jellyfin types of the entries `/Items?ParentId={id}` lists for the user, each once, by name, such as `["BoxSet", "Movie", "Series"]`.
+  - A collection made by users tells the types of all its entries the user sees, the collections inside it included.
+  - A smart list shown as a collection, or an addon's collection, tells those of its listing without a limit, as jellyfin-web asks it. When that listing stops at its 500 titles, a movie or a series past them counts too.
+  - An item that is not a collection answers `[]`, and one the user cannot see 404.
+- `/Items?ParentId={collection}` with `IncludeItemTypes` keeps that type before the listing's bound of 500 titles: a collection's 500 series, for example, rather than the series among its first 500 titles.
+
 ### Filters by age rating for apps
 
 `/Items` and `/Users/{userId}/Items` narrow their titles by age rating as Jellyfin does, on top of the user's [parental control](user-limits.md#parental-control). One of Jellyfin's official apps sends `maxOfficialRating` for its screensaver's age limit, and apps' filters send `officialRatings`.
