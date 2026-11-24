@@ -720,7 +720,8 @@ func universalProfile(r *http.Request) *playback.DeviceProfile {
 // addAudioSources describes a track's stream in its DTO, as Jellyfin
 // describes a song's file: its details ask the addon where it streams
 // from, listings only show what is known. An audiobook's chapters are the
-// ones its stream comes with.
+// ones its stream comes with. CanDownload, when asked, tells whether it
+// downloads (see setAudioDownload).
 func (h *Handler) addAudioSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, detail bool) {
 	var versions []library.Version
 	if detail {
@@ -757,6 +758,7 @@ func (h *Handler) addAudioSources(r *http.Request, user accounts.User, dto *Base
 		}
 	}
 	dto.MediaSources, dto.MediaStreams = &sources, &streams
+	h.setAudioDownload(r.Context(), user, dto, versions)
 }
 
 // queueItem is an entry of the queue a player reports with its playback:

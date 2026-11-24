@@ -739,6 +739,8 @@ Music libraries come from music addons and local folders. Jellyfin music apps br
 ### Music playback for apps
 
 - A track whose addon gives no stream (it cannot be reached, answers an HTTP error other than `404`, or gives no stream address) does not play: `PlaybackInfo` answers `NoCompatibleStream`, as for a title none of whose versions plays.
+- Tracks and audiobooks carry `CanDownload` in details, and in listings asked with `Fields=CanDownload`: `true` when the user has **Can download** and `/Items/{id}/Download` serves the track's stream as one file. A listing knows no stream of most tracks and asks no addon for it, so there it follows the permission alone.
+- `/Items/{id}/Download` refuses a track whose stream is an HLS playlist or a DASH manifest with `400`, as other versions that are not one file, and its `CanDownload` is `false` once that stream is known.
 
 ### Song lyrics for apps
 

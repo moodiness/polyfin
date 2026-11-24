@@ -536,7 +536,8 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.CanDelete = new(false)
 	}
 	if detail || fields.has("CanDownload") {
-		// Until its versions are known; see setDownload.
+		// Until its versions are known; see setDownload and
+		// setAudioDownload.
 		dto.CanDownload = new(false)
 	}
 	h.describeEdited(&dto, item, fields, detail)

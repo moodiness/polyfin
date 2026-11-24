@@ -227,6 +227,11 @@ Polyfin decides how to play a track with the app's device profile, as Jellyfin d
 
 **User limits:** the user's conversion permission, bitrate limit and number of playbacks at once apply (see [Users](users.md)). Quality groups, which are about video heights, do not.
 
+**Downloads:** tracks and audiobooks download with **Can download**, as Jellyfin's audio does, as the stream their addon gives. Apps that read `CanDownload` see it `true` for the tracks the user may download, and `false` without the permission:
+
+- **Streams not known yet:** a listing never asks the addon for a track's stream. Until Polyfin knows it, from the track's details or a play, `CanDownload` follows the permission alone, and the download asks the addon for the stream.
+- **Playlists and manifests:** a track whose stream is an HLS playlist or a DASH manifest is not one file. It does not download, and its `CanDownload` is `false` once its stream is known.
+
 **Plays and resume points:**
 
 - Playback reports count plays and mark songs played, without resume points.
