@@ -48,6 +48,7 @@ func (h *Handler) browseRoutes(rt *router) {
 	signedIn(http.MethodGet, "/Polyfin/NameOrder/Letters", h.nameOrderLetters)
 	signedIn(http.MethodPost, "/Polyfin/Items/{itemId}/Versions/Search", h.searchVersions)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Ratings", h.titleRatings)
+	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/CollectionTypes", h.collectionTypes)
 	signedIn(http.MethodGet, "/Polyfin/Items/Ratings", h.posterRatings)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Seasons", h.seasons)
 	signedIn(http.MethodGet, "/Shows/{seriesId}/Episodes", h.episodes)
