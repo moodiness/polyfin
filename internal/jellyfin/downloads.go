@@ -92,19 +92,22 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		}
 	}
 	version, err := h.Library.Version(r.Context(), user, item.ID, wanted)
-	if err != nil || h.Playback.ReadsInput(version) || version.Torrent != nil || h.hiddenVersion(r.Context(), user, version) {
-		// Jellyfin refuses to download what has no file, a series or a
-		// season, as a request it cannot process; a version that is not one
-		// file, a DVD, is refused the same way, as is a torrent's file,
-		// whose swarm only a playback joins, and one the version rules
-		// hide, which is listed nowhere.
+	if err != nil {
 		processingError(w, http.StatusBadRequest)
 		return
 	}
-	// Only versions that fit the user's quality group download: downloads
-	// are never converted. Without one, the title is refused as downloads
-	// are without the permission.
-	if !user.FitsGroup(h.versionHeight(r.Context(), version)) {
+	refusal := h.downloadRefusal(r.Context(), user, version)
+	if refusal == http.StatusBadRequest || h.hiddenVersion(r.Context(), user, version) {
+		// Jellyfin refuses to download what has no file, a series or a
+		// season, as a request it cannot process; a version that is not one
+		// file is refused the same way (see downloadRefusal), as is one the
+		// version rules hide, which is listed nowhere.
+		processingError(w, http.StatusBadRequest)
+		return
+	}
+	if refusal == http.StatusForbidden {
+		// Without a group the version fits, the title is refused as
+		// downloads are without the permission.
 		h.Logger.Info("A download taller than the user's quality group was refused", "addon", version.AddonLog)
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -155,24 +158,57 @@ func (h *Handler) firstWorkingVersion(ctx context.Context, user accounts.User, i
 	return item.ID
 }
 
+// downloadRefusal is the status /Items/{itemId}/Download refuses a
+// version with for user, 0 when it serves it: what it alone tells, which
+// CanDownload tells too. A version that is not one file is refused as a
+// request that cannot be processed: a DVD, read from its input; a
+// torrent's file, whose swarm only a playback joins; and a track whose
+// stream is an HLS playlist or a DASH manifest, which playback reads
+// through FFmpeg, as relaying it would give the playlist alone. Only
+// versions that fit the user's quality group download, as downloads are
+// never converted; the others are refused as downloads are without the
+// permission.
+func (h *Handler) downloadRefusal(ctx context.Context, user accounts.User, version library.Version) int {
+	switch {
+	case h.Playback.ReadsInput(version) || version.Torrent != nil ||
+		version.Audio != nil && (version.Audio.Manifest == "hls" || version.Audio.Manifest == "dash"):
+		return http.StatusBadRequest
+	case !user.FitsGroup(h.versionHeight(ctx, version)):
+		return http.StatusForbidden
+	}
+	return 0
+}
+
 // setDownload tells apps that a movie or an episode with versions can be
 // downloaded, when they asked, the user may download and one of the
-// versions, one file, fits their quality group, and with withPath names in
+// versions downloads (see downloadRefusal), and with withPath names in
 // Path the file the version it was opened as (see openedIndex) downloads
 // as.
 func (h *Handler) setDownload(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, versions []library.Version, opened accounts.ID, withPath bool) {
 	if len(versions) == 0 {
 		return
 	}
-	fits := slices.ContainsFunc(versions, func(v library.Version) bool {
-		return !h.Playback.ReadsInput(v) && v.Torrent == nil && user.FitsGroup(h.versionHeight(r.Context(), v))
-	})
-	if dto.CanDownload != nil && h.Accounts.MayDownload(user) && fits {
+	if dto.CanDownload != nil && h.Accounts.MayDownload(user) &&
+		slices.ContainsFunc(versions, func(v library.Version) bool { return h.downloadRefusal(r.Context(), user, v) == 0 }) {
 		dto.CanDownload = new(true)
 	}
 	if withPath {
 		dto.Path = h.downloadName(r, item, versions[openedIndex(opened, versions)])
 	}
+}
+
+// setAudioDownload tells apps that a track, an audiobook or a theme song
+// can be downloaded, when they asked, as Jellyfin tells of its audio: when
+// the user may download and the item's version, when known, downloads
+// (see downloadRefusal). A listing knows no version of most tracks, and
+// never asks their addons: the permission alone tells there, as the
+// download asks the addon for the track's link, which is never a
+// torrent's file and has no height.
+func (h *Handler) setAudioDownload(ctx context.Context, user accounts.User, dto *BaseItemDto, versions []library.Version) {
+	if dto.CanDownload == nil {
+		return
+	}
+	dto.CanDownload = new(h.Accounts.MayDownload(user) && (len(versions) == 0 || h.downloadRefusal(ctx, user, versions[0]) == 0))
 }
 
 // downloadName is the name a version is saved as: its file name, else one

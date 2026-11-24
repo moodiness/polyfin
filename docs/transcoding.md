@@ -247,7 +247,7 @@ Each user also has three permissions, in the **Access** section of their page un
 |---|---|
 | **Can convert video (transcoding)** | Converting the video, together with the server's switch |
 | **Can convert audio (transcoding)** | Converting the audio, together with the server's switch |
-| **Can download** | Downloads, on its own |
+| **Can download** | Downloads of videos, tracks and audiobooks, on its own (see [Music playback](music.md#music-playback)) |
 
 - The two transcoding permissions are saved apart: a user may, for example, have their audio converted while their video never is. With the server's **Conversion (transcoding)** off, neither applies, for everyone.
 - They match `EnableVideoPlaybackTranscoding` and `EnableAudioPlaybackTranscoding` in a user's Jellyfin policy, which Jellyfin's official apps read and write.

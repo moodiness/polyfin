@@ -25,20 +25,23 @@ import (
 // Once refusing is set, it answers everything but its manifest HTTP 403.
 // content, set before it is installed, is its manifest's contentType: an
 // audiobook addon's streams come with chapters; rowless, set before it is
-// installed, leaves its manifest without catalog rows. queries records the
-// settings every request carried, catalogs counts the requests for catalog
-// rows.
+// installed, leaves its manifest without catalog rows. manifests, set
+// before it is installed, gives the tracks whose stream is an HLS playlist
+// or a DASH manifest, by their identifiers: "hls" or "dash". queries
+// records the settings every request carried, catalogs counts the requests
+// for catalog rows.
 type fakeEclipse struct {
-	url      string
-	content  string
-	rowless  bool
-	streams  atomic.Int32
-	catalogs atomic.Int32
-	expiring atomic.Bool
-	failing  atomic.Bool
-	refusing atomic.Bool
-	mu       sync.Mutex
-	queries  []string
+	url       string
+	content   string
+	rowless   bool
+	manifests map[string]string
+	streams   atomic.Int32
+	catalogs  atomic.Int32
+	expiring  atomic.Bool
+	failing   atomic.Bool
+	refusing  atomic.Bool
+	mu        sync.Mutex
+	queries   []string
 }
 
 func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
@@ -60,7 +63,8 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Settings travel with every resource request; the manifest
 		// describes them.
-		if r.URL.Path != "/cover.jpg" && r.URL.Path != "/tone.flac" && !strings.HasSuffix(r.URL.Path, "/manifest.json") {
+		if r.URL.Path != "/cover.jpg" && r.URL.Path != "/tone.flac" && r.URL.Path != "/tone.m3u8" && r.URL.Path != "/tone.mpd" &&
+			!strings.HasSuffix(r.URL.Path, "/manifest.json") {
 			f.mu.Lock()
 			f.queries = append(f.queries, r.URL.Query().Get("quality"))
 			f.mu.Unlock()
@@ -114,6 +118,12 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 			n := f.streams.Add(1)
 			reply := map[string]any{"url": fmt.Sprintf("%s/tone.flac?n=%d", server.URL, n), "codec": "flac", "container": "flac",
 				"manifest": "none", "sampleRate": 44100, "bitDepth": 16}
+			switch manifest := f.manifests[strings.TrimPrefix(path, "/stream/")]; manifest {
+			case "hls":
+				reply = map[string]any{"url": server.URL + "/tone.m3u8", "codec": "aac", "manifest": manifest}
+			case "dash":
+				reply = map[string]any{"url": server.URL + "/tone.mpd", "codec": "aac", "manifest": manifest}
+			}
 			if f.content == "audiobook" {
 				reply["chapters"] = []any{map[string]any{"title": "Opening", "startTime": 0}, map[string]any{"title": "Ending", "startTime": 5}}
 			}
@@ -123,6 +133,12 @@ func newFakeEclipse(t *testing.T, tone string) *fakeEclipse {
 			answer(reply)
 		case path == "/tone.flac":
 			http.ServeFile(w, r, tone)
+		case path == "/tone.m3u8":
+			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+			_, _ = w.Write([]byte(tonePlaylist))
+		case path == "/tone.mpd":
+			w.Header().Set("Content-Type", "application/dash+xml")
+			_, _ = w.Write([]byte(toneManifest))
 		case path == "/cover.jpg":
 			w.Header().Set("Content-Type", "image/jpeg")
 			_, _ = w.Write([]byte("jpeg"))

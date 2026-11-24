@@ -239,6 +239,11 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 		// Only what is known, as MediaSources in the same listing: a listing
 		// never asks addons for streams.
 		h.setDownload(r, user, &dto, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID, path)
+	} else if fields.has("CanDownload") && audioItem(item.Kind) && !sources && !streams {
+		// As addMediaSources tells it when the listing asks for the item's
+		// stream: from what is known.
+		versions, _ := h.Library.CachedVersions(r.Context(), user, item.ID)
+		h.setAudioDownload(r.Context(), user, &dto, versions)
 	}
 	if fields.has("Trickplay") && versioned(item.Kind) {
 		dto.Trickplay = h.trickplayManifest(r.Context(), user, item, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
