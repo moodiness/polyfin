@@ -516,6 +516,30 @@ func requestScheme(r *http.Request) string {
 	return "http"
 }
 
+// fileContainer is the container a version's file is described and
+// served as: the one its analysis found, named as item details name it
+// (see playback.DisplayContainer), else the one its file name suggests.
+// A source may name its file wrongly, and answer with a wrong type too.
+func fileContainer(analysis media.Analysis, known bool, filename string) string {
+	if known {
+		if container := playback.DisplayContainer(analysis, filename); container != "" {
+			return container
+		}
+	}
+	return containerOfName(filename)
+}
+
+// versionContainer is fileContainer for a version, as far as it was
+// analyzed, or, until it is, as RemuxDB describes its file, as its media
+// sources describe it.
+func (h *Handler) versionContainer(ctx context.Context, version library.Version) string {
+	analysis, known := h.Playback.Analyzed(ctx, version.ID)
+	if !known {
+		analysis, known = h.RemuxDB.Described(version)
+	}
+	return fileContainer(analysis, known, version.Filename)
+}
+
 // containerOfName guesses a container from a file name until the version
 // is analyzed.
 func containerOfName(filename string) string {

@@ -1525,7 +1525,10 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if contentType == "" {
-		contentType = mimeTypes[containerOfName(version.Filename)]
+		// The type of the file the version's media sources describe, not
+		// the one its source answers or its name suggests (see
+		// fileContainer).
+		contentType = mimeTypes[h.versionContainer(r.Context(), version)]
 	}
 	// The files of an HLS playlist relayed are the same play's (see
 	// liveFile), named with a grant signed once one is named.

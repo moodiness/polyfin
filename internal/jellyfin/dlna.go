@@ -294,10 +294,7 @@ func (h *Handler) Resource(ctx context.Context, user accounts.User, item library
 	if !decision.DirectPlay || unplayable(request, analysis, decision, allowed) {
 		return converted, true
 	}
-	container := containerOfName(version.Filename)
-	if container == "" {
-		container = strings.Split(playback.Container(analysis), ",")[0]
-	}
+	container := fileContainer(analysis, true, version.Filename)
 	resource := converted
 	resource.Converted, resource.Extension, resource.Size, resource.Bitrate = false, container, analysis.Size, analysis.Bitrate
 	resource.MimeType, resource.OrgPn = profile.MimeType("Video", container, cmpOr(mimeTypes[container], "video/"+container))
@@ -449,7 +446,7 @@ func (h *Handler) playDLNAVideo(w http.ResponseWriter, r *http.Request, play dln
 	defer done()
 	header := w.Header()
 	if chosen.decision.DirectPlay && !play.Seek {
-		container := containerOfName(chosen.version.Filename)
+		container := h.versionContainer(r.Context(), chosen.version)
 		resource := dlna.Resource{}
 		resource.MimeType, resource.OrgPn = play.Profile.MimeType("Video", container, cmpOr(mimeTypes[container], "application/octet-stream"))
 		header.Set("ContentFeatures.DLNA.ORG", dlna.ContentFeatures(resource))
