@@ -1050,13 +1050,14 @@ func (h *Handler) playlistsViewItem() library.Item {
 		Name: library.PlaylistsName(h.Accounts.Settings().Language), CollectionType: "playlists"})
 }
 
-// playlistsView describes the Playlists view.
+// playlistsView describes the Playlists view, a UserView as Jellyfin's
+// views and details describe it.
 func (h *Handler) playlistsView(r *http.Request, user accounts.User) (BaseItemDto, error) {
 	dtos, err := h.folderDtos(r, user, []library.Item{h.playlistsViewItem()})
 	if err != nil {
 		return BaseItemDto{}, err
 	}
-	dtos[0].Type = "ManualPlaylistsFolder"
+	dtos[0].Type = "UserView"
 	return dtos[0], nil
 }
 
@@ -1499,9 +1500,18 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 		if detail || fields.has("ParentId") {
 			dto.ParentId = playlistsViewID.String()
 		}
+		// A playlist is no file to download, as in Jellyfin.
+		if detail || fields.has("CanDownload") {
+			dto.CanDownload = new(false)
+		}
+		if detail || fields.has("Chapters") {
+			dto.Chapters = &[]ChapterInfo{}
+		}
+		if detail || fields.has("RecursiveItemCount") {
+			dto.RecursiveItemCount = new(len(entries))
+		}
 		if detail {
 			dto.Etag = nameID("etag", p.ID.String())
-			dto.CanDownload = new(false)
 			dto.ExternalUrls = &[]MediaUrl{}
 			dto.EnableMediaSourceDisplay = new(true)
 			dto.PlayAccess = "Full"
@@ -1513,8 +1523,6 @@ func (h *Handler) playlistDtos(r *http.Request, user accounts.User, lists []play
 			dto.DisplayPreferencesId = p.ID.String()
 			dto.LockedFields = &[]string{}
 			dto.LockData = new(false)
-			dto.Chapters = &[]ChapterInfo{}
-			dto.RecursiveItemCount = new(len(entries))
 			dto.CumulativeRunTimeTicks = new(int64(runtime / 100))
 			added := time.Time{}
 			if p.LastAdded != nil {
