@@ -357,10 +357,17 @@ A listing of a library or a collection that takes more than 5 seconds logs "A li
 
 A database statement that runs for 500 milliseconds or longer logs "A database statement was slow" (Info), so that a query grown slow, as a library grows, shows in the log:
 
-- `duration`: from sending the statement until its rows are read. For a query sent in a batch, from asking for its result;
+- `duration`: from sending the statement until its rows are read;
 - `sql`: the statement on one line, cut at 300 characters. Its values, sent apart from the statement, are never logged: they can hold passwords or tokens;
 - `error`: what PostgreSQL answered, when the statement failed;
 - `skipped`: when PostgreSQL is slow for every statement, the log takes 20 such lines at once, then one a second. This counts the lines left out since the last one.
+
+Polyfin also sends some statements together, as a batch, such as the lock and the update that save a listing's titles. PostgreSQL runs them one after the other and answers the first only once the whole batch is done, committed when it does not run inside a transaction, so no statement of a batch can be timed alone. A batch that takes 500 milliseconds or longer logs "A database batch was slow" (Info), once, and none of its statements is logged on its own:
+
+- `duration`: from sending the batch until all its results are read, its commit included;
+- `queries`: how many statements the batch held;
+- `sql`: its statements in their order, separated by `; `, each on one line and cut at 120 characters, without their values. A statement the batch holds several times is told once, followed by how many times, such as `(3 times)`. Past 8 different statements, the line says how many others there are;
+- `error` and `skipped`: as for a statement. Batches and statements share the 20 lines at once.
 
 Copies of rows in bulk, such as a restore's, are not timed.
 
