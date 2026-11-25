@@ -1054,7 +1054,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 			// Jellyfin API's answers.
 			Silo: silo.New(silo.Options{ServerID: serverID, Version: version, Accounts: store, Jellyfin: jellyfinAPI, Genres: jellyfinAPI.CatalogGenres,
 				DB: pool, QuickConnect: quickConnect, SignIns: signIns, BoxSets: movieCollections, Logger: logger,
-				ContainerTracks: jellyfinAPI.ContainerTracks}),
+				ContainerTracks: jellyfinAPI.ContainerTracks, TrackChoices: jellyfinAPI, Tiles: images.Tile, Signer: playback.NewSigner(secret)}),
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),

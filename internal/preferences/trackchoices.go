@@ -2,6 +2,10 @@ package preferences
 
 import (
 	"context"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/database"
@@ -67,6 +71,25 @@ func (s *Store) TrackChoices(ctx context.Context, user accounts.ID) (map[account
 		choices[title] = c
 	}
 	return choices, rows.Err()
+}
+
+// TrackChoice returns the track choice user made for title, with when it
+// last changed; the zero choice, and the zero time, for none.
+func (s *Store) TrackChoice(ctx context.Context, user, title accounts.ID) (TrackChoice, time.Time, error) {
+	var c TrackChoice
+	var subtitle string
+	var chosen time.Time
+	err := s.db.QueryRow(ctx, `SELECT audio_language, audio_variant, subtitle, subtitle_language, subtitle_forced, subtitle_hearing_impaired,
+		chosen_at FROM track_choices WHERE user_id = $1 AND title_id = $2`, user, title).
+		Scan(&c.AudioLanguage, &c.AudioVariant, &subtitle, &c.Subtitle.Language, &c.Subtitle.Forced, &c.Subtitle.HearingImpaired, &chosen)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TrackChoice{}, time.Time{}, nil
+	}
+	if err != nil {
+		return TrackChoice{}, time.Time{}, err
+	}
+	c.Subtitle.Off = subtitle == "off"
+	return c, chosen, nil
 }
 
 // PutTrackChoice replaces the track choice user made for title, or

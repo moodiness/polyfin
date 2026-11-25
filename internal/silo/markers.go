@@ -2,6 +2,7 @@ package silo
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,6 +10,11 @@ import (
 
 	"github.com/moodiness/polyfin/internal/mediasegments"
 )
+
+func (s *Server) markerRoutes() {
+	s.mux.HandleFunc("GET /api/v2/markers/items/{item_id}", s.profiled(s.itemMarkers))
+	s.mux.HandleFunc("GET /api/v2/markers/files/{file_id}", s.profiled(s.versionMarkers))
+}
 
 // watchMarker is a span the apps offer to skip, with where it comes from:
 // source is the class of source, "online" for a segment database's and
@@ -49,6 +55,22 @@ type markers struct {
 	firstMarkers
 	Segments []markerOccurrence `json:"marker_segments"`
 }
+
+// fileMarkers are the skip markers of a version as the markers' own
+// routes answer them: the first of each kind, an empty object for a kind
+// it has none of, and every one.
+type fileMarkers struct {
+	FileID   string             `json:"file_id"`
+	Intro    markerSegment      `json:"intro"`
+	Credits  markerSegment      `json:"credits"`
+	Recap    markerSegment      `json:"recap"`
+	Preview  markerSegment      `json:"preview"`
+	Segments []markerOccurrence `json:"marker_segments"`
+}
+
+// markerSegment is a marker, or {} for none: a nil embedded pointer
+// adds no field.
+type markerSegment struct{ *watchMarker }
 
 // markerKinds are the apps' kinds of Polyfin's segment types. Commercial
 // breaks have none: the apps know no such marker.
@@ -151,4 +173,54 @@ func detailMarkers(r *http.Request, versions []watchVersion) firstMarkers {
 		}
 	}
 	return m
+}
+
+// itemMarkers answers the skip markers of a movie's or an episode's first
+// version, the one it plays unless the app asks another.
+func (s *Server) itemMarkers(w http.ResponseWriter, r *http.Request, v viewer) {
+	_, versions, ok := s.watchable(w, r, v, r.PathValue("item_id"))
+	if !ok {
+		return
+	}
+	if len(versions) == 0 {
+		problem(w, http.StatusNotFound, "not_found", "This title has no file.")
+		return
+	}
+	s.writeMarkers(w, r, v, versions[0])
+}
+
+// versionMarkers answers the skip markers of a version, by the number the
+// apps know it by, of a title the user may play.
+func (s *Server) versionMarkers(w http.ResponseWriter, r *http.Request, v viewer) {
+	file := r.PathValue("file_id")
+	id, err := s.numbers.id(r.Context(), file)
+	if errors.Is(err, errUnknownNumber) {
+		problem(w, http.StatusNotFound, "not_found", "File not found.")
+		return
+	}
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	// The Jellyfin API describes a title opened by any of its versions.
+	_, versions, ok := s.watchable(w, r, v, id.String())
+	if !ok {
+		return
+	}
+	at := slices.IndexFunc(versions, func(version fileVersion) bool { return version.FileID == file })
+	if at < 0 {
+		problem(w, http.StatusNotFound, "not_found", "File not found.")
+		return
+	}
+	s.writeMarkers(w, r, v, versions[at])
+}
+
+func (s *Server) writeMarkers(w http.ResponseWriter, r *http.Request, v viewer, version fileVersion) {
+	found, err := s.markersOf(r, v, version.sourceID)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, fileMarkers{FileID: version.FileID, Intro: markerSegment{found.Intro}, Credits: markerSegment{found.Credits},
+		Recap: markerSegment{found.Recap}, Preview: markerSegment{found.Preview}, Segments: found.Segments})
 }

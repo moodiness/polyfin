@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/homerows"
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/silo"
 	"github.com/moodiness/polyfin/internal/silo/silotest"
 	"github.com/moodiness/polyfin/internal/stremio"
@@ -43,7 +44,8 @@ func servingSilo(t *testing.T, s testServer) siloApps {
 	t.Helper()
 	api := silo.New(silo.Options{ServerID: testServerID, Version: "test", Accounts: s.store, Jellyfin: s.handler, Genres: s.handler.CatalogGenres, DB: s.pool,
 		QuickConnect: s.handler.QuickConnect, SignIns: s.handler.SignIns, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		ContainerTracks: s.handler.ContainerTracks})
+		ContainerTracks: s.handler.ContainerTracks, TrackChoices: s.handler, Tiles: s.handler.Thumbnails.Tile,
+		Signer: playback.NewSigner([]byte("silo test"))})
 	site := httptest.NewServer(api)
 	t.Cleanup(site.Close)
 	return siloApps{testServer: s, site: site.URL}
@@ -606,9 +608,10 @@ func TestSiloAppsBrowseSeries(t *testing.T) {
 }
 
 // Silo's apps get the skip markers Jellyfin apps get for each version,
-// with where each comes from: TheIntroDB's intro, SkipDB's recap with
-// SkipDB's confidence, and the credits of a version's chapters in place of
-// the database's. With the skip buttons off, they get none.
+// in the watch detail and from the markers' own routes, with where each
+// comes from: TheIntroDB's intro, SkipDB's recap with SkipDB's confidence,
+// and the credits of a version's chapters in place of the database's.
+// With the skip buttons off, they get none.
 func TestSiloAppsGetSkipMarkers(t *testing.T) {
 	t.Parallel()
 	p := skipping(t, mediasegments.TheIntroDB, mediasegments.SkipDB)
@@ -663,6 +666,19 @@ func TestSiloAppsGetSkipMarkers(t *testing.T) {
 	}
 	if !same(detail.Intro, database) || !same(detail.Recap, recap) {
 		t.Errorf("detail's intro %+v, recap %+v", detail.Intro, detail.Recap)
+	}
+	// The markers' own routes answer the same: a title's first version's,
+	// and a version's by its number, the title opened by that version.
+	var byTitle, byVersion markers
+	a.get(t, "/api/v2/markers/items/"+p.third, token, profile, &byTitle)
+	a.get(t, "/api/v2/markers/files/"+a.fileOf(t, p.third, token, profile, 2), token, profile, &byVersion)
+	if !same(byTitle.Intro, database) || !same(byTitle.Credits, marker{3072, 3304, "online", mediasegments.TheIntroDB, "polyfin.database:v1", nil}) ||
+		len(byTitle.Segments) != 3 {
+		t.Errorf("by title: %+v", byTitle)
+	}
+	if !same(byVersion.Credits, marker{3080, 3149, "scanner", "", "polyfin.chapters:v1", nil}) || !same(byVersion.Recap, recap) ||
+		len(byVersion.Segments) != 3 {
+		t.Errorf("by version: %+v", byVersion)
 	}
 
 	p.setting(t, func(settings *accounts.Settings) { settings.SkipButtons = false })
