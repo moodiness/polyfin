@@ -32,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/boxset"
 	"github.com/moodiness/polyfin/internal/forwarded"
+	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/quickconnect"
 	"github.com/moodiness/polyfin/internal/throttle"
 )
@@ -81,6 +82,16 @@ type Options struct {
 	// HLS stream are named by them (see renditions.go). Nil, or a track
 	// left out, is a number not known.
 	ContainerTracks func(ctx context.Context, playSession string) map[int]uint64
+	// TrackChoices reads and keeps the tracks users chose on series and
+	// movies, which their next plays follow in every app (see
+	// trackprefs.go).
+	TrackChoices TrackChoices
+	// Tiles returns a tile of a version's scrubbing thumbnails at a width,
+	// thumbnails.ErrNotFound for none (see thumbnails.Service.Tile); nil
+	// for none at all. Signer signs the addresses the apps load them at
+	// (see trickplay.go).
+	Tiles  func(ctx context.Context, version accounts.ID, width, index int) ([]byte, error)
+	Signer playback.Signer
 
 	// now is the clock; time.Now by default.
 	now func() time.Time
@@ -117,6 +128,9 @@ func New(options Options) *Server {
 	s.probeRoutes()
 	s.shuffleRoutes()
 	s.deviceLoginRoutes()
+	s.markerRoutes()
+	s.trickplayRoutes()
+	s.trackPreferenceRoutes()
 	// The fallback serves no operation: it is not one of the routes.
 	s.mux.ServeMux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
 		s.unknown.report(r)

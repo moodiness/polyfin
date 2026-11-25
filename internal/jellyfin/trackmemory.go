@@ -69,9 +69,17 @@ func (h *Handler) userTrackChoices(ctx context.Context, user accounts.ID) (map[a
 	return choices, nil
 }
 
-// putTrackChoice keeps the track choice of user on title, forgetting it
-// when empty.
-func (h *Handler) putTrackChoice(ctx context.Context, user, title accounts.ID, choice preferences.TrackChoice) error {
+// TrackChoice returns the track choice of user on title, a series or a
+// movie, with when it last changed; the zero choice for none. Silo's
+// apps read it (see silo.TrackChoices).
+func (h *Handler) TrackChoice(ctx context.Context, user, title accounts.ID) (preferences.TrackChoice, time.Time, error) {
+	return h.Preferences.TrackChoice(ctx, user, title)
+}
+
+// PutTrackChoice keeps the track choice of user on title, forgetting it
+// when empty: from what a playback report says plays, and from Silo's
+// apps.
+func (h *Handler) PutTrackChoice(ctx context.Context, user, title accounts.ID, choice preferences.TrackChoice) error {
 	h.trackChoices.mu.Lock()
 	defer h.trackChoices.mu.Unlock()
 	err := h.Preferences.PutTrackChoice(ctx, user, title, choice)
@@ -166,7 +174,7 @@ func (h *Handler) rememberTracks(ctx context.Context, user accounts.User, item l
 	if choice == stored {
 		return
 	}
-	if err := h.putTrackChoice(ctx, user.ID, title, choice); err != nil {
+	if err := h.PutTrackChoice(ctx, user.ID, title, choice); err != nil {
 		h.Logger.Warn("The tracks a user chose could not be remembered", "error", err)
 	}
 }

@@ -169,6 +169,9 @@ type item struct {
 	ParentPrimaryImageTag    string
 	SeriesPrimaryImageTag    string
 	MediaSources             []mediaSource
+	// Trickplay describes the scrubbing thumbnails of a title's versions,
+	// by media source and width, in a title's description.
+	Trickplay map[string]map[int]trickplayInfo
 }
 
 type person struct {
@@ -186,7 +189,10 @@ type userData struct {
 }
 
 type mediaSource struct {
-	Id                         string
+	Id string
+	// ETag is the version's own identifier, which Id is not for the
+	// version a title stands for (see jellyfin.sourceID).
+	ETag                       string
 	Name                       string
 	Container                  string
 	Size                       *int64

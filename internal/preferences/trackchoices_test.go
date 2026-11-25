@@ -8,10 +8,10 @@ import (
 )
 
 // Track choices are kept per user and title, with an audio track's
-// variant, an empty one forgets the title's, a new one replaces the
-// variant, and a subtitle turned off keeps no language. Forgetting a
-// user's choices, variants included, or resetting their preferences,
-// leaves other users'.
+// variant, and read one title at a time with when they changed; an empty
+// one forgets the title's, a new one replaces the variant, and a subtitle
+// turned off keeps no language. Forgetting a user's choices, variants
+// included, or resetting their preferences, leaves other users'.
 func TestTrackChoicesPerUserAndTitle(t *testing.T) {
 	t.Parallel()
 	store, users := setup(t)
@@ -38,6 +38,12 @@ func TestTrackChoicesPerUserAndTitle(t *testing.T) {
 	put(sam, dubbed, france)
 	put(kim, series, japanese)
 	check("kept", sam, map[accounts.ID]TrackChoice{series: japanese, movie: {Subtitle: SubtitleChoice{Off: true}}, dubbed: france})
+	if got, at, err := store.TrackChoice(ctx, sam, dubbed); err != nil || got != france || at.IsZero() {
+		t.Errorf("one title's: %v %v %v, want %v at a time", got, at, err, france)
+	}
+	if got, at, err := store.TrackChoice(ctx, kim, movie); err != nil || got != (TrackChoice{}) || !at.IsZero() {
+		t.Errorf("a title without one: %v %v %v", got, at, err)
+	}
 
 	put(sam, movie, TrackChoice{})
 	put(sam, dubbed, TrackChoice{AudioLanguage: "fre"})

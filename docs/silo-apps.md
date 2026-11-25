@@ -213,6 +213,7 @@ Movies and episodes play. The app sends what it plays, and Polyfin answers with 
 
 Tracks:
 
+- **Video:** each version lists its video tracks, with their codec, size, frame rate, dynamic range and Dolby Vision profile, as Silo describes them. A Silo client that finds no video track in a version plays it as audio alone, without a picture.
 - **Audio:** the track the app chooses, or the user's preferred one.
 - **Text subtitles:** WebVTT files beside the video.
 - **Picture subtitles:** burned in when chosen.
@@ -223,6 +224,8 @@ Tracks:
 During and after a playback:
 
 - **Skip buttons:** for the intro, recap and credits, and in the Android apps for previews, those Jellyfin apps get (see [Skip markers](#skip-markers)).
+- **Seek-bar previews:** the scrubbing thumbnails Jellyfin apps get (see [Seek-bar previews](#seek-bar-previews)).
+- **Remembered audio and subtitles:** the track choices Polyfin remembers on a series or a movie, which the apps read and keep (see [Remembered audio and subtitles](#remembered-audio-and-subtitles)).
 - **Progress and stop:** these reports, numbered per installation, keep the resume point.
 - **Playbacks kept:** each user keeps their 16 most recent playbacks, and the server 1,024 in all. One more ends a stopped playback first, then the one unused the longest. A playback nobody used for a day is forgotten too. A playback no longer kept answers as unknown (404), and its resume point stays.
 - **What the app sends:** each list of containers or codecs holds up to 64 names of 64 bytes, and the identifiers of an attempt, a new plan and a stop, like the quality asked, 128 bytes. A request past that is refused (422).
@@ -244,7 +247,7 @@ During and after a playback:
 - **The apps' own collections:** the app lists none, and making or changing one is refused as not supported. Make collections in Jellyfin apps or the web player.
 - **Taking a series off Next Up:** refused as not supported. Playing the series moves it on.
 - **Hiding watches from the history:** mark a title unplayed instead.
-- **Other features:** refreshing a person's details, trending or popular titles, and trickplay.
+- **Other features:** refreshing a person's details, and trending or popular titles.
 - **Playback features the apps can use but Polyfin does not offer, and so does not announce:**
   - the app's own player showing the file's subtitles, when it plays the file as it is;
   - quality adapting itself to buffering and to the measured speed during a playback;
@@ -282,6 +285,46 @@ The markers come in these fields:
 - **The detail's own `intro`, `credits`, `recap` and `preview`** are those of the version `file_id` names, when the app names one. Otherwise they are the first of each kind among the versions, in their order, as Silo answers them.
 
 A version whose markers cannot be read is listed without any, and still plays.
+
+The markers' own routes answer the same markers, as Silo's `FileMarkers`:
+
+- `GET /api/v2/markers/items/{item_id}`: those of the title's first version, the one it plays unless the app asks another.
+- `GET /api/v2/markers/files/{file_id}`: those of the version of that number.
+- A kind the version has none of is an empty object, and `marker_segments` an empty list: a version without markers is never "not found".
+- A title the user may not see, a series, and a number that names no version of a title they may see answer 404.
+- The apps cannot change markers: Polyfin's come from its sources (see [Skip buttons](skip-segments.md)).
+
+## Seek-bar previews
+
+Silo's apps show the scrubbing thumbnails Jellyfin apps get as previews on the seek bar (see [Scrubbing thumbnails](scrubbing-thumbnails.md)).
+
+- **Which versions:** `trickplay_available`, on each version of the watch details, tells which have them.
+- **`GET /api/v2/watch/{id}/trickplay?file_id=`** answers a version's previews: a thumbnail's size, the time each covers (`interval_ms`), how many there are, the grid of a sheet, and the address of each sheet, one of Jellyfin's tiles as a JPEG.
+- **One width:** a version with thumbnails at several widths gives its widest, as Silo gives one.
+- **Sheet addresses:** they work without credentials, as the apps load them as images, for an hour, until `expires_at`. The apps then read the previews again for fresh ones. A sheet asked later, or at an address changed, is refused (403).
+- **None:** a version without thumbnails, or any while **Thumbnails when moving through a title** is off, answers 404, as Silo answers a file without previews.
+- **Access:** a title the user may not see, or a `file_id` that is not one of its versions, answers 404, and a request without `file_id` 422.
+
+## Remembered audio and subtitles
+
+Silo's apps read and keep a series' audio and subtitle choice. These are the track choices Polyfin remembers on a series or a movie for every app (see [Remembered track choices](audio-and-subtitle-tracks.md#remembered-track-choices)): a language, never a track's place.
+
+| Route | What it does |
+|---|---|
+| `GET /api/v2/audio-prefs/{series_id}` | Answers the audio language chosen, in its regional variant when one was chosen, such as `pt-BR`. |
+| `PUT /api/v2/audio-prefs/{series_id}` | Keeps the language sent, else its signature's. No language, the original language (`x-silo-original`) or no track (`-1`) forgets the audio choice. |
+| `DELETE /api/v2/audio-prefs/{series_id}` | Forgets the audio choice. |
+| `GET /api/v2/subtitle-prefs/{series_id}` | Answers subtitles off (`subtitle_track_index` -1, `subtitle_mode` `off`), or a language with its forced and hearing-impaired flags, shown `always`. |
+| `PUT /api/v2/subtitle-prefs/{series_id}` | Keeps subtitles off for no track (-1) or the mode `off`. Otherwise keeps the language sent, else its signature's, with the signature's forced and hearing-impaired flags. No language forgets the subtitle choice. |
+| `DELETE /api/v2/subtitle-prefs/{series_id}` | Forgets the subtitle choice. |
+
+- **The track's place:** Polyfin keeps none, as it differs between episodes and versions. A language chosen answers `audio_track_index` or `subtitle_track_index` 0, and its `track_signature` names the language.
+- **When:** `updated_at` is when the choice last changed.
+- **None:** a title without a choice of that kind answers 404, as Silo answers a series without one. Keeping and forgetting answer 204.
+- **The user's settings:** while **Set audio track based on previous item** or **Set subtitle track based on previous item** is off, that kind is neither answered nor kept, as for Jellyfin apps.
+- **Titles:** a series or a movie the user may see; any other answers 404.
+- **What follows them:** the next plays of the title in every app. A Silo app that names no audio track gets the chosen language. Its playbacks still show only the subtitle it asks for.
+- **Not kept:** Silo's `show_forced_subtitles` and `external_subtitle_path`.
 
 ## Home layout
 

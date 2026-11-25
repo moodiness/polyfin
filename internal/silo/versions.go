@@ -3,6 +3,7 @@ package silo
 import (
 	"cmp"
 	"context"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +21,71 @@ type audioTrack struct {
 	Language string `json:"language,omitempty"`
 	Title    string `json:"title,omitempty"`
 	Default  bool   `json:"default"`
+}
+
+// videoTrack is a video track of a version, as the contract's VideoTrack
+// describes it: bitrate in kb/s, the range and its type as Jellyfin names
+// them (SDR, HDR10, DOVIWithHDR10…). An app tells a version's video by
+// it: a version listing audio tracks and no video track reads as audio
+// alone.
+type videoTrack struct {
+	Codec               string `json:"codec,omitempty"`
+	Profile             string `json:"profile,omitempty"`
+	Level               *int   `json:"level,omitempty"`
+	Width               *int   `json:"width,omitempty"`
+	Height              *int   `json:"height,omitempty"`
+	AspectRatio         string `json:"aspect_ratio,omitempty"`
+	Interlaced          bool   `json:"interlaced"`
+	FrameRate           string `json:"frame_rate,omitempty"`
+	BitDepth            *int   `json:"bit_depth,omitempty"`
+	Bitrate             int64  `json:"bitrate,omitempty"`
+	PixelFormat         string `json:"pixel_format,omitempty"`
+	ReferenceFrames     *int   `json:"reference_frames,omitempty"`
+	ColorRange          string `json:"color_range,omitempty"`
+	ColorSpace          string `json:"color_space,omitempty"`
+	ColorTransfer       string `json:"color_transfer,omitempty"`
+	ColorPrimaries      string `json:"color_primaries,omitempty"`
+	VideoRange          string `json:"video_range,omitempty"`
+	VideoRangeType      string `json:"video_range_type,omitempty"`
+	HDR10Plus           bool   `json:"hdr10_plus"`
+	DVProfile           *int   `json:"dv_profile,omitempty"`
+	DVLevel             *int   `json:"dv_level,omitempty"`
+	DVBLCompatID        *int   `json:"dv_bl_compat_id,omitempty"`
+	DVConfigPresent     bool   `json:"dv_config_present"`
+	DVBLCompatIDPresent bool   `json:"dv_bl_compat_id_present"`
+	DVRPUPresent        bool   `json:"dv_rpu_present"`
+	DVELPresent         bool   `json:"dv_el_present"`
+	DVBLPresent         bool   `json:"dv_bl_present"`
+	Title               string `json:"title,omitempty"`
+}
+
+// videoTrackOf describes a video stream of a version.
+func videoTrackOf(stream playback.MediaStream) videoTrack {
+	known := func(value string) string {
+		if strings.EqualFold(value, "Unknown") {
+			return ""
+		}
+		return value
+	}
+	flag := func(value *int) bool { return value != nil && *value != 0 }
+	t := videoTrack{Codec: stream.Codec, Profile: stream.Profile, Width: stream.Width, Height: stream.Height, AspectRatio: stream.AspectRatio,
+		Interlaced: stream.IsInterlaced, BitDepth: stream.BitDepth, PixelFormat: stream.PixelFormat, ReferenceFrames: stream.RefFrames,
+		ColorRange: stream.ColorRange, ColorSpace: stream.ColorSpace, ColorTransfer: stream.ColorTransfer, ColorPrimaries: stream.ColorPrimaries,
+		VideoRange: known(stream.VideoRange), VideoRangeType: known(stream.VideoRangeType),
+		HDR10Plus: stream.Hdr10PlusPresentFlag != nil && *stream.Hdr10PlusPresentFlag, DVProfile: stream.DvProfile, DVLevel: stream.DvLevel,
+		DVBLCompatID: stream.DvBlSignalCompatibilityId, DVConfigPresent: stream.DvProfile != nil,
+		DVBLCompatIDPresent: stream.DvBlSignalCompatibilityId != nil, DVRPUPresent: flag(stream.RpuPresentFlag),
+		DVELPresent: flag(stream.ElPresentFlag), DVBLPresent: flag(stream.BlPresentFlag), Title: stream.Title}
+	if stream.Level != nil && *stream.Level > 0 {
+		t.Level = new(int(math.Round(*stream.Level)))
+	}
+	if rate := cmp.Or(stream.RealFrameRate, stream.AverageFrameRate); rate != nil && *rate > 0 {
+		t.FrameRate = strconv.FormatFloat(*rate, 'f', -1, 64)
+	}
+	if stream.BitRate != nil && *stream.BitRate > 0 {
+		t.Bitrate = *stream.BitRate / 1000
+	}
+	return t
 }
 
 // subtitleTrack is a subtitle of a version: index is the file's own
@@ -52,10 +118,12 @@ type fileVersion struct {
 	AddedAt                  string          `json:"added_at"`
 	EffectiveAudioTrackIndex *int            `json:"effective_audio_track_index,omitempty"`
 	EffectiveAudioLanguage   string          `json:"effective_audio_language,omitempty"`
+	VideoTracks              []videoTrack    `json:"video_tracks"`
 	AudioTracks              []audioTrack    `json:"audio_tracks"`
 	SubtitleTracks           []subtitleTrack `json:"subtitle_tracks"`
-	// sourceID is the version's media source's identifier.
-	sourceID string
+	// sourceID is the version's media source's identifier, and versionID
+	// the version's own (see mediaSource.ETag).
+	sourceID, versionID string
 }
 
 // resolution names a height as the apps do.
@@ -124,15 +192,19 @@ func languageTag(code string) string {
 // versionOf describes a version, numbered as number.
 func versionOf(source mediaSource, number string, added time.Time) fileVersion {
 	v := fileVersion{FileID: number, FileName: source.Name, Container: strings.Split(source.Container, ",")[0], AddedAt: instant(added),
-		AudioTracks: []audioTrack{}, SubtitleTracks: []subtitleTrack{}, Duration: int64(seconds(source.RunTimeTicks))}
+		VideoTracks: []videoTrack{}, AudioTracks: []audioTrack{}, SubtitleTracks: []subtitleTrack{}, Duration: int64(seconds(source.RunTimeTicks))}
 	if source.Size != nil {
 		v.FileSize = *source.Size
 	}
 	if source.Bitrate != nil {
 		v.Bitrate = *source.Bitrate / 1000
 	}
-	if video := streamsOf(source, "Video"); len(video) > 0 {
+	video := streamsOf(source, "Video")
+	if len(video) > 0 {
 		v.CodecVideo, v.Resolution, v.HDR = video[0].Codec, resolution(intOf(video[0].Height)), video[0].VideoRange == "HDR"
+	}
+	for _, stream := range video {
+		v.VideoTracks = append(v.VideoTracks, videoTrackOf(stream))
 	}
 	played, hasAudio := defaultAudio(source)
 	for n, stream := range streamsOf(source, "Audio") {
@@ -204,7 +276,7 @@ func versionsWith(i item, numbers map[accounts.ID]int32) []fileVersion {
 			continue
 		}
 		version := versionOf(source, strconv.Itoa(int(numbers[id])), added)
-		version.sourceID = source.Id
+		version.sourceID, version.versionID = source.Id, cmp.Or(source.ETag, source.Id)
 		if version.Duration == 0 {
 			version.Duration = int64(seconds(i.RunTimeTicks))
 		}
@@ -247,9 +319,12 @@ type watchVersion struct {
 	AddedAt                  string          `json:"added_at"`
 	EffectiveAudioTrackIndex *int            `json:"effective_audio_track_index,omitempty"`
 	EffectiveAudioLanguage   string          `json:"effective_audio_language,omitempty"`
+	VideoTracks              []videoTrack    `json:"video_tracks"`
 	AudioTracks              []audioTrack    `json:"audio_tracks"`
 	SubtitleTracks           []subtitleTrack `json:"subtitle_tracks"`
 	markers
+	// Trickplay tells whether the version has scrubbing thumbnails, which
+	// GET /api/v2/watch/{id}/trickplay describes.
 	Trickplay bool `json:"trickplay_available"`
 }
 
@@ -310,21 +385,31 @@ func (s *Server) subtitlePreferencesOf(r *http.Request, v viewer) (subtitlePrefe
 	return p, nil
 }
 
-// watch describes what the player needs of a movie or an episode: its
-// versions with their skip markers, the user's subtitle preferences and
-// progress.
-func (s *Server) watch(w http.ResponseWriter, r *http.Request, v viewer) {
-	i, ok := s.itemOf(w, r, v, r.PathValue("id"))
+// watchable reads a movie or an episode with its versions, answering the
+// request when the user may not see it, or it is no such title.
+func (s *Server) watchable(w http.ResponseWriter, r *http.Request, v viewer, id string) (item, []fileVersion, bool) {
+	i, ok := s.itemOf(w, r, v, id)
 	if !ok {
-		return
+		return item{}, nil, false
 	}
 	if i.Type != "Movie" && i.Type != "Episode" && i.Type != "Video" {
 		problem(w, http.StatusNotFound, "not_found", "Only movies and episodes play.")
-		return
+		return item{}, nil, false
 	}
 	versions, err := s.versionsOf(r.Context(), i)
 	if err != nil {
 		s.internalError(w, r, err)
+		return item{}, nil, false
+	}
+	return i, versions, true
+}
+
+// watch describes what the player needs of a movie or an episode: its
+// versions with their skip markers, the user's subtitle preferences and
+// progress.
+func (s *Server) watch(w http.ResponseWriter, r *http.Request, v viewer) {
+	i, versions, ok := s.watchable(w, r, v, r.PathValue("id"))
+	if !ok {
 		return
 	}
 	preferences, err := s.subtitlePreferencesOf(r, v)
@@ -347,7 +432,8 @@ func (s *Server) watch(w http.ResponseWriter, r *http.Request, v viewer) {
 			Container: version.Container, CodecVideo: version.CodecVideo, CodecAudio: version.CodecAudio, Resolution: version.Resolution,
 			HDR: version.HDR, Bitrate: version.Bitrate * 1000, DurationSeconds: version.Duration, AddedAt: version.AddedAt,
 			EffectiveAudioTrackIndex: version.EffectiveAudioTrackIndex, EffectiveAudioLanguage: version.EffectiveAudioLanguage,
-			AudioTracks: version.AudioTracks, SubtitleTracks: version.SubtitleTracks, markers: found})
+			VideoTracks: version.VideoTracks, AudioTracks: version.AudioTracks, SubtitleTracks: version.SubtitleTracks, markers: found,
+			Trickplay: len(i.Trickplay[version.sourceID]) > 0})
 	}
 	detail.firstMarkers = detailMarkers(r, detail.Versions)
 	writeJSON(w, http.StatusOK, detail)
