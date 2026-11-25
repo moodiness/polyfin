@@ -31,11 +31,13 @@ on:
 permissions:
   contents: read
 
-# A push cancels the run of the push before, on a pull request as on main:
-# the newest commit is the one tested.
+# As in CI: a push to a pull request cancels the run of the push before.
+# Each commit of main and each draft's run has a group of its own: a draft's
+# run, which runs nothing, never cancels the run of its ready head (on
+# #1525, the draft's run cancelled the ready one and no update was tested).
 concurrency:
-  group: upgrade-${{ github.ref }}
-  cancel-in-progress: true
+  group: upgrade-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.pull_request.draft && github.run_id || github.ref) || format('{0}-{1}', github.ref, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
 
 jobs:
   upgrade:
