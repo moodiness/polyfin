@@ -4,12 +4,12 @@ This page is for administrators. It covers when new versions come out and what t
 
 ## Releases and versions
 
-Polyfin's versions are numbered `0.<minor>.<patch>`, such as 0.90.1:
+Polyfin's versions are numbered `0.<minor>.<patch>`, such as 0.90.1. A release comes out as soon as what it holds is ready, and what it holds sets its number:
 
-| Release | When | What it holds |
-|---|---|---|
-| Minor, such as 0.90.0 | Every Tuesday, with what is ready since the last one. A week without changes has none. | New features and changes, fixes, and the database migrations they need. Announced in [Announcements](https://github.com/moodiness/polyfin/discussions/categories/announcements). |
-| Patch, such as 0.90.1 | Any day, when needed | Fixes for a regression, an app or a feature that no longer works, or a security problem. Other fixes wait for the next minor release. |
+| Release | What it holds |
+|---|---|
+| Minor, such as 0.91.0 | Something new: a feature, a setting, a new answer to apps, a change in how Polyfin behaves, or a database migration. It may hold fixes too. Announced in [Announcements](https://github.com/moodiness/polyfin/discussions/categories/announcements). |
+| Patch, such as 0.90.1 | Fixes only, with no database migration. |
 
 - **Release notes:** each release's notes on GitHub say what it adds and fixes, and, under **Upgrading**, what the update changes, such as a migration or a setting to look at.
 - **Fixes come to the latest minor release only,** as its patches: to get a fix, update to the latest release.
@@ -23,7 +23,7 @@ Polyfin becomes 1.0 once:
 - updating to it is tested from several older versions;
 - its answers to apps are checked against Jellyfin's, field by field, for each type of item;
 - its additions to the web player are checked against the jellyfin-web version they run on;
-- a minor release has gone through its week with no regression reported.
+- a minor release has gone a week with no regression reported.
 
 From 1.0 on, no 1.x release removes or changes a setting, your data or an API (the Jellyfin API Polyfin answers, and the admin app's) without a migration and a note under **Upgrading**. A change that would break one waits for 2.0.
 
