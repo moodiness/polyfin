@@ -55,10 +55,10 @@ const revision = "polyfin-1"
 // subtitles, books, diagnostics uploads, push notifications and the
 // notification inbox, remote control, subtitle searches and their timing,
 // requests, external sign-in, invitations, watch-together, theme music,
-// settings synced from the apps, the apps' onboarding tour, and the
-// rating sources shown, which the apps' sort menus read to list the
-// sorts by a source's rating. Each holds what the contract requires, all
-// off.
+// settings synced from the apps, the apps' onboarding tour, the realtime
+// events socket, and the rating sources shown, which the apps' sort menus
+// read to list the sorts by a source's rating. Each holds what the
+// contract requires, all off.
 var unsupportedDocuments = map[string]map[string]any{
 	"/api/v2/capabilities/downloads": {"bounded_creation": false, "subscription_mutations": false, "bounded_subscription_sync": false,
 		"subscription_reads": false, "bounded_manifests": false, "file_delivery": false, "enabled": false, "download_allowed": false,
@@ -106,7 +106,9 @@ var unsupportedDocuments = map[string]map[string]any{
 		"scopes": []any{}, "client_families": []any{}, "supports_batched_effective": false, "supports_idempotent_writes": false,
 		"supports_atomic_shortcuts": false, "supports_device_rename": false, "supports_overlay_images": false},
 	"/api/v2/onboarding/capabilities": {"available": false, "revision_guarded": false},
-	"/api/v2/capabilities/ratings":    {"sources": []any{}},
+	"/api/v2/events/capabilities": {"schema_version": 1, "subscribe_frame": false, "declared_channels": false,
+		"subscribe_grace_period_seconds": 0, "max_requested_channels": 0, "channels": []any{}},
+	"/api/v2/capabilities/ratings": {"sources": []any{}},
 }
 
 // publicDocuments are the documents read before signing in, which carry
