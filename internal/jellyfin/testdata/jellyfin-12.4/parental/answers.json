@@ -1,0 +1,164 @@
+{
+  "ChildUser": {
+    "status": 200
+  },
+  "EpisodeRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-8a4e490c1c3385e1ef3bd3464b3c57bc-fa488efa060769e2-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "EpisodesRestricted": {
+    "body": "Series not found",
+    "status": 404
+  },
+  "FavoriteRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-9a61e186c466ea8a1905fa2a80781163-20dda6f08c3ffdc1-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "Latest": {
+    "names": [
+      "Sintel"
+    ],
+    "status": 200
+  },
+  "MovieAllowed": {
+    "status": 200
+  },
+  "MovieRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-5cf1d711d344cfb60ff921b27aed244f-2bbae8abbe81802a-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "MovieUnrated": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-2c87c79f07c6acb29ad8f6e57a11ef31-cc39a1ce4d18e5c0-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "Movies": {
+    "names": [
+      "Sintel"
+    ],
+    "status": 200
+  },
+  "PlaybackInfoRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-12e9da5f4715952857565aec7c137a6d-13de2d972e2faec0-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "Policy": {
+    "status": 204
+  },
+  "PolicyAsMember": {
+    "status": 403
+  },
+  "PolicyDisableAdministrator": {
+    "body": "Administrators cannot be disabled.",
+    "status": 403
+  },
+  "PolicyEmptyBody": {
+    "body": {
+      "errors": {
+        "": [
+          "A non-empty request body is required."
+        ],
+        "newPolicy": [
+          "The newPolicy field is required."
+        ]
+      },
+      "status": 400,
+      "title": "One or more validation errors occurred.",
+      "traceId": "00-542865eb08dbcb99e46758026de5e5d7-60a57f1fe424339d-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+    },
+    "status": 400
+  },
+  "PolicyLastAdministrator": {
+    "body": "There must be at least one user in the system with administrative access.",
+    "status": 403
+  },
+  "PolicyUnknownKind": {
+    "body": {
+      "errors": {
+        "$.BlockUnratedItems[0]": [
+          "The JSON value could not be converted to Jellyfin.Data.Enums.UnratedItem. Path: $.BlockUnratedItems[0] | LineNumber: 0 | BytePositionInLine: 274."
+        ],
+        "newPolicy": [
+          "The newPolicy field is required."
+        ]
+      },
+      "status": 400,
+      "title": "One or more validation errors occurred.",
+      "traceId": "00-b0ef9af21880ac45f6369433c1775536-3b5b0c38d0226585-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+    },
+    "status": 400
+  },
+  "PolicyUnknownUser": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-70b6fcbfa226cab6e3fb9776a4ea37d2-b11f2554ce4833a3-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "Search": {
+    "names": [],
+    "status": 200
+  },
+  "SeasonRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-c07d3dd03df583bb9e0dfcdda48a942a-ea8ebe75a4fc4e38-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "SeasonsRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-c123f20a9e640ac2d7589ef4140c8533-04a35761eda58d7a-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "SeriesRestricted": {
+    "body": {
+      "status": 404,
+      "title": "Not Found",
+      "traceId": "00-5832487f501bbc5c76a6fcab1ce4edc1-b3690d45a46d81ee-00",
+      "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5"
+    },
+    "status": 404
+  },
+  "Shows": {
+    "names": [],
+    "status": 200
+  },
+  "Unrestricted": {
+    "status": 200
+  }
+}

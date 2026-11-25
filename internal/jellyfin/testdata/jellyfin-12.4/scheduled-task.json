@@ -1,0 +1,18 @@
+{
+  "Category": "",
+  "Description": "",
+  "Id": "",
+  "IsHidden": false,
+  "Key": "",
+  "LastExecutionResult": {
+    "EndTimeUtc": "",
+    "Id": "",
+    "Key": "",
+    "Name": "",
+    "StartTimeUtc": "",
+    "Status": ""
+  },
+  "Name": "",
+  "State": "",
+  "Triggers": []
+}

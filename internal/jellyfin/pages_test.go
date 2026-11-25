@@ -392,7 +392,7 @@ var pageShapes = shapeRules{
 }
 
 // TestPagesMatchJellyfin compares genre, studio and year pages and their
-// listings with those recorded from Jellyfin 12.2 by
+// listings with those recorded from Jellyfin 12.4 by
 // scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPagesMatchJellyfin(t *testing.T) {
 	t.Parallel()
@@ -414,7 +414,7 @@ func TestPagesMatchJellyfin(t *testing.T) {
 			t.Errorf("%s: %d %s", fixture, status, body)
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

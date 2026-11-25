@@ -1,0 +1,22 @@
+{
+  "Items": [
+    {
+      "AppName": "",
+      "AppVersion": "",
+      "Capabilities": {
+        "PlayableMediaTypes": [],
+        "SupportedCommands": [],
+        "SupportsMediaControl": false,
+        "SupportsPersistentIdentifier": false
+      },
+      "CustomName": "",
+      "DateLastActivity": "",
+      "Id": "",
+      "LastUserId": "",
+      "LastUserName": "",
+      "Name": ""
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

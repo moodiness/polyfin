@@ -1,0 +1,50 @@
+{
+  "Items": [
+    {
+      "AirDays": [],
+      "BackdropImageTags": [
+        ""
+      ],
+      "ChannelId": null,
+      "CommunityRating": 0,
+      "EndDate": "",
+      "Id": "",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "77520719c853fc6ec850b3b103f887a7": ""
+        },
+        "Primary": {
+          "3663d498eca2f1d1aea62fd86fb7a175": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "IsFolder": false,
+      "LocationType": "",
+      "MediaType": "",
+      "Name": "",
+      "OfficialRating": "",
+      "OriginalLanguage": "",
+      "PremiereDate": "",
+      "PrimaryImageAspectRatio": 0,
+      "ProductionYear": 0,
+      "RunTimeTicks": 0,
+      "ServerId": "",
+      "Status": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false,
+        "PlayedPercentage": 0,
+        "UnplayedItemCount": 0
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

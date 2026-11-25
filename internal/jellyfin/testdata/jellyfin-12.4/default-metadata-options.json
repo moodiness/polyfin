@@ -1,0 +1,8 @@
+{
+  "DisabledImageFetchers": [],
+  "DisabledMetadataFetchers": [],
+  "DisabledMetadataSavers": [],
+  "ImageFetcherOrder": [],
+  "LocalMetadataReaderOrder": [],
+  "MetadataFetcherOrder": []
+}

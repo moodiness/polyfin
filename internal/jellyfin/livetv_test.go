@@ -156,7 +156,7 @@ var liveShapes = shapeRules{
 
 func compareLive(t *testing.T, fixture string, body []byte) {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -557,7 +557,7 @@ func livePlaybackInfo(t *testing.T, s testServer, token, channel, profile string
 	if status != http.StatusOK || json.Unmarshal(body, &info) != nil || len(info.MediaSources) != 1 {
 		t.Fatalf("PlaybackInfo of a channel: %d %s", status, body)
 	}
-	raw, _ := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "livetv", "playback-info.json"))
+	raw, _ := os.ReadFile(filepath.Join(jellyfinFixtures, "livetv", "playback-info.json"))
 	var recorded struct{ Opened json.RawMessage }
 	_ = json.Unmarshal(raw, &recorded)
 	var want, got any

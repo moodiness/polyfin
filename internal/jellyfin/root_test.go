@@ -25,9 +25,11 @@ func TestRootFolderCountsAndSuggestionsAnswerAsJellyfin(t *testing.T) {
 		if status != http.StatusOK {
 			t.Fatalf("%s: %d %s", path, status, body)
 		}
-		// Polyfin's root folder has no path on disk.
+		// Polyfin's root folder has no path on disk, and no picture, which
+		// the recorded Jellyfin had made once its libraries were set up.
 		matchesFixture(t, "root-folder", body, shapeRules{absent: map[string][]string{"Path": {"root-folder"}, "ChannelId": {"root-folder"},
-			"ParentId": {"root-folder"}}, returned: map[string][]string{"CollectionType": {"root-folder"}}})
+			"ParentId": {"root-folder"}, "Primary": {"root-folder"}, "PrimaryImageAspectRatio": {"root-folder"}},
+			returned: map[string][]string{"CollectionType": {"root-folder"}}})
 		var root BaseItemDto
 		_ = json.Unmarshal(body, &root)
 		if root.Type != "UserRootFolder" || root.Name != "Media Folders" || root.Id != rootFolderID.String() || *root.ChildCount != len(views.Items) {

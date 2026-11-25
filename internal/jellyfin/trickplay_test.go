@@ -243,7 +243,7 @@ func TestTrickplayRoutes(t *testing.T) {
 func TestChapterImages(t *testing.T) {
 	t.Parallel()
 	s := withThumbnails(t)
-	probe, err := os.ReadFile("testdata/jellyfin-12.2/chapters/probe.json")
+	probe, err := os.ReadFile(jellyfinFixtures + "/chapters/probe.json")
 	if err != nil {
 		t.Fatal(err)
 	}

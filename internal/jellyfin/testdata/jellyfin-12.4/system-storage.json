@@ -1,0 +1,64 @@
+{
+  "CacheFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  },
+  "ImageCacheFolder": {
+    "FreeSpace": 0,
+    "Path": "",
+    "UsedSpace": 0
+  },
+  "InternalMetadataFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  },
+  "Libraries": [
+    {
+      "Folders": [
+        {
+          "DeviceId": "",
+          "FreeSpace": 0,
+          "Path": "",
+          "StorageType": "",
+          "UsedSpace": 0
+        }
+      ],
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "LogFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  },
+  "ProgramDataFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  },
+  "TranscodingTempFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  },
+  "WebFolder": {
+    "DeviceId": "",
+    "FreeSpace": 0,
+    "Path": "",
+    "StorageType": "",
+    "UsedSpace": 0
+  }
+}

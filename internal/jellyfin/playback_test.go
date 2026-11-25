@@ -26,7 +26,11 @@ import (
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
-const playbackFixtures = "testdata/jellyfin-12.2/playback"
+// jellyfinFixtures holds the answers recorded from a real Jellyfin by
+// scripts/jellyfin-fixtures.sh, named after the version Polyfin speaks.
+const jellyfinFixtures = "testdata/jellyfin-12.4"
+
+const playbackFixtures = jellyfinFixtures + "/playback"
 
 // mediaBytes are the bytes the test addons serve for a stream's file: a
 // Matroska header, then a few bytes more.
@@ -774,7 +778,7 @@ func TestSessionsShowWhatDevicesPlay(t *testing.T) {
 }
 
 // TestPlaybackResponsesMatchJellyfin compares playback responses with those
-// recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, for versions
+// recorded from Jellyfin 12.4 by scripts/jellyfin-fixtures.sh, for versions
 // analyzed as the clips Jellyfin played.
 func TestPlaybackResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()
@@ -800,7 +804,7 @@ func TestPlaybackResponsesMatchJellyfin(t *testing.T) {
 		"playback-info-remote": remoteInfo,
 		"sessions-now-playing": sessions,
 	} {
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

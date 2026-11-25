@@ -71,7 +71,7 @@ var musicShapes = shapeRules{
 
 // TestMusicResponsesMatchJellyfin compares the answers of music listings,
 // details, search, instant mixes and playback with those recorded from a
-// Jellyfin 12.2 music library by scripts/jellyfin-fixtures-music.sh, with
+// Jellyfin 12.4 music library by scripts/jellyfin-fixtures-music.sh, with
 // the same requests.
 func TestMusicResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()

@@ -1,0 +1,36 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "ChannelId": null,
+      "ChannelNumber": "",
+      "ChannelType": "",
+      "Id": "",
+      "ImageBlurHashes": {
+        "Primary": {
+          "da330e7b7f1448a352cc432a9bc28c77": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "IsFolder": false,
+      "LocationType": "",
+      "MediaType": "",
+      "Name": "",
+      "Number": "",
+      "ServerId": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      }
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

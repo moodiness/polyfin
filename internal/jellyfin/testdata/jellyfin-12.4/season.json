@@ -1,0 +1,83 @@
+{
+  "BackdropImageTags": [],
+  "CanDelete": false,
+  "CanDownload": false,
+  "ChannelId": null,
+  "Chapters": [],
+  "ChildCount": 0,
+  "DateCreated": "",
+  "DateLastMediaAdded": "",
+  "DisplayPreferencesId": "",
+  "EnableMediaSourceDisplay": false,
+  "Etag": "",
+  "ExternalUrls": [
+    {
+      "Name": "",
+      "Url": ""
+    }
+  ],
+  "GenreItems": [],
+  "Genres": [],
+  "Id": "",
+  "ImageBlurHashes": {
+    "Backdrop": {
+      "77520719c853fc6ec850b3b103f887a7": ""
+    },
+    "Primary": {
+      "3663d498eca2f1d1aea62fd86fb7a175": ""
+    }
+  },
+  "ImageTags": {},
+  "IndexNumber": 0,
+  "IsFolder": false,
+  "LocalTrailerCount": 0,
+  "LocationType": "",
+  "LockData": false,
+  "LockedFields": [],
+  "MediaType": "",
+  "Name": "",
+  "ParentBackdropImageTags": [
+    ""
+  ],
+  "ParentBackdropItemId": "",
+  "ParentId": "",
+  "Path": "",
+  "People": [
+    {
+      "Id": "",
+      "Name": "",
+      "Role": "",
+      "Type": ""
+    }
+  ],
+  "PlayAccess": "",
+  "PremiereDate": "",
+  "PrimaryImageAspectRatio": 0,
+  "ProductionYear": 0,
+  "ProviderIds": {
+    "Tmdb": ""
+  },
+  "RecursiveItemCount": 0,
+  "RemoteTrailers": [],
+  "SeriesId": "",
+  "SeriesName": "",
+  "SeriesPrimaryImageTag": "",
+  "SeriesStudio": "",
+  "ServerId": "",
+  "SortName": "",
+  "SpecialFeatureCount": 0,
+  "Studios": [],
+  "Taglines": [],
+  "Tags": [],
+  "Type": "",
+  "UserData": {
+    "IsFavorite": false,
+    "ItemId": "",
+    "Key": "",
+    "PlayCount": 0,
+    "PlaybackPositionTicks": 0,
+    "Played": false,
+    "PlayedPercentage": 0,
+    "UnplayedItemCount": 0
+  }
+}

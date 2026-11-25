@@ -12,9 +12,9 @@ import (
 	"github.com/moodiness/polyfin/internal/hls"
 )
 
-const playbackFixtures = "../jellyfin/testdata/jellyfin-12.2/playback/"
+const playbackFixtures = "../jellyfin/testdata/jellyfin-12.4/playback/"
 
-// recordedDecision is an entry of decisions.json: Jellyfin 12.2's answer
+// recordedDecision is an entry of decisions.json: Jellyfin 12.4's answer
 // for one clip, one DeviceProfile and one request.
 type recordedDecision struct {
 	Media   string

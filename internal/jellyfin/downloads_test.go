@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// recordedDownloads are Jellyfin 12.2's answers to downloads, recorded by
+// recordedDownloads are Jellyfin 12.4's answers to downloads, recorded by
 // scripts/jellyfin-fixtures.sh.
 func recordedDownloads(t *testing.T) map[string]struct {
 	Status             int
@@ -19,7 +19,7 @@ func recordedDownloads(t *testing.T) map[string]struct {
 	Body               any
 } {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "downloads", "answers.json"))
+	data, err := os.ReadFile(filepath.Join(jellyfinFixtures, "downloads", "answers.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestDownloadsServeAVersionAsAFile(t *testing.T) {
 func TestMoviesWithVersionsCanBeDownloaded(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
-	data, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "downloads", "can-download.json"))
+	data, err := os.ReadFile(filepath.Join(jellyfinFixtures, "downloads", "can-download.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

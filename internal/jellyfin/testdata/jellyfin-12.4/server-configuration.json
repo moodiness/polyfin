@@ -1,0 +1,99 @@
+{
+  "ActivityLogRetentionDays": 0,
+  "AllowClientLogUpload": false,
+  "CacheSize": 0,
+  "CastReceiverApplications": [
+    {
+      "Id": "",
+      "Name": ""
+    }
+  ],
+  "ChapterImageResolution": "",
+  "CodecsUsed": [],
+  "ContentTypes": [],
+  "CorsHosts": [
+    ""
+  ],
+  "DisableLiveTvChannelUserDataName": false,
+  "DisplaySpecialsWithinSeasons": false,
+  "DummyChapterDuration": 0,
+  "EnableCaseSensitiveItemIds": false,
+  "EnableExternalContentInSuggestions": false,
+  "EnableFolderView": false,
+  "EnableGroupingMoviesIntoCollections": false,
+  "EnableGroupingShowsIntoCollections": false,
+  "EnableLegacyAuthorization": false,
+  "EnableMetrics": false,
+  "EnableNormalizedItemByNameIds": false,
+  "EnableSlowResponseWarning": false,
+  "ImageExtractionTimeoutMs": 0,
+  "ImageSavingConvention": "",
+  "InactiveSessionThreshold": 0,
+  "IsPortAuthorized": false,
+  "IsStartupWizardCompleted": false,
+  "LibraryMetadataRefreshConcurrency": 0,
+  "LibraryMonitorDelay": 0,
+  "LibraryScanFanoutConcurrency": 0,
+  "LibraryUpdateDuration": 0,
+  "LogFileRetentionDays": 0,
+  "MaxAudiobookResume": 0,
+  "MaxResumePct": 0,
+  "MetadataCountryCode": "",
+  "MetadataOptions": [
+    {
+      "DisabledImageFetchers": [],
+      "DisabledMetadataFetchers": [],
+      "DisabledMetadataSavers": [],
+      "ImageFetcherOrder": [],
+      "ItemType": "",
+      "LocalMetadataReaderOrder": [],
+      "MetadataFetcherOrder": []
+    }
+  ],
+  "MetadataPath": "",
+  "MinAudiobookResume": 0,
+  "MinResumeDurationSeconds": 0,
+  "MinResumePct": 0,
+  "ParallelImageEncodingLimit": 0,
+  "PathSubstitutions": [],
+  "PluginRepositories": [
+    {
+      "Enabled": false,
+      "Name": "",
+      "Url": ""
+    }
+  ],
+  "PreferredMetadataLanguage": "",
+  "QuickConnectAvailable": false,
+  "RemoteClientBitrateLimit": 0,
+  "SaveMetadataHidden": false,
+  "ServerName": "",
+  "SkipDeserializationForBasicTypes": false,
+  "SlowResponseThresholdMs": 0,
+  "SortRemoveCharacters": [
+    ""
+  ],
+  "SortRemoveWords": [
+    ""
+  ],
+  "SortReplaceCharacters": [
+    ""
+  ],
+  "TrickplayOptions": {
+    "EnableHwAcceleration": false,
+    "EnableHwEncoding": false,
+    "EnableKeyFrameOnlyExtraction": false,
+    "Interval": 0,
+    "JpegQuality": 0,
+    "ProcessPriority": "",
+    "ProcessThreads": 0,
+    "Qscale": 0,
+    "ScanBehavior": "",
+    "TileHeight": 0,
+    "TileWidth": 0,
+    "WidthResolutions": [
+      0
+    ]
+  },
+  "UICulture": ""
+}

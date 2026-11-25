@@ -1,0 +1,23 @@
+[
+  {
+    "category": "",
+    "description": "",
+    "guid": "",
+    "name": "",
+    "overview": "",
+    "owner": "",
+    "versions": [
+      {
+        "VersionNumber": "",
+        "changelog": "",
+        "checksum": "",
+        "repositoryName": "",
+        "repositoryUrl": "",
+        "sourceUrl": "",
+        "targetAbi": "",
+        "timestamp": "",
+        "version": ""
+      }
+    ]
+  }
+]

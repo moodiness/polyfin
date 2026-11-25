@@ -74,7 +74,7 @@ func TestBrandingComesFromTheSettings(t *testing.T) {
 			t.Errorf("%s: %d %q %q", path, status, contentType, body)
 		}
 	}
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "branding-configuration-set.json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, "branding-configuration-set.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

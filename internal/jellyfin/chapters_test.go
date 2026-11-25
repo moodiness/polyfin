@@ -12,7 +12,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 )
 
-// recordedChapters are the chapters Jellyfin 12.2 returned for the clip
+// recordedChapters are the chapters Jellyfin 12.4 returned for the clip
 // scripts/jellyfin-fixtures.sh made, where they were asked.
 type recordedChapters struct {
 	Detail, Listing, NowPlaying []any
@@ -22,7 +22,7 @@ type recordedChapters struct {
 func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
-	fixtures := filepath.Join("testdata", "jellyfin-12.2", "chapters")
+	fixtures := filepath.Join(jellyfinFixtures, "chapters")
 	data, err := os.ReadFile(filepath.Join(fixtures, "chapters.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestChaptersAreThoseOfTheVersionOpened(t *testing.T) {
 func TestChaptersAreAlwaysSent(t *testing.T) {
 	t.Parallel()
 	p := playing(t)
-	probe, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "chapters", "probe.json"))
+	probe, err := os.ReadFile(filepath.Join(jellyfinFixtures, "chapters", "probe.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

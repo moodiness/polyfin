@@ -785,7 +785,7 @@ func TestFavoritePeopleAreListed(t *testing.T) {
 }
 
 // TestUserDataResponsesMatchJellyfin compares user data responses with those
-// recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, after the same
+// recorded from Jellyfin 12.4 by scripts/jellyfin-fixtures.sh, after the same
 // marks and resume points.
 func TestUserDataResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()
@@ -831,7 +831,7 @@ func TestUserDataResponsesMatchJellyfin(t *testing.T) {
 		"series-in-progress":   series,
 		"episodes-in-progress": episodes,
 	} {
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
