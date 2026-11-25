@@ -54,6 +54,7 @@ import (
 	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/mediasegments"
 	"github.com/moodiness/polyfin/internal/metrics"
+	"github.com/moodiness/polyfin/internal/moonfin"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/ocr"
 	"github.com/moodiness/polyfin/internal/pace"
@@ -764,7 +765,11 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	// Each user's taste profile, built in the background.
 	tastes := taste.New(pool, store, userData, lib, logger)
 	registerTasteTask(registry, tastes)
+	// What Moonfin's apps sync, and the administrator's defaults for them.
+	moonfinStore := moonfin.New(pool)
 	jellyfinAPI := jellyfin.New(jellyfin.Options{
+		Moonfin:          moonfinStore,
+		PolyfinVersion:   version,
 		ServerID:         serverID,
 		Sent:             sent,
 		Accounts:         store,
@@ -846,6 +851,7 @@ func serve(ctx context.Context, cfg config.Config, environ []string, restore *pe
 	var restartOnce sync.Once
 	adminOptions := admin.Options{
 		Version:       version,
+		Moonfin:       moonfinStore,
 		ServerID:      serverID,
 		Database:      pool,
 		Accounts:      store,

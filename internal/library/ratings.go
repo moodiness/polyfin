@@ -99,3 +99,20 @@ func (s *Service) Scores(item Item) (scores ratings.Scores, pending, ok bool) {
 	}
 	return scores, s.ratings.Pending(t), true
 }
+
+// TitleScores returns the scores kept of a movie or series MDBList is
+// asked about by its IMDb identifier, else its TMDB one, for Moonfin's
+// apps, whether or not the library lists it; kept is false when none are
+// kept, MDBList did not know it, or no key is saved. A title not kept, or
+// kept for too long, is asked about in the background, as a listing has
+// it asked about.
+func (s *Service) TitleScores(ctx context.Context, t ratings.Title) (scores ratings.Scores, kept bool) {
+	if !s.ratings.Enabled() {
+		return ratings.Scores{}, false
+	}
+	found := s.ratings.Kept(ctx, []ratings.Title{t})
+	if found == nil {
+		return ratings.Scores{}, false
+	}
+	return found[0], true
+}

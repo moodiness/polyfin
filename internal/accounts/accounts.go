@@ -164,6 +164,12 @@ type User struct {
 	// from changing it themselves (see SetOwnWebTheme).
 	WebTheme       string
 	WebThemeLocked bool
+	// Moonfin sets the user apart from the server's Moonfin, MoonfinOn or
+	// MoonfinOff, empty for the server's (see Settings.MoonfinFor);
+	// MoonfinLocked keeps the user from changing it themselves (see
+	// SetOwnMoonfin).
+	Moonfin       string
+	MoonfinLocked bool
 	// AudioRegion is the regional variant of audio the user prefers, one
 	// of localization.AudioVariants ("fr-CA"), empty for none. It refines
 	// the audio language they or the server chose for them, or names it
@@ -292,6 +298,9 @@ type UserChanges struct {
 	// check.
 	WebTheme       *string
 	WebThemeLocked *bool
+	// Moonfin and MoonfinLocked, see User: Moonfin is one of MoonfinChoices.
+	Moonfin       *string
+	MoonfinLocked *bool
 	// AudioRegion, see User: one of localization.AudioVariants or empty.
 	AudioRegion *string
 	// RemoteAccess, see User.
@@ -426,7 +435,7 @@ const userColumns = "id, name, is_administrator, is_hidden, is_disabled, created
 	"subtitle_management, image_tag, live_tv_management, quality_group, ends_on, ends_at, can_share, group_id, own_sections, metadata_language, two_step, torrent_streams, " +
 	"provider_issuer, provider_link_allowed, " +
 	"provider_only, web_theme, web_theme_locked, audio_region, remote_access, live_tv_channels, local_first, next_up_with_resume, " +
-	"boost_volume, convert_sound, interface_size, preferences_reset_at"
+	"boost_volume, convert_sound, interface_size, preferences_reset_at, moonfin, moonfin_locked"
 
 // fields lists where the userColumns of a row go.
 func (user *User) fields() []any {
@@ -441,7 +450,8 @@ func (user *User) fields() []any {
 		&user.GroupID, &user.OwnSections, &user.MetadataLanguage, &user.TwoStep, &user.TorrentStreams,
 		(*zeronull.Text)(&user.ProviderIssuer), &user.ProviderLinkAllowed,
 		&user.ProviderOnly, &user.WebTheme, &user.WebThemeLocked, &user.AudioRegion, &user.RemoteAccess, &user.LiveTvChannels, &user.LocalFirst,
-		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize, &user.PreferencesResetAt}
+		&user.NextUpWithResume, &user.BoostVolume, &user.ConvertSound, &user.InterfaceSize, &user.PreferencesResetAt,
+		&user.Moonfin, &user.MoonfinLocked}
 }
 
 func scanUser(row pgx.Row) (User, error) {
@@ -793,6 +803,9 @@ func (changes UserChanges) prepare() (userUpdate, error) {
 	if changes.WebTheme != nil && *changes.WebTheme != "" && !slices.Contains(WebThemes, *changes.WebTheme) {
 		return u, ErrInvalidWebTheme
 	}
+	if changes.Moonfin != nil && !slices.Contains(MoonfinChoices, *changes.Moonfin) {
+		return u, ErrInvalidMoonfin
+	}
 	if changes.AudioRegion != nil && *changes.AudioRegion != "" && !localization.AudioVariantOffered(*changes.AudioRegion) {
 		return u, ErrInvalidAudioRegion
 	}
@@ -937,7 +950,9 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 			next_up_with_resume = coalesce($41, next_up_with_resume),
 			boost_volume = coalesce($42, boost_volume),
 			convert_sound = coalesce($43, convert_sound),
-			interface_size = coalesce($44, interface_size)
+			interface_size = coalesce($44, interface_size),
+			moonfin = coalesce($46, moonfin),
+			moonfin_locked = coalesce($47, moonfin_locked)
 		WHERE id = $1 RETURNING `+userColumns,
 		id, u.name, u.hash, changes.IsAdministrator, changes.IsHidden, changes.IsDisabled,
 		changes.Parental != nil, u.parental.MaxRating, u.parental.MaxSubRating, u.parental.BlockUnrated,
@@ -948,7 +963,8 @@ func applyUserChanges(ctx context.Context, tx pgx.Tx, id ID, changes UserChanges
 		changes.SubtitleManagement, changes.LiveTvManagement, changes.QualityGroup, changes.UseSharedAddons, endsOn, changes.CanShare,
 		membership.group, membership.own, changes.MetadataLanguage, changes.TorrentStreams, changes.ProviderOnly,
 		changes.WebTheme, changes.WebThemeLocked, changes.AudioRegion, changes.RemoteAccess, u.channels, changes.LocalFirst,
-		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize, endsAt))
+		changes.NextUpWithResume, changes.BoostVolume, changes.ConvertSound, changes.InterfaceSize, endsAt,
+		changes.Moonfin, changes.MoonfinLocked))
 	if uniqueViolation(err) {
 		return User{}, nil, ErrNameTaken
 	}

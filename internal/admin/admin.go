@@ -32,6 +32,7 @@ import (
 	"github.com/moodiness/polyfin/internal/localfiles"
 	"github.com/moodiness/polyfin/internal/logs"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/moonfin"
 	"github.com/moodiness/polyfin/internal/notifications"
 	"github.com/moodiness/polyfin/internal/oidc"
 	"github.com/moodiness/polyfin/internal/playback"
@@ -211,6 +212,9 @@ type Options struct {
 	// Taste keeps the users' taste profiles, which My account shows each
 	// their own; nil keeps none.
 	Taste *taste.Service
+	// Moonfin keeps what Moonfin's apps sync, which the administrator's
+	// defaults, each user's page and My account show; nil shows none.
+	Moonfin *moonfin.Store
 	// PosterPreviews finds titles to preview the badges over posters on
 	// (Settings › Content › Posters); nil previews none.
 	PosterPreviews PosterPreviews
@@ -407,6 +411,15 @@ func New(options Options) http.Handler {
 	mux.Handle("GET /admin/api/account/web-theme", h.signedIn(h.ownWebTheme))
 	mux.Handle("PUT /admin/api/account/web-theme", h.signedIn(h.setOwnWebTheme))
 	mux.Handle("GET /admin/api/web-themes", h.signedIn(h.webThemes))
+	mux.Handle("GET /admin/api/account/moonfin", h.signedIn(h.ownMoonfin))
+	mux.Handle("PUT /admin/api/account/moonfin", h.signedIn(h.setOwnMoonfin))
+	mux.Handle("DELETE /admin/api/account/moonfin/settings", h.signedIn(h.deleteOwnMoonfinSettings))
+	mux.Handle("GET /admin/api/users/{id}/moonfin", h.administrator(h.userMoonfin))
+	mux.Handle("DELETE /admin/api/users/{id}/moonfin", h.administrator(h.deleteUserMoonfin))
+	mux.Handle("GET /admin/api/moonfin/defaults", h.administrator(h.moonfinDefaults))
+	mux.Handle("PUT /admin/api/moonfin/defaults/{profile}", h.administrator(h.setMoonfinDefaults))
+	mux.Handle("POST /admin/api/moonfin/defaults/{profile}/copy", h.administrator(h.copyMoonfinDefaults))
+	mux.Handle("POST /admin/api/moonfin/apply", h.administrator(h.applyMoonfinDefaults))
 	mux.Handle("GET /admin/api/account/audio-region", h.signedIn(h.ownAudioRegion))
 	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
 	mux.Handle("GET /admin/api/account/sound", h.signedIn(h.ownSound))
@@ -881,6 +894,8 @@ func accountError(w http.ResponseWriter, err error) bool {
 		{accounts.ErrInvalidWatchlistCheckHours, http.StatusBadRequest, "invalid_watchlist_check_hours"},
 		{accounts.ErrInvalidWebTheme, http.StatusBadRequest, "invalid_web_theme"},
 		{accounts.ErrWebThemeLocked, http.StatusForbidden, "web_theme_locked"},
+		{accounts.ErrInvalidMoonfin, http.StatusBadRequest, "invalid_moonfin"},
+		{accounts.ErrMoonfinLocked, http.StatusForbidden, "moonfin_locked"},
 		{accounts.ErrInvalidCustomCss, http.StatusBadRequest, "invalid_custom_css"},
 		{accounts.ErrInvalidCustomJs, http.StatusBadRequest, "invalid_custom_js"},
 		{accounts.ErrInvalidLoginDisclaimer, http.StatusBadRequest, "invalid_login_disclaimer"},

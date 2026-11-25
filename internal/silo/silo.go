@@ -131,6 +131,7 @@ func New(options Options) *Server {
 	s.markerRoutes()
 	s.trickplayRoutes()
 	s.trackPreferenceRoutes()
+	s.moonfinRoutes()
 	// The fallback serves no operation: it is not one of the routes.
 	s.mux.ServeMux.HandleFunc("/api/v2/", func(w http.ResponseWriter, r *http.Request) {
 		s.unknown.report(r)
