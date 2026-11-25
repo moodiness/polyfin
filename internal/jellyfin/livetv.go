@@ -126,7 +126,7 @@ func describeLive(dto *BaseItemDto, item library.Item, fields fieldSet, detail b
 	case library.KindChannel:
 		dto.LocationType = "Remote"
 		dto.Number, dto.ChannelNumber, dto.ChannelType = item.Number, item.Number, "TV"
-		if detail {
+		if detail || fields.has("ParentId") {
 			dto.ParentId = liveTvViewID.String()
 		}
 	case library.KindProgram, library.KindReplay:
