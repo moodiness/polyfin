@@ -151,9 +151,10 @@ How loud converted audio plays, the stereo mix, evening the loudness and each us
   A play streamed by Polyfin adds a section with the target codecs, "(direct)" beside a copied one, and the reasons, such as "The audio codec is not supported". The section shows once the play's first segment is made. It stays while the encoding waits between requests.
 - **In the version's name:** it ends with how it plays, such as "(converted: audio)" (see [Version names](versions.md#version-names)).
 - **In the admin app:** **Home › Now playing › Details** shows the encoder, "Copied" for copied video, the audio sent, and why.
-- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)). Neither line below names an address.
+- **In the detailed log:** one line for each play (see [Logs](administration.md#logs)). No line below names an address.
   - `A version plays as it is`, or `A version plays over HLS` (`A version plays as one stream` for a stream sent as one file). It has `video` (`copied`, or the codec and encoder, such as `h264 with h264_nvenc`), `audio` (`copied`, `none`, or the codec and channels, such as `aac 2 ch`) and `reasons`.
   - Each FFmpeg run then logs `Started a remux`, with `video` (`copy` or the encoder) and `audio` (`copy`, `none` or the encoder).
+  - Each request for `PlaybackInfo`, a video's stream, a subtitle or a download logs `An app sent a playback request`, as the app sent it. It has `app` and `app_version`, the `route` with its values, such as `itemId` and `mediaSourceId`, and the `query`, where an access token, a play session or a grant reads `sent`. A `PlaybackInfo` adds the `body` the app posted, with its device profile.
 
 **Compared with Jellyfin**
 
