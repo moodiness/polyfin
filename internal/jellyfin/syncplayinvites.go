@@ -16,8 +16,9 @@ import (
 
 // Invitations to watch together. The web player's "Watch together" lists
 // the people its SyncPlay group may invite, then invites some of them; each
-// invitee's web player shows a prompt to join it (see the tenth part of
-// webclient.js), which Join answers with Jellyfin's POST /SyncPlay/Join.
+// invitee's web player shows a prompt to join it (see
+// internal/server/webclient/10-item-menus.js), which Join answers with
+// Jellyfin's POST /SyncPlay/Join.
 // They live in memory, like the groups.
 const (
 	// inviteMessage is the type of the socket message that tells an

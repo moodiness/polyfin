@@ -1,7 +1,7 @@
 {
   "overrides": [
     {
-      "files": "webclient.js",
+      "files": "webclient/**/*.js",
       "options": {
         "singleQuote": true,
         "semi": false,

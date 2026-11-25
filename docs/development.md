@@ -26,9 +26,24 @@ make check                    # formatting, vet and tests
 
 `make check` builds the admin app first, as its formatting check needs it.
 
-### The web player's script
+<a id="the-web-players-script"></a>
 
-`internal/server/webclient.js` is the script Polyfin adds to jellyfin-web's page, written in ES5. The page loads `webclient.min.js` beside it, the same script minified, which the server embeds. After a change to `webclient.js`, run `go generate ./internal/server` to write it again: `TestTheScriptIsServedMinified` fails while it is not the source minified.
+### The web player script
+
+`internal/server/webclient/` holds the script Polyfin adds to jellyfin-web's page, written in ES5: a file for each of its 24 parts, from `01-admin-pages.js` to `24-collection-types.js`, numbered as the parts are known, and the core they share, in `core/`. Each file starts with what it does, then what it relies on in jellyfin-web, its anchors.
+
+- **How it is assembled:** `webScriptGroups`, in `internal/server/webclientminify_test.go`, lists the files in the order they run. Each group runs in a function of its own, `;(function () { … })()`, and its files share that function's scope: a file holds the statements of its group's function, indented by two spaces. Most parts are a group of their own. Parts 1 to 10 and 12 share one, which starts with `core/shared.js`, their helpers, and ends with `core/start.js`, which follows the routes for them once each has set itself up.
+- **What the page loads:** `webclient.min.js`, the files assembled, then minified, which the server embeds. After a change to a file, run `go generate ./internal/server` to write it again: `TestTheScriptIsServedMinified` fails while it is not the files minified. The script's other tests run on the files assembled; a failure names a file and its line.
+- **Adding a part:** write it as the next number, such as `25-<name>.js`: what it does, its anchors, then its code. Add it to `webScriptGroups`, in a group of its own unless it calls the shared helpers, then run `go generate ./internal/server`. `TestTheScriptAssemblesEveryFileOnce` fails on a file the list leaves out.
+- **Anchors:** each file lists them under `// Anchors in jellyfin-web:`, one a line, as a kind and a value: `route`, `selector`, `class`, `id`, `global`, `property`, `event`, `storage` or `text`, such as `global: ApiClient.getItems`, `property: notifyRefreshNeeded` or `selector: .collectionItems`. `check-anchors.mjs`, beside the files, describes each kind. A file that relies on nothing in jellyfin-web says `none.` there.
+- **The anchor check:** `check-anchors.mjs` looks for every anchor in jellyfin-web's built files, and names each part with the anchors it misses: after a jellyfin-web upgrade, those are the parts to look at. CI runs it on the files of the Dockerfile's `jellyfin-web` stage (see [Continuous integration](#continuous-integration)). Locally, `scripts/packaging/files.sh` takes those files with Docker, into `dist/packaging/files/jellyfin-web`:
+
+  ```sh
+  scripts/packaging/files.sh
+  node internal/server/webclient/check-anchors.mjs dist/packaging/files/jellyfin-web
+  ```
+
+  Files named after the folder, such as `02-versions.js`, are checked alone. `TestWebClientFilesListTheirAnchors` reads every list, and checks them too when `POLYFIN_TEST_JELLYFIN_WEB` names such a folder.
 
 ### French punctuation
 
@@ -38,7 +53,7 @@ French texts set `:`, `;`, `?`, `!` and the inside of `« »` apart with a narro
 npx --yes --package=typescript@5.9.3 -- node scripts/french-spacing.mjs
 ```
 
-- **What it rewrites:** a plain or no-break space before these signs, or after `«`, in the strings of the admin app's French messages (`web/src/i18n/fr`), of the French words of `internal/server/webclient.js`, and of the French of each `i18n.Text` and each Go map by language, never code. It then regenerates `webclient.min.js` when the script changed.
+- **What it rewrites:** a plain or no-break space before these signs, or after `«`, in the strings of the admin app's French messages (`web/src/i18n/fr`), of the French words of the web player's script (`internal/server/webclient/`), and of the French of each `i18n.Text` and each Go map by language, never code. It then regenerates `webclient.min.js` when the script changed.
 - **What it keeps:** a sign with no space before it (`10:30`, `http://`), and a sign a letter or a digit follows, which is syntax rather than punctuation (`Ajoutez :port`).
 - **Again:** a second run changes nothing.
 - **The checks:** the i18n check (`scripts/i18n-check.mjs`) fails on a French message or a word of the script with a plain or no-break space there, and `TestFrenchSpacing` (in `internal/i18n`) on a Go text; `go generate ./internal/i18n` rewrites the Go texts alone.
@@ -56,6 +71,7 @@ Some tests need a program or a service, and run only when a variable names it. W
 | The tests that run PostgreSQL's server (`internal/cluster`, `internal/desktop/app`, and the embedded database's in `cmd/polyfin`) | `POLYFIN_TEST_POSTGRES_BIN` names the folder of PostgreSQL 18's server programs. |
 | The test of a torrent route's interface going down | `POLYFIN_TEST_TORRENT_INTERFACE` names a dummy interface with an address, with the right to set it down and up (`NET_ADMIN`). |
 | SMB share tests | `POLYFIN_TEST_SMB` names a share holding video files (see [SMB shares](#smb-shares)). |
+| The check of the web player script's anchors (see [The web player script](#the-web-player-script)) | `POLYFIN_TEST_JELLYFIN_WEB` names a folder of jellyfin-web's built files. Without it, the test only reads the lists. |
 
 - **Databases:** most database tests work in a database of their own, copied from a template database. The template is migrated once and kept for later runs, named `polyfin_template_` followed by a key of the migrations. The migrations' own tests start from an empty database of their own, copied from `polyfin_template_empty`. A few other tests work in a schema of their own.
 - **A fast test server:** start the disposable server with `-c fsync=off`, or turn it off on a running one with `ALTER SYSTEM SET fsync = off; SELECT pg_reload_conf();`. Each test database's drop waits for a checkpoint, which otherwise writes every other test database to disk first: with it on, a local run of `internal/jellyfin` spends most of its time waiting. CI's server keeps its data in memory, so it does not wait either.
@@ -228,6 +244,7 @@ How the jobs are set up:
 - **Tesseract:** the race jobs keep the Tesseract packages apt fetches in a cache, keyed by their checksums, as Ubuntu's mirror sometimes sends them at a few kB/s. A cached package without the checksum apt expects is fetched again, and a cached set that fails to install is fetched in full.
 - **Windows:** the Windows tests run in two jobs, balanced by the packages' times on the Windows runner. `internal/playback` and the smaller packages run in one, `internal/localfiles` and `internal/hls` in the other.
 - **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only. Every package embeds the admin app one Linux job builds, through the scripts' `SKIP_WEB=1`: `npm ci` alone takes about a minute and a half on Windows on Arm.
+- **The web player script's anchors:** the job that takes Polyfin Desktop's files from the image checks them in its jellyfin-web, in about 2 seconds (see [The web player script](#the-web-player-script)).
 - **The admin app's bundle:** after the build, `npm --prefix web run check:bundle` fails when the JavaScript the first page loads, the entry file with the files it imports, passes its gzip budget, or when one file holds the messages of more than one language. The budget is in `web/scripts/check-bundle.mjs`; raise it on purpose, in the change that needs it.
 
 ## Following Silo

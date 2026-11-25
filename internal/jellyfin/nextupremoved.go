@@ -14,8 +14,9 @@ import (
 // Jellyfin 12.4 has no way to take a series off Next Up but its watch
 // state: marked played, or every episode played or started marked
 // unplayed. Polyfin's own routes take it off while keeping what the user
-// watched, for its web player's script (see internal/server/webclient.js),
-// its admin app's My account and any app:
+// watched, for its web player's script (see
+// internal/server/webclient/10-item-menus.js), its admin app's My account
+// and any app:
 //
 //	DELETE /Polyfin/UserItems/{itemId}/NextUp takes the series of an
 //	  episode or a season, or the series itself, off the user's Next Up;

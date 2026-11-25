@@ -1213,7 +1213,8 @@ jobs:
   desktop-files:
     # What every package of Polyfin Desktop takes from the Docker image:
     # jellyfin-web and the fonts, through the Dockerfile's desktop-files
-    # stage, once, for the Macs, which have no Docker.
+    # stage, once, for the Macs, which have no Docker. The web player
+    # script's anchors are checked in that jellyfin-web.
     name: Polyfin Desktop's files from the image
     needs: tested
     if: needs.tested.outputs.run == 'true'
@@ -1251,6 +1252,12 @@ jobs:
           path: ${{ runner.temp }}/files
           if-no-files-found: error
           retention-days: 1
+      - name: Check the web player script's anchors in jellyfin-web
+        # What each part of internal/server/webclient relies on in
+        # jellyfin-web, found in the very files the image and the packages
+        # ship (see docs/development.md): a jellyfin-web that lacks one
+        # fails here, naming the part. About 2 s, with the runner's Node.
+        run: node internal/server/webclient/check-anchors.mjs "$RUNNER_TEMP/files/jellyfin-web"
 
   desktop-admin-app:
     # The admin app every package of Polyfin Desktop embeds, built once, as
