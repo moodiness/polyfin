@@ -20,7 +20,7 @@ Polyfin's versions are numbered `0.<minor>.<patch>`, such as 0.90.1. A release c
 
 Polyfin becomes 1.0 once:
 
-- updating to it is tested from several older versions;
+- updating to it is tested from several older versions, with the embedded database and with your own PostgreSQL: each older version sets a server up and makes users, settings, libraries, playlists and what users did through its own APIs, and the new version must apply every migration and answer all of it as before;
 - its answers to apps are checked against Jellyfin's, field by field, for each type of item;
 - its additions to the web player are checked against the jellyfin-web version they run on;
 - a minor release has gone a week with no regression reported.
