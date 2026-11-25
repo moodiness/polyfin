@@ -81,11 +81,11 @@ func (s *Service) channels(ctx context.Context, v view) ([]Item, []record) {
 		group.Go(func() error {
 			metas, _, err := s.window(ctx, v, src, 0, v.limit(src))
 			if err != nil && ctx.Err() == nil {
-				s.logger.Warn("A live TV catalog could not be listed", "catalog", src.catalog.ID, "error", err)
+				s.logger.Warn("A live TV catalog could not be listed", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 			}
 			lists[i] = metas
 			if icons[i], err = s.guideIcons(ctx, src, metas); err != nil && ctx.Err() == nil {
-				s.logger.Warn("A live TV catalog's guide icons could not be read", "catalog", src.catalog.ID, "error", err)
+				s.logger.Warn("A live TV catalog's guide icons could not be read", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 			}
 			return nil
 		})
@@ -364,7 +364,7 @@ func (s *Service) Guide(ctx context.Context, user accounts.User, q GuideQuery) (
 		group.Go(func() error {
 			metas, _, err := s.window(read, v, src, 0, v.limit(src))
 			if err != nil && ctx.Err() == nil {
-				s.logger.Warn("A live TV guide could not be read", "catalog", src.catalog.ID, "date", src.date, "error", err)
+				s.logger.Warn("A live TV guide could not be read", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "date", src.date, "error", err)
 			}
 			mu.Lock()
 			defer mu.Unlock()

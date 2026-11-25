@@ -328,7 +328,7 @@ func (s *Service) titleCatalogs(ctx context.Context, v view) ([]titleCatalog, er
 			return nil, ctx.Err()
 		}
 		if err != nil {
-			s.logger.Warn("A collection library could not be listed", "catalog", l.catalog.ID, "error", err)
+			s.logger.Warn("A collection library could not be listed", "addon", l.addon.addon.LogName(), "catalog", l.catalog.ID, "error", err)
 			continue
 		}
 		for _, src := range grouped {

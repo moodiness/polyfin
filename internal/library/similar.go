@@ -52,7 +52,7 @@ func (s *Service) Similar(ctx context.Context, user accounts.User, id accounts.I
 			metas, err := s.page(ctx, src, 0)
 			// An app that stops waiting cancels ctx: nothing failed.
 			if err != nil && ctx.Err() == nil {
-				s.logger.Warn("A catalog could not be listed for similar titles", "catalog", src.catalog.ID, "error", err)
+				s.logger.Warn("A catalog could not be listed for similar titles", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 			}
 			// Titles hidden from the user are no candidates.
 			pages[i], _ = s.visibleMetas(ctx, v, src, metas)
