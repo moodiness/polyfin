@@ -220,6 +220,8 @@ Jellyfin API responses are checked against the JSON structure of a real Jellyfin
 - **Inputs:** the playback profiles in `playback/profiles/` are not recordings. The script reads them and leaves them as they are.
 - **Another version:** change `version` and the image digest at the top of the script, record, then point `jellyfinFixtures` in `internal/jellyfin/playback_test.go` and the fixture paths of `internal/media` and `internal/playback`'s tests to the new directory.
 
+Most fixtures keep shapes only: values are replaced by their type. `values/items.json` keeps real values, for the fields whose value depends on the item's type, the user's permissions or the request, such as `Type`, `MediaType`, `IsFolder`, `CanDownload` and `CanDelete`. It holds each kind of item Polyfin serves too, in its details and in a listing, for a user allowed to download and one who is not; `scripts/jellyfin-fixtures-values.sh` lists the fields and why apps read them. `TestItemValuesMatchJellyfin` compares Polyfin's answers for the same kinds field by field. A difference fails it unless the test lists it: in `parityGaps` when Polyfin keeps it on purpose, with the reason, and in `parityOpen` while it waits for a decision.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on pull requests, on pushes to `main` and release tags, each night, and when run by hand. Its first job, "Decide what this run tests", chooses the others:
