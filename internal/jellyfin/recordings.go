@@ -817,6 +817,11 @@ func (h *Handler) recordingDto(r *http.Request, user accounts.User, rec recordin
 	if detail || fields.has("CanDelete") {
 		dto.CanDelete = new(user.LiveTvManagement)
 	}
+	if dto.CanDownload != nil {
+		// As /Items/{itemId}/Download tells: the permission, then
+		// serveRecordingFile's rules.
+		dto.CanDownload = new(h.Accounts.MayDownload(user) && h.recordingRefusal(r.Context(), user, h.recordingFile(rec)) == 0)
+	}
 	if detail {
 		h.addMediaSources(r, user, &dto, item, rec.ID, true)
 	} else if fields.has("MediaSources") || fields.has("MediaStreams") {
@@ -1040,7 +1045,16 @@ func (h *Handler) recordingTitle(ctx context.Context, user accounts.User, id acc
 // recordingVersions is the version a finished recording plays: its file.
 func (h *Handler) recordingVersions(ctx context.Context, item library.Item) []library.Version {
 	rec, err := h.Recordings.Recording(ctx, item.ID)
-	if err != nil || rec.InProgress() {
+	if err != nil {
+		return nil
+	}
+	return h.recordingFile(rec)
+}
+
+// recordingFile is the version rec plays once finished, its file; none
+// while it is under way.
+func (h *Handler) recordingFile(rec recordings.Recording) []library.Version {
+	if rec.InProgress() {
 		return nil
 	}
 	return []library.Version{h.Playback.FileVersion(rec.ID, rec.Name, h.Recordings.Path(rec), rec.Size)}
@@ -1290,17 +1304,15 @@ func (h *Handler) recordingArtwork(ctx context.Context, id accounts.ID, imageTyp
 }
 
 // serveRecordingFile serves a recording's file for /Items/{id}/File and
-// /Items/{id}/Download, as a file to save when attachment is set. One
-// still being written has no file yet: Jellyfin refuses what has none as a
-// request it cannot process. One analyzed as taller than the user's
-// quality group is refused, as titles are.
+// /Items/{id}/Download, as a file to save when attachment is set, unless
+// recordingRefusal refuses it.
 func (h *Handler) serveRecordingFile(w http.ResponseWriter, r *http.Request, user accounts.User, recording library.Item, attachment bool) {
 	versions := h.recordingVersions(r.Context(), recording)
-	if len(versions) == 0 {
+	switch h.recordingRefusal(r.Context(), user, versions) {
+	case http.StatusBadRequest:
 		processingError(w, http.StatusBadRequest)
 		return
-	}
-	if !user.FitsGroup(h.versionHeight(r.Context(), versions[0])) {
+	case http.StatusForbidden:
 		h.Logger.Info("A recording taller than the user's quality group was refused for download")
 		w.WriteHeader(http.StatusForbidden)
 		return
@@ -1309,6 +1321,21 @@ func (h *Handler) serveRecordingFile(w http.ResponseWriter, r *http.Request, use
 		w.Header().Set("Content-Disposition", `attachment; filename="`+versions[0].Filename+`"`)
 	}
 	h.serveRecording(w, r, versions[0], "")
+}
+
+// recordingRefusal is the status a recording's file, of versions, is
+// refused with for user, 0 when it is served: what CanDownload tells too.
+// One still being written has no file yet: Jellyfin refuses what has none
+// as a request it cannot process. One analyzed as taller than the user's
+// quality group is refused, as titles are.
+func (h *Handler) recordingRefusal(ctx context.Context, user accounts.User, versions []library.Version) int {
+	switch {
+	case len(versions) == 0:
+		return http.StatusBadRequest
+	case !user.FitsGroup(h.versionHeight(ctx, versions[0])):
+		return http.StatusForbidden
+	}
+	return 0
 }
 
 // isRecording reports whether id is a recording's.
