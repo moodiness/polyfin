@@ -20,6 +20,7 @@
 // Anchors in jellyfin-web:
 //   route: dashboard
 //   route: dashboard/users
+//   route: users/:userId/:tab
 //   route: dashboard/devices
 //   route: dashboard/libraries
 //   route: dashboard/livetv/recordings
@@ -34,6 +35,7 @@
 //   route: dashboard/backups
 //   route: dashboard/logs
 //   route: dashboard/tasks
+//   route: tasks/:id
 //   route: dashboard/keys
 //   route: metadata
 //   route: configurationpage
@@ -57,28 +59,26 @@
     ['logs', 'system/logs'],
     ['tasks', 'system/schedule'],
     ['keys', 'system/api-keys'],
-    ['apikeys', 'system/api-keys'],
   ]
   // The admin page for a route: "" (home) unless it is a dashboard page with a match. A user's
-  // dashboard pages name the user with ?userId=, which opens that user. A tuner's page names it
-  // with ?id=, the identifier of its source among the server's, which opens that source; without
-  // one, the page adds a tuner, which opens Add a source on its HDHomeRun tuner tab. A task's
-  // page, tasks/edit?id=, opens that task's triggers on the schedule.
+  // dashboard pages, users/<id>/<tab> (jellyfin-web 12.4's users/:userId/:tab), open that user.
+  // A tuner's page names it with ?id=, the identifier of its source among the server's, which
+  // opens that source; without one, the page adds a tuner, which opens Add a source on its
+  // HDHomeRun tuner tab. A task's page, tasks/<id> (12.4's tasks/:id), opens that task's
+  // triggers on the schedule.
   function target(hash) {
     if (!/^#!?\/dashboard(?:[/?#]|$)/i.test(hash)) return ''
     var path = hash.replace(/^#!?\/dashboard\/?/i, '').split(/[?#]/)[0].toLowerCase()
-    var user = /[?&]userId=([0-9a-f-]+)/i.exec(hash)
     // The admin app names users by 32 lowercase hexadecimal digits.
-    if (user && /^users(\/|$)/.test(path)) return 'users/' + user[1].replace(/-/g, '').toLowerCase()
+    var user = /^users\/([0-9a-f-]+)(?:\/|$)/.exec(path)
+    var userId = user ? user[1].replace(/-/g, '') : ''
+    if (/^[0-9a-f]{32}$/.test(userId)) return 'users/' + userId
     if (/^livetv\/tuner(\/|$)/.test(path)) {
       var tuner = /[?&]id=([0-9a-f]{32})(?:[&#]|$)/i.exec(hash)
       return tuner ? 'sources/shared/' + tuner[1].toLowerCase() : 'sources?add=hdhomerun'
     }
-    // A task's page names it with ?id=, which opens its triggers on the schedule.
-    if (/^tasks\/edit(\/|$)/.test(path)) {
-      var task = /[?&]id=([0-9a-f]{32})(?:[&#]|$)/i.exec(hash)
-      if (task) return 'system/schedule?task=' + task[1].toLowerCase()
-    }
+    var task = /^tasks\/([0-9a-f]{32})(?:\/|$)/.exec(path)
+    if (task) return 'system/schedule?task=' + task[1]
     for (var i = 0; i < pages.length; i++) {
       var prefix = pages[i][0]
       if (path === prefix || path.indexOf(prefix + '/') === 0) return pages[i][1]

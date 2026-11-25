@@ -1,7 +1,9 @@
 // Part 3: the play buttons held until a version is known.
 //
-// On a title's page, it holds the play buttons (.btnPlay, .btnResume,
-// .btnReplay) until a version is known, as /Polyfin/Items/{id}/Versions and
+// On a title's page, it holds the play buttons (.btnPlay, which
+// jellyfin-web 12.4 titles Resume when the title was started, and
+// .btnReplay, which then plays it from the start) until a version is
+// known, as /Polyfin/Items/{id}/Versions and
 // its push tell (Known, the placeholder left out). While none is known and
 // addons are asked (Pending), they are disabled, greyed, with a spinner and
 // the tooltip "Looking for sources…"; as soon as one is known, they are given
@@ -31,8 +33,7 @@
 //
 // Anchors in jellyfin-web:
 //   selector: .selectSource
-//   selector: .btnPlay
-//   selector: .btnReplay
+//   selector: .btnPlay, .btnReplay
 //   selector: .detailRibbon
 //   selector: .mainDetailButtons
 //   class: padded-left
@@ -103,7 +104,7 @@
       watch(page)
       if (!state) return release()
       style()
-      var buttons = page.querySelectorAll('.btnPlay, .btnResume, .btnReplay')
+      var buttons = page.querySelectorAll('.btnPlay, .btnReplay')
       var tooltip = say(state === 'searching' ? 'searching' : 'none')
       held = held.filter(function (entry) {
         if (Array.prototype.indexOf.call(buttons, entry.button) >= 0) return true

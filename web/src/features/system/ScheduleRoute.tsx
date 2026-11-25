@@ -99,7 +99,7 @@ type Act = UseMutationResult<void, Error, TaskAction>
 function Tasks({ tasks, act }: { tasks: TasksQuery; act: Act }) {
   const { t } = useI18n()
   const text = t.system.schedule
-  // Jellyfin's task page, tasks/edit?id=, comes as ?task=<id>: that task's triggers open once.
+  // jellyfin-web's task page, tasks/<id>, comes as ?task=<id>: that task's triggers open once.
   const [params, setParams] = useSearchParams()
   const asked = params.get('task')
   const loaded = tasks.data !== undefined

@@ -168,8 +168,10 @@ In the web player, these open Polyfin's [admin app](administration.md) at `/admi
 - every dashboard page, the metadata manager and plugin pages;
 - the startup wizard.
 
-Live TV's tuner pages open the admin app too:
+A dashboard page with a match in the admin app opens that page, such as:
 
+- A user's pages, from **Profile** to **Password**, open that user's page.
+- A scheduled task's page opens its triggers on **System › Schedule**.
 - A tuner's page opens the tuner's source page.
 - The page to add a tuner opens **Add a source** with **HDHomeRun tuner** chosen (see [HDHomeRun tuners](iptv.md#hdhomerun-tuners)).
 

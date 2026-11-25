@@ -242,11 +242,15 @@ func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 		t.Skip("Node.js is not installed")
 	}
 	// The admin page each route opens, after /admin/; "-" for a route left alone.
+	// The dashboard's own pages are jellyfin-web 12.4's: a user's at
+	// users/:userId/:tab, a task's at tasks/:id.
 	routes := map[string]string{
 		"#/dashboard":       "",
 		"#/dashboard/users": "users",
-		"#/dashboard/users/profile?userId=0123456789ABCDEF0123456789abcdef":    "users/0123456789abcdef0123456789abcdef",
-		"#/dashboard/users/access?userId=01234567-89ab-cdef-0123-456789abcdef": "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/users/0123456789ABCDEF0123456789abcdef/profile":         "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/users/01234567-89ab-cdef-0123-456789abcdef/access":      "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/users/0123456789abcdef0123456789abcdef/parentalcontrol": "users/0123456789abcdef0123456789abcdef",
+		"#/dashboard/users/add":         "users",
 		"#/dashboard/devices":           "users",
 		"#/dashboard/libraries/display": "libraries",
 		"#/dashboard/livetv":            "live-tv",
@@ -263,10 +267,11 @@ func TestDashboardRoutesOpenTheAdminApp(t *testing.T) {
 		"#/dashboard/backups":                                                         "settings/backups",
 		"#/dashboard/logs":                                                            "system/logs",
 		"#/dashboard/keys":                                                            "system/api-keys",
+		"#/dashboard/apikeys":                                                         "",
 		"#/dashboard/plugins/0123/settings":                                           "",
 		"#/Dashboard/Tasks":                                                           "system/schedule",
-		"#/dashboard/tasks/edit?id=3":                                                 "system/schedule",
-		"#/dashboard/tasks/edit?id=0123456789ABCDEF0123456789abcdef":                  "system/schedule?task=0123456789abcdef0123456789abcdef",
+		"#/dashboard/tasks/3":                                                         "system/schedule",
+		"#/dashboard/tasks/0123456789ABCDEF0123456789abcdef":                          "system/schedule?task=0123456789abcdef0123456789abcdef",
 		"#/dashboard/activity":                                                        "",
 		"#/dashboard?tab=1":                                                           "",
 		"#!/dashboard":                                                                "",
