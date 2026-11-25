@@ -103,7 +103,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Notifications](notifications.md) | Targets and their kinds, the events each one tells and who receives them, and how messages are delivered, paced and logged |
 | [Webhook reference](webhook-reference.md) | The JSON a webhook receives, what each target kind receives, and the admin API for targets |
 | [Statistics](statistics.md) | How playbacks are tracked, the playback history and its settings, and the Statistics pages of System and My account |
-| [Updates and restarts](updates-and-restarts.md) | How Polyfin tells you of a new version, and how you restart or update it from Home |
+| [Updates and restarts](updates-and-restarts.md) | When new versions come out and what they hold, how Polyfin tells you of one, and how you restart or update it from Home |
 | [HTTPS and networking](https-and-networking.md) | Letting apps find Polyfin on the local network, and serving HTTPS with your own certificate or Let's Encrypt |
 | [Reverse proxy](reverse-proxy.md) | Running Polyfin behind a reverse proxy: headers, WebSockets, slow answers, HTTPS, known proxies and a worked Traefik example |
 | [Configuration](configuration.md) | The environment variables, the data folder, the work folders, `.env`, and how stored secrets are encrypted with `POLYFIN_SECRET_KEY` |
