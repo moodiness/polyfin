@@ -1382,7 +1382,7 @@ func (s *Service) merged(ctx context.Context, v view, sources []source, start, c
 				metas, total, err := s.window(ctx, v, src, 0, per)
 				// An app that stops waiting cancels ctx: nothing failed.
 				if err != nil && ctx.Err() == nil {
-					s.logger.Warn("A catalog of a collection could not be listed", "catalog", src.catalog.ID, "error", err)
+					s.logger.Warn("A catalog of a collection could not be listed", "addon", src.addon.addon.LogName(), "catalog", src.catalog.ID, "error", err)
 				}
 				lists[i], mores[i] = metas, total > len(metas)
 				return nil
