@@ -1,6 +1,6 @@
 # Development
 
-This page is for contributors who change Polyfin's code or its documentation. It covers running Polyfin from source, its tests, the Jellyfin fixtures, what CI runs and when, following Silo's changes, working on the website, and building and signing Polyfin Desktop's packages.
+This page is for contributors who change Polyfin's code or its documentation. It covers running Polyfin from source, its tests, the check of updates from older releases, the Jellyfin fixtures, what CI runs and when, following Silo's changes, working on the website, and building and signing Polyfin Desktop's packages.
 
 ## Requirements
 
@@ -192,6 +192,41 @@ The FFmpeg for NVIDIA drivers older than 610 is built from the same archive's bu
 1. Run `scripts/ffmpeg-nvenc13.sh recipe-commit`: it asks the recipe's repository, and prints the new tag and its commit.
 2. Read what the recipe changed since the commit recorded before, then put the two lines in `scripts/ffmpeg-nvenc13.pin`, in the same pull request as the Dockerfile's change.
 
+### Updates from older releases
+
+`make upgrade-check` tests updating to the image `make image-check` built from older releases, as their users update. It needs Docker, and network access to pull the releases' images. It runs `scripts/upgradecheck` for each release, with the embedded database and with an external PostgreSQL 18, through these steps:
+
+1. **The release:** its published image starts on an empty database and an empty data volume. 0.71 and 0.72 ran the embedded database from their `aio` image, which the check runs in their place.
+2. **The data:** the release makes it through its own APIs, as the admin app and Jellyfin's apps would:
+   - the setup, in French, and settings changed from their defaults;
+   - a group with its own settings, and three users: one in the group, one with her own settings and a hidden library, one disabled;
+   - a home videos folder and a music folder, of tiny files the candidate's FFmpeg makes;
+   - three playlists, a collection, and two home rows, one of them turned off by a user;
+   - played and favorite marks, a resume point, and a user's display preferences.
+3. **The facts:** the check reads them back through the same APIs, and checks that the release kept what it was asked to.
+4. **The update:** `docker stop` stops the release, then the candidate starts on the same database and data volume, and must become healthy.
+5. **The checks:** every migration the candidate ships is in `schema_migrations`, with its checksum, and the candidate answers the same facts:
+   - sign-ins, and the devices and admin session signed in before the update;
+   - the server's identity and settings;
+   - the users, the group, and the libraries with their items' identifiers;
+   - the playlists in their order, the collection and the home rows;
+   - what users did, the display preferences, and the status of a few routes.
+
+A failure names the release, the database, the step and the check. Then it lists each fact that differs, with what the release answered and what the candidate answers. When a check cannot read its facts, the end of the server's log follows.
+
+```sh
+make image-check
+make upgrade-check                              # from the releases below
+make upgrade-check UPGRADE_FROM=0.88.0,latest   # from others
+go run ./scripts/upgradecheck -help             # every option, such as -databases embedded or -keep
+```
+
+- **The releases:** 0.71.0, the first with an embedded database and the oldest database a single-container server can hold; 0.80.0 and 0.85.0, further along the migrations; and `latest`, the newest release tag of the remote `origin` other than the candidate's version. `defaultFrom` in `scripts/upgradecheck/main.go` lists them.
+- **Time:** each update takes about 12 seconds, and four run at once (`-parallel`).
+- **Before a release:** `make image-check upgrade-check VERSION=<version>` builds the release's image, then updates to it from the releases above, the latest being the one before it.
+- **A change on purpose:** when the candidate answers a fact otherwise on purpose, such as a route's status, change what the check reads in `scripts/upgradecheck/checks.go`, in the same pull request, and say so in the release notes under **Upgrading**.
+- **Left out:** movies and shows folders, whose titles the metadata addons would have to match online; addons, IPTV sources and torrents; Polyfin Desktop; and the other platform, as the check runs the images of the machine's own.
+
 ### A synthetic Xtream Codes provider
 
 This serves a synthetic Xtream Codes provider until interrupted, to try Polyfin by hand with a large line-up:
@@ -249,6 +284,7 @@ How the jobs are set up:
 - **Polyfin Desktop's packages:** `.github/workflows/desktop-package.yml` builds each package, then installs and smokes it. The CI workflow calls it for each package, so that each test waits for its own package only. Every package embeds the admin app one Linux job builds, through the scripts' `SKIP_WEB=1`: `npm ci` alone takes about a minute and a half on Windows on Arm.
 - **The web player script's anchors:** the job that takes Polyfin Desktop's files from the image checks them in its jellyfin-web, in about 2 seconds (see [The web player script](#the-web-player-script)).
 - **The admin app's bundle:** after the build, `npm --prefix web run check:bundle` fails when the JavaScript the first page loads, the entry file with the files it imports, passes its gzip budget, or when one file holds the messages of more than one language. The budget is in `web/scripts/check-bundle.mjs`; raise it on purpose, in the change that needs it.
+- **Updates from older releases:** `.github/workflows/upgrade.yml` builds the native image and runs `make upgrade-check` (see [Updates from older releases](#updates-from-older-releases)). It runs on pull requests that change a migration or the check itself, on each push to `main` but of documentation, and when run by hand, which may name the releases to update from. Drafts skip it, as they skip CI.
 
 ## Following Silo
 
