@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -43,8 +44,7 @@ func testSlowLog(out *lockedBuffer, clock *time.Time) *slowLog {
 
 // A statement under the threshold logs nothing; one at it or over logs
 // its duration and its SQL on one line, cut short, never its arguments,
-// and its error. A batch's query counts from when its result was asked
-// for.
+// and its error.
 func TestOnlySlowStatementsAreLogged(t *testing.T) {
 	t.Parallel()
 	out := &lockedBuffer{}
@@ -70,10 +70,70 @@ func TestOnlySlowStatementsAreLogged(t *testing.T) {
 	if got := out.String(); !strings.Contains(got, `duration=2s sql="SELECT `+strings.Repeat("é, ", 97)+`é,…" error="canceling statement due to user request"`) {
 		t.Errorf("logged %s", got)
 	}
-	s.TraceBatchQuery(t.Context(), nil, pgx.TraceBatchQueryData{SQL: "UPDATE items SET seen = $1", Args: []any{"hunter2"}, ReadStartTime: clock.Add(-time.Second)})
-	s.TraceBatchQuery(t.Context(), nil, pgx.TraceBatchQueryData{SQL: "UPDATE fast SET seen = $1", ReadStartTime: clock.Add(-time.Millisecond)})
-	if got := out.String(); strings.Count(got, "\n") != 3 || !strings.Contains(got, `duration=1s sql="UPDATE items SET seen = $1"`) || strings.Contains(got, "hunter2") {
+}
+
+// A batch is logged whole, once, when it took the threshold or longer
+// from its sending until its results were read: with how many queries it
+// held and each of them, one queued several times told once, never their
+// arguments, and its error. None of its queries is logged on its own,
+// whose answer waited for the others. Its lines count with the others
+// against slowBurst.
+func TestASlowBatchIsLoggedWhole(t *testing.T) {
+	t.Parallel()
+	out := &lockedBuffer{}
+	clock := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
+	s := testSlowLog(out, &clock)
+	long := "UPDATE items SET data = " + strings.Repeat("x || ", 40) + "y"
+	batch := &pgx.Batch{}
+	batch.Queue("SELECT id, xmin\n\t FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE", "hunter2")
+	for range 3 {
+		batch.Queue("INSERT INTO seen (id) VALUES ($1)", "hunter3")
+	}
+	batch.Queue(long)
+	// The first answer comes once the batch committed, as PostgreSQL holds
+	// the answers until then; the others follow at once. Each run starts
+	// at the same time, so that the lines spent are not refilled.
+	start := clock
+	run := func(batch *pgx.Batch, took time.Duration, err error) {
+		clock = start
+		ctx := s.TraceBatchStart(t.Context(), nil, pgx.TraceBatchStartData{Batch: batch})
+		read := clock
+		clock = clock.Add(took)
+		for _, q := range batch.QueuedQueries {
+			s.TraceBatchQuery(ctx, nil, pgx.TraceBatchQueryData{SQL: q.SQL, Args: q.Arguments, ReadStartTime: read})
+			read = clock
+		}
+		s.TraceBatchEnd(ctx, nil, pgx.TraceBatchEndData{Err: err})
+	}
+	run(batch, 495*time.Millisecond, nil)
+	if out.String() != "" {
+		t.Fatalf("a fast batch logged %s", out)
+	}
+	run(batch, 5*time.Second, errors.New("canceling statement due to user request"))
+	// 120 characters of the long query: "UPDATE items SET data = ", then
+	// 19 times "x || ", then "x".
+	want := `level=INFO msg="A database batch was slow" duration=5s queries=5 sql="SELECT id, xmin FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE; ` +
+		`INSERT INTO seen (id) VALUES ($1) (3 times); UPDATE items SET data = ` + strings.Repeat("x || ", 19) + `x…" error="canceling statement due to user request"`
+	if got := out.String(); strings.Count(got, "\n") != 1 || !strings.Contains(got, want) || strings.Contains(got, "statement was slow") ||
+		strings.Contains(got, "hunter") {
+		t.Errorf("logged %s\nwant %s", got, want)
+	}
+
+	// Past 8 different queries, the line counts the others.
+	many := &pgx.Batch{}
+	for i := range 11 {
+		many.Queue(fmt.Sprintf("SELECT %d", i))
+	}
+	run(many, 5*time.Second, nil)
+	if got := out.String(); !strings.Contains(got, `queries=11 sql="SELECT 0; SELECT 1; SELECT 2; SELECT 3; SELECT 4; SELECT 5; SELECT 6; SELECT 7; and 3 other queries"`) {
 		t.Errorf("logged %s", got)
+	}
+
+	for range 25 {
+		run(batch, 5*time.Second, nil)
+	}
+	if got := strings.Count(out.String(), "\n"); got != slowBurst {
+		t.Errorf("%d lines at once, want %d", got, slowBurst)
 	}
 }
 
@@ -139,6 +199,35 @@ func TestThePoolLogsSlowStatements(t *testing.T) {
 	}
 	if strings.Contains(logged, "hunter") {
 		t.Errorf("logged an argument: %s", logged)
+	}
+}
+
+// A batch whose second query is slow logs one line, the batch's, with
+// its two queries: its first query, whose answer PostgreSQL held until the
+// second was done, is not told as slow.
+func TestThePoolLogsASlowBatchWhole(t *testing.T) {
+	t.Parallel()
+	url := testdb.CopyURL(t, testdb.Empty(t))
+	out := &lockedBuffer{}
+	config, err := poolConfig(url, slog.New(slog.NewTextHandler(out, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	batch := &pgx.Batch{}
+	batch.Queue("SELECT 1")
+	batch.Queue("SELECT pg_sleep(0.6)")
+	if err := pool.SendBatch(t.Context(), batch).Close(); err != nil {
+		t.Fatal(err)
+	}
+	logged := out.String()
+	if strings.Contains(logged, "statement was slow") || !strings.Contains(logged, `msg="A database batch was slow"`) ||
+		!strings.Contains(logged, `queries=2 sql="SELECT 1; SELECT pg_sleep(0.6)"`) {
+		t.Errorf("logged %s", logged)
 	}
 }
 
