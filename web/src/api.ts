@@ -1685,6 +1685,8 @@ type ChannelStream = {
   /** Redacted address of a custom stream; null for the provider's. */
   address: string | null
   health: StreamHealth
+  /** The DRM its list says it needs, such as `Widevine`, when Polyfin does not support it; empty otherwise. */
+  drm: string
 }
 
 /** The guide channel a channel takes; manual with null ids pins "no guide". */
@@ -1719,6 +1721,8 @@ export type LineupChannel = {
   streams: ChannelStream[]
   /** How many days back the provider keeps the channel's programmes, played from Replay; 0 for no archive. */
   archiveDays: number
+  /** Not shown in apps because every one of its enabled streams needs a DRM Polyfin does not support. */
+  needsDrm: boolean
 }
 
 export type ChannelFilters = {

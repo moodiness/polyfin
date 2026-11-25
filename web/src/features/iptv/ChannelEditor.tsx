@@ -167,6 +167,9 @@ function Details({
               <span className="figures">{text.numberNow(channel.number)}</span>
             )}
           </p>
+          {!channel.shown && channel.needsDrm && (
+            <p className="mt-1 text-small text-ink-2">{text.needsDrm}</p>
+          )}
         </div>
       </div>
       <Field
@@ -365,6 +368,11 @@ function Streams({
               />
             </div>
             {stream.custom && <Badge tone="accent">{text.custom}</Badge>}
+            {stream.drm !== '' && (
+              <span className="basis-full pb-1.5 pl-8 text-micro text-ink-3">
+                <StatusPill tone="danger">{text.drm(stream.drm)}</StatusPill>
+              </span>
+            )}
             {stream.health.failure !== '' && stream.health.failedAt && (
               <span className="basis-full pb-1.5 pl-8 text-micro text-ink-3">
                 <StatusPill tone={stream.health.hiddenUntil ? 'danger' : 'warn'}>

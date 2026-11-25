@@ -423,6 +423,9 @@ type channelJSON struct {
 	// ArchiveDays is how many days back the provider keeps the channel's
 	// past programmes, played from Replay; 0 for no archive.
 	ArchiveDays int `json:"archiveDays"`
+	// NeedsDRM tells a channel left out of apps because every one of its
+	// enabled streams names a DRM Polyfin does not support.
+	NeedsDRM bool `json:"needsDrm"`
 }
 
 type channelCategoryJSON struct {
@@ -447,6 +450,9 @@ type lineupStreamJSON struct {
 	Address *string `json:"address"`
 	// Health is how the stream last answered when its channel was opened.
 	Health iptv.StreamHealth `json:"health"`
+	// DRM names the DRM the stream's list says it needs, when Polyfin does
+	// not support it; "" otherwise.
+	DRM string `json:"drm"`
 }
 
 func newMappingJSON(guide *accounts.ID, guideChannel *string, name string, manual bool) *mappingJSON {
@@ -461,7 +467,7 @@ func newChannelJSON(c iptv.Channel) channelJSON {
 	result := channelJSON{ID: c.ID.String(), Name: c.Name, ProviderName: c.ProviderName, Renamed: c.Renamed, Logo: c.Logo,
 		ProviderLogo: c.ProviderLogo, Description: c.Description, Category: channelCategoryJSON{ID: c.Category.String(), Name: c.CategoryName},
 		ProviderCategoryID: c.ProviderCategory.String(), Moved: c.Moved, Enabled: c.Enabled, Shown: c.Shown, FixedNumber: c.FixedNumber,
-		GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams)), ArchiveDays: c.ArchiveDays}
+		GuideID: c.GuideID, Streams: make([]lineupStreamJSON, 0, len(c.Streams)), ArchiveDays: c.ArchiveDays, NeedsDRM: c.NeedsDRM}
 	if c.ProviderNumber != nil {
 		result.ProviderNumber = new(cmp.Or(c.GuideNumber, strconv.Itoa(*c.ProviderNumber)))
 	}
@@ -475,7 +481,7 @@ func newChannelJSON(c iptv.Channel) channelJSON {
 		result.Mapping = newMappingJSON(m.Guide, m.GuideChannel, m.GuideChannelName, m.Manual)
 	}
 	for _, s := range c.Streams {
-		stream := lineupStreamJSON{ID: s.ID, Label: s.Label, Enabled: s.Enabled, Custom: s.Custom, Health: s.Health}
+		stream := lineupStreamJSON{ID: s.ID, Label: s.Label, Enabled: s.Enabled, Custom: s.Custom, Health: s.Health, DRM: s.DRM}
 		if s.Custom {
 			stream.Address = new(s.Address)
 		}

@@ -216,6 +216,7 @@ Add, rename, reorder, turn on or off, and delete categories.
 The channel list loads from the server 100 at a time. It filters by category, state, visibility in apps, guide and archive.
 
 - A channel whose provider keeps its past programmes shows for how many days, such as **Replay, 7 days**.
+- A channel whose every turned-on stream needs a DRM Polyfin does not support, such as Widevine, shows **Needs a DRM**, and is not shown in apps (see [DASH channels and encryption](iptv-streams.md#dash-channels-and-encryption)).
 - On/off switches turn a channel on or off. A selection turns several on or off.
 - **Change by keyword** shows a count of what would change, then applies it.
 - Channels move within a category, or to another category or place.

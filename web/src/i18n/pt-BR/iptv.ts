@@ -282,6 +282,9 @@ const iptv: typeof en = {
       hidden: 'Não exibido',
       hiddenHelp:
         'Ativado, mas a categoria está desativada ou nenhuma das streams dele está ativada.',
+      needsDrm: 'Precisa de um DRM',
+      needsDrmHelp:
+        'Cada uma das streams ativadas dele precisa de um DRM que o Polyfin não suporta, como Widevine.',
       mapped: 'Com guia',
       unmapped: 'Sem guia',
       archived: 'Com arquivo',
@@ -321,6 +324,7 @@ const iptv: typeof en = {
       title: (name: string) => `Editar ${name}`,
       shownInApps: 'Exibido nos aplicativos Jellyfin',
       notShownInApps: 'Não exibido nos aplicativos Jellyfin',
+      needsDrm: 'As streams ativadas dele precisam de um DRM que o Polyfin não suporta.',
       numberNow: (number: string) => `número ${number}`,
       name: 'Nome',
       providerValue: (value: string) => `Do provedor: ${value}`,
@@ -357,6 +361,7 @@ const iptv: typeof en = {
       defaultLabel: 'Personalizada',
       add: 'Adicionar a stream',
       adding: 'Adicionando…',
+      drm: (name: string) => `Precisa de ${name}, que o Polyfin não suporta`,
       failures: {
         dead: 'Nenhuma stream ao vivo',
         refused: 'Recusada pelo provedor',

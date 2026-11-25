@@ -787,8 +787,17 @@ func (s *Service) Source(ctx context.Context, scope addons.Scope, id accounts.ID
 }
 
 // shownSQL selects, joined as l with its category as c, the channels apps
-// show: enabled, in an enabled category, with an enabled stream.
-const shownSQL = `l.enabled AND c.enabled AND EXISTS (SELECT 1 FROM iptv_streams s WHERE s.addon_id = l.addon_id AND s.channel_id = l.id AND s.enabled)`
+// show: enabled, in an enabled category, with an enabled stream that Polyfin
+// can play (see playableSQL). A channel whose every enabled stream names
+// a DRM Polyfin does not support stays out of apps.
+const shownSQL = `l.enabled AND c.enabled AND EXISTS (SELECT 1 FROM iptv_streams s
+	LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
+	WHERE s.addon_id = l.addon_id AND s.channel_id = l.id AND s.enabled AND ` + playableSQL + `)`
+
+// playableSQL tells a stream s, joined with its entry as e, whose list
+// names no licence Polyfin cannot have (see drm.Protection.Unsupported). A
+// custom stream has no entry, so names none.
+const playableSQL = `coalesce(e.protection->>'license', '') IN ('', '` + drm.ClearKey + `')`
 
 func (s *Service) source(ctx context.Context, scope addons.Scope, id accounts.ID) (Source, error) {
 	list, err := s.addons.Addons(ctx, scope)
