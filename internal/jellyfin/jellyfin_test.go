@@ -31,6 +31,7 @@ import (
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/library"
 	"github.com/moodiness/polyfin/internal/logs"
+	"github.com/moodiness/polyfin/internal/moonfin"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/preferences"
@@ -281,6 +282,8 @@ func newServerSealing(t *testing.T, failures int, ffprobe, ffmpeg string, reach 
 		Playlists:        playlists.New(pool),
 		Collections:      collections.New(pool),
 		HomeRows:         homerows.New(pool),
+		Moonfin:          moonfin.New(pool),
+		PolyfinVersion:   "1.2.3",
 		Thumbnails:       images,
 		Logger:           logger,
 		Activity:         activityLog,

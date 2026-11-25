@@ -875,6 +875,19 @@ func (settings Settings) WebThemeOf(user User) string {
 	return settings.WebTheme
 }
 
+// MoonfinFor reports whether Moonfin's companion is served to user (see
+// package moonfin): as the user is set apart, on or off, else as the
+// server's Moonfin.
+func (settings Settings) MoonfinFor(user User) bool {
+	switch user.Moonfin {
+	case MoonfinOn:
+		return true
+	case MoonfinOff:
+		return false
+	}
+	return settings.Moonfin
+}
+
 // CustomThemeSet reports whether the Custom theme has a text, which a user
 // needs to be given it as their own theme.
 func (settings Settings) CustomThemeSet() bool {
@@ -2114,6 +2127,11 @@ type Settings struct {
 	// /api/v2 (see package silo); off, the API answers nothing.
 	SiloApps bool
 
+	// Moonfin serves Moonfin's companion (see package moonfin) to the
+	// users not set apart (see User.Moonfin): the routes Moonfin apps call
+	// for their synced settings, ratings and TMDB extras.
+	Moonfin bool
+
 	// PosterRatings has the web player show a title's ratings on its
 	// poster as the pointer or the focus comes to it (see
 	// /Polyfin/Items/Ratings); off, it shows none there.
@@ -2426,7 +2444,7 @@ const settingsColumns = "server_name, quick_connect_enabled, legacy_authorizatio
 	"torrent_trackers, " +
 	"restart_confirmed, update_tool_url, update_tool_token, " +
 	"conversion_folder, reading_folder, cache_folder, " +
-	"silo_apps, " +
+	"silo_apps, moonfin, " +
 	"poster_ratings, poster_badges, poster_badge_size, poster_template, " +
 	"provider_issuer, provider_name, provider_client_id, provider_client_secret, provider_user_claim, provider_create_accounts, " +
 	"provider_admin_claim, provider_admin_value, " +
@@ -2498,7 +2516,7 @@ func (settings *Settings) fields() []any {
 		&settings.TorrentTrackers,
 		&settings.RestartConfirmed, &settings.UpdateToolURL, &settings.UpdateToolToken,
 		&settings.ConversionFolder, &settings.ReadingFolder, &settings.CacheFolder,
-		&settings.SiloApps,
+		&settings.SiloApps, &settings.Moonfin,
 		&settings.PosterRatings, &settings.PosterBadges, &settings.PosterBadgeSize, &settings.PosterTemplate,
 		&settings.ProviderIssuer, &settings.ProviderName, &settings.ProviderClientID, &settings.ProviderClientSecret, &settings.ProviderUserClaim,
 		&settings.ProviderCreateAccounts, &settings.ProviderAdminClaim, &settings.ProviderAdminValue,

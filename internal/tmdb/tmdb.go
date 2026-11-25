@@ -15,9 +15,12 @@
 // number episodes by (see the library package's episodealign.go), for the
 // collections movies belong to, which Silo's apps show as box sets (see
 // the boxset package), for the posters and backdrops of titles whose
-// addon gives none (see the library package's tmdbartwork.go), and for
-// the check of the TMDB identifiers metadata addons give as moviedb_id
-// (see the library package's tmdbidcheck.go).
+// addon gives none (see the library package's tmdbartwork.go), for the
+// check of the TMDB identifiers metadata addons give as moviedb_id
+// (see the library package's tmdbidcheck.go), and for the extras
+// Moonfin's apps show: reviews, people's links, the outline of titles the
+// server does not hold, episodes' ratings and series' next episodes (see
+// extras.go and the jellyfin package's moonfinextras.go).
 //
 // TMDB is asked only while a key is saved. Its answers, and the titles and
 // people it did not know, are kept in memory for answerLife; at most

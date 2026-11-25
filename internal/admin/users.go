@@ -57,6 +57,11 @@ type userJSON struct {
 	// under My account.
 	WebTheme       string `json:"webTheme"`
 	WebThemeLocked bool   `json:"webThemeLocked"`
+	// Moonfin sets the user apart from the server's choice of serving
+	// Moonfin's companion, on or off, empty for the server's; MoonfinLocked
+	// keeps them from changing it under My account.
+	Moonfin       string `json:"moonfin"`
+	MoonfinLocked bool   `json:"moonfinLocked"`
 	// AudioRegion is the regional variant of audio the user prefers, one
 	// of AudioRegions, empty for none; AudioRegions are those offered.
 	AudioRegion  string   `json:"audioRegion"`
@@ -356,6 +361,8 @@ func newUserJSON(user accounts.User) userJSON {
 		MetadataLanguage: user.MetadataLanguage,
 		WebTheme:         user.WebTheme,
 		WebThemeLocked:   user.WebThemeLocked,
+		Moonfin:          user.Moonfin,
+		MoonfinLocked:    user.MoonfinLocked,
 		AudioRegion:      user.AudioRegion,
 		AudioRegions:     localization.AudioVariants,
 		// When the account ends.
@@ -848,6 +855,8 @@ type settingsJSON struct {
 	CacheFolderDefault string  `json:"cacheFolderDefault"`
 	// SiloApps keeps its current value when a PUT leaves it out.
 	SiloApps *bool `json:"siloApps"`
+	// Moonfin keeps its current value when a PUT leaves it out.
+	Moonfin *bool `json:"moonfin"`
 	// PosterRatings keeps its current value when a PUT leaves it out.
 	PosterRatings *bool `json:"posterRatings"`
 	// PosterBadges, PosterBadgeSize and PosterTemplate keep their current
@@ -1134,6 +1143,7 @@ func newSettingsJSON(settings accounts.Settings) settingsJSON {
 		CacheFolder:             &settings.CacheFolder,
 		InterfaceRoutes:         accounts.InterfaceRoutes,
 		SiloApps:                &settings.SiloApps,
+		Moonfin:                 &settings.Moonfin,
 		PosterRatings:           &settings.PosterRatings,
 		PosterBadges:            &settings.PosterBadges,
 		PosterBadgeSize:         &settings.PosterBadgeSize,
@@ -1533,6 +1543,10 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		// WebTheme and WebThemeLocked, see userJSON.
 		WebTheme       *string `json:"webTheme"`
 		WebThemeLocked *bool   `json:"webThemeLocked"`
+		// Moonfin and MoonfinLocked, see userJSON: 400 invalid_moonfin for
+		// another value than '', 'on' and 'off'.
+		Moonfin       *string `json:"moonfin"`
+		MoonfinLocked *bool   `json:"moonfinLocked"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1562,6 +1576,7 @@ func (h *handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	changes.WebTheme, changes.WebThemeLocked = body.WebTheme, body.WebThemeLocked
+	changes.Moonfin, changes.MoonfinLocked = body.Moonfin, body.MoonfinLocked
 	if body.WebTheme != nil && !webThemeOffered(w, h.Accounts.Settings(), *body.WebTheme) {
 		return
 	}
@@ -2045,6 +2060,7 @@ func (h *handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		ReadingFolder:        valueOr(body.ReadingFolder, current.ReadingFolder),
 		CacheFolder:          valueOr(body.CacheFolder, current.CacheFolder),
 		SiloApps:             valueOr(body.SiloApps, current.SiloApps),
+		Moonfin:              valueOr(body.Moonfin, current.Moonfin),
 		PosterRatings:        valueOr(body.PosterRatings, current.PosterRatings),
 		PosterBadges:         valueOr(body.PosterBadges, current.PosterBadges),
 		PosterBadgeSize:      valueOr(body.PosterBadgeSize, current.PosterBadgeSize),

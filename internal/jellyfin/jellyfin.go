@@ -24,6 +24,7 @@ import (
 	"github.com/moodiness/polyfin/internal/loudness"
 	"github.com/moodiness/polyfin/internal/lyrics"
 	"github.com/moodiness/polyfin/internal/mediasegments"
+	"github.com/moodiness/polyfin/internal/moonfin"
 	"github.com/moodiness/polyfin/internal/playback"
 	"github.com/moodiness/polyfin/internal/playlists"
 	"github.com/moodiness/polyfin/internal/plays"
@@ -177,6 +178,11 @@ type Options struct {
 	// BoxSets knows the TMDB collections of movies, whose artwork Silo's
 	// apps load through Polyfin (see boxsetimages.go); nil knows none.
 	BoxSets *boxset.Store
+	// Moonfin keeps what Polyfin serves Moonfin's apps as their companion
+	// (see moonfin.go), and PolyfinVersion is Polyfin's version, which its
+	// Ping tells; nil serves none.
+	Moonfin        *moonfin.Store
+	PolyfinVersion string
 }
 
 // Handler serves the Jellyfin API.
@@ -457,6 +463,7 @@ func New(options Options) *Handler {
 	signedIn(http.MethodGet, "/Videos/{itemId}/Trickplay/{width}/{file}", h.trickplayFile)
 	signedIn(http.MethodGet, "/Polyfin/Items/{itemId}/Share", h.mayShare)
 	h.soundRoutes(signedIn)
+	h.moonfinRoutes(rt)
 
 	h.routes = cors(rt)
 	return h
