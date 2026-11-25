@@ -714,6 +714,7 @@ Polyfin adds routes for what Jellyfin 12.4 has no route for: taking a title off 
 - `GET /Playlists/{id}/Items` lists the entries in the playlist's order, each with its `PlaylistItemId`.
 - `/Items?ParentId=<playlist>` lists them in the playlist's order without `SortBy`, or with `SortBy=None`. With a `SortBy`, they follow it, as a folder's children do: the standard fields, and `Random`, which jellyfin-web's Shuffle asks for, a new order each time.
 - A playlist's `Name` is the viewer's: see [Watchlist for apps](#watchlist-for-apps) for the Watchlist playlist's.
+- The Playlists view is a `UserView` of `CollectionType` `playlists`, as Jellyfin's. A playlist listed with `Fields=CanDownload`, `Chapters` or `RecursiveItemCount` carries them, as its details do: `false`, an empty list and its number of entries.
 
 ### Watchlist for apps
 
@@ -1049,6 +1050,7 @@ Polyfin's own routes, under the Live TV permission:
 - Guide programmes show their timers (`TimerId`, `SeriesTimerId`).
 - A recording under way can be followed at `/LiveTv/LiveRecordings/{id}/stream`. Unlike Jellyfin, it needs a signed-in user's credentials or play session, like Polyfin's other media.
 - Recordings are listed under `/LiveTv/Recordings`, and the folder at `/LiveTv/Recordings/Folders`.
+- A finished recording carries `CanDownload` in its details, and in listings asked with `Fields=CanDownload`: `true` when the user has **Can download** and `/Items/{id}/Download` serves its file. A recording under way has no file yet, and one taller than the user's quality group is refused: both are `false`.
 - A timer or series timer asked for a programme Polyfin does not know answers 404 (`Timers/Defaults`) or 400 (`SeriesTimers`), where Jellyfin fails with 500.
 - `POST /LiveTv/Timers/{id}` changes the timer the route names, not the one in the body.
 

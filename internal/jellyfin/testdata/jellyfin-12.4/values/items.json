@@ -1,0 +1,3535 @@
+{
+  "items": {
+    "album": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "MusicAlbum"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "MusicAlbum"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "MusicAlbum"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "MusicAlbum"
+          }
+        }
+      }
+    },
+    "artist": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "MusicArtist"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "MusicArtist"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "MusicArtist"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "MusicArtist"
+          }
+        }
+      }
+    },
+    "audiobook": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "PlayAccess": "Full",
+            "Type": "AudioBook"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "Type": "AudioBook"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "PlayAccess": "Full",
+            "Type": "AudioBook"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "Type": "AudioBook"
+          }
+        }
+      }
+    },
+    "boxset": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "BoxSet"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "BoxSet"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "BoxSet"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "BoxSet"
+          }
+        }
+      }
+    },
+    "channel": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "ChannelType": "TV",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "Remote",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "TvChannel"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "ChannelType": "TV",
+            "IsFolder": false,
+            "LocationType": "Remote",
+            "MediaType": "Video",
+            "Type": "TvChannel"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "ChannelType": "TV",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "Remote",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "TvChannel"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "ChannelType": "TV",
+            "IsFolder": false,
+            "LocationType": "Remote",
+            "MediaType": "Video",
+            "Type": "TvChannel"
+          }
+        }
+      }
+    },
+    "episode": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "folder": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Folder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Folder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Folder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Folder"
+          }
+        }
+      }
+    },
+    "movie": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Logo",
+            "Primary",
+            "Thumb"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Logo",
+            "Primary",
+            "Thumb"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Logo",
+            "Primary",
+            "Thumb"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Logo",
+            "Primary",
+            "Thumb"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "playlist": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Playlist"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": true,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Playlist"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Playlist"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": true,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Playlist"
+          }
+        }
+      }
+    },
+    "program": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsNews": true,
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Program"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsNews": true,
+            "MediaType": "Unknown",
+            "Type": "Program"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsNews": true,
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Program"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsNews": true,
+            "MediaType": "Unknown",
+            "Type": "Program"
+          }
+        }
+      }
+    },
+    "recording": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "season": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Season"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Season"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Season"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Season"
+          }
+        }
+      }
+    },
+    "series": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Series"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Series"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "Series"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": true,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played",
+            "PlayedPercentage",
+            "UnplayedItemCount"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "Series"
+          }
+        }
+      }
+    },
+    "track": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": true,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "PlayAccess": "Full",
+            "Type": "Audio"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": true,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "Type": "Audio"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": true,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "PlayAccess": "Full",
+            "Type": "Audio"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": true,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Audio",
+            "Type": "Audio"
+          }
+        }
+      }
+    },
+    "video": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Video",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Video",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Video",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Video",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "view-books": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "books",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "books",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "books",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "books",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-boxsets": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "boxsets",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "boxsets",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "boxsets",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "boxsets",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-homevideos": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "homevideos",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "homevideos",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "homevideos",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "homevideos",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-livetv": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "livetv",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "UserView"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "livetv",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "UserView"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "livetv",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "UserView"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "livetv",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "UserView"
+          }
+        }
+      }
+    },
+    "view-movies": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "movies",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "movies",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "movies",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "movies",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-music": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "music",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "music",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "music",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "music",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-playlists": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "playlists",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "UserView"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "playlists",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "UserView"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "playlists",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "UserView"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": false,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "playlists",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "UserView"
+          }
+        }
+      }
+    },
+    "view-recordings": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    },
+    "view-tvshows": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "tvshows",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "tvshows",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "tvshows",
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "PlayAccess": "Full",
+            "Type": "CollectionFolder"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": true,
+            "MediaSourceCount": false,
+            "MediaSources": false,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": false,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "CollectionType": "tvshows",
+            "IsFolder": true,
+            "LocationType": "FileSystem",
+            "MediaType": "Unknown",
+            "Type": "CollectionFolder"
+          }
+        }
+      }
+    }
+  },
+  "listingFields": [
+    "CanDelete",
+    "CanDownload",
+    "Chapters",
+    "ChildCount",
+    "MediaSources",
+    "MediaSourceCount",
+    "ParentId",
+    "PrimaryImageAspectRatio",
+    "RecursiveItemCount"
+  ]
+}

@@ -219,6 +219,21 @@ Polyfin serves a title's streams, subtitles and fonts for the user its address n
 
 API details: [Who a media URL plays for](jellyfin-api.md#who-a-media-url-plays-for), [Opening streams and downloading files](jellyfin-api.md#opening-streams-and-downloading-files).
 
+### What items tell apps
+
+Apps decide from an item's fields how to show and open it: its type, whether it is a folder, whether it plays as video or audio, whether it can be downloaded or deleted. Polyfin gives these fields as Jellyfin 12.4 gives them for each kind of item, to a user allowed to download and to one who is not, and its tests compare them with the answers of a real Jellyfin server (see [Jellyfin fixtures](development.md#jellyfin-fixtures)).
+
+**Compared with Jellyfin**
+
+- **Pictures:** an item has the pictures its source gives: an addon's artwork, a collection's picture drawn from its titles' posters, Polyfin's emblems for its own views. Jellyfin also draws pictures from frames of its videos and recordings, and from its titles for folders and libraries.
+- **Lengths of other videos:** a video of an addon's catalog of other videos has a length once the addon gives one or a play read it.
+- **Deleting playlists:** a playlist tells apps it can be deleted (`CanDelete`) only when the user owns it or is an administrator, who alone may delete it. Jellyfin's listings tell it to the users a playlist is shared with too, though its details do not.
+- **Library sizes:** a library of an addon's catalog has no `ChildCount`, as the catalog's size is unknown until it is read whole.
+- **Albums and audiobooks:** an addon's album has no `ParentId`, where Jellyfin's sits in its artist's folder. An audiobook the addon gives an album links it in `AlbumId`, as a track does.
+- **Programmes:** guide programmes carry `IsFolder` `false` and `LocationType` `FileSystem`, which Jellyfin leaves out, and are `MediaType` `Video` in listings as in their details, where Jellyfin's listings say `Unknown`.
+
+API details: [Recordings and timers for apps](jellyfin-api.md#recordings-and-timers-for-apps), [Playlists for apps](jellyfin-api.md#playlists-for-apps).
+
 ### What a streamed play sends
 
 The session of a device playing a version Polyfin streams, over HLS or as one file, carries `TranscodingInfo`, as Jellyfin's does: whether the video and the audio are copied (`IsVideoDirect`, `IsAudioDirect`), the codecs, size, bitrate and audio channels sent, the container, the GPU converting the video, and `TranscodeReasons`. The web player's "Playback Info" reads it to say "Direct streaming" when only the audio is converted, rather than "Transcoding", with the target codecs and the reasons (see [Seeing how a play goes](transcoding.md#seeing-how-a-play-goes)). DLNA devices' sessions carry it too. A version played as it is has none.
