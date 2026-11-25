@@ -1,6 +1,7 @@
 package iptv
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"slices"
@@ -245,5 +246,75 @@ func TestKodiPropertiesAreRead(t *testing.T) {
 	}
 	if entries[4].Protection != nil {
 		t.Errorf("a stream the list says nothing of: %+v", entries[4].Protection)
+	}
+}
+
+// Kodi 21's drm_legacy property and Kodi 22's drm property name the
+// licence type, ClearKey keys or the licence server, and its headers, as
+// license_type and license_key do: ClearKey is taken when a drm property
+// names it beside other systems, as Polyfin decrypts it, else the system
+// ranked first.
+func TestKodiDRMPropertiesAreRead(t *testing.T) {
+	t.Parallel()
+	jwk := base64.StdEncoding.EncodeToString([]byte(`{"keys":[{"kty":"oct","kid":"ASNFZ4mrze8BI0VniavN7w","k":"ABEiM0RVZneImaq7zN3u_w"}]}`))
+	entries, err := parse(t, "#EXTM3U\n"+
+		"#EXTINF:-1,Zeb Legacy\n"+
+		"#KODIPROP:inputstream.adaptive.drm_legacy=org.w3.clearkey|0123456789abcdef0123456789abcdef:00112233445566778899aabbccddeeff\n"+
+		"https://live.example/zeb.mpd\n"+
+		"#EXTINF:-1,Orbe Legacy Server\n"+
+		"#KODIPROP:inputstream.adaptive.drm_legacy=org.w3.clearkey|https://licence.example/ck|X-Token=abc&User-Agent=Player%2F3\n"+
+		"https://live.example/orbe.mpd\n"+
+		"#EXTINF:-1,Kite Legacy Data\n"+
+		"#KODIPROP:inputstream.adaptive.drm_legacy=org.w3.clearkey|data:application/json;base64,"+jwk+"\n"+
+		"https://live.example/kite.mpd\n"+
+		"#EXTINF:-1,Plume Legacy Widevine\n"+
+		"#KODIPROP:inputstream.adaptive.drm_legacy=com.widevine.alpha|https://licence.example/wv|User-Agent=Player%2F3\n"+
+		"https://live.example/plume.mpd\n"+
+		"#EXTINF:-1,Moss Widevine\n"+
+		`#KODIPROP:inputstream.adaptive.drm={"com.widevine.alpha":{"license":{"server_url":"https://licence.example/wv","req_headers":"X-Token=abc"}}}`+"\n"+
+		"https://live.example/moss.mpd\n"+
+		"#EXTINF:-1,Fern Both\n"+
+		`#KODIPROP:inputstream.adaptive.drm={"com.widevine.alpha":{"priority":1},"org.w3.clearkey":{"license":{"keyids":{"0123456789abcdef0123456789abcdef":"00112233445566778899aabbccddeeff"}}}}`+"\n"+
+		"https://live.example/fern.mpd\n"+
+		"#EXTINF:-1,Reed Ranked\n"+
+		`#KODIPROP:inputstream.adaptive.drm={"com.widevine.alpha":{"priority":2},"com.microsoft.playready":{"priority":1}}`+"\n"+
+		"https://live.example/reed.mpd\n"+
+		"#EXTINF:-1,Sage Clear Server\n"+
+		`#KODIPROP:inputstream.adaptive.drm={"none":{},"org.w3.clearkey":{"license":{"server_url":"https://licence.example/ck","req_headers":"X-Token=abc"}}}`+"\n"+
+		"https://live.example/sage.mpd\n"+
+		"#EXTINF:-1,Tern AES\n"+
+		`#KODIPROP:inputstream.adaptive.drm={"none":{"license":{"req_headers":"X-Token=abc"}}}`+"\n"+
+		"https://live.example/tern.m3u8\n")
+	if err != nil || len(entries) != 9 {
+		t.Fatalf("entries: %+v %v", entries, err)
+	}
+	keys := []drm.Key{{ID: "0123456789abcdef0123456789abcdef", Value: "00112233445566778899aabbccddeeff"}}
+	for _, i := range []int{0, 2, 5} {
+		if p := entries[i].Protection; p == nil || p.License != drm.ClearKey || !slices.Equal(p.Keys, keys) || p.LicenseURL != "" || !p.Decrypted() {
+			t.Errorf("%s: %+v", entries[i].Name, p)
+		}
+	}
+	for _, i := range []int{1, 7} {
+		if p := entries[i].Protection; p == nil || p.License != drm.ClearKey || p.Keys != nil || p.LicenseURL != "https://licence.example/ck" ||
+			p.LicenseHeaders["X-Token"] != "abc" || !p.Decrypted() {
+			t.Errorf("%s: %+v", entries[i].Name, p)
+		}
+	}
+	if p := entries[1].Protection; p == nil || p.LicenseHeaders["User-Agent"] != "Player/3" || len(p.LicenseHeaders) != 2 {
+		t.Errorf("the licence server's headers: %+v", p)
+	}
+	for i, name := range map[int]string{3: "Widevine", 4: "Widevine", 6: "PlayReady"} {
+		if p := entries[i].Protection; p == nil || !p.Unsupported() || p.Name() != name {
+			t.Errorf("%s: %+v, want %s", entries[i].Name, p, name)
+		}
+	}
+	if p := entries[3].Protection; p == nil || p.LicenseURL != "https://licence.example/wv" || p.LicenseHeaders["User-Agent"] != "Player/3" {
+		t.Errorf("a Widevine licence server: %+v", p)
+	}
+	if p := entries[8].Protection; p == nil || p.License != "" || p.Unsupported() || p.Decrypted() {
+		t.Errorf("HLS's own encryption names no licence: %+v", p)
+	}
+	if entries[8].Headers != nil {
+		t.Errorf("the key request's headers are not the stream's: %v", entries[8].Headers)
 	}
 }

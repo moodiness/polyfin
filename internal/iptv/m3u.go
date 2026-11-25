@@ -3,10 +3,13 @@ package iptv
 import (
 	"bufio"
 	"bytes"
+	"cmp"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -235,10 +238,11 @@ func headerPairs(text string) (map[string]string, bool) {
 // kodiProperty reads a #KODIPROP line's property, as lists write those of
 // adaptive streams: inputstream.adaptive.manifest_type (mpd, hls),
 // license_type (org.w3.clearkey, com.widevine.alpha...), license_key
-// (ClearKey keys, or a licence server's address, see licenseKey), and
-// manifest_headers and stream_headers, Name=value pairs apart by &.
-// Polyfin sends one set of headers with every request of a stream: both
-// are its headers. Other properties are not read.
+// (ClearKey keys, or a licence server's address, see licenseKey), drm_legacy
+// and drm, which name the same in one property (see drmLegacy and
+// drmConfig), and manifest_headers and stream_headers, Name=value pairs
+// apart by &. Polyfin sends one set of headers with every request of a
+// stream: both are its headers. Other properties are not read.
 func (e *Entry) kodiProperty(name, value string) {
 	name, value = strings.ToLower(strings.TrimSpace(name)), strings.TrimSpace(value)
 	property, ok := strings.CutPrefix(name, "inputstream.adaptive.")
@@ -258,6 +262,10 @@ func (e *Entry) kodiProperty(name, value string) {
 		protection().License = drm.LicenseType(value)
 	case "license_key":
 		licenseKey(protection(), value)
+	case "drm_legacy":
+		drmLegacy(protection(), value)
+	case "drm":
+		drmConfig(protection(), value)
 	case "manifest_headers", "stream_headers":
 		headers, _ := headerPairs(value)
 		for _, name := range slices.Sorted(maps.Keys(headers)) {
@@ -286,6 +294,122 @@ func licenseKey(p *drm.Protection, value string) {
 			p.License = drm.ClearKey
 		}
 	}
+}
+
+// drmLegacy reads a drm_legacy property, written keysystem|licence|headers,
+// the last two optional: the licence type, then the licence server's
+// address or ClearKey keys (see licenseValue), then the licence server's
+// headers, Name=value pairs apart by &.
+func drmLegacy(p *drm.Protection, value string) {
+	fields := strings.SplitN(value, "|", 3)
+	if system := strings.TrimSpace(fields[0]); system != "" {
+		p.License = drm.LicenseType(system)
+	}
+	if len(fields) > 1 {
+		licenseValue(p, fields[1])
+	}
+	if len(fields) > 2 && strings.TrimSpace(fields[2]) != "" {
+		if headers, ok := headerPairs(fields[2]); ok {
+			p.LicenseHeaders = headers
+		}
+	}
+}
+
+// drmSystem is a key system's configuration in a drm property: its rank
+// among the others (1 first, 0 for none), and its licence server's address
+// or ClearKey keys as a data address, the server's headers, and ClearKey
+// keys by key ID.
+type drmSystem struct {
+	Priority int `json:"priority"`
+	License  struct {
+		ServerURL string            `json:"server_url"`
+		Headers   string            `json:"req_headers"`
+		KeyIDs    map[string]string `json:"keyids"`
+	} `json:"license"`
+}
+
+// drmConfig reads a drm property: a JSON object of configurations by key
+// system. "none", which configures HLS's own encryption, names no licence.
+// ClearKey is taken when the object names it, as Polyfin decrypts it;
+// otherwise the system ranked first (by priority, then name), which
+// Polyfin does not support.
+func drmConfig(p *drm.Protection, value string) {
+	var systems map[string]drmSystem
+	if json.Unmarshal([]byte(value), &systems) != nil {
+		return
+	}
+	maps.DeleteFunc(systems, func(name string, _ drmSystem) bool {
+		return slices.Contains([]string{"", "none"}, drm.LicenseType(name))
+	})
+	rank := func(name string) int {
+		switch n := systems[name].Priority; {
+		case drm.LicenseType(name) == drm.ClearKey:
+			return 0
+		case n > 0:
+			return n
+		}
+		return math.MaxInt
+	}
+	names := slices.SortedFunc(maps.Keys(systems), func(a, b string) int {
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), strings.Compare(a, b))
+	})
+	if len(names) == 0 {
+		return
+	}
+	system := systems[names[0]]
+	p.License = drm.LicenseType(names[0])
+	if len(system.License.KeyIDs) > 0 {
+		pairs, _ := json.Marshal(system.License.KeyIDs)
+		if keys, ok := drm.ParseKeys(string(pairs)); ok {
+			p.Keys = keys
+		}
+	}
+	licenseValue(p, system.License.ServerURL)
+	if headers, ok := headerPairs(system.License.Headers); ok && strings.TrimSpace(system.License.Headers) != "" {
+		p.LicenseHeaders = headers
+	}
+}
+
+// licenseValue reads the licence of drm_legacy and drm: a licence server's
+// address, ClearKey keys as kid:key pairs (see drm.ParseKeys), or a
+// ClearKey licence as a data address (data:application/json;base64,...).
+// Keys make the licence ClearKey when the list names no type.
+func licenseValue(p *drm.Protection, value string) {
+	value = strings.TrimSpace(value)
+	if streamAddress(value) {
+		p.LicenseURL = value
+		return
+	}
+	if data, ok := strings.CutPrefix(value, "data:"); ok {
+		value = dataText(data)
+	}
+	if keys, ok := drm.ParseKeys(value); ok {
+		p.Keys = keys
+		if p.License == "" {
+			p.License = drm.ClearKey
+		}
+	}
+}
+
+// dataText is the text a data address holds, after its "data:": base64
+// when its type says so, percent-encoded otherwise; "" when it is neither.
+func dataText(data string) string {
+	kind, payload, ok := strings.Cut(data, ",")
+	if !ok {
+		return ""
+	}
+	if strings.HasSuffix(strings.ToLower(kind), ";base64") {
+		raw, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(payload, "="))
+		if err != nil {
+			return ""
+		}
+		return string(raw)
+	}
+	text, err := url.PathUnescape(payload)
+	if err != nil {
+		return ""
+	}
+	return text
 }
 
 // streamAddress reports whether a playlist line is an address Polyfin can
