@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/drm"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -273,6 +274,9 @@ type Stream struct {
 	Address string
 	// Health is how the stream last answered when its channel was opened.
 	Health StreamHealth
+	// DRM names the DRM the stream's list says it needs, when Polyfin does
+	// not support it (see drm.Protection.Unsupported); "" otherwise.
+	DRM string
 }
 
 // Channel is a channel of a line-up as the administrator edits it.
@@ -303,6 +307,9 @@ type Channel struct {
 	// ArchiveDays is how many days back the provider keeps the channel's
 	// past programmes, played from Replay; 0 for no archive.
 	ArchiveDays int
+	// NeedsDRM tells a channel left out of apps because every one of its
+	// enabled streams names a DRM Polyfin does not support (see shownSQL).
+	NeedsDRM bool
 
 	key string
 }
@@ -363,7 +370,7 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 		channels[i].Streams = []Stream{}
 	}
 	rows, err = s.db.Query(ctx, `SELECT s.channel_id, s.key, s.label, s.enabled, s.custom_url,
-		coalesce(s.custom_url, e.url, ''), coalesce(s.health_url, ''), s.ok_at, s.failure, s.failed_at, s.failures FROM iptv_streams s
+		coalesce(s.custom_url, e.url, ''), coalesce(s.health_url, ''), s.ok_at, s.failure, s.failed_at, s.failures, e.protection FROM iptv_streams s
 		LEFT JOIN iptv_entries e ON e.addon_id = s.addon_id AND e.key = s.key
 		WHERE s.addon_id = $1 AND s.channel_id = ANY($2) ORDER BY s.channel_id, `+streamOrder, source, keys)
 	if err != nil {
@@ -373,19 +380,34 @@ func (s *Service) channels(ctx context.Context, source accounts.ID, filter strin
 	var st Stream
 	var custom *string
 	var h health
+	var protection *drm.Protection
 	now := s.now()
-	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom, &address, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&channel, &st.ID, &st.Label, &st.Enabled, &custom, &address, &checked, &h.okAt, &h.failure, &h.failedAt, &h.failures,
+		&protection}, func() error {
 		stream := st
 		stream.Custom = custom != nil
 		if custom != nil {
 			stream.Address = Redact(*custom)
 		}
 		stream.Health = streamHealth(address, checked, h, now)
+		if protection.Unsupported() {
+			stream.DRM = protection.Name()
+		}
 		c := &channels[index[channel]]
 		c.Streams = append(c.Streams, stream)
+		// pgx decodes JSON into the value given: each row starts empty.
+		protection = nil
 		return nil
 	})
-	return total, channels, err
+	if err != nil {
+		return total, channels, err
+	}
+	for i := range channels {
+		c := &channels[i]
+		c.NeedsDRM = slices.ContainsFunc(c.Streams, func(s Stream) bool { return s.Enabled }) &&
+			!slices.ContainsFunc(c.Streams, func(s Stream) bool { return s.Enabled && s.DRM == "" })
+	}
+	return total, channels, nil
 }
 
 // ListChannels lists a line-up's channels in order, narrowed by filter:

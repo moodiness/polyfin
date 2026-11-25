@@ -65,6 +65,8 @@ A playlist's `#KODIPROP` lines, before or after the channel's `#EXTINF` line, ar
 | `inputstream.adaptive.manifest_type` | `mpd` or `hls` |
 | `inputstream.adaptive.license_type` | `org.w3.clearkey` or `clearkey` for ClearKey. Any other type, such as `com.widevine.alpha` or `com.microsoft.playready`, is not supported (see below). |
 | `inputstream.adaptive.license_key` | ClearKey keys as `kid:key` pairs, in hexadecimal or base64url, several separated by commas, or a JSON Web Key set. Or the address of a ClearKey license server, optionally followed by `\|` and its `Name=value&Name=value` headers. |
+| `inputstream.adaptive.drm_legacy` | The same in one property, as Kodi 21 writes it: `type\|license\|headers`, the last two optional. The license is a license server's address, ClearKey keys as `kid:key` pairs, or a ClearKey license as a `data:` address. The headers are the license server's, as `Name=value` pairs separated by `&`. |
+| `inputstream.adaptive.drm` | The same as a JSON object by license type, as Kodi 22 writes it. Polyfin reads each type's `license` object: `server_url`, `req_headers` and `keyids`. When the object names ClearKey beside other types, ClearKey is used. Otherwise the type with the lowest `priority`, then by name, is the stream's. A `none` type, for HLS's own encryption, names no license. |
 | `inputstream.adaptive.manifest_headers` and `inputstream.adaptive.stream_headers` | `Name=value` pairs separated by `&`. Both become the channel's headers, as Polyfin sends one set with every request of a stream. They come after its `#EXTVLCOPT` and `#EXTHTTP` lines, and before the `\|` pairs of its address. |
 
 A channel's first 64 `#KODIPROP` lines are read; lists write a handful.
@@ -82,13 +84,15 @@ FFmpeg decrypts a ClearKey channel with the keys its list gives, by key ID.
 | A license server's address | Never shown |
 | Keys while the channel plays | FFmpeg takes them on its command line, the only way it reads them. The server's other local users can see them. |
 | Keys that do not decrypt the stream | The stream fails as **The list's keys do not decrypt it** |
-| Widevine, PlayReady or another license type | The stream fails as **Needs a DRM Polyfin does not support** |
+| Widevine, PlayReady or another license type | The stream fails as **Needs a DRM Polyfin does not support**, before its source is asked. A channel whose every turned-on stream names such a type is not shown in apps (see below). |
 | An encrypted stream whose list gives no ClearKey keys | The stream fails as **Needs a DRM Polyfin does not support** |
 | An FFmpeg built without libxml2 | It has no DASH demuxer. Its DASH channels fail, saying so. |
 
 - Polyfin checks the keys by decoding the stream's first 8 pictures. A wrong key's garbage sometimes decodes for one picture, never for several in a row.
 - Widevine, PlayReady and other license types need the provider's content decryption module. It is licensed to browsers and devices, not to servers.
-- A channel whose list names such a license fails before its source is asked.
+- A channel whose every turned-on stream names such a license type leaves the line-up: Jellyfin apps do not list it, nor show its programmes in the guide, and cannot play it. Its source is never asked.
+- The admin app still lists it among the source's **Channels**, marked **Needs a DRM**. Its editor names the DRM each stream needs, such as "Needs Widevine, which Polyfin does not support". The **In apps** filter counts it as not shown.
+- A channel with another stream turned on stays, and plays that one, such as a merged channel's stream without DRM, or one you added. In such a channel, a stream that names such a license fails before its source is asked.
 - These failures are not tried again as a network failure would be (see [Stream health](iptv.md#stream-health)).
 - The keys apply to DASH channels. The FFmpeg builds Polyfin ships read DASH.
 

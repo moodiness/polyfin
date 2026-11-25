@@ -479,15 +479,18 @@ function ChannelRow({
             <span className="md:hidden"> · {text.archiveDays(channel.archiveDays)}</span>
           )}
           {channel.enabled && !channel.shown && (
-            <span className="text-warn md:hidden"> · {text.hidden}</span>
+            <span className="text-warn md:hidden">
+              {' '}
+              · {channel.needsDrm ? text.needsDrm : text.hidden}
+            </span>
           )}
         </p>
       </div>
       <span className="hidden max-w-[45%] shrink-0 flex-wrap justify-end gap-1.5 md:flex">
         {channel.enabled && !channel.shown && (
-          <Tooltip content={text.hiddenHelp}>
+          <Tooltip content={channel.needsDrm ? text.needsDrmHelp : text.hiddenHelp}>
             <span tabIndex={0} className="rounded-full focus-lit">
-              <Badge tone="warn">{text.hidden}</Badge>
+              <Badge tone="warn">{channel.needsDrm ? text.needsDrm : text.hidden}</Badge>
             </span>
           </Tooltip>
         )}

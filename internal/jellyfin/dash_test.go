@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -245,8 +246,9 @@ func (p *dashProvider) licence(w http.ResponseWriter, r *http.Request) {
 }
 
 // dashSetup is a server with a member signed in, whose M3U source is a
-// dashProvider's list, its channels by name. The log keeps every record,
-// and the streams' health is saved as the server saves it.
+// dashProvider's list, imported with options (nil for the defaults), its
+// channels by name. The log keeps every record, and the streams' health is
+// saved as the server saves it.
 type dashSetup struct {
 	s        testServer
 	token    string
@@ -256,7 +258,7 @@ type dashSetup struct {
 	provider *dashProvider
 }
 
-func newDASHSetup(t *testing.T, ffprobe string, provider *dashProvider) dashSetup {
+func newDASHSetup(t *testing.T, ffprobe string, provider *dashProvider, options *iptv.OptionsPatch) dashSetup {
 	t.Helper()
 	s := newProbingServer(t, 10, ffprobe)
 	s.warnings.all.Store(true)
@@ -266,7 +268,7 @@ func newDASHSetup(t *testing.T, ffprobe string, provider *dashProvider) dashSetu
 	s.user("member", nil)
 	d := dashSetup{s: s, token: s.signIn("member", "tv"), channels: map[string]string{}, provider: provider}
 	addon, err := s.iptv.Add(t.Context(), addons.Shared(), iptv.NewSource{Name: "Provider",
-		Account: iptv.Account{Kind: addons.KindM3U, URL: provider.url}}, false)
+		Account: iptv.Account{Kind: addons.KindM3U, URL: provider.url}, Options: options}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,15 +296,17 @@ func (d dashSetup) playbackInfo(t *testing.T, name string) playbackInfoResponse 
 	return info
 }
 
-// health is how the stream of a channel last answered.
+// health is how the stream of a channel last answered: its one stream
+// whose list names no DRM Polyfin does not support.
 func (d dashSetup) health(t *testing.T, name string) iptv.StreamHealth {
 	t.Helper()
 	id, _ := accounts.ParseID(d.channels[name])
 	c, err := d.s.iptv.Channel(t.Context(), addons.Shared(), d.source, id)
-	if err != nil || len(c.Streams) != 1 {
+	streams := slices.DeleteFunc(c.Streams, func(s iptv.Stream) bool { return s.DRM != "" })
+	if err != nil || len(streams) != 1 {
 		t.Fatalf("the streams of %s: %+v %v", name, c, err)
 	}
-	return c.Streams[0].Health
+	return streams[0].Health
 }
 
 // plays checks that a channel plays converted into HLS, as jellyfin-web
@@ -404,7 +408,7 @@ func TestDASHChannelPlays(t *testing.T) {
 	provider := newDASHProvider(t, ffmpeg, func(base string) string {
 		return "#EXTM3U\n#EXTINF:-1,Zeb Clear\n" + base + "/clear/manifest.mpd\n"
 	}, false)
-	d := newDASHSetup(t, ffprobe, provider)
+	d := newDASHSetup(t, ffprobe, provider, nil)
 	d.plays(t, ffmpeg, "Zeb Clear")
 }
 
@@ -427,7 +431,7 @@ func TestClearKeyChannelsPlay(t *testing.T) {
 			"#EXTINF:-1 tvg-chno=\"2\",Kite Licence\n" +
 			"#EXTVLCOPT:http-referrer=https://portal.example/\n" + encrypted
 	}, true)
-	d := newDASHSetup(t, ffprobe, provider)
+	d := newDASHSetup(t, ffprobe, provider, nil)
 	d.plays(t, ffmpeg, "Orbe Keys")
 	d.plays(t, ffmpeg, "Kite Licence")
 	provider.mu.Lock()
@@ -439,10 +443,56 @@ func TestClearKeyChannelsPlay(t *testing.T) {
 	d.keysUnlogged(t)
 }
 
-// A wrong key, a Widevine licence, or an encrypted stream whose list gives
-// no keys, are told as such failures, once, and not asked again as a
-// network failure would be; the Widevine stream's source is never asked.
-// The keys never show in the log.
+// Channels whose list writes Kodi 21's drm_legacy or Kodi 22's drm
+// property play as the others do: decrypted with the ClearKey keys the
+// property gives, or those its licence server answers. A merged channel's
+// Widevine stream is refused before its source is asked, and its ClearKey
+// stream plays.
+func TestClearKeyChannelsOfNewerKodiPropertiesPlay(t *testing.T) {
+	t.Parallel()
+	ffmpeg, ffprobe := dashFFmpeg(t)
+	provider := newDASHProvider(t, ffmpeg, func(base string) string {
+		encrypted := base + "/enc/manifest.mpd\n"
+		return "#EXTM3U\n" +
+			"#EXTINF:-1 tvg-chno=\"1\",Fern Legacy\n" +
+			"#KODIPROP:inputstream.adaptive.drm_legacy=org.w3.clearkey|" + dashKID + ":" + dashKey + "\n" + encrypted +
+			"#EXTINF:-1 tvg-chno=\"2\",Sage Config\n" +
+			"#EXTVLCOPT:http-referrer=https://portal.example/\n" +
+			`#KODIPROP:inputstream.adaptive.drm={"org.w3.clearkey":{"license":{"server_url":"` + base + "/licence?token=" + licenceToken +
+			`","req_headers":"X-Licence=yes"}}}` + "\n" + encrypted +
+			"#EXTINF:-1 tvg-chno=\"3\",Moss FHD\n" +
+			"#KODIPROP:inputstream.adaptive.drm_legacy=com.widevine.alpha|" + base + "/widevine/licence\n" + base + "/widevine/manifest.mpd\n" +
+			"#EXTINF:-1 tvg-chno=\"3\",Moss HD\n" +
+			`#KODIPROP:inputstream.adaptive.drm={"com.widevine.alpha":{},"org.w3.clearkey":{"license":{"keyids":{"` + dashKID + `":"` + dashKey + `"}}}}` +
+			"\n" + encrypted
+	}, true)
+	merged := iptv.ChannelsMerged
+	d := newDASHSetup(t, ffprobe, provider, &iptv.OptionsPatch{Channels: &merged})
+	d.plays(t, ffmpeg, "Fern Legacy")
+	d.plays(t, ffmpeg, "Sage Config")
+	d.plays(t, ffmpeg, "Moss")
+	if n := provider.asked("widevine"); n != 0 {
+		t.Errorf("the Widevine stream's source was asked %d times", n)
+	}
+	id, _ := accounts.ParseID(d.channels["Moss"])
+	moss, err := d.s.iptv.Channel(t.Context(), addons.Shared(), d.source, id)
+	if err != nil || len(moss.Streams) != 2 || moss.Streams[0].DRM != "Widevine" || moss.Streams[0].Health.Failure != iptv.FailureDRM ||
+		moss.Streams[1].DRM != "" || !moss.Shown || moss.NeedsDRM {
+		t.Errorf("Moss: %+v %v", moss, err)
+	}
+	provider.mu.Lock()
+	licences := provider.licences
+	provider.mu.Unlock()
+	if len(licences) == 0 || strings.Join(licences, "") != "" {
+		t.Errorf("licence requests: %q", licences)
+	}
+	d.keysUnlogged(t)
+}
+
+// A wrong key, or an encrypted stream whose list gives no keys, are told
+// as such failures, once, and not asked again as a network failure would
+// be. A channel whose list names a Widevine licence is not listed, and its
+// source is never asked. The keys never show in the log.
 func TestDASHChannelsThatCannotPlay(t *testing.T) {
 	t.Parallel()
 	ffmpeg, ffprobe := dashFFmpeg(t)
@@ -457,10 +507,12 @@ func TestDASHChannelsThatCannotPlay(t *testing.T) {
 			"#KODIPROP:inputstream.adaptive.license_key=" + base + "/widevine/licence\n" + base + "/widevine/manifest.mpd\n" +
 			"#EXTINF:-1 tvg-chno=\"3\",Fern Locked\n" + encrypted
 	}, true)
-	d := newDASHSetup(t, ffprobe, provider)
+	d := newDASHSetup(t, ffprobe, provider, nil)
+	if _, listed := d.channels["Moss Widevine"]; listed || len(d.channels) != 2 {
+		t.Errorf("the channels listed: %v", d.channels)
+	}
 	for _, tc := range []struct{ name, failure, says string }{
 		{"Plume Wrong", iptv.FailureKeys, "ClearKey keys do not decrypt"},
-		{"Moss Widevine", iptv.FailureDRM, "needs a DRM Polyfin does not support: its list names a Widevine licence"},
 		{"Fern Locked", iptv.FailureDRM, "needs a DRM Polyfin does not support: it is encrypted (Widevine, ClearKey), and its list gives no ClearKey keys"},
 	} {
 		if info := d.playbackInfo(t, tc.name); len(info.MediaSources) != 0 {

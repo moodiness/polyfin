@@ -269,6 +269,9 @@ const iptv = {
       shown: 'Shown',
       hidden: 'Not shown',
       hiddenHelp: 'On, but its category is off or none of its streams is on.',
+      needsDrm: 'Needs a DRM',
+      needsDrmHelp:
+        'Each of its streams that is on needs a DRM Polyfin does not support, such as Widevine.',
       mapped: 'With a guide',
       unmapped: 'No guide',
       archived: 'With an archive',
@@ -308,6 +311,7 @@ const iptv = {
       title: (name: string) => `Edit ${name}`,
       shownInApps: 'Shown in Jellyfin apps',
       notShownInApps: 'Not shown in Jellyfin apps',
+      needsDrm: 'Its streams that are on need a DRM Polyfin does not support.',
       numberNow: (number: string) => `number ${number}`,
       name: 'Name',
       providerValue: (value: string) => `Provider’s: ${value}`,
@@ -344,6 +348,7 @@ const iptv = {
       defaultLabel: 'Custom',
       add: 'Add the stream',
       adding: 'Adding…',
+      drm: (name: string) => `Needs ${name}, which Polyfin does not support`,
       failures: {
         dead: 'No live stream',
         refused: 'Refused by the provider',
