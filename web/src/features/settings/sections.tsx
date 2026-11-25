@@ -43,6 +43,7 @@ import { LastBackup, Variables } from './Diagnostics'
 import DlnaSection from './DlnaSection'
 import TorrentsSection from './TorrentsSection'
 import MetricsToken from './MetricsToken'
+import MoonfinDefaults from './MoonfinDefaults'
 import { FieldRow, ListRows, PlainRow, SettingsGroup, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
@@ -188,6 +189,20 @@ function General({ form, update, error, range, limits, saved }: SectionFormApi) 
         onChange={(siloApps) => update({ siloApps })}
         saved={saved.siloApps}
       />
+      <SettingRow
+        kind="switch"
+        anchor="moonfin"
+        label={s.moonfin}
+        help={s.moonfinHelp}
+        checked={form.moonfin}
+        onChange={(moonfin) => update({ moonfin })}
+        saved={saved.moonfin}
+      />
+      {form.moonfin && (
+        <PlainRow anchor="moonfin-defaults">
+          <MoonfinDefaults />
+        </PlainRow>
+      )}
       <SettingRow
         kind="switch"
         anchor="update-check"

@@ -65,6 +65,52 @@ const settings = {
     siloApps: 'Allow Silo’s apps',
     siloAppsHelp:
       'Lets Silo’s apps for iPhone, iPad, Apple TV, Mac and Android sign in and play, under Silo’s API at /api/v2, as Jellyfin apps do, within each user’s limits. Off, that API answers nothing.',
+    moonfin: 'Serve Moonfin’s companion',
+    moonfinHelp:
+      'Moonfin’s apps then find Polyfin’s own companion: each user’s settings synced across their devices, MDBList ratings and TMDB extras. Other apps see no change. Each user can be set apart on their page under Users.',
+    /** Moonfin's defaults, under Serve Moonfin's companion in Settings › General. */
+    moonfinDefaults: {
+      title: 'Moonfin’s defaults',
+      help: 'The settings Moonfin’s apps take for what a user never set. Global applies to every device; TV, Desktop and Mobile win over it on that kind of device.',
+      profiles: 'Profiles',
+      count: (count: number) =>
+        count === 0 ? 'No setting set' : count === 1 ? '1 setting set' : `${count} settings set`,
+      take: 'Take from an account',
+      takeTitle: (profile: string) => `Take the ${profile} defaults from an account`,
+      takeHelp: (profile: string) =>
+        `The settings an account synced, in the profile you pick, replace the ${profile} defaults, unsaved changes included. The account’s own API keys and hidden items are left out.`,
+      account: 'Account',
+      from: 'Its profile',
+      copy: 'Copy',
+      copied: (profile: string) => `${profile} defaults taken from the account.`,
+      noAccounts: 'No account has synced settings yet. Set Moonfin up on an account first.',
+      editor: (profile: string) => `${profile} defaults in JSON`,
+      editorHelp:
+        'A JSON object of Moonfin’s settings, by their names in the app. A setting left out stays the user’s choice. A user’s own API keys and hidden items are never kept here.',
+      notObject: 'Write a JSON object, between { and }.',
+      saved: (profile: string) => `${profile} defaults saved.`,
+      apply: 'Apply to users',
+      applyHelp:
+        'Writes the saved defaults into the settings of every user who synced, each profile into the same profile.',
+      saveFirst: 'Save or discard the changes first: users get the saved defaults.',
+      applyTitle: 'Apply the defaults to users?',
+      applyIntro:
+        'The saved defaults go into the settings of every user who synced, each profile into the same one.',
+      applyMode: 'How',
+      merge: 'Merge',
+      reset: 'Replace',
+      mergeHelp:
+        'Each setting the defaults set takes their value; users keep their other settings.',
+      resetHelp:
+        'Each user’s settings become the defaults; only their own API keys and hidden items stay. This cannot be undone.',
+      applyConfirm: 'Apply',
+      applied: (count: number) =>
+        count === 0
+          ? 'No user had synced settings.'
+          : count === 1
+            ? '1 user updated.'
+            : `${count} users updated.`,
+    },
     updateCheck: 'Check for new versions',
     updateCheckHelp:
       'Once a day, and shortly after startup, Polyfin asks GitHub for its latest release, sending only its version. A newer one shows on Home and under System › Health, and is sent to the New version notifications. Off, Polyfin never contacts GitHub.',

@@ -305,6 +305,11 @@ const common: typeof en = {
     invalid_custom_js: 'Le JavaScript personnalisé ne doit pas dépasser 2 Mo.',
     invalid_web_theme: 'Choisissez un thème dans la liste.',
     web_theme_locked: 'Votre administrateur a choisi le thème de votre lecteur web.',
+    invalid_moonfin: 'Choisissez Réglage du serveur, Activé ou Désactivé.',
+    moonfin_locked: 'Votre administrateur a choisi si le compagnon de Moonfin vous est servi.',
+    invalid_moonfin_defaults:
+      'Les valeurs par défaut doivent être un objet JSON de 256 Ko au plus.',
+    moonfin_settings_not_found: 'Ce compte n’a pas de réglages synchronisés dans ce profil.',
     theme_copy_running: 'Une copie du thème est déjà en cours. Réessayez dans un instant.',
     theme_copy_nothing: 'Les textes personnalisés enregistrés ne chargent rien d’ailleurs.',
     theme_copy_failed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite.',

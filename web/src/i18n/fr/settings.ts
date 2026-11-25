@@ -68,6 +68,57 @@ const settings: typeof en = {
     siloApps: 'Autoriser les applications de Silo',
     siloAppsHelp:
       'Permet aux applications de Silo pour iPhone, iPad, Apple TV, Mac et Android de se connecter et de lire, par l’API de Silo sous /api/v2, comme les applications Jellyfin, dans les limites de chaque utilisateur. Désactivé, cette API ne répond rien.',
+    moonfin: 'Servir le compagnon de Moonfin',
+    moonfinHelp:
+      'Les applications Moonfin trouvent alors le compagnon propre à Polyfin\u202f: les réglages de chaque utilisateur synchronisés entre ses appareils, les notes MDBList et les compléments TMDB. Les autres applications ne voient aucun changement. Chaque utilisateur peut être réglé à part sur sa page, dans Utilisateurs.',
+    moonfinDefaults: {
+      title: 'Valeurs par défaut de Moonfin',
+      help: 'Les réglages que prennent les applications Moonfin pour ce qu’un utilisateur n’a jamais réglé. Global vaut pour tous les appareils\u202f; TV, Ordinateur et Mobile l’emportent sur lui pour ce type d’appareil.',
+      profiles: 'Profils',
+      count: (count: number) =>
+        count === 0
+          ? 'Aucun réglage défini'
+          : count === 1
+            ? '1 réglage défini'
+            : `${count} réglages définis`,
+      take: 'Prendre d’un compte',
+      takeTitle: (profile: string) => `Prendre le profil ${profile} d’un compte`,
+      takeHelp: (profile: string) =>
+        `Les réglages synchronisés d’un compte, dans le profil choisi, remplacent les valeurs par défaut du profil ${profile}, modifications non enregistrées comprises. Les clés d’API et les éléments masqués propres au compte sont laissés de côté.`,
+      account: 'Compte',
+      from: 'Son profil',
+      copy: 'Copier',
+      copied: (profile: string) => `Valeurs par défaut du profil ${profile} prises du compte.`,
+      noAccounts:
+        'Aucun compte n’a encore de réglages synchronisés. Configurez d’abord Moonfin sur un compte.',
+      editor: (profile: string) => `Valeurs par défaut du profil ${profile} en JSON`,
+      editorHelp:
+        'Un objet JSON des réglages de Moonfin, sous leurs noms dans l’application. Un réglage absent reste au choix de l’utilisateur. Les clés d’API et les éléments masqués propres à un utilisateur n’y sont jamais gardés.',
+      notObject: 'Écrivez un objet JSON, entre { et }.',
+      saved: (profile: string) => `Valeurs par défaut du profil ${profile} enregistrées.`,
+      apply: 'Appliquer aux utilisateurs',
+      applyHelp:
+        'Écrit les valeurs par défaut enregistrées dans les réglages de chaque utilisateur qui a synchronisé, chaque profil dans le même profil.',
+      saveFirst:
+        'Enregistrez ou annulez d’abord les modifications\u202f: les utilisateurs reçoivent les valeurs enregistrées.',
+      applyTitle: 'Appliquer les valeurs par défaut aux utilisateurs\u202f?',
+      applyIntro:
+        'Les valeurs par défaut enregistrées vont dans les réglages de chaque utilisateur qui a synchronisé, chaque profil dans le même.',
+      applyMode: 'Manière',
+      merge: 'Fusionner',
+      reset: 'Remplacer',
+      mergeHelp:
+        'Chaque réglage défini par les valeurs par défaut prend leur valeur\u202f; les utilisateurs gardent leurs autres réglages.',
+      resetHelp:
+        'Les réglages de chaque utilisateur deviennent les valeurs par défaut\u202f; seuls ses clés d’API et ses éléments masqués restent. C’est irréversible.',
+      applyConfirm: 'Appliquer',
+      applied: (count: number) =>
+        count === 0
+          ? 'Aucun utilisateur n’avait de réglages synchronisés.'
+          : count === 1
+            ? '1 utilisateur mis à jour.'
+            : `${count} utilisateurs mis à jour.`,
+    },
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
       'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications «\u202fNouvelle version\u202f». Désactivé, Polyfin ne contacte jamais GitHub.',

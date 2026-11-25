@@ -68,6 +68,57 @@ const settings: typeof en = {
     siloApps: 'Silo-Apps erlauben',
     siloAppsHelp:
       'Lässt die Apps von Silo für iPhone, iPad, Apple TV, Mac und Android sich anmelden und abspielen, über die API von Silo unter /api/v2, wie Jellyfin-Apps, in den Grenzen jedes Benutzers. Aus, antwortet diese API nicht.',
+    moonfin: 'Moonfins Begleiter bereitstellen',
+    moonfinHelp:
+      'Die Apps von Moonfin finden dann Polyfins eigenen Begleiter: die Einstellungen jedes Benutzers, über seine Geräte synchronisiert, MDBList-Bewertungen und TMDB-Extras. Andere Apps merken keinen Unterschied. Jeder Benutzer lässt sich auf seiner Seite unter Benutzer eigens einstellen.',
+    moonfinDefaults: {
+      title: 'Standardwerte von Moonfin',
+      help: 'Die Einstellungen, die die Apps von Moonfin für alles nehmen, was ein Benutzer nie eingestellt hat. Global gilt für jedes Gerät; TV, Desktop und Mobil gehen auf dieser Art Gerät vor.',
+      profiles: 'Profile',
+      count: (count: number) =>
+        count === 0
+          ? 'Keine Einstellung gesetzt'
+          : count === 1
+            ? '1 Einstellung gesetzt'
+            : `${count} Einstellungen gesetzt`,
+      take: 'Von einem Konto übernehmen',
+      takeTitle: (profile: string) => `Profil ${profile} von einem Konto übernehmen`,
+      takeHelp: (profile: string) =>
+        `Die synchronisierten Einstellungen eines Kontos, im gewählten Profil, ersetzen die Standardwerte des Profils ${profile}, ungespeicherte Änderungen eingeschlossen. Die eigenen API-Schlüssel und ausgeblendeten Einträge des Kontos bleiben außen vor.`,
+      account: 'Konto',
+      from: 'Sein Profil',
+      copy: 'Kopieren',
+      copied: (profile: string) => `Standardwerte des Profils ${profile} vom Konto übernommen.`,
+      noAccounts:
+        'Noch kein Konto hat synchronisierte Einstellungen. Richte Moonfin zuerst auf einem Konto ein.',
+      editor: (profile: string) => `Standardwerte des Profils ${profile} als JSON`,
+      editorHelp:
+        'Ein JSON-Objekt der Einstellungen von Moonfin, unter ihren Namen in der App. Eine fehlende Einstellung bleibt die Wahl des Benutzers. Die eigenen API-Schlüssel und ausgeblendeten Einträge eines Benutzers werden hier nie behalten.',
+      notObject: 'Schreibe ein JSON-Objekt, zwischen { und }.',
+      saved: (profile: string) => `Standardwerte des Profils ${profile} gespeichert.`,
+      apply: 'Auf Benutzer anwenden',
+      applyHelp:
+        'Schreibt die gespeicherten Standardwerte in die Einstellungen jedes Benutzers, der synchronisiert hat, jedes Profil in dasselbe Profil.',
+      saveFirst:
+        'Speichere oder verwirf zuerst die Änderungen: Die Benutzer erhalten die gespeicherten Standardwerte.',
+      applyTitle: 'Standardwerte auf die Benutzer anwenden?',
+      applyIntro:
+        'Die gespeicherten Standardwerte gehen in die Einstellungen jedes Benutzers, der synchronisiert hat, jedes Profil in dasselbe.',
+      applyMode: 'Art',
+      merge: 'Zusammenführen',
+      reset: 'Ersetzen',
+      mergeHelp:
+        'Jede Einstellung, die die Standardwerte setzen, erhält deren Wert; die Benutzer behalten ihre übrigen Einstellungen.',
+      resetHelp:
+        'Die Einstellungen jedes Benutzers werden zu den Standardwerten; nur seine eigenen API-Schlüssel und ausgeblendeten Einträge bleiben. Das lässt sich nicht rückgängig machen.',
+      applyConfirm: 'Anwenden',
+      applied: (count: number) =>
+        count === 0
+          ? 'Kein Benutzer hatte synchronisierte Einstellungen.'
+          : count === 1
+            ? '1 Benutzer aktualisiert.'
+            : `${count} Benutzer aktualisiert.`,
+    },
     updateCheck: 'Nach neuen Versionen suchen',
     updateCheckHelp:
       'Einmal täglich und kurz nach dem Start fragt Polyfin bei GitHub die neueste Veröffentlichung ab und sendet dabei nur seine Version. Eine neuere Version wird auf der Startseite und unter System › Systemzustand angezeigt und an die Benachrichtigungen für neue Versionen gesendet. Wenn aus, kontaktiert Polyfin GitHub nie.',
