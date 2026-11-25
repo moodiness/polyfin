@@ -9,7 +9,7 @@ const deviceIdKey = '_deviceId2'
 
 /**
  * The web client's links to the admin app, its Dashboard and dashboard pages, the Polyfin entry,
- * Share and the reminders' link, carry `?from=web` (see internal/server/webclient.js).
+ * Share and the reminders' link, carry `?from=web` (see internal/server/webclient/core/shared.js).
  */
 const fromParameter = 'from'
 const fromWebClient = 'web'

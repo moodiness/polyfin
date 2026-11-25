@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -12,7 +13,8 @@ import (
 // 5.1): jellyfin-web 12.4 is built for engines as old as Chrome 27 and iOS
 // 10, those of TV browsers among them, and an engine that cannot parse the
 // script runs none of it. Both are parsed: the script as served, minified,
-// and its source, webclient.js, where a failure is easier to find. They are
+// and its source, the files of webclient/ assembled, where a failure is
+// easier to find, by its file and line. They are
 // parsed with the parser Node.js carries for its own use, acorn, which
 // --expose-internals lets a script load: no other parser is needed. The
 // parser must refuse a trailing comma in a call, as ES2017 brought them,
@@ -48,7 +50,7 @@ process.stdout.write(JSON.stringify({ probe: refuses('f(a,\n)') !== null, refuse
 `
 	scripts := []struct{ name, text string }{
 		{"polyfin.js as served", response.Body.String()},
-		{"webclient.js", string(webScriptSource(t))},
+		{"the script's files assembled", string(webScriptSource(t))},
 	}
 	input, _ := json.Marshal([]string{scripts[0].text, scripts[1].text})
 	command := exec.CommandContext(t.Context(), node, "--expose-internals", "-e", harness)
@@ -88,7 +90,11 @@ process.stdout.write(JSON.stringify({ probe: refuses('f(a,\n)') !== null, refuse
 			to := min(refused.Column+40, len(line))
 			near = strings.TrimSpace(string(line[min(max(refused.Column-40, 0), to):to]))
 		}
-		t.Errorf("%s is not ES5 at line %d, column %d (%s): %q", scripts[i].name, refused.Line, refused.Column, refused.Message, near)
+		where := fmt.Sprintf("line %d", refused.Line)
+		if i == 1 {
+			where = webScriptPlace(t, refused.Line)
+		}
+		t.Errorf("%s is not ES5 at %s, column %d (%s): %q", scripts[i].name, where, refused.Column, refused.Message, near)
 	}
 }
 

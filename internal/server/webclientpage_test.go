@@ -13,9 +13,9 @@ import (
 // Node.js start with: runScript(script, context) runs it as
 // vm.runInNewContext does, in context completed with what a browser has
 // that the harness's stand-ins may lack: events on the document, on which
-// the script tells the page's changes (see the start of the header of
-// webclient.js), and Event. A listener added twice is added once, as in a
-// browser.
+// the script tells the page's changes (see
+// webclient/core/page-changes.js), and Event. A listener added twice is
+// added once, as in a browser.
 const scriptRunner = `
 const runScript = (script, context) => {
   const document = context.document
@@ -32,7 +32,7 @@ const runScript = (script, context) => {
 `
 
 // Seven parts of the script follow the whole page as jellyfin-web renders
-// it (see the start of the header of webclient.js): the menus' entry, the
+// it (see webclient/core/page-changes.js): the menus' entry, the
 // home page's rows, the play buttons while they may be held, the
 // reminders, the recent searches, the version badges, these once a
 // title's badges were answered or while a video plays, and the type

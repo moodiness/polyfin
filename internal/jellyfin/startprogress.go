@@ -14,7 +14,7 @@ import (
 )
 
 // How a play's torrent starts, for the web client's line under jellyfin-web's
-// spinner (see webclient.js, the seventeenth).
+// spinner (see internal/server/webclient/17-torrent-start.js).
 //
 // A PlaybackInfo of a signed-in user's device records the torrent versions
 // its play tries, and why each that failed did not start. Once it answers,

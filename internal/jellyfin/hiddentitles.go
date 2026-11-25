@@ -15,7 +15,8 @@ import (
 // Jellyfin has no way to take a title off Continue Watching but marking it
 // played or unplayed, nor to hide a title from one's lists. Polyfin's own
 // routes do both, for its web player's script (see
-// internal/server/webclient.js), its admin app's My account and any app:
+// internal/server/webclient/10-item-menus.js), its admin app's My account
+// and any app:
 //
 //	DELETE /Polyfin/UserItems/{itemId}/Resume takes an item off Continue
 //	  Watching (see userdata.Data.RemoveResume);

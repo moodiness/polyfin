@@ -29,9 +29,10 @@ const (
 	// webScript is the name Polyfin's own script is served under, in /web/,
 	// beside the files of jellyfin-web.
 	webScript = "polyfin.js"
-	// webScriptFile is the script as it is served: webclient.js, its
-	// source, minified (see TestTheScriptIsServedMinified, which go
-	// generate runs to write it again after a change of the source).
+	// webScriptFile is the script as it is served: the files of
+	// webclient/ assembled, then minified (see webScriptGroups and
+	// TestTheScriptIsServedMinified, which go generate runs to write it
+	// again after a change of those files).
 	webScriptFile = "webclient.min.js"
 	// themesID is the identifier of the element of the page that describes
 	// the themes to Polyfin's script (see withWebScripts).

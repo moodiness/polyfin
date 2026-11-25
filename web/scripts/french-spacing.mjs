@@ -8,7 +8,7 @@
 // It rewrites only the contents of strings, never code: the string literals
 // and the text of the template literals of the admin app's French messages
 // (src/i18n/fr), the strings of the French dictionaries (the fr properties)
-// of the web player's script (internal/server/webclient.js), then the
+// of the web player's script (the files of internal/server/webclient), then the
 // French texts of the Go code, through go generate ./internal/i18n (see
 // TestFrenchSpacing), and the minified script through go generate
 // ./internal/server. Running it again changes nothing.
@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 const web = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.resolve(web, '..')
 const french = path.join(web, 'src', 'i18n', 'fr')
-const webClient = path.join(root, 'internal', 'server', 'webclient.js')
+const webClient = path.join(root, 'internal', 'server', 'webclient')
 
 // typescript is TypeScript 5's compiler API, from the tsc first on PATH, as
 // npx --package=typescript@5.9.3 puts it. script names the script to run so.
@@ -104,7 +104,7 @@ function strings(ts, file) {
     )
   }
   // The path of properties to n, as t reads a message (versions.orderNone);
-  // in webclient.js, from the variable holding them (words.fr.none).
+  // in the web player's script, from the variable holding them (words.fr.none).
   const key = (n) => {
     const names = []
     for (let p = n.parent; p; p = p.parent) {
@@ -117,7 +117,7 @@ function strings(ts, file) {
     }
     return names.join('.')
   }
-  // In webclient.js, only the values of the fr properties are French.
+  // In the web player's script, only the values of the fr properties are French.
   const inFrench = file.endsWith('.js')
     ? (n) => {
         for (let p = n.parent; p; p = p.parent)
@@ -139,7 +139,10 @@ const frenchFiles = () => [
     .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
     .sort()
     .map((f) => path.join(french, f)),
-  webClient,
+  ...readdirSync(webClient, { recursive: true })
+    .filter((f) => f.endsWith('.js'))
+    .sort()
+    .map((f) => path.join(webClient, f)),
 ]
 
 // frenchSpacing lists the French strings the script would change, as
@@ -189,5 +192,6 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
     })
   const go = (pkg) => execFileSync('go', ['generate', pkg], { cwd: root, stdio: 'inherit' })
   go('./internal/i18n')
-  if (changed.has(path.relative(root, webClient))) go('./internal/server')
+  if ([...changed.keys()].some((f) => f.startsWith(path.relative(root, webClient) + path.sep)))
+    go('./internal/server')
 }

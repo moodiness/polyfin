@@ -12,9 +12,9 @@ import (
 
 // Jellyfin has no programme reminders, and its apps no button for one.
 // Polyfin's own routes set them, for its web player's script (see
-// internal/server/webclient.js) and any app, under the Live TV permission
-// as Jellyfin's Live TV routes, but for the state of a programme, which
-// signed-in users without it may ask:
+// internal/server/webclient/13-reminders.js) and any app, under the Live
+// TV permission as Jellyfin's Live TV routes, but for the state of a
+// programme, which signed-in users without it may ask:
 //
 //	GET /Polyfin/Reminders lists the user's reminders and series reminders;
 //	GET /Polyfin/Reminders/Programs/{programId} tells how a programme

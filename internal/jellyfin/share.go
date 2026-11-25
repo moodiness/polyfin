@@ -816,8 +816,8 @@ func randomID() accounts.ID {
 
 // mayShare answers GET /Polyfin/Items/{itemId}/Share: whether the caller
 // may give the title through a share link, for the web client's script,
-// which offers Share then (see internal/server/webclient.js), and the
-// admin app's address that makes the link, set only when they may.
+// which offers Share then (see internal/server/webclient/12-share.js), and
+// the admin app's address that makes the link, set only when they may.
 func (h *Handler) mayShare(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseGUID(r.PathValue("itemId"))
 	if !ok {
