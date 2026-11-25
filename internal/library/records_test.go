@@ -215,6 +215,83 @@ func TestMergingItemsChangedMeanwhileSucceeds(t *testing.T) {
 	}
 }
 
+// A merge that waits for an item another writer holds keeps the items it
+// locked before from other writers only: the fingerprint another save
+// keeps of one of them (see keepFingerprints), whose foreign key only asks
+// that the item stays, is kept at once, not once the merge is done.
+func TestAWaitingMergeHoldsUpNoFingerprint(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := t.Context()
+	records := []record{{Key: titleKey(KindMovie, "tt1"), Kind: KindMovie}, {Key: titleKey(KindMovie, "tt2"), Kind: KindMovie}}
+	for i := range records {
+		records[i].ID = itemID(records[i].Key)
+	}
+	slices.SortFunc(records, func(a, b record) int { return bytes.Compare(a.ID[:], b.ID[:]) })
+	first, second := records[0], records[1]
+	if err := e.service.save(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.service.db.Exec(ctx, "DELETE FROM item_records WHERE item_id = $1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	holder, err := e.service.db.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.Rollback(context.WithoutCancel(ctx)) }()
+	var holderPID int
+	if err := holder.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&holderPID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := holder.Exec(ctx, "SELECT 1 FROM items WHERE id = $1 FOR UPDATE", second.ID); err != nil {
+		t.Fatal(err)
+	}
+	folder := accounts.ID{7}
+	listed := slices.Clone(records)
+	for i := range listed {
+		listed[i].Parent = &folder
+	}
+	saved := make(chan error, 1)
+	go func() { saved <- e.service.save(ctx, listed) }()
+	eventually(t, "the merge to wait for the second item", func() bool {
+		var waiting int
+		_ = e.service.db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", holderPID).Scan(&waiting)
+		return waiting > 0
+	})
+
+	var version uint32
+	if err := e.service.db.QueryRow(ctx, "SELECT xmin FROM items WHERE id = $1", first.ID).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, data, err := columns([]*record{&first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keeping, cancel := context.WithTimeout(ctx, 2*time.Second)
+	e.service.keepFingerprints(keeping, []*record{&first}, []int64{fingerprint(data[0])}, map[accounts.ID]uint32{first.ID: version},
+		func(int) bool { return false })
+	cancel()
+	var kept bool
+	if err := e.service.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM item_records WHERE item_id = $1)", first.ID).Scan(&kept); err != nil {
+		t.Fatal(err)
+	}
+	if !kept {
+		t.Error("the fingerprint waited for the merge")
+	}
+
+	if err := holder.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-saved; err != nil {
+		t.Fatalf("the save: %v", err)
+	}
+	if r, err := e.service.load(ctx, first.ID); err != nil || r.Parent == nil || *r.Parent != folder {
+		t.Errorf("the first item after the merge: %+v %v", r, err)
+	}
+}
+
 // listingAddon serves the movie catalogs Top, of movies 0 to 4, and New,
 // of movies 3 to 7, and the series catalog Shows, of one series of two
 // seasons.

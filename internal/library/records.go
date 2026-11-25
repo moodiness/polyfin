@@ -522,14 +522,17 @@ func (s *Service) upsertColumns(ctx context.Context, ids []accounts.ID, keys, ki
 	// Only the items stored under their identifier are merged, locked first
 	// in order so that requests merging the same items never deadlock; a
 	// batch is one transaction, which holds the locks until the merge, and
-	// gives its xmin to the items it changes. A record whose key is another
-	// identifier's is left out, and told: its identifier was not derived
-	// from its key.
+	// gives its xmin to the items it changes. The lock is the one an update
+	// that leaves the keys as they are takes: it holds up the other writers
+	// of the items, not the fingerprints kept of them (see
+	// keepFingerprints), whose foreign key only asks that the item stays.
+	// A record whose key is another identifier's is left out, and told: its
+	// identifier was not derived from its key.
 	var changed []accounts.ID
 	var changedVersion *uint32
 	var taken []string
 	batch := &pgx.Batch{}
-	batch.Queue(`SELECT id, xmin FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`, ids).Query(func(rows pgx.Rows) error {
+	batch.Queue(`SELECT id, xmin FROM items WHERE id = ANY($1::uuid[]) ORDER BY id FOR NO KEY UPDATE`, ids).Query(func(rows pgx.Rows) error {
 		_, err := pgx.ForEachRow(rows, []any{&id, &version}, func() error {
 			stored[id] = version
 			return nil
