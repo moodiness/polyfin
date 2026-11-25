@@ -242,6 +242,15 @@ Check them with `docker compose exec postgres psql -U polyfin -c 'SHOW shared_bu
 
 Polyfin does not support SQLite instead of PostgreSQL (see [discussion #1061](https://github.com/moodiness/polyfin/discussions/1061)). Its queries rely on PostgreSQL's JSON indexes, arrays and row locks, and SQLite's single writer would hold playback progress back behind long imports, for a smaller saving than these settings give: most of PostgreSQL's memory is its cache.
 
+### Writes that do not wait for the disk
+
+PostgreSQL commits a write once it is on the disk. On a disk that other programs keep busy, that can take seconds, and the request that wrote waits as long. Some writes keep nothing whose loss costs more than asking again, and Polyfin commits them without waiting for the disk: `synchronous_commit` is off for their transaction alone.
+
+- **What addons and IPTV providers answered**, kept so that a restart answers at once: catalog pages and how many titles a page holds, titles' descriptions, stream lists, and the details an Xtream server gave for a title.
+- **The last activity** of users and devices, which requests write: its time, the app, and the device's address.
+
+A crash of PostgreSQL or of its machine can lose the last moments of these writes, at most three times `wal_writer_delay`, 600 ms by default. Polyfin then asks the addon or the provider again, and the next request writes the activity again. Nothing else is lost: every other write still waits for the disk, and with it the writes before it. A crash or restart of Polyfin alone loses nothing. The server's own `synchronous_commit` applies to every other write.
+
 ### Folders for conversion, files being read and the cache
 
 The segments being played, the files being read and the cache go to Polyfin's data volume by default. **Conversion folder**, **Folder for files being read** and **Cache folder** can name other folders (see [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache)).

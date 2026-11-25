@@ -20,6 +20,7 @@ import (
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
 	"github.com/moodiness/polyfin/internal/cache"
+	"github.com/moodiness/polyfin/internal/database/unsynced"
 	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tmdb"
@@ -694,9 +695,10 @@ func (s *Service) pageRead(ctx context.Context) (release func(), err error) {
 	return func() { <-s.pageReads }, nil
 }
 
-// storePage keeps a page in the database. A page the addon gave again
-// unchanged keeps its stored metas, which the update then neither copies
-// nor rewrites: only fetched_at moves.
+// storePage keeps a page in the database, a cache whose write does not
+// wait for the disk (see unsynced.Exec). A page the addon gave
+// again unchanged keeps its stored metas, which the update then neither
+// copies nor rewrites: only fetched_at moves.
 func (s *Service) storePage(ctx context.Context, src source, key pageKey, kept fetched[[]stremio.Meta]) error {
 	metas := kept.value
 	if metas == nil {
@@ -706,7 +708,7 @@ func (s *Service) storePage(ctx context.Context, src source, key pageKey, kept f
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO catalog_pages (addon_id, catalog_type, catalog_id, genre, skip, config, metas, fetched_at)
+	_, err = unsynced.Exec(ctx, s.db, `INSERT INTO catalog_pages (addon_id, catalog_type, catalog_id, genre, skip, config, metas, fetched_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (addon_id, catalog_type, catalog_id, genre, skip)
 		DO UPDATE SET config = excluded.config, fetched_at = excluded.fetched_at,
@@ -1021,12 +1023,14 @@ func (s *Service) keptDescription(ctx context.Context, addon installed, key meta
 	return kept.value, ok
 }
 
+// storeMeta keeps an addon's description of a title in the database, a
+// cache whose write does not wait for the disk (see unsynced.Exec).
 func (s *Service) storeMeta(ctx context.Context, addon installed, key metaKey, kept fetched[stremio.Meta]) error {
 	data, err := json.Marshal(kept.value)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO metas (addon_id, meta_type, meta_id, config, meta, fetched_at) VALUES ($1, $2, $3, $4, $5, $6)
+	_, err = unsynced.Exec(ctx, s.db, `INSERT INTO metas (addon_id, meta_type, meta_id, config, meta, fetched_at) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (addon_id, meta_type, meta_id) DO UPDATE SET config = excluded.config, meta = excluded.meta, fetched_at = excluded.fetched_at`,
 		key.addon, key.metaType, key.id, configOf(addon.addon), data, kept.at)
 	return err
@@ -1094,7 +1098,8 @@ func (s *Service) loadPageSizes(ctx context.Context) error {
 }
 
 // learnPageSize remembers that a page of src's catalog held size titles,
-// when it is more than remembered.
+// when it is more than remembered, in a cache whose write does not wait
+// for the disk (see unsynced.Exec).
 func (s *Service) learnPageSize(ctx context.Context, src source, size int) {
 	key := sizeKey{src.addon.addon.ID, src.catalog.Type, src.catalog.ID}
 	s.sizes.mu.Lock()
@@ -1104,7 +1109,7 @@ func (s *Service) learnPageSize(ctx context.Context, src source, size int) {
 	}
 	s.sizes.byCatalog[key] = size
 	s.sizes.mu.Unlock()
-	if _, err := s.db.Exec(context.WithoutCancel(ctx), `INSERT INTO catalog_sizes (addon_id, catalog_type, catalog_id, page_size) VALUES ($1, $2, $3, $4)
+	if _, err := unsynced.Exec(context.WithoutCancel(ctx), s.db, `INSERT INTO catalog_sizes (addon_id, catalog_type, catalog_id, page_size) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (addon_id, catalog_type, catalog_id) DO UPDATE SET page_size = greatest(catalog_sizes.page_size, excluded.page_size)`,
 		key.addon, key.catalogType, key.catalogID, size); err != nil {
 		s.logger.Debug("A catalog page size could not be kept", "catalog", key.catalogID, "error", err)

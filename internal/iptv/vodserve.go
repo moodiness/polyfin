@@ -17,6 +17,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/database/unsynced"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -479,7 +480,8 @@ func (d *details) apply(source accounts.ID, t Title, meta *stremio.Meta) {
 // details returns a title's details: those kept while fresh; else, when
 // fetch is set and its source is an Xtream account, asked again, paced
 // per host (see Pacer); else those kept, even old, or nil. A failed
-// request is logged and answers what was kept.
+// request is logged and answers what was kept. What it keeps is a cache,
+// whose write does not wait for the disk (see unsynced.Exec).
 func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle, fetch bool) (*details, error) {
 	var kept *details
 	var version string
@@ -513,7 +515,7 @@ func (s *Service) details(ctx context.Context, source accounts.ID, t storedTitle
 		if err != nil {
 			return nil, err
 		}
-		_, err = s.db.Exec(ctx, `INSERT INTO iptv_details (addon_id, type, key, version, fetched_at, details) VALUES ($1, $2, $3, $4, $5, $6)
+		_, err = unsynced.Exec(ctx, s.db, `INSERT INTO iptv_details (addon_id, type, key, version, fetched_at, details) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (addon_id, type, key) DO UPDATE SET version = excluded.version, fetched_at = excluded.fetched_at, details = excluded.details`,
 			source, t.Type, t.Key, t.Version, s.now(), fetched)
 		if err == nil {
