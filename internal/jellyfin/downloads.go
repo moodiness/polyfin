@@ -40,6 +40,7 @@ func (h *Handler) itemFile(w http.ResponseWriter, r *http.Request) {
 // serveFile serves the version a request names, as a file to save when
 // attachment is set.
 func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment bool) {
+	h.logAppRequest(r, nil)
 	opened, ok := parseGUID(r.PathValue("itemId"))
 	if !ok {
 		validationProblem(w, map[string][]string{"itemId": {notValid(r.PathValue("itemId"))}})

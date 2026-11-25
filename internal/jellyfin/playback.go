@@ -401,9 +401,14 @@ func (h *Handler) playbackInfo(w http.ResponseWriter, r *http.Request) {
 	if start := b.ticks(r, "startTimeTicks"); start != nil {
 		request.StartTimeTicks = looseInt{*start, true}
 	}
-	if r.Method == http.MethodPost && !h.readPlaybackInfoBody(w, r, b, &request) {
-		return
+	var body []byte
+	if r.Method == http.MethodPost {
+		var read bool
+		if body, read = h.readPlaybackInfoBody(w, r, b, &request); !read {
+			return
+		}
 	}
+	h.logAppRequest(r, body)
 	request.directPlayOff = request.EnableDirectPlay != nil && !*request.EnableDirectPlay
 	// The Jellyfin iOS app's native player gets over HLS what Jellyfin
 	// would stream it as one file (see iosNativeOverHLS).
@@ -773,25 +778,26 @@ func appLimitReached(r *http.Request) bool {
 }
 
 // readPlaybackInfoBody reads a posted PlaybackInfoDto over the query's
-// values, as Jellyfin reads it (see bodyOptions). An empty body is
-// allowed; a body without a JSON content type is not. A body it cannot
-// read is logged, without its content, as the app shows no reason.
-func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b bindErrors, request *playbackInfoRequest) bool {
+// values, as Jellyfin reads it (see bodyOptions), and returns the body.
+// An empty body is allowed; a body without a JSON content type is not. A
+// body it cannot read is logged, without its content, as the app shows
+// no reason.
+func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b bindErrors, request *playbackInfoRequest) ([]byte, bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
 		processingError(w, http.StatusRequestEntityTooLarge)
-		return false
+		return nil, false
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		if r.Header.Get("Content-Type") == "" {
 			unsupportedMediaTypeProblem(w)
-			return false
+			return nil, false
 		}
-		return true
+		return nil, true
 	}
 	if !jsonContent(r.Header.Get("Content-Type")) {
 		unsupportedMediaTypeProblem(w)
-		return false
+		return nil, false
 	}
 	var posted playbackInfoRequest
 	if err := unmarshalBody(body, &posted); err != nil {
@@ -802,7 +808,7 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 		h.Logger.Warn("A PlaybackInfo request could not be read", "app", truncate(c.Device.Client), "device", truncate(c.Device.DeviceName), "error", truncate(err.Error()))
 		b.add("$", "The JSON value could not be converted.")
 		validationProblem(w, b)
-		return false
+		return nil, false
 	}
 	if posted.MaxStreamingBitrate.set {
 		request.MaxStreamingBitrate = posted.MaxStreamingBitrate
@@ -834,7 +840,7 @@ func (h *Handler) readPlaybackInfoBody(w http.ResponseWriter, r *http.Request, b
 	if posted.AllowVideoStreamCopy != nil {
 		request.AllowVideoStreamCopy = posted.AllowVideoStreamCopy
 	}
-	return true
+	return body, true
 }
 
 // decided is a version with the decision for the app's device profile:
@@ -1397,6 +1403,7 @@ func (h *Handler) mediaToken(r *http.Request, route mediaRoute) string {
 // stream serves a version's bytes: /Videos/{itemId}/stream, with an
 // optional container extension.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
+	h.logAppRequest(r, nil)
 	name, extension, _ := strings.Cut(r.PathValue("file"), ".")
 	if strings.EqualFold(extension, "m3u8") && (strings.EqualFold(name, "master") || strings.EqualFold(name, "main") || strings.EqualFold(name, "live")) {
 		h.hlsPlaylist(w, r, name)
@@ -1657,6 +1664,7 @@ var mimeTypes = map[string]string{
 // the version, in the format the player asks, optionally from a start
 // position.
 func (h *Handler) subtitle(w http.ResponseWriter, r *http.Request) {
+	h.logAppRequest(r, nil)
 	name, format, _ := strings.Cut(r.PathValue("file"), ".")
 	opened, okItem := parseGUID(r.PathValue("itemId"))
 	index, errIndex := strconv.Atoi(r.PathValue("index"))
