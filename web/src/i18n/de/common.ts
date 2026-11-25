@@ -310,6 +310,11 @@ const common: typeof en = {
     invalid_custom_js: 'Das benutzerdefinierte JavaScript darf höchstens 2 MB groß sein.',
     invalid_web_theme: 'Wähle ein Theme aus der Liste.',
     web_theme_locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
+    invalid_moonfin: 'Wähle Vorgabe des Servers, Ein oder Aus.',
+    moonfin_locked: 'Dein Administrator hat gewählt, ob Moonfins Begleiter dich bedient.',
+    invalid_moonfin_defaults: 'Die Standardwerte müssen ein JSON-Objekt von höchstens 256 KB sein.',
+    moonfin_settings_not_found:
+      'Dieses Konto hat keine synchronisierten Einstellungen in diesem Profil.',
     theme_copy_running:
       'Eine Kopie des Themes wird bereits angelegt. Versuche es gleich noch einmal.',
     theme_copy_nothing: 'Die gespeicherten benutzerdefinierten Texte laden nichts von anderswo.',

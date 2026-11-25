@@ -36,6 +36,7 @@ import { OwnMetadataLanguage } from './MetadataLanguage'
 import { OwnWebTheme } from './WebTheme'
 import { OwnAudioRegion } from './AudioRegion'
 import { OwnInterfaceSize } from './InterfaceSize'
+import { OwnMoonfin } from './Moonfin'
 import { OwnSoundOptions } from './Sound'
 import ResetPreferences from './ResetPreferences'
 import TasteProfile from './TasteProfile'
@@ -57,6 +58,7 @@ const sectionIds = [
   'web-theme',
   'audio-region',
   'interface-size',
+  'moonfin',
   'sound',
   'shared-links',
   'reminders',
@@ -82,11 +84,11 @@ const anchorMargin =
  * Reset my preferences, then the sections as words on the left and their content beside them:
  * statistics, tracking services, Continue Watching, hidden titles, home rows, the taste profile,
  * track choices, the metadata language, the web player theme, the audio region, the interface
- * size, sound, shared links (while the user may share or has links), programme reminders (with
- * the Live TV permission), importing from another server and from an app (unless the server
- * turns it off), notifications, devices, password, two-step sign-in and the identity provider
- * (while the server offers one). Every setting saves as it changes, so the page has no unsaved
- * dock.
+ * size, Moonfin's companion and the settings its apps synced, sound, shared links (while the user
+ * may share or has links), programme reminders (with the Live TV permission), importing from
+ * another server and from an app (unless the server turns it off), notifications, devices,
+ * password, two-step sign-in and the identity provider (while the server offers one). Every
+ * setting saves as it changes, so the page has no unsaved dock.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
@@ -156,6 +158,7 @@ export default function AccountRoute() {
     'web-theme': true,
     'audio-region': true,
     'interface-size': true,
+    moonfin: true,
     sound: true,
     'shared-links': sharing,
     reminders: reminding,
@@ -180,6 +183,7 @@ export default function AccountRoute() {
     'web-theme': text.sections.webTheme,
     'audio-region': text.sections.audioRegion,
     'interface-size': text.sections.interfaceSize,
+    moonfin: text.sections.moonfin,
     sound: text.sections.sound,
     'shared-links': text.sections.sharedLinks,
     reminders: text.sections.reminders,
@@ -247,6 +251,9 @@ export default function AccountRoute() {
           <OwnInterfaceSize />
         </div>
       </div>
+      <AccountSection id="moonfin" title={labels.moonfin} help={text.moonfin.sectionHelp}>
+        <OwnMoonfin />
+      </AccountSection>
       <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
         <OwnSoundOptions />
       </AccountSection>

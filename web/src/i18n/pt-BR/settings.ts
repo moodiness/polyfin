@@ -66,6 +66,56 @@ const settings: typeof en = {
     siloApps: 'Permitir os aplicativos do Silo',
     siloAppsHelp:
       'Permite que os aplicativos do Silo para iPhone, iPad, Apple TV, Mac e Android entrem e reproduzam, pela API do Silo em /api/v2, como os aplicativos Jellyfin, dentro dos limites de cada usuário. Desativado, essa API não responde.',
+    moonfin: 'Servir o companheiro do Moonfin',
+    moonfinHelp:
+      'Os aplicativos do Moonfin encontram então o companheiro próprio do Polyfin: as configurações de cada usuário sincronizadas entre os dispositivos dele, as notas do MDBList e os extras do TMDB. Os outros aplicativos não notam nenhuma mudança. Cada usuário pode ser configurado à parte na página dele, em Usuários.',
+    moonfinDefaults: {
+      title: 'Padrões do Moonfin',
+      help: 'As configurações que os aplicativos do Moonfin usam para o que um usuário nunca configurou. Global vale para todos os dispositivos; TV, Computador e Celular prevalecem sobre ele nesse tipo de dispositivo.',
+      profiles: 'Perfis',
+      count: (count: number) =>
+        count === 0
+          ? 'Nenhuma configuração definida'
+          : count === 1
+            ? '1 configuração definida'
+            : `${count} configurações definidas`,
+      take: 'Pegar de uma conta',
+      takeTitle: (profile: string) => `Pegar o perfil ${profile} de uma conta`,
+      takeHelp: (profile: string) =>
+        `As configurações sincronizadas de uma conta, no perfil escolhido, substituem os padrões do perfil ${profile}, alterações não salvas incluídas. As chaves de API e os itens ocultos próprios da conta ficam de fora.`,
+      account: 'Conta',
+      from: 'Perfil dela',
+      copy: 'Copiar',
+      copied: (profile: string) => `Padrões do perfil ${profile} pegos da conta.`,
+      noAccounts:
+        'Nenhuma conta tem configurações sincronizadas ainda. Configure primeiro o Moonfin em uma conta.',
+      editor: (profile: string) => `Padrões do perfil ${profile} em JSON`,
+      editorHelp:
+        'Um objeto JSON das configurações do Moonfin, com os nomes delas no aplicativo. Uma configuração ausente continua à escolha do usuário. As chaves de API e os itens ocultos próprios de um usuário nunca são guardados aqui.',
+      notObject: 'Escreva um objeto JSON, entre { e }.',
+      saved: (profile: string) => `Padrões do perfil ${profile} salvos.`,
+      apply: 'Aplicar aos usuários',
+      applyHelp:
+        'Grava os padrões salvos nas configurações de cada usuário que sincronizou, cada perfil no mesmo perfil.',
+      saveFirst: 'Salve ou descarte as alterações primeiro: os usuários recebem os padrões salvos.',
+      applyTitle: 'Aplicar os padrões aos usuários?',
+      applyIntro:
+        'Os padrões salvos vão para as configurações de cada usuário que sincronizou, cada perfil no mesmo.',
+      applyMode: 'Modo',
+      merge: 'Mesclar',
+      reset: 'Substituir',
+      mergeHelp:
+        'Cada configuração definida pelos padrões recebe o valor deles; os usuários mantêm as outras configurações.',
+      resetHelp:
+        'As configurações de cada usuário passam a ser os padrões; só as chaves de API e os itens ocultos dele ficam. Não dá para desfazer.',
+      applyConfirm: 'Aplicar',
+      applied: (count: number) =>
+        count === 0
+          ? 'Nenhum usuário tinha configurações sincronizadas.'
+          : count === 1
+            ? '1 usuário atualizado.'
+            : `${count} usuários atualizados.`,
+    },
     updateCheck: 'Verificar novas versões',
     updateCheckHelp:
       'Uma vez por dia, e logo após a inicialização, o Polyfin consulta o GitHub sobre sua versão mais recente, enviando apenas a própria versão. Uma versão mais nova aparece no Início e em Sistema › Integridade, e é enviada às notificações de Nova versão. Desativado, o Polyfin nunca contata o GitHub.',

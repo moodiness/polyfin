@@ -68,6 +68,57 @@ const settings: typeof en = {
     siloApps: 'Consenti le app di Silo',
     siloAppsHelp:
       'Permette alle app di Silo per iPhone, iPad, Apple TV, Mac e Android di accedere e riprodurre, tramite l’API di Silo in /api/v2, come le app Jellyfin, entro i limiti di ciascun utente. Disattivato, quell’API non risponde.',
+    moonfin: 'Offri il compagno di Moonfin',
+    moonfinHelp:
+      'Le app di Moonfin trovano allora il compagno proprio di Polyfin: le impostazioni di ciascun utente sincronizzate tra i suoi dispositivi, le valutazioni di MDBList e gli extra di TMDB. Le altre app non notano alcun cambiamento. Ogni utente può essere impostato a parte nella sua pagina, in Utenti.',
+    moonfinDefaults: {
+      title: 'Valori predefiniti di Moonfin',
+      help: 'Le impostazioni che le app di Moonfin prendono per ciò che un utente non ha mai impostato. Globale vale per ogni dispositivo; TV, Desktop e Mobile prevalgono su di esso per quel tipo di dispositivo.',
+      profiles: 'Profili',
+      count: (count: number) =>
+        count === 0
+          ? 'Nessuna impostazione definita'
+          : count === 1
+            ? '1 impostazione definita'
+            : `${count} impostazioni definite`,
+      take: 'Prendi da un account',
+      takeTitle: (profile: string) => `Prendi il profilo ${profile} da un account`,
+      takeHelp: (profile: string) =>
+        `Le impostazioni sincronizzate di un account, nel profilo scelto, sostituiscono i valori predefiniti del profilo ${profile}, modifiche non salvate comprese. Le chiavi API e gli elementi nascosti propri dell’account restano fuori.`,
+      account: 'Account',
+      from: 'Il suo profilo',
+      copy: 'Copia',
+      copied: (profile: string) => `Valori predefiniti del profilo ${profile} presi dall’account.`,
+      noAccounts:
+        'Nessun account ha ancora impostazioni sincronizzate. Configura prima Moonfin su un account.',
+      editor: (profile: string) => `Valori predefiniti del profilo ${profile} in JSON`,
+      editorHelp:
+        'Un oggetto JSON delle impostazioni di Moonfin, con i loro nomi nell’app. Un’impostazione assente resta a scelta dell’utente. Le chiavi API e gli elementi nascosti propri di un utente non vengono mai tenuti qui.',
+      notObject: 'Scrivi un oggetto JSON, tra { e }.',
+      saved: (profile: string) => `Valori predefiniti del profilo ${profile} salvati.`,
+      apply: 'Applica agli utenti',
+      applyHelp:
+        'Scrive i valori predefiniti salvati nelle impostazioni di ogni utente che ha sincronizzato, ogni profilo nello stesso profilo.',
+      saveFirst:
+        'Salva o annulla prima le modifiche: gli utenti ricevono i valori predefiniti salvati.',
+      applyTitle: 'Applicare i valori predefiniti agli utenti?',
+      applyIntro:
+        'I valori predefiniti salvati vanno nelle impostazioni di ogni utente che ha sincronizzato, ogni profilo nello stesso.',
+      applyMode: 'Modo',
+      merge: 'Unisci',
+      reset: 'Sostituisci',
+      mergeHelp:
+        'Ogni impostazione definita dai valori predefiniti prende il loro valore; gli utenti tengono le altre impostazioni.',
+      resetHelp:
+        'Le impostazioni di ogni utente diventano i valori predefiniti; restano solo le sue chiavi API e i suoi elementi nascosti. Non si può annullare.',
+      applyConfirm: 'Applica',
+      applied: (count: number) =>
+        count === 0
+          ? 'Nessun utente aveva impostazioni sincronizzate.'
+          : count === 1
+            ? '1 utente aggiornato.'
+            : `${count} utenti aggiornati.`,
+    },
     updateCheck: 'Controlla nuove versioni',
     updateCheckHelp:
       'Una volta al giorno, e poco dopo l’avvio, Polyfin chiede a GitHub la sua ultima release, inviando solo la propria versione. Una versione più recente compare nella Home e in Sistema › Stato di salute, e viene inviata alle notifiche Nuova versione. Se disattivato, Polyfin non contatta mai GitHub.',

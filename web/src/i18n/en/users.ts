@@ -107,6 +107,16 @@ const users = {
     webThemeChange: 'Let them change it',
     webThemeChangeHelp:
       'Under My account › Web player theme. Off, the theme chosen here stays theirs.',
+    moonfinTitle: 'Moonfin',
+    moonfinSectionHelp:
+      'Moonfin’s apps find Polyfin’s companion for this user: their settings synced across their devices, MDBList ratings and TMDB extras.',
+    moonfinRow: 'Companion',
+    moonfinHelp: 'Server default follows Serve Moonfin’s companion, under Settings › General.',
+    moonfinChange: 'Let them change it',
+    moonfinChangeHelp: 'Under My account › Moonfin. Off, the choice made here stays theirs.',
+    moonfinResetTitle: (name: string) => `Reset ${name}’s synced settings?`,
+    moonfinResetConfirm:
+      'Polyfin forgets the settings Moonfin’s apps synced for this user. Their devices then start again from the server’s defaults.',
     audioRegionTitle: 'Audio region',
     audioRegionHelp:
       'The dub this user prefers where a language is dubbed apart for a region, such as French for Quebec. It applies to the audio language they chose in their apps, else the server’s, when that is the region’s language, and sets it when neither is set: in that language, the audio tracks of the region play first, and its versions come first where the server orders versions by language.',

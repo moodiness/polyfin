@@ -112,6 +112,18 @@ const users: typeof en = {
     webThemeChange: 'Lui permettre de le changer',
     webThemeChangeHelp:
       'Dans Mon compte › Thème du lecteur web. Désactivé, le thème choisi ici reste le sien.',
+    moonfinTitle: 'Moonfin',
+    moonfinSectionHelp:
+      'Les applications Moonfin trouvent le compagnon de Polyfin pour cet utilisateur\u202f: ses réglages synchronisés entre ses appareils, les notes MDBList et les compléments TMDB.',
+    moonfinRow: 'Compagnon',
+    moonfinHelp:
+      'Le réglage du serveur suit Servir le compagnon de Moonfin, dans Paramètres › Général.',
+    moonfinChange: 'Lui permettre de le changer',
+    moonfinChangeHelp: 'Dans Mon compte › Moonfin. Désactivé, le choix fait ici reste le sien.',
+    moonfinResetTitle: (name: string) =>
+      `Réinitialiser les réglages synchronisés de ${name}\u202f?`,
+    moonfinResetConfirm:
+      'Polyfin oublie les réglages que les applications Moonfin ont synchronisés pour cet utilisateur. Ses appareils repartent ensuite des valeurs par défaut du serveur.',
     audioRegionTitle: 'Région audio',
     audioRegionHelp:
       'Le doublage que cet utilisateur préfère quand une langue est doublée à part pour une région, comme le français du Québec. Elle s’applique à la langue audio choisie dans ses applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est\u202f: dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',

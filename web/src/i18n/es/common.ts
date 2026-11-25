@@ -300,6 +300,11 @@ const common: typeof en = {
     invalid_custom_js: 'El JavaScript personalizado no debe superar los 2 MB.',
     invalid_web_theme: 'Elija un tema de la lista.',
     web_theme_locked: 'Su administrador eligió el tema de su reproductor web.',
+    invalid_moonfin: 'Elija Valor del servidor, Activado o Desactivado.',
+    moonfin_locked: 'Su administrador eligió si el compañero de Moonfin le da servicio.',
+    invalid_moonfin_defaults:
+      'Los valores predeterminados deben ser un objeto JSON de 256 KB como máximo.',
+    moonfin_settings_not_found: 'Esta cuenta no tiene ajustes sincronizados en ese perfil.',
     theme_copy_running:
       'Ya se está haciendo una copia del tema. Vuelva a intentarlo en un momento.',
     theme_copy_nothing: 'Los textos personalizados guardados no cargan nada desde otro sitio.',

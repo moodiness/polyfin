@@ -150,6 +150,10 @@ export type User = {
   webTheme: UserWebTheme
   /** Whether the user is kept from changing their web player theme under My account. */
   webThemeLocked: boolean
+  /** Whether Moonfin's companion serves the user: 'on', 'off', or '' for the server's default. */
+  moonfin: UserMoonfin
+  /** Whether the user is kept from changing whether Moonfin's companion serves them. */
+  moonfinLocked: boolean
   /** The regional variant of audio the user prefers, one of audioRegions; '' for none. */
   audioRegion: string
   /** The regional variants offered, BCP 47 tags such as 'fr-CA'. */
@@ -871,6 +875,11 @@ export type Settings = {
   /** Whether Silo's apps may sign in and play through Silo's API under /api/v2. */
   siloApps: boolean
   /**
+   * Whether Moonfin's apps find Polyfin's companion: settings synced across a user's devices,
+   * MDBList ratings and TMDB extras. The default of users who keep the server's.
+   */
+  moonfin: boolean
+  /**
    * The OpenID Connect provider people may sign in with: its issuer, the name its button shows
    * (empty for the issuer's host), and the server's client at it. The client secret is never sent
    * back: providerClientSecretSet tells whether one is saved; providerClientSecret, sent only to
@@ -1068,6 +1077,10 @@ export type UserPatch = Partial<{
   webTheme: UserWebTheme
   /** True keeps the user from changing their web player theme under My account. */
   webThemeLocked: boolean
+  /** 'on', 'off', or '' for the server's default. */
+  moonfin: UserMoonfin
+  /** True keeps the user from changing it under My account. */
+  moonfinLocked: boolean
 }>
 
 /** Who owns addons and libraries: the server (administrators only) or the signed-in user. */
@@ -2521,6 +2534,54 @@ export const fetchOwnWebTheme = (signal?: AbortSignal) =>
 
 export const saveOwnWebTheme = (webTheme: UserWebTheme) =>
   request<OwnWebTheme>('PUT', '/account/web-theme', { webTheme })
+
+/** Whether Moonfin's companion serves a user: 'on', 'off', or '' for the server's default. */
+export type UserMoonfin = '' | 'on' | 'off'
+
+/** The profiles of Moonfin's settings: Global for every device, and the kinds of device over it. */
+export const moonfinProfiles = ['global', 'tv', 'desktop', 'mobile'] as const
+export type MoonfinProfile = (typeof moonfinProfiles)[number]
+
+/**
+ * The settings Moonfin's apps synced for a user: how many are set across profiles, the profiles
+ * that have some, and when and by which app they were last saved. `synced` is false, the rest
+ * empty, when the user never synced.
+ */
+export type MoonfinSync = {
+  synced: boolean
+  settings: number
+  profiles: MoonfinProfile[]
+  updatedAt: string | null
+  updatedBy: string
+}
+
+/**
+ * The signed-in user's choice for Moonfin's companion, whether the administrator keeps them from
+ * changing it, the server's default, and their synced settings.
+ */
+export type OwnMoonfin = {
+  moonfin: UserMoonfin
+  locked: boolean
+  serverDefault: boolean
+  sync: MoonfinSync
+}
+
+export const fetchOwnMoonfin = (signal?: AbortSignal) =>
+  request<OwnMoonfin>('GET', '/account/moonfin', undefined, signal)
+
+export const saveOwnMoonfin = (moonfin: UserMoonfin) =>
+  request<OwnMoonfin>('PUT', '/account/moonfin', { moonfin })
+
+/** Forgets the settings Moonfin's apps synced for the signed-in user. */
+export const forgetOwnMoonfinSettings = () => request<void>('DELETE', '/account/moonfin/settings')
+
+/** The settings Moonfin's apps synced for a user, for an administrator. */
+export const fetchUserMoonfin = (id: string, signal?: AbortSignal) =>
+  request<MoonfinSync>('GET', `/users/${seg(id)}/moonfin`, undefined, signal)
+
+/** Forgets the settings Moonfin's apps synced for a user. */
+export const forgetUserMoonfin = (id: string) =>
+  request<void>('DELETE', `/users/${seg(id)}/moonfin`)
 
 /** The signed-in user's preferred audio region ('' for none) and the ones they may choose. */
 export type AudioRegion = { region: string; regions: string[] }
@@ -4489,6 +4550,43 @@ export const fetchMetadataLanguages = async (signal?: AbortSignal) =>
 export const fetchWebThemes = (signal?: AbortSignal) =>
   request<WebThemes>('GET', '/web-themes', undefined, signal)
 
+/** The settings of one of Moonfin's profiles, by their names in the app. */
+export type MoonfinSettings = Record<string, unknown>
+
+/**
+ * The defaults Moonfin's apps take for the settings a user never set, by profile, and the
+ * accounts with synced settings, by name, to take them from.
+ */
+export type MoonfinDefaults = {
+  profiles: Record<MoonfinProfile, MoonfinSettings>
+  users: { id: string; name: string; sync: MoonfinSync }[]
+}
+
+export const fetchMoonfinDefaults = (signal?: AbortSignal) =>
+  request<MoonfinDefaults>('GET', '/moonfin/defaults', undefined, signal)
+
+/** Saves the defaults of a profile; a user's own API keys and hidden items are dropped. */
+export const saveMoonfinDefaults = (profile: MoonfinProfile, settings: MoonfinSettings) =>
+  request<MoonfinDefaults>('PUT', `/moonfin/defaults/${seg(profile)}`, settings)
+
+/** Copies the profile `from` of a user's synced settings over the defaults of `profile`. */
+export const copyMoonfinDefaults = (
+  profile: MoonfinProfile,
+  userId: string,
+  from: MoonfinProfile,
+) =>
+  request<MoonfinDefaults>('POST', `/moonfin/defaults/${seg(profile)}/copy`, {
+    userId,
+    profile: from,
+  })
+
+/**
+ * Writes the saved defaults into every synced user's settings, merged into theirs or, with
+ * `reset`, in place of theirs; answers how many users were updated.
+ */
+export const applyMoonfinDefaults = async (reset: boolean) =>
+  (await request<{ users: number }>('POST', '/moonfin/apply', { reset })).users
+
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
 export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
@@ -6360,6 +6458,11 @@ export const queryKeys = {
   ownWebTheme: ['account', 'web-theme'] as const,
   /** The server's theme and the themes offered: refreshed as the settings are saved. */
   webThemes: ['web-themes'] as const,
+  ownMoonfin: ['account', 'moonfin'] as const,
+  /** Prefix of every user's synced Moonfin settings: refreshed once defaults are applied. */
+  usersMoonfin: ['moonfin', 'users'] as const,
+  userMoonfin: (id: string) => ['moonfin', 'users', id] as const,
+  moonfinDefaults: ['moonfin', 'defaults'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */

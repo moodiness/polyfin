@@ -15,11 +15,14 @@ import {
   fetchGroups,
   fetchImportTitleCounts,
   fetchMetadataLanguages,
+  fetchSettings,
   fetchStatus,
   fetchUserDevices,
+  fetchUserMoonfin,
   fetchUserShareLinks,
   fetchUsers,
   fetchWebThemes,
+  forgetUserMoonfin,
   queryClient,
   queryKeys,
   revokeShareLink,
@@ -29,11 +32,13 @@ import {
   userImageUrl,
   type GroupSection,
   type User,
+  type UserMoonfin,
   type UserWebTheme,
 } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
+import { moonfinOptions, MoonfinSyncRow } from '@/features/account/Moonfin'
 import { sourceName, TitlesNotFoundDialog } from '@/features/imports/TitlesNotFound'
 import { errorMessage, languageOptions } from '@/format'
 import { useI18n } from '@/i18n'
@@ -92,6 +97,7 @@ const sectionIds = [
   'access',
   'metadata-language',
   'web-theme',
+  'moonfin',
   'audio-region',
   'playback',
   'parental',
@@ -184,6 +190,7 @@ function UserPage({ user }: { user: User }) {
     ['access', t.users.accessTitle],
     ['metadata-language', t.users.metadataLanguageTitle],
     ['web-theme', t.users.webThemeTitle],
+    ['moonfin', t.users.moonfinTitle],
     ['audio-region', t.users.audioRegionTitle],
     ['playback', t.users.playbackAccessTitle],
     ['parental', t.users.parentalTitle],
@@ -272,6 +279,7 @@ function UserPage({ user }: { user: User }) {
               <AccessSection user={user} />
               <MetadataLanguageSection user={user} />
               <WebThemeSection user={user} />
+              <MoonfinSection user={user} />
               <AudioRegionSection user={user} />
               <PlaybackAccessSection key={formsKey('playback')} id="playback" target={target} />
               <ParentalControlSection key={formsKey('parental')} id="parental" target={target} />
@@ -859,6 +867,92 @@ function WebThemeSection({ user }: { user: User }) {
   return (
     <PageSection id="web-theme" title={t.users.webThemeTitle}>
       {rows}
+    </PageSection>
+  )
+}
+
+/**
+ * Whether Moonfin's companion serves the user: the server's default, naming whether it is on, On
+ * or Off, saved as it changes, and whether they may change it themselves under My account; then
+ * the settings Moonfin's apps synced for them, with Reset.
+ */
+function MoonfinSection({ user }: { user: User }) {
+  const { t } = useI18n()
+  const text = t.account.moonfin
+  const toast = useToast()
+  const patch = useUserPatch(user)
+  const settings = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: ({ signal }) => fetchSettings(signal),
+  })
+  const sync = useQuery({
+    queryKey: queryKeys.userMoonfin(user.id),
+    queryFn: ({ signal }) => fetchUserMoonfin(user.id, signal),
+  })
+  const save = (change: Parameters<typeof patch.mutate>[0]) => {
+    if (!patch.isPending) patch.mutate(change, { onSuccess: () => toast(t.users.updated) })
+  }
+
+  let choice
+  if (settings.isPending) choice = <Skeleton className="h-15 rounded-row" />
+  else if (settings.isError)
+    choice = (
+      <InlineError onRetry={() => void settings.refetch()} retrying={settings.isFetching}>
+        {errorMessage(t, settings.error)}
+      </InlineError>
+    )
+  else {
+    const options = moonfinOptions(settings.data.moonfin, t)
+    choice = (
+      <OpenRow
+        anchor="moonfin-choice"
+        label={t.users.moonfinRow}
+        value={options.find((option) => option.value === user.moonfin)?.label}
+        help={t.users.moonfinHelp}
+        error={patch.isError ? errorMessage(t, patch.error) : undefined}
+      >
+        <Select<UserMoonfin>
+          size="sm"
+          value={user.moonfin}
+          options={options}
+          onValue={(moonfin) => save({ moonfin })}
+          disabled={patch.isPending}
+          aria-label={t.users.moonfinRow}
+          className="max-w-[26.25rem]"
+        />
+      </OpenRow>
+    )
+  }
+
+  return (
+    <PageSection id="moonfin" title={t.users.moonfinTitle} description={t.users.moonfinSectionHelp}>
+      {choice}
+      <SettingRow
+        kind="switch"
+        label={t.users.moonfinChange}
+        help={t.users.moonfinChangeHelp}
+        checked={!user.moonfinLocked}
+        onChange={(change) => save({ moonfinLocked: !change })}
+      />
+      {sync.isPending ? (
+        <Skeleton className="h-15 rounded-row" />
+      ) : sync.isError ? (
+        <InlineError onRetry={() => void sync.refetch()} retrying={sync.isFetching}>
+          {errorMessage(t, sync.error)}
+        </InlineError>
+      ) : (
+        <MoonfinSyncRow
+          sync={sync.data}
+          forget={() => forgetUserMoonfin(user.id)}
+          onForgotten={() => {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.userMoonfin(user.id) })
+            void queryClient.invalidateQueries({ queryKey: queryKeys.moonfinDefaults })
+          }}
+          button={text.resetUser}
+          title={t.users.moonfinResetTitle(user.name)}
+          confirm={t.users.moonfinResetConfirm}
+        />
+      )}
     </PageSection>
   )
 }

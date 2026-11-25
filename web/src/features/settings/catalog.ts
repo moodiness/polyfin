@@ -83,6 +83,20 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'general',
+    anchor: 'moonfin',
+    label: (t) => s(t).moonfin,
+    help: (t) => s(t).moonfinHelp,
+    keywords: ['Moonfin', 'Moonbase', 'MDBList', 'TMDB', 'sync', 'synchronisation'],
+  },
+  {
+    section: 'general',
+    anchor: 'moonfin-defaults',
+    label: (t) => s(t).moonfinDefaults.title,
+    help: (t) => s(t).moonfinDefaults.help,
+    keywords: ['Moonfin', 'JSON', 'defaults', 'profile', 'TV', 'desktop', 'mobile'],
+  },
+  {
+    section: 'general',
     anchor: 'update-check',
     label: (t) => s(t).updateCheck,
     help: (t) => s(t).updateCheckHelp,

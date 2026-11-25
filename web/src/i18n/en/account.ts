@@ -18,6 +18,7 @@ const account = {
       webTheme: 'Web player theme',
       audioRegion: 'Audio region',
       interfaceSize: 'Interface size',
+      moonfin: 'Moonfin',
       sound: 'Sound',
       sharedLinks: 'Shared links',
       reminders: 'Reminders',
@@ -45,6 +46,28 @@ const account = {
       server: (theme: string) => `The server’s (${theme})`,
       choices: { lumaaglaass: 'LumaaGlaass', none: 'jellyfin-web’s own look', custom: 'Custom' },
       saved: 'Web player theme saved.',
+    },
+    /** My account › Moonfin, and the synced settings shown on a user's page under Users. */
+    moonfin: {
+      sectionHelp:
+        'Moonfin’s apps find Polyfin’s companion: your settings synced across your devices, MDBList ratings and TMDB extras. Other apps see no change.',
+      label: 'Moonfin’s companion',
+      help: 'Off, Moonfin’s apps work as with any server: your settings stay on each device.',
+      server: (state: string) => `Server default (${state})`,
+      saved: 'Moonfin’s companion saved.',
+      sync: 'Synced settings',
+      notSynced: 'Not synced yet',
+      settings: (count: number) => (count === 1 ? '1 setting' : `${count} settings`),
+      settingsIn: (count: string, profiles: string) => `${count} in ${profiles}`,
+      lastSaved: (when: string) => `Last saved ${when}`,
+      lastSavedBy: (when: string, app: string) => `Last saved ${when} by ${app}`,
+      profiles: { global: 'Global', tv: 'TV', desktop: 'Desktop', mobile: 'Mobile' },
+      reset: 'Reset my synced settings',
+      resetTitle: 'Reset your synced settings?',
+      resetConfirm:
+        'Polyfin forgets the settings Moonfin’s apps synced for you. Your devices then start again from the server’s defaults.',
+      resetUser: 'Reset',
+      resetDone: 'Synced settings reset.',
     },
     /** My account › Audio region, and the names of the regions offered there and on a user's page. */
     audioRegion: {
