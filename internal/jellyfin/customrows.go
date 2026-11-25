@@ -946,29 +946,22 @@ func (h *Handler) addCustomRowViews(r *http.Request, user accounts.User, views [
 	return append(views, dtos...), nil
 }
 
-// describeCustomRow answers the description of a row's folder. It reports
-// whether id named one.
-func (h *Handler) describeCustomRow(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
+// customRowDescription describes a row's folder. It reports whether id
+// named one.
+func (h *Handler) customRowDescription(r *http.Request, user accounts.User, id accounts.ID) (BaseItemDto, bool, error) {
 	row, found, err := h.customRowOf(r.Context(), user, id)
-	if err != nil {
-		h.internalError(w, r, err)
-		return true
-	}
-	if !found {
-		return false
+	if err != nil || !found {
+		return BaseItemDto{}, false, err
 	}
 	folder, err := h.customRowFolder(r.Context(), user, row)
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
 	dtos, err := h.folderDtos(r, user, []library.Item{folder})
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
-	writeJSON(w, http.StatusOK, dtos[0])
-	return true
+	return dtos[0], true, nil
 }
 
 // customRowAncestors answers the folders above a row's folder: none, as

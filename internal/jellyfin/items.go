@@ -202,11 +202,15 @@ type BaseItemDto struct {
 // Both describe a placeholder while no version is known, so that apps see
 // the title as playable.
 // A channel's details describe its streams as a placeholder, as Jellyfin's
-// do: PlaybackInfo describes them once the channel plays.
+// do: PlaybackInfo describes them once the channel plays. Its listings
+// give the same placeholder, never resolving the lineup.
 func (h *Handler) addMediaSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, opened accounts.ID, detail bool) {
-	if item.Kind == library.KindChannel && detail {
+	if item.Kind == library.KindChannel {
 		dto.MediaSources = &[]MediaSourceInfo{channelPlaceholder(item)}
 		dto.MediaStreams = &[]playback.MediaStream{}
+		if !detail {
+			return
+		}
 		if sources := h.lineupSources(r, user, item, opened); len(sources) > 0 {
 			dto.MediaSources = &sources
 		}
@@ -324,8 +328,10 @@ var itemTypes = map[library.Kind]string{
 	library.KindPerson:  "Person",
 	library.KindChannel: "TvChannel",
 	library.KindProgram: "Program",
-	// Jellyfin's recordings are videos of its recordings folders; Replay's
-	// programmes are as well, in a folder per channel.
+	// Recordings are videos of the recordings folder, whatever their
+	// programme: Jellyfin 12.4 makes its recordings library titles, movies
+	// or a series' episodes, which Polyfin's are not (see parityGaps).
+	// Replay's programmes are videos too, in a folder per channel.
 	library.KindRecording:     "Video",
 	library.KindReplayFolder:  "Folder",
 	library.KindReplay:        "Video",
@@ -482,16 +488,18 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		dto.DisplayOrder = item.DisplayOrder
 	case library.KindCollection:
 		dto.DisplayOrder = "PremiereDate"
-	case library.KindFolder:
-		// Listings count a folder's videos when asked; its own description
-		// always does (see below).
-		if c := item.Contents; c != nil && !detail {
-			if fields.has("ChildCount") {
-				dto.ChildCount = new(c.Children)
-			}
-			if fields.has("RecursiveItemCount") {
-				dto.RecursiveItemCount = new(c.Released)
-			}
+	}
+	// Listings count a series' seasons and released episodes, a season's
+	// episodes and a folder's videos when asked, once Polyfin knows them
+	// from its description: a listing asks no addon. Their own details
+	// always count them (see below).
+	if c := item.Contents; c != nil && !detail &&
+		(item.Kind == library.KindFolder || item.Kind == library.KindSeries || item.Kind == library.KindSeason) {
+		if fields.has("ChildCount") {
+			dto.ChildCount = new(c.Children)
+		}
+		if fields.has("RecursiveItemCount") {
+			dto.RecursiveItemCount = new(c.Released)
 		}
 	}
 	if playable {
@@ -552,6 +560,12 @@ func (h *Handler) newItemDto(item library.Item, fields fieldSet, detail bool, st
 		if item.Shown != nil {
 			dto.ParentId = item.Shown.SeasonID.String()
 		}
+	} else if (detail || fields.has("ParentId")) && item.Kind == library.KindLibrary &&
+		item.ID != rootFolderID && item.ID != liveTvViewID && item.ID != playlistsViewID {
+		// A library, as Jellyfin's, is a child of the root folder that
+		// /Items/Root describes. Jellyfin's Live TV and Playlists views,
+		// UserViews, have no parent.
+		dto.ParentId = rootFolderID.String()
 	}
 	dto.ExtraType = item.ExtraType
 	if detail {
@@ -782,6 +796,27 @@ func itemTypeFilter(r *http.Request) func(library.Item) bool {
 		included := len(include) == 0 || named(include) || item.Kind == library.KindCollection && matches(include, "Folder")
 		return included && !named(exclude) &&
 			(len(media) == 0 || matches(media, mediaType(item.Kind))) && (!folders || folder) && (!others || !folder)
+	}
+}
+
+// dtoTypeFilter is itemTypeFilter for what is described without a library
+// item, Polyfin's own playlists, collections, views, recordings and named
+// items: by their type, media type and whether they are folders.
+func dtoTypeFilter(r *http.Request) func(BaseItemDto) bool {
+	matches := func(list []string, value string) bool {
+		return slices.ContainsFunc(list, func(t string) bool { return strings.EqualFold(t, value) })
+	}
+	known := func(list []string) []string {
+		return slices.DeleteFunc(list, func(t string) bool { return !matches(itemKinds, t) })
+	}
+	include := known(listQuery(r, "includeItemTypes"))
+	exclude := known(listQuery(r, "excludeItemTypes"))
+	media := listQuery(r, "mediaTypes")
+	filters := listQuery(r, "filters")
+	folders, others := matches(filters, "IsFolder"), matches(filters, "IsNotFolder")
+	return func(dto BaseItemDto) bool {
+		return (len(include) == 0 || matches(include, dto.Type)) && !matches(exclude, dto.Type) &&
+			(len(media) == 0 || matches(media, dto.MediaType)) && (!folders || dto.IsFolder) && (!others || !dto.IsFolder)
 	}
 }
 

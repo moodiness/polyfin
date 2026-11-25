@@ -39,29 +39,34 @@ func (h *Handler) rootRoutes(rt *router) {
 
 func (h *Handler) rootFolder(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.viewer(w, r, bindErrors{}, notFoundProblem)
-	if ok {
-		h.writeRootFolder(w, r, user)
+	if !ok {
+		return
 	}
-}
-
-// writeRootFolder describes the user's root folder, which holds their
-// views, as Jellyfin does.
-func (h *Handler) writeRootFolder(w http.ResponseWriter, r *http.Request, user accounts.User) {
-	views, err := h.userViews(r, user, false)
+	dto, err := h.rootFolderDto(r, user, nil, true)
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+// rootFolderDto describes the user's root folder, which holds their
+// views, as Jellyfin does: in its details or, unless detail is set, as a
+// listing does.
+func (h *Handler) rootFolderDto(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, error) {
+	views, err := h.userViews(r, user, false)
+	if err != nil {
+		return BaseItemDto{}, err
 	}
 	item := rootFolderItem()
 	state, err := h.userState(r.Context(), user, []library.Item{item})
 	if err != nil {
-		h.internalError(w, r, err)
-		return
+		return BaseItemDto{}, err
 	}
-	dto := h.newItemDto(item, nil, true, state)
+	dto := h.newItemDto(item, fields, detail, state)
 	dto.Type, dto.CollectionType, dto.DateLastMediaAdded = "UserRootFolder", "", nil
 	dto.ChildCount = new(len(views))
-	writeJSON(w, http.StatusOK, dto)
+	return dto, nil
 }
 
 // rootChildren lists the root folder's children: the user's views.

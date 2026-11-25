@@ -1050,15 +1050,23 @@ func (h *Handler) playlistsViewItem() library.Item {
 		Name: library.PlaylistsName(h.Accounts.Settings().Language), CollectionType: "playlists"})
 }
 
-// playlistsView describes the Playlists view, a UserView as Jellyfin's
-// views and details describe it.
-func (h *Handler) playlistsView(r *http.Request, user accounts.User) (BaseItemDto, error) {
-	dtos, err := h.folderDtos(r, user, []library.Item{h.playlistsViewItem()})
-	if err != nil {
-		return BaseItemDto{}, err
+// playlistsView describes the Playlists view (see viewDto), a UserView as
+// Jellyfin's views and details describe it, its ChildCount what its
+// listing lists: the playlists user is shown and those of their local
+// music folders.
+func (h *Handler) playlistsView(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, error) {
+	lists, err := h.listedPlaylists(r.Context(), user)
+	var music []library.Item
+	if err == nil {
+		music, err = h.Library.FolderPlaylists(r.Context(), user)
 	}
-	dtos[0].Type = "UserView"
-	return dtos[0], nil
+	var view BaseItemDto
+	if err == nil {
+		view, err = h.viewDto(r, user, h.playlistsViewItem(), fields, detail)
+	}
+	view.Type = "UserView"
+	view.ChildCount = new(len(lists) + len(music))
+	return view, err
 }
 
 // addPlaylistsView adds the Playlists view to views once user may see a
@@ -1069,7 +1077,7 @@ func (h *Handler) addPlaylistsView(r *http.Request, user accounts.User, views []
 	if err != nil || !visible {
 		return views, err
 	}
-	view, err := h.playlistsView(r, user)
+	view, err := h.playlistsView(r, user, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1223,40 +1231,30 @@ func (h *Handler) playlistListing(w http.ResponseWriter, r *http.Request, user a
 	return true
 }
 
-// describePlaylist answers the description of the Playlists view or of a
-// playlist user may see. It reports whether id named one.
-func (h *Handler) describePlaylist(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
+// playlistDescription describes the Playlists view or a playlist user may
+// see, in its details or, unless detail is set, as a listing does. It
+// reports whether id named one.
+func (h *Handler) playlistDescription(r *http.Request, user accounts.User, id accounts.ID, fields fieldSet, detail bool) (BaseItemDto, bool, error) {
 	if id == playlistsViewID {
-		view, err := h.playlistsView(r, user)
-		if err != nil {
-			h.internalError(w, r, err)
-			return true
-		}
-		writeJSON(w, http.StatusOK, view)
-		return true
+		view, err := h.playlistsView(r, user, fields, detail)
+		return view, err == nil, err
 	}
 	p, err := h.Playlists.Get(r.Context(), id)
 	if errors.Is(err, playlists.ErrNotFound) || err == nil && !p.Visible(user.ID) {
-		return false
+		return BaseItemDto{}, false, nil
 	}
 	var shown []playlists.Playlist
 	if err == nil {
 		shown, err = h.shownPlaylists(r.Context(), user, []playlists.Playlist{p})
 	}
+	if err != nil || len(shown) == 0 {
+		return BaseItemDto{}, false, err
+	}
+	dtos, err := h.playlistDtos(r, user, []playlists.Playlist{p}, fields, detail)
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
-	if len(shown) == 0 {
-		return false
-	}
-	dtos, err := h.playlistDtos(r, user, []playlists.Playlist{p}, requestedFields(r), true)
-	if err != nil {
-		h.internalError(w, r, err)
-		return true
-	}
-	writeJSON(w, http.StatusOK, dtos[0])
-	return true
+	return dtos[0], true, nil
 }
 
 // playlistAncestors answers the folders above a playlist user may see: the
@@ -1270,7 +1268,7 @@ func (h *Handler) playlistAncestors(w http.ResponseWriter, r *http.Request, user
 		h.internalError(w, r, err)
 		return true
 	}
-	view, err := h.playlistsView(r, user)
+	view, err := h.playlistsView(r, user, nil, true)
 	if err != nil {
 		h.internalError(w, r, err)
 		return true
