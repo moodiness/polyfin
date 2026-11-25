@@ -321,47 +321,59 @@ func (h *Handler) addCollectionsView(r *http.Request, user accounts.User, views 
 			return views, err
 		}
 	}
-	view, err := h.folderDtos(r, user, []library.Item{h.collectionsViewItem()})
+	view, err := h.collectionsView(r, user, nil, true)
 	if err != nil {
 		return nil, err
 	}
-	return append(views, view...), nil
+	return append(views, view), nil
 }
 
-// describeCollection answers the description of the Collections view or of
-// a collection. It reports whether id named one.
-func (h *Handler) describeCollection(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
+// collectionsView describes the Collections view (see viewDto), its
+// ChildCount what its listing lists: the collections user is shown, and
+// the smart lists they are shown as collections. Judging these costs
+// reads only for a user whose listings are narrowed, by parental control
+// or blocked genres.
+func (h *Handler) collectionsView(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, error) {
+	all, err := h.Collections.All(r.Context())
+	if err == nil {
+		all, err = h.shownCollections(r.Context(), user, all)
+	}
+	var smart []library.Item
+	if err == nil {
+		smart, err = h.Library.ShownSmartCollections(r.Context(), user)
+	}
+	var view BaseItemDto
+	if err == nil {
+		view, err = h.viewDto(r, user, h.collectionsViewItem(), fields, detail)
+	}
+	view.ChildCount = new(len(all) + len(smart))
+	return view, err
+}
+
+// collectionDescription describes the Collections view or a collection
+// user sees, in its details or, unless detail is set, as a listing does.
+// It reports whether id named one.
+func (h *Handler) collectionDescription(r *http.Request, user accounts.User, id accounts.ID, fields fieldSet, detail bool) (BaseItemDto, bool, error) {
 	if id == collectionsViewID {
-		views, err := h.folderDtos(r, user, []library.Item{h.collectionsViewItem()})
-		if err != nil {
-			h.internalError(w, r, err)
-			return true
-		}
-		writeJSON(w, http.StatusOK, views[0])
-		return true
+		view, err := h.collectionsView(r, user, fields, detail)
+		return view, err == nil, err
 	}
 	c, err := h.Collections.Get(r.Context(), id)
 	if errors.Is(err, collections.ErrNotFound) {
-		return false
+		return BaseItemDto{}, false, nil
 	}
 	var shown []collections.Collection
 	if err == nil {
 		shown, err = h.shownCollections(r.Context(), user, []collections.Collection{c})
 	}
+	if err != nil || len(shown) == 0 {
+		return BaseItemDto{}, false, err
+	}
+	dtos, err := h.collectionDtos(r, user, []collections.Collection{c}, fields, detail)
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
-	if len(shown) == 0 {
-		return false
-	}
-	dtos, err := h.collectionDtos(r, user, []collections.Collection{c}, requestedFields(r), true)
-	if err != nil {
-		h.internalError(w, r, err)
-		return true
-	}
-	writeJSON(w, http.StatusOK, dtos[0])
-	return true
+	return dtos[0], true, nil
 }
 
 // collectionAncestors answers the folders above a collection: the

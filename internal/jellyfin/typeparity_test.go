@@ -3,12 +3,14 @@ package jellyfin
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -24,9 +26,6 @@ type parityRecord struct {
 	Present      map[string]bool `json:"present"`
 	UserDataKeys []string        `json:"userDataKeys"`
 	ImageTags    []string        `json:"imageTags"`
-	// unlisted is set on a listing of Polyfin's that came from elsewhere
-	// than the listing by identifiers, which left the item out.
-	unlisted bool
 }
 
 // parityFields are the fields whose values are compared: they depend on
@@ -102,7 +101,6 @@ func (r parityRecord) flatten(userDataKeys, imageTags []string) map[string]strin
 	for _, field := range parityPresence {
 		flat["has "+field] = fmt.Sprint(r.Present[field])
 	}
-	flat["listed by its identifier"] = fmt.Sprint(!r.unlisted)
 	for _, key := range userDataKeys {
 		flat["UserData."+key] = fmt.Sprint(slices.Contains(r.UserDataKeys, key))
 	}
@@ -126,7 +124,8 @@ type parityGap struct {
 // those apps notice. Any difference neither here nor in parityOpen fails
 // the test, and so does an entry that matches none.
 var parityGaps = []parityGap{
-	{kinds: []string{"artist", "audiobook", "boxset", "folder", "movie", "recording", "season", "series", "track", "video",
+	{kinds: []string{"artist", "audiobook", "boxset", "folder", "movie", "recording-episode", "recording-kids", "recording-news",
+		"recording-other", "recording-sports", "season", "series", "track", "video",
 		"view-boxsets", "view-homevideos", "view-livetv", "view-recordings"},
 		fields: []string{"ImageTags.Primary", "ImageTags.Logo", "ImageTags.Thumb"},
 		reason: "an item's pictures are those its source gives: an addon's artwork, a collection's drawn from its titles' " +
@@ -147,33 +146,22 @@ var parityGaps = []parityGap{
 		reason: "Polyfin sends them on every item, false and FileSystem, which is what apps take their absence for"},
 	{kinds: []string{"program"}, fields: []string{"MediaType"}, where: "listing",
 		reason: "a programme is Video in listings as in its details; Jellyfin's listing by identifier says Unknown"},
+	{kinds: []string{"recording-movie", "recording-episode", "recording-news", "recording-sports", "recording-kids", "recording-other"},
+		fields: []string{"Type"},
+		reason: "Jellyfin 12.4 turns its recordings into library titles (Movie, or Episode within a series), identified with " +
+			"pictures and similar titles; Polyfin's recordings have neither, so jellyfin-web would show them worse as " +
+			"Movie: they stay Video"},
+	{kinds: []string{"recording-episode"}, fields: []string{"has SeriesId", "has SeasonId"},
+		reason: "Jellyfin 12.4 files a series' recording under a Series and a Season of its Recordings library; Polyfin's " +
+			"recordings folder holds the recordings alone"},
+	{kinds: []string{"recording-movie", "recording-news", "recording-episode"}, fields: []string{"IsMovie", "IsNews", "IsSeries"},
+		reason: "a recording keeps its programme's flags, which the recordings listing filters by; Jellyfin's recordings " +
+			"are items of its library, without them"},
 }
 
 // parityOpen are the differences left for a decision, each with what it
 // would change; Polyfin answers as before meanwhile.
-var parityOpen = []parityGap{
-	{kinds: []string{"boxset", "playlist", "recording", "view-boxsets", "view-livetv", "view-playlists", "view-recordings"},
-		fields: []string{"listed by its identifier"},
-		reason: "/Items?ids= lists only the library's items: collections, playlists, recordings and the views Polyfin " +
-			"makes itself are compared as their own listings give them"},
-	{kinds: []string{"view-boxsets", "view-livetv", "view-playlists", "view-recordings"},
-		fields: []string{"EnableMediaSourceDisplay", "PlayAccess"}, where: "listing",
-		reason: "follows from the listing by identifier: /UserViews and the recordings folders give what details give"},
-	{kinds: []string{"recording"}, fields: []string{"Type"},
-		reason: "Jellyfin 12.4 made its recording of a news programme, in its untyped Recordings library, a Movie; " +
-			"Polyfin's recordings are always videos"},
-	{kinds: []string{"series", "season", "album", "artist"}, fields: []string{"has ChildCount", "has RecursiveItemCount"},
-		where: "listing",
-		reason: "listings count only folders of videos; a title's counts come with its description, which a listing " +
-			"does not ask addons for"},
-	{kinds: []string{"view-boxsets", "view-playlists", "view-recordings"}, fields: []string{"has ChildCount"},
-		reason: "the views Polyfin makes itself could count what they hold"},
-	{kinds: []string{"view-movies", "view-tvshows", "view-music", "view-books", "view-homevideos", "view-boxsets",
-		"view-playlists", "view-recordings"}, fields: []string{"has ParentId"},
-		reason: "Jellyfin's libraries have the root folder as their parent; Polyfin's have none, though /Items/Root holds them"},
-	{kinds: []string{"channel"}, fields: []string{"has MediaSources"}, where: "listing",
-		reason: "a channel's details describe its streams, its listings do not, even asked: a lineup lists thousands"},
-}
+var parityOpen = []parityGap{}
 
 // parityUser is a user of a parityArea, signed in.
 type parityUser struct{ id, token string }
@@ -185,14 +173,11 @@ type parityArea struct {
 	testServer
 	users map[string]parityUser
 	items map[string]string
-	// listings are, by kind, the listings apps find an item in that
-	// Polyfin's listing by identifiers leaves out, ending in ? or &.
-	listings map[string]string
 }
 
 func newParityArea(t *testing.T, s testServer) parityArea {
 	t.Helper()
-	a := parityArea{testServer: s, users: map[string]parityUser{}, items: map[string]string{}, listings: map[string]string{}}
+	a := parityArea{testServer: s, users: map[string]parityUser{}, items: map[string]string{}}
 	for who, allowed := range map[string]bool{"allowed": true, "denied": false} {
 		name := map[bool]string{true: "downloader", false: "keeper"}[allowed]
 		user := s.user(name, func(c *accounts.UserChanges) { c.ContentDownloading = new(allowed) })
@@ -235,49 +220,67 @@ func (a parityArea) first(t *testing.T, path string) string {
 	return page.Items[0].Id
 }
 
-// answers projects the details and the listing of each kind, by user. A
-// kind Polyfin's listing by identifiers leaves out is listed where apps
-// find it, a.listings, and its listing projected with unlisted set.
+// answers projects the details and the listing by identifier of each kind,
+// by user. The requests go out together, each a goroutine, as an app's
+// do; their answers are projected once all are in.
 func (a parityArea) answers(t *testing.T, fields string) map[string]map[string]map[string]parityRecord {
 	t.Helper()
-	answers := map[string]map[string]map[string]parityRecord{}
+	type asked struct {
+		kind, who, where, path, token string
+		status                        int
+		body                          []byte
+		err                           error
+	}
+	var requests []*asked
 	for kind, id := range a.items {
-		answers[kind] = map[string]map[string]parityRecord{}
 		for who, user := range a.users {
-			status, detail := a.call(http.MethodGet, "/Users/"+user.id+"/Items/"+id, app("web", user.token), nil)
-			if status != http.StatusOK {
-				t.Errorf("%s details for the %s user: %d %s", kind, who, status, detail)
-				continue
-			}
-			answers[kind][who] = map[string]parityRecord{"detail": project(t, detail)}
-			listed := func(path string) (json.RawMessage, bool) {
-				t.Helper()
-				status, body := a.call(http.MethodGet, path+"userId="+user.id+"&fields="+fields, app("web", user.token), nil)
-				var page struct{ Items []json.RawMessage }
-				if status != http.StatusOK || json.Unmarshal(body, &page) != nil {
-					t.Fatalf("%s: %d %s", path, status, body)
-				}
-				for _, item := range page.Items {
-					var named struct{ Id string }
-					if json.Unmarshal(item, &named) == nil && named.Id == id {
-						return item, true
-					}
-				}
-				return nil, false
-			}
-			item, ok := listed("/Items?ids=" + id + "&")
-			unlisted := !ok
-			if path, elsewhere := a.listings[kind]; !ok && elsewhere {
-				item, ok = listed(path)
-			}
-			if !ok {
-				t.Errorf("%s is listed nowhere for the %s user", kind, who)
-				continue
-			}
-			record := project(t, item)
-			record.unlisted = unlisted
-			answers[kind][who]["listing"] = record
+			requests = append(requests,
+				&asked{kind: kind, who: who, where: "detail", path: "/Users/" + user.id + "/Items/" + id, token: user.token},
+				&asked{kind: kind, who: who, where: "listing", path: "/Items?userId=" + user.id + "&ids=" + id + "&fields=" + fields, token: user.token})
 		}
+	}
+	var wg sync.WaitGroup
+	for _, r := range requests {
+		wg.Go(func() {
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, a.url+r.path, nil)
+			if err != nil {
+				r.err = err
+				return
+			}
+			request.Header.Set("Authorization", app("web", r.token))
+			response, err := testClient.Do(request)
+			if err != nil {
+				r.err = err
+				return
+			}
+			defer response.Body.Close()
+			r.status = response.StatusCode
+			r.body, r.err = io.ReadAll(response.Body)
+		})
+	}
+	wg.Wait()
+	answers := map[string]map[string]map[string]parityRecord{}
+	for _, r := range requests {
+		body := r.body
+		if r.where == "listing" && r.err == nil && r.status == http.StatusOK {
+			var page struct{ Items []json.RawMessage }
+			if json.Unmarshal(r.body, &page) != nil || len(page.Items) != 1 {
+				r.status = 0
+			} else {
+				body = page.Items[0]
+			}
+		}
+		if r.err != nil || r.status != http.StatusOK {
+			t.Errorf("%s %s for the %s user: %d %v %s", r.kind, r.where, r.who, r.status, r.err, r.body)
+			continue
+		}
+		if answers[r.kind] == nil {
+			answers[r.kind] = map[string]map[string]parityRecord{}
+		}
+		if answers[r.kind][r.who] == nil {
+			answers[r.kind][r.who] = map[string]parityRecord{}
+		}
+		answers[r.kind][r.who][r.where] = project(t, body)
 	}
 	return answers
 }
@@ -325,10 +328,6 @@ func videoParity(t *testing.T) parityArea {
 			map[string]any{"CanEdit": false})
 	}
 	a.views(t, "boxsets", "playlists")
-	a.listings["view-boxsets"] = "/UserViews?"
-	a.listings["view-playlists"] = "/UserViews?"
-	a.listings["boxset"] = "/Items?ParentId=" + a.items["view-boxsets"] + "&"
-	a.listings["playlist"] = "/Items?ParentId=" + a.items["view-playlists"] + "&"
 	return a
 }
 
@@ -391,8 +390,9 @@ func musicParity(t *testing.T, audiobook bool) parityArea {
 	return a
 }
 
-// liveParity holds a channel, the programme airing on it, a recording of
-// it, and the Live TV view.
+// liveParity holds a channel, the programme airing on it, a finished
+// recording of each kind of programme the script records, and the Live TV
+// view.
 func liveParity(t *testing.T) parityArea {
 	t.Helper()
 	folder := t.TempDir()
@@ -400,26 +400,38 @@ func liveParity(t *testing.T) parityArea {
 	a := newParityArea(t, s)
 	a.install(t, newTVAddon(t, true, "").url)
 	a.views(t, "livetv")
-	a.listings["view-livetv"] = "/UserViews?"
-	a.listings["recording"] = "/LiveTv/Recordings?"
 	a.items["channel"] = a.first(t, "/LiveTv/Channels")
 	a.items["program"] = guidePrograms(t, a.testServer, a.users["allowed"].token)["Now"].Id
-	// A finished recording of the programme, its file in the folder.
+	// The recordings, their files in the folder, of the guide categories
+	// and episode the script's programmes have.
 	channel, _ := parseGUID(a.items["channel"])
-	var recording accounts.ID
-	if err := a.pool.QueryRow(t.Context(), `INSERT INTO live_recordings (channel_id, name, start_at, end_at, started_at, ended_at, status, file)
-		VALUES ($1, 'Now', now() - interval '1 minute', now(), now() - interval '1 minute', now(), 'Completed', 'now.mkv') RETURNING id`,
-		channel).Scan(&recording); err != nil {
-		t.Fatal(err)
+	for _, kind := range []struct {
+		name, genres    string
+		season, episode int
+		episodeTitle    string
+	}{
+		{"movie", "{Movie}", 0, 0, ""},
+		{"episode", "{Series}", 2, 5, "The Second One"},
+		{"news", "{News}", 0, 0, ""},
+		{"sports", "{Sports}", 0, 0, ""},
+		{"kids", "{Kids}", 0, 0, ""},
+		{"other", "{}", 0, 0, ""},
+	} {
+		var recording accounts.ID
+		if err := a.pool.QueryRow(t.Context(), `INSERT INTO live_recordings (channel_id, name, genres, season, episode, episode_title,
+			start_at, end_at, started_at, ended_at, status, file)
+			VALUES ($1, $2, $3, $4, $5, $6, now() - interval '1 minute', now(), now() - interval '1 minute', now(), 'Completed', $2 || '.mkv')
+			RETURNING id`, channel, kind.name, kind.genres, kind.season, kind.episode, kind.episodeTitle).Scan(&recording); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(folder, kind.name+".mkv"), []byte(mediaBytes), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		a.items["recording-"+kind.name] = strings.ReplaceAll(recording.String(), "-", "")
 	}
-	if err := os.WriteFile(filepath.Join(folder, "now.mkv"), []byte(mediaBytes), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	a.items["recording"] = strings.ReplaceAll(recording.String(), "-", "")
 	// Jellyfin's Recordings library, which has no type, is Polyfin's
 	// recordings folder.
 	a.items["view-recordings"] = a.first(t, "/LiveTv/Recordings/Folders")
-	a.listings["view-recordings"] = "/LiveTv/Recordings/Folders?"
 	return a
 }
 

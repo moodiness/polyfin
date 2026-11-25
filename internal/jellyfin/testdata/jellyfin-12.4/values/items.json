@@ -1468,7 +1468,749 @@
         }
       }
     },
-    "recording": {
+    "recording-episode": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": true,
+            "SeriesId": true,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Episode",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "recording-kids": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "recording-movie": {
+      "allowed": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "recording-news": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "recording-other": {
+      "allowed": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      },
+      "denied": {
+        "detail": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "EnableMediaSourceDisplay": true,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "PlayAccess": "Full",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        },
+        "listing": {
+          "imageTags": [
+            "Primary"
+          ],
+          "present": {
+            "AlbumId": false,
+            "Chapters": true,
+            "ChildCount": false,
+            "MediaSourceCount": false,
+            "MediaSources": true,
+            "ParentId": true,
+            "RecursiveItemCount": false,
+            "RunTimeTicks": true,
+            "SeasonId": false,
+            "SeriesId": false,
+            "UserData": true
+          },
+          "userDataKeys": [
+            "IsFavorite",
+            "ItemId",
+            "Key",
+            "PlayCount",
+            "PlaybackPositionTicks",
+            "Played"
+          ],
+          "values": {
+            "CanDelete": false,
+            "CanDownload": false,
+            "IsFolder": false,
+            "LocationType": "FileSystem",
+            "MediaType": "Video",
+            "Type": "Movie",
+            "VideoType": "VideoFile"
+          }
+        }
+      }
+    },
+    "recording-sports": {
       "allowed": {
         "detail": {
           "imageTags": [

@@ -117,6 +117,7 @@ Administrators manage users in the admin app, under `/admin/api/users` and `/adm
 ### Live TV access for apps
 
 - The `/LiveTv` routes answer 403, as Jellyfin's do without `EnableLiveTvAccess`.
+- Live TV channels listed with `Fields=MediaSources` or `MediaStreams` carry the placeholder source their details start with; the lineup is read only for their details and PlaybackInfo.
 
 ### Live TV channels per user for apps
 
@@ -456,7 +457,10 @@ The web player's [type filter on collection pages](web-client.md#type-filter-on-
 
 ### Root folder, counts and suggestions for apps
 
-- `/Items/Root` is the user's root folder; its children are the user's views.
+- `/Items/Root` is the user's root folder; its children are the user's views. Each view's `ParentId` is the root folder, as Jellyfin's libraries have it, but for the Live TV and Playlists views, which are `UserView` items without a parent, as Jellyfin's are.
+- The Collections and Playlists views and the recordings folder give their `ChildCount`: what their listing lists for the user. A library of an addon's catalog has none, as its size is unknown until the catalog is read whole.
+- `/Items?ids=` lists every item the details route describes: the library's items, and what Polyfin makes itself (playlists, collections, recordings, the root folder, its own views, home rows' folders), a version by its own identifier as its title, and genres and studios. Its type filters apply to them all.
+- Listings asked for `ChildCount` or `RecursiveItemCount` give them for series, seasons, albums, artists and folders of videos once Polyfin knows them, as their details do: a series once one of the user's addons has described it lately, an album or artist once its addon has listed its tracks or albums. Unknown, they are left out: a listing asks no addon for them.
 - `/Items/Counts` counts each library's first page of titles, plus one when more follow, as genre and studio pages count, as far as Polyfin keeps them: it asks the addons nothing. The user's favorites are counted exactly with `isFavorite=true`.
 - `/Items/Suggestions` returns titles picked at random among the first page of each library, those the user's taste profile ranks first coming first once it is confident (see [Top picks for you](home-rows.md#top-picks-for-you)).
 
@@ -1050,6 +1054,7 @@ Polyfin's own routes, under the Live TV permission:
 - Guide programmes show their timers (`TimerId`, `SeriesTimerId`).
 - A recording under way can be followed at `/LiveTv/LiveRecordings/{id}/stream`. Unlike Jellyfin, it needs a signed-in user's credentials or play session, like Polyfin's other media.
 - Recordings are listed under `/LiveTv/Recordings`, and the folder at `/LiveTv/Recordings/Folders`.
+- A recording is a `Video` item of the recordings folder, whatever its programme. Jellyfin 12.4 makes its recordings library titles: an `Episode` of a `Series` and a `Season` for a series' episode, a `Movie` for any other programme, identified with pictures and similar titles. Polyfin's recordings have neither, and jellyfin-web shows them better as videos (see [What items tell apps](jellyfin-compatibility.md#what-items-tell-apps)).
 - A finished recording carries `CanDownload` in its details, and in listings asked with `Fields=CanDownload`: `true` when the user has **Can download** and `/Items/{id}/Download` serves its file. A recording under way has no file yet, and one taller than the user's quality group is refused: both are `false`.
 - A timer or series timer asked for a programme Polyfin does not know answers 404 (`Timers/Defaults`) or 400 (`SeriesTimers`), where Jellyfin fails with 500.
 - `POST /LiveTv/Timers/{id}` changes the timer the route names, not the one in the body.

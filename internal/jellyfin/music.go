@@ -123,6 +123,8 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail,
 			dto.ChildCount, dto.RecursiveItemCount = new(children), new(children)
 			dto.CumulativeRunTimeTicks = new(int64(item.Runtime / 100))
 			dto.DateLastMediaAdded = new(Time(time.Time{}))
+		} else {
+			listedCounts(dto, item, fields, children)
 		}
 	case library.KindArtist:
 		// Jellyfin gives artists no length of their own.
@@ -133,12 +135,32 @@ func describeMusic(dto *BaseItemDto, item library.Item, fields fieldSet, detail,
 			dto.EpisodeCount, dto.TrailerCount, dto.MusicVideoCount, dto.ProgramCount = new(0), new(0), new(0), new(0)
 			dto.CumulativeRunTimeTicks = new(int64(0))
 			dto.DateLastMediaAdded = new(Time(time.Time{}))
+		} else {
+			listedCounts(dto, item, fields, 0)
 		}
 	case library.KindMusicPlaylist:
 		if detail {
 			dto.ChildCount, dto.RecursiveItemCount = new(children), new(children)
 			dto.CumulativeRunTimeTicks = new(int64(item.Runtime / 100))
+		} else {
+			listedCounts(dto, item, fields, children)
 		}
+	}
+}
+
+// listedCounts gives a listed album, artist or playlist the counts its
+// details give, ChildCount its known number of children and
+// RecursiveItemCount recursive, when the listing asks for them: only once
+// Polyfin knows its children, as a listing asks no addon for them.
+func listedCounts(dto *BaseItemDto, item library.Item, fields fieldSet, recursive int) {
+	if item.ChildCount == nil {
+		return
+	}
+	if fields.has("ChildCount") {
+		dto.ChildCount = new(*item.ChildCount)
+	}
+	if fields.has("RecursiveItemCount") {
+		dto.RecursiveItemCount = new(recursive)
 	}
 }
 

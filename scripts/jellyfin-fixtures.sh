@@ -36,8 +36,8 @@
 # the item's type, the user's permissions or the request (Type, MediaType,
 # IsFolder, CanDownload, CanDelete and others), for every kind of item
 # Polyfin serves too, in its details and in a listing, by a user allowed
-# to download and one who is not. It adds a home videos library and a
-# Live TV recording for the kinds the rest lacks.
+# to download and one who is not. It adds a home videos library, and Live
+# TV channels whose programmes of each kind it records.
 #
 # Requirements: Docker, curl, jq, ffmpeg, ffprobe. Usage: scripts/jellyfin-fixtures.sh
 set -euo pipefail

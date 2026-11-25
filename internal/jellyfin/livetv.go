@@ -224,15 +224,13 @@ func liveTvViewItem() library.Item {
 	return withEmblem(library.Item{ID: liveTvViewID, Kind: library.KindLibrary, Name: "Live TV", CollectionType: "livetv"})
 }
 
-// liveTvView describes the Live TV view, a view of Jellyfin's own.
-func (h *Handler) liveTvView(r *http.Request, user accounts.User) (BaseItemDto, error) {
-	dtos, err := h.folderDtos(r, user, []library.Item{liveTvViewItem()})
-	if err != nil {
-		return BaseItemDto{}, err
-	}
-	dtos[0].Type = "UserView"
-	dtos[0].ChildCount, dtos[0].DateLastMediaAdded = new(0), nil
-	return dtos[0], nil
+// liveTvView describes the Live TV view, a view of Jellyfin's own (see
+// viewDto).
+func (h *Handler) liveTvView(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, error) {
+	view, err := h.viewDto(r, user, liveTvViewItem(), fields, detail)
+	view.Type = "UserView"
+	view.ChildCount, view.DateLastMediaAdded = new(0), nil
+	return view, err
 }
 
 // addLiveTvView adds the Live TV view to views when user has live TV
@@ -242,26 +240,21 @@ func (h *Handler) addLiveTvView(r *http.Request, user accounts.User, views []Bas
 	if err != nil || !has {
 		return views, err
 	}
-	view, err := h.liveTvView(r, user)
+	view, err := h.liveTvView(r, user, nil, true)
 	if err != nil {
 		return nil, err
 	}
 	return append(views, view), nil
 }
 
-// describeLiveTvView answers the description of the Live TV view. It
-// reports whether user has it.
-func (h *Handler) describeLiveTvView(w http.ResponseWriter, r *http.Request, user accounts.User) bool {
+// liveTvViewDescription describes the Live TV view, in its details or,
+// unless detail is set, as a listing does. It reports whether user has it.
+func (h *Handler) liveTvViewDescription(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, bool, error) {
 	if has, err := h.Library.HasChannels(r.Context(), user); err != nil || !has {
-		return false
+		return BaseItemDto{}, false, nil
 	}
-	view, err := h.liveTvView(r, user)
-	if err != nil {
-		h.internalError(w, r, err)
-		return true
-	}
-	writeJSON(w, http.StatusOK, view)
-	return true
+	view, err := h.liveTvView(r, user, fields, detail)
+	return view, err == nil, err
 }
 
 // channelListing answers listings of channels: the Live TV view's, which
@@ -404,6 +397,9 @@ func (h *Handler) liveChannels(w http.ResponseWriter, r *http.Request) {
 	dtos := make([]BaseItemDto, 0, to-from)
 	for _, channel := range channels[from:to] {
 		dto := h.newItemDto(channel, fields, false, state)
+		if fields.has("MediaSources") || fields.has("MediaStreams") {
+			h.addListedSources(r, user, &dto, channel, fields)
+		}
 		if program, ok := airing[channel.ID]; ok {
 			dto.CurrentProgram = new(h.newItemDto(program, fields, false, userState{reader: user.ID}))
 		}

@@ -915,15 +915,17 @@ func (h *Handler) recordings(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordingsFolder describes the folder recordings are listed in, as
-// Jellyfin describes its recordings library.
-func (h *Handler) recordingsFolder(r *http.Request, user accounts.User) (BaseItemDto, error) {
-	folder := library.Item{ID: recordingsFolderID, Kind: library.KindLibrary, Name: "Recordings"}
-	dtos, err := h.folderDtos(r, user, []library.Item{folder})
-	if err != nil {
-		return BaseItemDto{}, err
+// Jellyfin describes its recordings library (see viewDto), its ChildCount
+// the recordings user sees.
+func (h *Handler) recordingsFolder(r *http.Request, user accounts.User, fields fieldSet, detail bool) (BaseItemDto, error) {
+	list, _, err := h.listedRecordings(r.Context(), user)
+	var folder BaseItemDto
+	if err == nil {
+		folder, err = h.viewDto(r, user, library.Item{ID: recordingsFolderID, Kind: library.KindLibrary, Name: "Recordings"}, fields, detail)
 	}
-	dtos[0].DateLastMediaAdded = nil
-	return dtos[0], nil
+	folder.DateLastMediaAdded = nil
+	folder.ChildCount = new(len(list))
+	return folder, err
 }
 
 // recordingFolders lists the recordings folder, when the server records.
@@ -935,7 +937,7 @@ func (h *Handler) recordingFolders(w http.ResponseWriter, r *http.Request) {
 	}
 	result := QueryResult{Items: []BaseItemDto{}}
 	if h.recordable() && user.LiveTv {
-		folder, err := h.recordingsFolder(r, user)
+		folder, err := h.recordingsFolder(r, user, nil, true)
 		if err != nil {
 			h.internalError(w, r, err)
 			return
@@ -966,36 +968,29 @@ func (h *Handler) recordingListing(w http.ResponseWriter, r *http.Request, user 
 	return true
 }
 
-// describeRecording answers the description of a recording, or of the
-// recordings folder. It reports whether id is one the caller sees.
-func (h *Handler) describeRecording(w http.ResponseWriter, r *http.Request, user accounts.User, id accounts.ID) bool {
+// recordingDescription describes a recording the caller sees, or the
+// recordings folder, in its details or, unless detail is set, as a
+// listing does. It reports whether id is one.
+func (h *Handler) recordingDescription(r *http.Request, user accounts.User, id accounts.ID, fields fieldSet, detail bool) (BaseItemDto, bool, error) {
 	if !h.recordable() || !user.LiveTv {
-		return false
+		return BaseItemDto{}, false, nil
 	}
 	if id == recordingsFolderID {
-		folder, err := h.recordingsFolder(r, user)
-		if err != nil {
-			h.internalError(w, r, err)
-			return true
-		}
-		writeJSON(w, http.StatusOK, folder)
-		return true
+		folder, err := h.recordingsFolder(r, user, fields, detail)
+		return folder, err == nil, err
 	}
 	rec, channel, err := h.visibleRecording(r.Context(), user, id)
 	if errors.Is(err, recordings.ErrNotFound) {
-		return false
+		return BaseItemDto{}, false, nil
 	}
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
 	state, err := h.userState(r.Context(), user, []library.Item{{ID: rec.ID, Kind: library.KindRecording}})
 	if err != nil {
-		h.internalError(w, r, err)
-		return true
+		return BaseItemDto{}, false, err
 	}
-	writeJSON(w, http.StatusOK, h.recordingDto(r, user, rec, channel, requestedFields(r), true, state))
-	return true
+	return h.recordingDto(r, user, rec, channel, fields, detail, state), true, nil
 }
 
 // recording describes a recording.
@@ -1006,8 +1001,14 @@ func (h *Handler) recording(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.describeRecording(w, r, user, id) {
+	dto, found, err := h.recordingDescription(r, user, id, requestedFields(r), true)
+	switch {
+	case err != nil:
+		h.internalError(w, r, err)
+	case !found:
 		notFoundProblem(w)
+	default:
+		writeJSON(w, http.StatusOK, dto)
 	}
 }
 

@@ -162,6 +162,11 @@ func versionFields(fields fieldSet) bool {
 // analyzedAhead). A panic while describing one is raised again here, in
 // the request, as it was when they were described one by one.
 func (h *Handler) listDtos(r *http.Request, user accounts.User, items []library.Item, fields fieldSet, state userState) []BaseItemDto {
+	if fields.has("ChildCount") || fields.has("RecursiveItemCount") {
+		// A series listed from its catalog counts its seasons and episodes
+		// once Polyfin knows its description.
+		items = h.Library.KnownContents(r.Context(), user, items)
+	}
 	result := make([]BaseItemDto, len(items))
 	if len(items) < 2 || !versionFields(fields) {
 		for i, item := range items {
@@ -223,13 +228,7 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 	dto := h.newItemDto(item, fields, false, state)
 	sources, streams := fields.has("MediaSources"), fields.has("MediaStreams")
 	if sources || streams {
-		h.addMediaSources(r, user, &dto, item, item.ID, false)
-		if !sources {
-			dto.MediaSources = nil
-		}
-		if !streams {
-			dto.MediaStreams = nil
-		}
+		h.addListedSources(r, user, &dto, item, fields)
 	} else if dto.Chapters != nil && versioned(item.Kind) {
 		// Only what is known: a listing never asks addons for streams.
 		h.setChapters(r.Context(), &dto, h.cachedPlayable(r.Context(), user, item).versions, item.ID)
@@ -251,6 +250,18 @@ func (h *Handler) listDto(r *http.Request, user accounts.User, item library.Item
 	return dto
 }
 
+// addListedSources gives a listed item the MediaSources and MediaStreams a
+// listing asks for, from what is known (see addMediaSources).
+func (h *Handler) addListedSources(r *http.Request, user accounts.User, dto *BaseItemDto, item library.Item, fields fieldSet) {
+	h.addMediaSources(r, user, dto, item, item.ID, false)
+	if !fields.has("MediaSources") {
+		dto.MediaSources = nil
+	}
+	if !fields.has("MediaStreams") {
+		dto.MediaStreams = nil
+	}
+}
+
 // folderDtos describes libraries and ancestors, which Jellyfin always
 // describes in full.
 func (h *Handler) folderDtos(r *http.Request, user accounts.User, items []library.Item) ([]BaseItemDto, error) {
@@ -263,6 +274,17 @@ func (h *Handler) folderDtos(r *http.Request, user accounts.User, items []librar
 		result = append(result, h.newItemDto(item, nil, true, state))
 	}
 	return result, nil
+}
+
+// viewDto describes one of Polyfin's own views: in full, as libraries are
+// in their details and among the views, or, unless detail is set, as a
+// listing by identifier describes it, as Jellyfin lists its views.
+func (h *Handler) viewDto(r *http.Request, user accounts.User, item library.Item, fields fieldSet, detail bool) (BaseItemDto, error) {
+	state, err := h.userState(r.Context(), user, []library.Item{item})
+	if err != nil {
+		return BaseItemDto{}, err
+	}
+	return h.newItemDto(item, fields, detail, state), nil
 }
 
 // paging binds startIndex and limit; a missing or negative limit is
@@ -505,18 +527,25 @@ func (h *Handler) items(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		found, err := h.Library.Items(r.Context(), user, wanted)
+		known := make(map[accounts.ID]bool, len(found))
+		for _, item := range found {
+			known[item.ID] = true
+		}
 		if err == nil {
 			found, err = h.Library.RatingFiltered(r.Context(), user, found)
 		}
+		var items, others []BaseItemDto
+		if err == nil {
+			items, err = h.dtos(r, user, found, fields, keep)
+		}
+		if err == nil {
+			others, err = h.unknownByIdentifier(r, user, slices.DeleteFunc(wanted, func(id accounts.ID) bool { return known[id] }), fields)
+		}
 		if err != nil {
 			h.internalError(w, r, err)
 			return
 		}
-		items, err := h.dtos(r, user, found, fields, keep)
-		if err != nil {
-			h.internalError(w, r, err)
-			return
-		}
+		items = append(items, slices.DeleteFunc(others, func(dto BaseItemDto) bool { return !dtoTypeFilter(r)(dto) })...)
 		writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items)})
 		return
 	}
@@ -899,24 +928,18 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		// Apps open a version as an item by its media source id.
 		item, err = h.title(r.Context(), user, id)
 	}
-	if errors.Is(err, library.ErrNotFound) && h.describePlaylist(w, r, user, id) {
-		return
-	}
-	if errors.Is(err, library.ErrNotFound) && h.describeCollection(w, r, user, id) {
-		return
-	}
-	if errors.Is(err, library.ErrNotFound) && id == liveTvViewID && h.describeLiveTvView(w, r, user) {
-		return
-	}
-	if errors.Is(err, library.ErrNotFound) && id == rootFolderID {
-		h.writeRootFolder(w, r, user)
-		return
-	}
-	if errors.Is(err, library.ErrNotFound) && h.describeRecording(w, r, user, id) {
-		return
-	}
-	if errors.Is(err, library.ErrNotFound) && h.describeCustomRow(w, r, user, id) {
-		return
+	if errors.Is(err, library.ErrNotFound) {
+		// What Polyfin makes itself: playlists, collections, its views,
+		// recordings and rows' folders.
+		dto, found, ownErr := h.ownItem(r, user, id, requestedFields(r), true)
+		if ownErr != nil {
+			h.internalError(w, r, ownErr)
+			return
+		}
+		if found {
+			writeJSON(w, http.StatusOK, dto)
+			return
+		}
 	}
 	// A genre or studio a title links to (see names.go).
 	if errors.Is(err, library.ErrNotFound) && h.describeNamed(w, r, user, id) {
@@ -930,8 +953,16 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		h.writePerson(w, r, user, item)
 		return
 	}
-	if item.Kind == library.KindRecording && h.describeRecording(w, r, user, item.ID) {
-		return
+	if item.Kind == library.KindRecording {
+		dto, found, err := h.recordingDescription(r, user, item.ID, requestedFields(r), true)
+		if err != nil {
+			h.internalError(w, r, err)
+			return
+		}
+		if found {
+			writeJSON(w, http.StatusOK, dto)
+			return
+		}
 	}
 	if track, ok := lyricsTrack(item); ok && !item.Lyrics {
 		// A song's details tell whether it has lyrics, which apps show
@@ -973,6 +1004,83 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		dto = dtos[0]
 	}
 	writeJSON(w, http.StatusOK, dto)
+}
+
+// ownItem describes what Polyfin makes itself, which the library does not
+// hold: a playlist or the Playlists view, a collection or the Collections
+// view, the Live TV view, the root folder, a recording or the recordings
+// folder, a row's folder. It describes it in its details or, unless
+// detail is set, as a listing does, and reports whether id named one the
+// user sees.
+func (h *Handler) ownItem(r *http.Request, user accounts.User, id accounts.ID, fields fieldSet, detail bool) (BaseItemDto, bool, error) {
+	for _, describe := range []func() (BaseItemDto, bool, error){
+		func() (BaseItemDto, bool, error) { return h.playlistDescription(r, user, id, fields, detail) },
+		func() (BaseItemDto, bool, error) { return h.collectionDescription(r, user, id, fields, detail) },
+		func() (BaseItemDto, bool, error) {
+			if id != liveTvViewID {
+				return BaseItemDto{}, false, nil
+			}
+			return h.liveTvViewDescription(r, user, fields, detail)
+		},
+		func() (BaseItemDto, bool, error) {
+			if id != rootFolderID {
+				return BaseItemDto{}, false, nil
+			}
+			dto, err := h.rootFolderDto(r, user, fields, detail)
+			return dto, err == nil, err
+		},
+		func() (BaseItemDto, bool, error) { return h.recordingDescription(r, user, id, fields, detail) },
+		func() (BaseItemDto, bool, error) { return h.customRowDescription(r, user, id) },
+	} {
+		if dto, found, err := describe(); err != nil || found {
+			return dto, found, err
+		}
+	}
+	return BaseItemDto{}, false, nil
+}
+
+// unknownByIdentifier describes, as a listing by identifier does, the
+// identifiers among ids that the library holds no item of, as item
+// resolves them: a plain video matched since, a version (as its title,
+// under the version's identifier, as details describe it), what Polyfin
+// makes itself (see ownItem), a genre or a studio. Those that name none
+// the user sees are left out.
+func (h *Handler) unknownByIdentifier(r *http.Request, user accounts.User, ids []accounts.ID, fields fieldSet) ([]BaseItemDto, error) {
+	var result []BaseItemDto
+	for _, id := range ids {
+		item, err := h.Library.MatchedPlain(r.Context(), user, id)
+		if errors.Is(err, library.ErrNotFound) {
+			item, err = h.title(r.Context(), user, id)
+		}
+		if err == nil && item.Kind != library.KindRecording {
+			dtos, err := h.dtos(r, user, []library.Item{item}, fields, nil)
+			if err != nil {
+				return nil, err
+			}
+			dtos[0].Id = id.String()
+			result = append(result, dtos[0])
+			continue
+		}
+		if err != nil && !errors.Is(err, library.ErrNotFound) {
+			return nil, err
+		}
+		dto, found, err := h.ownItem(r, user, id, fields, false)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			result = append(result, dto)
+			continue
+		}
+		named, found, err := h.namedByID(r.Context(), user, id.String())
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			result = append(result, h.namedListDto(NameGuidPair{Name: named.name, Id: id.String()}, named.kind))
+		}
+	}
+	return result, nil
 }
 
 func (h *Handler) ancestors(w http.ResponseWriter, r *http.Request) {
@@ -1220,19 +1328,24 @@ func (h *Handler) genres(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]BaseItemDto, 0, len(genres))
 	for _, genre := range h.namedPairs(user.ID, genreNamed, genres) {
-		items = append(items, BaseItemDto{
-			Name:              genre.Name,
-			ServerId:          h.ServerID,
-			Id:                genre.Id,
-			Type:              genreNamed.itemType,
-			IsFolder:          false,
-			ImageTags:         map[string]string{},
-			BackdropImageTags: []string{},
-			ImageBlurHashes:   map[string]map[string]string{},
-			LocationType:      "FileSystem",
-			MediaType:         "Unknown",
-			UserData:          UserItemData{Key: genre.Name, ItemId: genre.Id},
-		})
+		items = append(items, h.namedListDto(genre, genreNamed))
 	}
 	writeJSON(w, http.StatusOK, QueryResult{Items: items, TotalRecordCount: len(items), StartIndex: 0})
+}
+
+// namedListDto describes a genre or a studio as listings do.
+func (h *Handler) namedListDto(named NameGuidPair, kind namedKind) BaseItemDto {
+	return BaseItemDto{
+		Name:              named.Name,
+		ServerId:          h.ServerID,
+		Id:                named.Id,
+		Type:              kind.itemType,
+		IsFolder:          false,
+		ImageTags:         map[string]string{},
+		BackdropImageTags: []string{},
+		ImageBlurHashes:   map[string]map[string]string{},
+		LocationType:      "FileSystem",
+		MediaType:         "Unknown",
+		UserData:          UserItemData{Key: named.Name, ItemId: named.Id},
+	}
 }
