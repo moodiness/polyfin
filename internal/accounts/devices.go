@@ -11,6 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/moodiness/polyfin/internal/database/unsynced"
 )
 
 // activityResolution limits how often a device's last activity is written.
@@ -238,8 +240,10 @@ func (s *Store) DeviceByToken(ctx context.Context, token, remoteAddress string) 
 		return Device{}, User{}, ErrNotFound
 	}
 	if now.Sub(entry.device.LastActivityAt) >= activityResolution || entry.device.RemoteAddress != remoteAddress {
-		// The user's app moves with the time only.
-		_, err := s.db.Exec(ctx, `WITH touched AS (
+		// The user's app moves with the time only. The device's activity,
+		// its address with it, and the user's do not wait for the disk
+		// (see unsynced.Exec).
+		_, err := unsynced.Exec(ctx, s.db, `WITH touched AS (
 				UPDATE devices SET last_activity_at = greatest(last_activity_at, $3), remote_address = $2 WHERE id = $1 RETURNING user_id, client
 			) UPDATE users u SET last_activity_at = $3, last_activity_app = t.client FROM touched t
 			WHERE u.id = t.user_id AND (u.last_activity_at IS NULL OR u.last_activity_at < $3)`,

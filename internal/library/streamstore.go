@@ -15,6 +15,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/database"
+	"github.com/moodiness/polyfin/internal/database/unsynced"
 	"github.com/moodiness/polyfin/internal/stremio"
 )
 
@@ -243,7 +244,8 @@ func (s *Service) saveStreamsAfter(key streamKey, failures int) {
 
 // writeStreams writes the stream list kept in memory for key to the
 // database, reading it under the key's lock, and reports whether it did,
-// or the database's error.
+// or the database's error. The list is a cache, whose write does not wait
+// for the disk (see unsynced.Exec).
 func (s *Service) writeStreams(key streamKey) (bool, error) {
 	tracked := s.tracked()
 	defer tracked.saving.lock(key)()
@@ -257,7 +259,7 @@ func (s *Service) writeStreams(key streamKey) (bool, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), savedTimeout)
 	defer cancel()
-	if _, err := s.db.Exec(ctx, `INSERT INTO stream_lists (addon_id, content_type, stremio_id, streams, answer, fetched_at)
+	if _, err := unsynced.Exec(ctx, s.db, `INSERT INTO stream_lists (addon_id, content_type, stremio_id, streams, answer, fetched_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (addon_id, content_type, stremio_id) DO UPDATE
 		SET streams = excluded.streams, answer = excluded.answer, fetched_at = excluded.fetched_at`,

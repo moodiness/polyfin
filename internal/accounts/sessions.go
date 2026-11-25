@@ -10,6 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/moodiness/polyfin/internal/database/unsynced"
 )
 
 // AdminSessionLifetime is how long the admin interface stays signed in
@@ -126,9 +128,10 @@ func (s *Store) AdminSession(ctx context.Context, token string) (AdminSession, e
 	}
 	// The tokens remembered for the user's devices need not learn of it:
 	// their devices were last active before the user, so over a minute
-	// ago, and their next request writes the activity again.
+	// ago, and their next request writes the activity again. An activity
+	// time does not wait for the disk (see unsynced.Exec).
 	if now := s.now(); user.LastActivityAt == nil || now.Sub(*user.LastActivityAt) >= activityResolution {
-		written, err := s.db.Exec(ctx, `UPDATE users SET last_activity_at = $2, last_activity_app = $3
+		written, err := unsynced.Exec(ctx, s.db, `UPDATE users SET last_activity_at = $2, last_activity_app = $3
 			WHERE id = $1 AND NOT is_disabled AND (last_activity_at IS NULL OR last_activity_at < $2)`, user.ID, now, AdminApp)
 		if err != nil {
 			return AdminSession{}, err
