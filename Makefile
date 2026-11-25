@@ -13,7 +13,7 @@ IMAGE_DATABASE_URL ?= postgresql://polyfin:polyfin@host.docker.internal:5432/pol
 FFMPEG_ARCHIVES ?=
 FFMPEG_CONTEXTS = $(if $(FFMPEG_ARCHIVES),--build-context ffmpeg-amd64-archive=$(FFMPEG_ARCHIVES)/amd64 --build-context ffmpeg-arm64-archive=$(FFMPEG_ARCHIVES)/arm64)
 
-.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health image-health-embedded
+.PHONY: web build dev check lint test test-race-1 test-race-2 test-jellyfin-1 test-jellyfin-2 bounds compose-check image-check image-health image-health-embedded upgrade-check
 
 web:
 	$(NPM) --prefix web ci --no-audit --no-fund
@@ -120,3 +120,11 @@ image-health:
 # a clean stop, and a recovery after a kill.
 image-health-embedded:
 	sh scripts/image-health-embedded.sh polyfin-local:check
+
+# Updating to the image image-check built from older releases, with both
+# databases (scripts/upgradecheck): each release's published image makes
+# data through its APIs, then this image must start on it and answer the
+# same. UPGRADE_FROM names other releases, comma-separated.
+UPGRADE_FROM ?=
+upgrade-check:
+	$(GO) run ./scripts/upgradecheck -candidate polyfin-local:check $(if $(UPGRADE_FROM),-from '$(UPGRADE_FROM)')
