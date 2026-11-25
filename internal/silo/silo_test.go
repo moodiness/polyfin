@@ -58,6 +58,7 @@ func (f *fakeAccounts) SignOutDevice(_ context.Context, token string) error {
 type call struct {
 	method, path string
 	query        url.Values
+	header       http.Header
 	body         map[string]any
 }
 
@@ -70,7 +71,7 @@ type fakeJellyfin struct {
 }
 
 func (f *fakeJellyfin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := call{method: r.Method, path: r.URL.Path, query: r.URL.Query()}
+	c := call{method: r.Method, path: r.URL.Path, query: r.URL.Query(), header: r.Header}
 	data, _ := io.ReadAll(r.Body)
 	_ = json.Unmarshal(data, &c.body)
 	f.mu.Lock()
