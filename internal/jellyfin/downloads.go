@@ -124,7 +124,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request, attachment b
 		// A player that authenticates with a header might send it to the
 		// source too: relay instead of redirecting it.
 		Relay:       kept || grant.Relay || strings.Contains(r.Header.Get("Authorization"), "Token="),
-		ContentType: mimeTypes[containerOfName(name)],
+		ContentType: mimeTypes[h.versionContainer(r.Context(), version)],
 	}
 	if attachment {
 		delivery.Attachment = name
@@ -221,11 +221,7 @@ func (h *Handler) downloadName(r *http.Request, item library.Item, version libra
 	if item.Kind == library.KindEpisode {
 		title = fmt.Sprintf("%s S%02dE%02d %s", item.SeriesName, item.ParentIndexNumber, item.IndexNumber, item.Name)
 	}
-	container := containerOfName(version.Filename)
-	if analysis, ok := h.Playback.Analyzed(r.Context(), version.ID); ok {
-		container = playback.DisplayContainer(analysis, version.Filename)
-	}
-	return safeFileName(strings.NewReplacer("/", "-", `\`, "-").Replace(title)) + "." + container
+	return safeFileName(strings.NewReplacer("/", "-", `\`, "-").Replace(title)) + "." + h.versionContainer(r.Context(), version)
 }
 
 // safeFileName drops what a file name may not carry on the devices apps
