@@ -1097,6 +1097,42 @@ Silo's apps use their own API, under `/api/v2/`. These notes cover what Polyfin 
 - `GET /activate?code=` leads to `/admin/me/quick-connect?code=`, which shows the request and approves it once its code is typed.
 - Polyfin's tests check these answers against the rules the apps apply to them, read from their code at the commits named in [The contract followed](silo-apps.md#the-contract-followed).
 
+## Moonfin apps
+
+Moonfin's apps call routes of their own, under `/Moonfin/`, for the companion Polyfin serves them (see [Moonfin](moonfin.md)). These notes cover what Polyfin answers there.
+
+### Companion routes for Moonfin
+
+- Every route needs a signed-in user, from where they may connect and within their allowed hours, as the Jellyfin API's routes do. To a user the companion is not served to, every route answers 404, as a server without it does. An API key, which has no user, gets 400.
+- `GET /Moonfin/Ping` answers `installed`, `version` (Polyfin's), `serverName`, `settingsSyncEnabled` (true), and `defaultSettings`: the Global defaults, with those of the device's kind over them when `profile` is `tv`, `desktop` or `mobile`. `mdblistAvailable` follows the server's MDBList key. `tmdbThumbsSupported`, `tmdbDetailsSupported`, `tmdbPersonLinksSupported` and `tmdbReviewsSupported` follow its TMDB key. `clientLogSupported` is true. Every other feature flag is false, `tmdbAvailable` included, as Polyfin serves no custom rows.
+- Settings:
+
+| Method | Path | What it does |
+|---|---|---|
+| GET, HEAD | `/Moonfin/Settings` | The caller's envelope (`schemaVersion`, `lastUpdated`, `lastUpdatedBy`, `syncEnabled`, and the `global`, `desktop`, `mobile` and `tv` profiles), 404 without one |
+| POST | `/Moonfin/Settings` | Saves a whole envelope, `{"settings", "mergeMode", "clientId"}`: merged profile by profile with `mergeMode` `merge` or none, replacing the one kept with any other |
+| DELETE | `/Moonfin/Settings` | Forgets the caller's settings |
+| GET | `/Moonfin/Settings/Resolved/{profile}` | The caller's settings as a device of that profile takes them, defaults included; `{}` for a user with neither |
+| POST | `/Moonfin/Settings/Profile/{profile}` | Merges `{"profile", "clientId"}` into that profile. A null value sets nothing, and an empty API key keeps the one kept. |
+| DELETE | `/Moonfin/Settings/Profile/{profile}` | Forgets a device profile; `global` answers 400 |
+| GET | `/Moonfin/Settings/Stream` | Server-sent events: `data: {"type":"settingsUpdated"}` when a save changed the caller's settings, a comment every 30 seconds otherwise |
+| GET | `/Moonfin/Defaults` | The Global defaults |
+| GET, POST | `/Moonfin/Settings/{userId}` | Another user's envelope, read or saved as above, for administrators (403 otherwise) |
+
+- A save answers `{"Success": true, "Created", "UserId"}`. A profile other than `global`, `desktop`, `mobile` and `tv`, in any letter case, answers 400. A body past 1 MB, or settings past 1 MB once saved, answer 413.
+- `GET /Moonfin/MdbList/Ratings` (`type` `movie` or `show`, `tmdbId`) answers `{"success": true, "ratings": [...]}`, each rating `{"source", "value", "score"}` for `imdb`, `tomatoes`, `tomatoes_audience` and `metacritic`, from the scores Polyfin keeps. A title not kept yet is asked about in the background and answers `success` false meanwhile, as does a server without the key.
+- `GET /Moonfin/Tmdb/Reviews`, `PersonLinks`, `Details`, `EpisodeRating`, `SeasonRatings` and `NextEpisode` answer TMDB's data in the shapes the apps read, with `success` true, or `success` false and an `error` without the server's key or for a title TMDB does not know. `GET /Moonfin/Tmdb/Thumb` redirects to a titled backdrop, 404 without one. Bad parameters answer 400.
+- `POST /Moonfin/ClientLog/Document` takes an app's report as `/ClientLog/Document` does (see [Server logs in the Jellyfin API](#server-logs-in-the-jellyfin-api)). `GET /Moonfin/Themes` answers `[]`.
+- On Silo's API, `GET /api/v2/settings/plugins` lists, while the companion is served to the user, one installation with `id` `moonfin` and `plugin_id` `moonfin.moonbase`, with no routes, settings or files. `/api/v2/plugin-content/plugins/moonfin/Moonfin/...` answers as `/Moonfin/...` does for the same session, query and body included; another installation or path answers 404.
+
+### Moonfin in the admin API
+
+- A user's JSON has `moonfin`, `on`, `off` or empty for the server's, and `moonfinLocked`, true while **Let them change it** is off; `PATCH /admin/api/users/{id}` sets them, and another value is `400 invalid_moonfin`. The settings' JSON has `moonfin`, **Serve Moonfin's companion**.
+- A user's synced settings are told as `{"synced", "settings", "profiles", "updatedAt", "updatedBy"}`: `GET /admin/api/users/{id}/moonfin`, and `DELETE` to forget them (204), for administrators.
+- `GET /admin/api/account/moonfin` answers the caller's `moonfin`, `locked`, `serverDefault` and `sync`. `PUT` with `{"moonfin"}` changes it, `403 moonfin_locked` while locked. `DELETE /admin/api/account/moonfin/settings` forgets the caller's synced settings (204).
+- `GET /admin/api/moonfin/defaults` answers the defaults by profile, `profiles`, and the users with synced settings, `users`, each with `id`, `name` and `sync`. `PUT /admin/api/moonfin/defaults/{profile}` replaces one profile's defaults with a JSON object of 256 KB at most (`400 invalid_moonfin_defaults` otherwise), and `POST /admin/api/moonfin/defaults/{profile}/copy` with `{"userId", "profile"}` takes them from that user's profile (`404 moonfin_settings_not_found` when it holds none). Both leave out a user's own API keys and hidden titles, and answer as the `GET` does.
+- `POST /admin/api/moonfin/apply` with `{"reset"}` writes the defaults into every synced user's settings, merged or replacing them, and answers `{"users"}`, how many.
+
 ## Server administration from Jellyfin apps
 
 The web player's dashboard and other Jellyfin apps reach the server's administration through Jellyfin's routes. Polyfin answers them for what it has, and as an empty Jellyfin server for the rest.

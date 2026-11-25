@@ -17,6 +17,7 @@ Polyfin targets the apps that connect to a Jellyfin server, including:
 - Odin
 - VidHub
 - Official Jellyfin apps
+- Moonfin
 - Kodi
 
 Apps reach Polyfin at its address, such as `http://192.168.1.10:8096`. They also reach it under `/jellyfin` at that address, such as `http://192.168.1.10:8096/jellyfin`, where a Jellyfin server behind a reverse proxy often lives: given an address without a path, some apps try it there first. Under `/jellyfin`, in any letter case, the Jellyfin API, its WebSocket at `/jellyfin/socket` and the web player at `/jellyfin/web/` answer as at the root. The admin app, `/healthz` and `/readyz` are at the root only.
@@ -306,6 +307,21 @@ On a movie or series of a local folder, **Refresh metadata** first matches its f
 On a server movie or series library, **Refresh metadata** queues the paced refresh of its titles' descriptions, as **Content › Libraries** does (see [Library description refresh](addons-and-libraries.md#library-description-refresh)), and answers at once.
 
 API details: [Refresh metadata for apps](jellyfin-api.md#refresh-metadata-for-apps).
+
+### Moonfin and its companion
+
+Moonfin's apps look on a server for a companion of their own, Moonbase, a plugin on Jellyfin. Polyfin answers its routes itself while **Serve Moonfin's companion**, in **Settings › General**, is on, as it is by default:
+
+- each user's settings, synced across their devices, with the administrator's defaults;
+- ratings from MDBList and extras from TMDB, with the server's keys, which stay on the server.
+
+An administrator sets each user apart, on or off, on the user's page. Without the companion, Moonfin's apps hide what depends on it and play as any Jellyfin app. See [Moonfin](moonfin.md).
+
+**Compared with Jellyfin**
+
+- Jellyfin needs Moonbase installed as a plugin, from its repository. Polyfin has no plugins: its own answers stand in for Moonbase's, for the features listed in [What Moonfin gets](moonfin.md#what-moonfin-gets).
+
+API details: [Companion routes for Moonfin](jellyfin-api.md#companion-routes-for-moonfin).
 
 ### Administration from Jellyfin apps
 

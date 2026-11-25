@@ -80,6 +80,7 @@ These pages explain how to run Polyfin and what it does for the people who use i
 | [Home rows](home-rows.md) | Rows an administrator adds to the web player's home page: kinds, places, schedules, preview, and the taste profile behind Top picks for you |
 | [Themes and custom code](themes-and-custom-code.md) | The web player's themes, a theme per user, LumaaGlaass, other themes and copies of them, custom CSS and JavaScript, the sign-in message and branding |
 | [Silo's apps](silo-apps.md) | Using Silo's apps with Polyfin: setup, what works, what does not yet, skip markers, Home layout, subtitle tracks, box sets, TV sign-in with a code, and the Silo contract Polyfin follows |
+| [Moonfin](moonfin.md) | The companion Polyfin serves Moonfin's apps: settings synced across devices, ratings and TMDB extras, the defaults, and each user set apart |
 | [DLNA](dlna.md) | Sharing the libraries with TVs and players over DLNA: setup, devices and their users, browsing, playing, profiles, Docker networking and limits |
 
 <a id="users-and-administration"></a>
