@@ -51,7 +51,7 @@ music_fixtures() {
 	song=$(get "/Items?userId=$user&recursive=true&includeItemTypes=Audio&searchTerm=First" | jq --exit-status --raw-output '.Items[0].Id')
 	book=$(get "/Items?userId=$user&recursive=true&includeItemTypes=AudioBook" | jq --exit-status --raw-output '.Items[0].Id')
 
-	# The music library as jellyfin-web 12.2 lists it: its tabs, an album,
+	# The music library as jellyfin-web 12.4 lists it: its tabs, an album,
 	# an artist and a song, with the web client's parameters.
 	local list="/Users/$user/Items?SortBy=SortName&SortOrder=Ascending&Recursive=true&Fields=PrimaryImageAspectRatio,SortName&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Banner,Thumb&StartIndex=0&Limit=100&ParentId=$music"
 	get "/UserViews?userId=$user" | jq '{Items: [.Items[] | select(.CollectionType == "music")], TotalRecordCount, StartIndex}' | msave views
@@ -70,7 +70,7 @@ music_fixtures() {
 	get "/Users/$user/Items/$song" | msave song
 	get "/Users/$user/Items/$book" | msave audiobook
 
-	# Search, the way jellyfin-web 12.2 asks for each kind, and the hints.
+	# Search, the way jellyfin-web 12.4 asks for each kind, and the hints.
 	get "/Users/$user/Items?searchTerm=wind&IncludeItemTypes=Audio&Recursive=true&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-songs
 	get "/Users/$user/Items?searchTerm=sine&IncludeItemTypes=MusicAlbum&Recursive=true&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-albums
 	get "/Artists?userId=$user&searchTerm=tone&Limit=24&Fields=PrimaryImageAspectRatio,CanDelete,MediaSourceCount&ImageTypeLimit=1&EnableTotalRecordCount=false" | msave search-artists
@@ -79,7 +79,7 @@ music_fixtures() {
 	# An instant mix from a song.
 	get "/Items/$song/InstantMix?userId=$user&limit=20&Fields=PrimaryImageAspectRatio" | msave instant-mix
 
-	# Playback of a FLAC song as jellyfin-web 12.2 on Chrome asks it.
+	# Playback of a FLAC song as jellyfin-web 12.4 on Chrome asks it.
 	local profile
 	profile=$(jq --compact-output . "$out/playback/profiles/jellyfin-web-chrome.json")
 	audio_info() {

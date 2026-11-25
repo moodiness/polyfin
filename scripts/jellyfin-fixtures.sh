@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Records the JSON shapes a real Jellyfin 12.2 server returns, as fixtures for
+# Records the JSON shapes a real Jellyfin server returns, as fixtures for
 # internal/jellyfin tests. Values are replaced by their type ("" for strings,
 # 0 for numbers, false for booleans; arrays keep one element), so fixtures
 # hold no identifier, date or token from the disposable server.
 #
 # The server gets a tiny generated media tree (three movies, one series with
 # two seasons) and a BoxSet, so browsing responses can be recorded too. It
-# fetches metadata from TMDB, which needs network access.
+# fetches metadata from TMDB, which needs network access. The administration
+# answers (wizard, configuration, devices, keys, logs, tasks, plugins and
+# packages, password reset) come from the same server; the plugin catalog
+# needs network access too.
 #
 # User data (played, favorites, resume points, Next Up) is recorded next, by a
 # separate user, so that the browsing fixtures keep an untouched user's shape.
@@ -35,8 +38,11 @@ for tool in docker curl jq ffmpeg ffprobe; do
 	command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
-image='jellyfin/jellyfin:12.2@sha256:357724bf0ae27a672c7cbaa899db2d9abeb13dbd8657ccce750258a4c059d037'
-out="$(cd "$(dirname "$0")/.." && pwd)/internal/jellyfin/testdata/jellyfin-12.2"
+# The Jellyfin version Polyfin speaks: the Dockerfile's jellyfin-web comes
+# from the same image. The fixtures go to a directory named after it.
+version='12.4'
+image="jellyfin/jellyfin:$version@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771"
+out="$(cd "$(dirname "$0")/.." && pwd)/internal/jellyfin/testdata/jellyfin-$version"
 container="polyfin-jellyfin-fixtures-$$"
 # The .strm movie's file server, reachable from Jellyfin by name on a network
 # of their own.
@@ -129,9 +135,11 @@ done
 client='MediaBrowser Client="Polyfin fixtures", Device="Fixtures", DeviceId="polyfin-fixtures", Version="1.0.0"'
 post() { curl --silent --show-error --fail --request POST --header 'Content-Type: application/json' "$@"; }
 
+# The setup wizard's answers, kept for the fixtures until save is defined.
+startup_configuration=$(curl --silent --fail "$base/Startup/Configuration")
 post "$base/Startup/Configuration" --data '{"UICulture":"en-US","MetadataCountryCode":"US","PreferredMetadataLanguage":"en"}'
 # Reading the startup user creates it; it can then be renamed.
-curl --silent --fail "$base/Startup/User" >/dev/null
+startup_user=$(curl --silent --fail "$base/Startup/User")
 post "$base/Startup/User" --data '{"Name":"fixtures","Password":"fixtures-password"}'
 post "$base/Startup/Complete"
 
@@ -152,6 +160,8 @@ mkdir -p "$out"
 save() { jq --sort-keys "$shape" >"$out/$1.json"; }
 
 save authentication-result <<<"$authentication"
+save startup-configuration <<<"$startup_configuration"
+save startup-user <<<"$startup_user"
 curl --silent --fail "$base/System/Info/Public" | save public-system-info
 curl --silent --fail --header "Authorization: $signed" "$base/System/Info" | save system-info
 curl --silent --fail --header "Authorization: $signed" "$base/Users/Me" | save user
@@ -248,6 +258,50 @@ get "/DisplayPreferences/usersettings?userId=$user&client=emby" | save display-p
 get "/UserItems/Resume?userId=$user&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false" | save resume
 get /System/Endpoint | save system-endpoint
 
+# Administration, as the dashboard and server tools ask it.
+get "/Items/Root?userId=$user" | save root-folder
+get "/Items/Counts?userId=$user" | save item-counts
+get "/Items/$movie/MetadataEditor" | save metadata-editor
+get "/Items/$movie/ExternalIdInfos" | save external-id-infos
+get /Library/PhysicalPaths | save physical-paths
+get '/Libraries/AvailableOptions?libraryContentType=movies' | save available-options-movies
+get /System/Configuration/MetadataOptions/Default | save default-metadata-options
+get /System/Configuration | save server-configuration
+get /System/Info/Storage | save system-storage
+get /System/Logs | save log-files
+get /Environment/DefaultDirectoryBrowser | save default-directory-browser
+get /Environment/Drives | save drives
+get /Plugins | save plugins
+get /Repositories | save repositories
+get /Packages | save packages
+get /Backup | save backups
+get /LiveTv/ListingProviders/Default | save default-listing-provider
+get /LiveTv/TunerHosts/Types | save tuner-host-types
+get /Auth/Providers | save auth-providers
+get /Auth/PasswordResetProviders | save password-reset-providers
+post "$base/Auth/Keys?app=Fixtures" --header "Authorization: $signed"
+get /Auth/Keys | save api-keys
+post "$base/Devices/Options?id=polyfin-fixtures" --header "Authorization: $signed" --data '{"CustomName":"Living room"}'
+get /Devices | save devices
+get '/Devices/Info?id=polyfin-fixtures' | save device-info
+get '/Devices/Options?id=polyfin-fixtures' | save device-options
+curl --silent --show-error --fail --request POST --header "Authorization: $signed" --header 'Content-Type: text/plain' \
+	--data-binary 'app log' "$base/ClientLog/Document" | save client-log
+# A password reset, on a user of its own: its PIN is in the file Jellyfin
+# names, inside the container.
+post "$base/Users/New" --header "Authorization: $signed" --data '{"Name":"reset","Password":"reset-password"}' >/dev/null
+reset=$(post "$base/Users/ForgotPassword" --data '{"EnteredUsername":"reset"}')
+save forgot-password <<<"$reset"
+pin=$(docker exec "$container" cat "$(jq --exit-status --raw-output .PinFile <<<"$reset")" | jq --exit-status --raw-output .Pin)
+post "$base/Users/ForgotPassword/Pin" --data "$(jq --null-input --compact-output --arg pin "$pin" '{Pin: $pin}')" | save pin-redeem
+get '/System/ActivityLog/Entries?limit=5' | save activity-log
+# A task that has run once, so that its last result is recorded too.
+task=$(get /ScheduledTasks | jq --exit-status --raw-output '.[] | select(.Key == "CleanActivityLog") | .Id')
+ran() { get "/ScheduledTasks/$task" | jq --exit-status '.State == "Idle" and .LastExecutionResult != null'; }
+post "$base/ScheduledTasks/Running/$task" --header "Authorization: $signed"
+await 'the activity log cleanup' ran
+get "/ScheduledTasks/$task" | save scheduled-task
+
 # User data, as a second user whose plays and favorites no fixture above sees.
 # The clips are shorter than MinResumeDurationSeconds, so playback reports
 # would mark them played: resume points are set through the UserData endpoint.
@@ -299,7 +353,7 @@ vpost "/Users/$viewer/PlayedItems/$episode?DatePlayed=$(jq --null-input --raw-ou
 resume_at "$tears" 3600
 resume_at "$episode" 120
 resume_at "$s02e01" 60
-# The home page's rows and the Favorites tab, with jellyfin-web 12.2's
+# The home page's rows and the Favorites tab, with jellyfin-web 12.4's
 # parameters; its Next Up cutoff is a date, 365 days back by default.
 vget "/UserItems/Resume?userId=$viewer&limit=12&fields=PrimaryImageAspectRatio&mediaTypes=Video&imageTypeLimit=1&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb&enableTotalRecordCount=false" |
 	save_led_by resume-items "$s02e01"

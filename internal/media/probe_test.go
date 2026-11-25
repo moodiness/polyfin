@@ -76,7 +76,7 @@ func TestParseRefusesWhatIsNotAVideo(t *testing.T) {
 // it.
 func TestParseReadsChapters(t *testing.T) {
 	t.Parallel()
-	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.2", "chapters", "probe.json"))
+	probe, err := os.ReadFile(filepath.Join("..", "jellyfin", "testdata", "jellyfin-12.4", "chapters", "probe.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

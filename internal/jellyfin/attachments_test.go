@@ -29,7 +29,7 @@ const matroskaTag = "[0][0][0][0]"
 
 func TestAttachedFilesAreListedAsJellyfinListsThem(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "ass", "media-source.json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, "ass", "media-source.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

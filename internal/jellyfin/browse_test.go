@@ -735,7 +735,7 @@ var browseShapes = shapeRules{
 }
 
 // TestBrowseResponsesMatchJellyfin compares browsing responses with those
-// recorded from Jellyfin 12.2 by scripts/jellyfin-fixtures.sh, with the
+// recorded from Jellyfin 12.4 by scripts/jellyfin-fixtures.sh, with the
 // same requests.
 func TestBrowseResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()
@@ -799,7 +799,7 @@ func TestBrowseResponsesMatchJellyfin(t *testing.T) {
 			t.Errorf("%s: %d %s", fixture, status, body)
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -847,7 +847,7 @@ func TestVirtualFoldersDescribeTheLibraries(t *testing.T) {
 		}
 	}
 
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "virtual-folders.json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, "virtual-folders.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

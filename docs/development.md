@@ -212,12 +212,13 @@ Before each minor release, `docs/scripts/bench/bench.mjs` replays what the web p
 
 ## Jellyfin fixtures
 
-Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.2 server, recorded in `internal/jellyfin/testdata/`.
+Jellyfin API responses are checked against the JSON structure of a real Jellyfin 12.4 server, the version Polyfin speaks and whose jellyfin-web the Dockerfile ships. They are recorded in `internal/jellyfin/testdata/jellyfin-12.4/`.
 
-- **Jellyfin 12.3:** it answers the same. Recorded again from it with the same scripts, its answers differ only in identifiers, dates, timings and the encoded clips' bitrates. So the 12.2 recordings stand for both.
-- **Jellyfin 12.4:** it changes only its .NET packages and its version, so the recordings stand for it too.
+`scripts/jellyfin-fixtures.sh` records them again in one run. It requires Docker, curl, jq, `ffmpeg` and `ffprobe`, and network access for TMDB's metadata and the plugin catalog.
 
-`scripts/jellyfin-fixtures.sh` records them again from a disposable Jellyfin container. It requires Docker, curl, jq, `ffmpeg` and `ffprobe`.
+- **Server:** it starts a disposable Jellyfin container from the Dockerfile's image, sets it up, records every answer, then removes it.
+- **Inputs:** the playback profiles in `playback/profiles/` are not recordings. The script reads them and leaves them as they are.
+- **Another version:** change `version` and the image digest at the top of the script, record, then point `jellyfinFixtures` in `internal/jellyfin/playback_test.go` and the fixture paths of `internal/media` and `internal/playback`'s tests to the new directory.
 
 ## Continuous integration
 

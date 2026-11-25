@@ -146,7 +146,7 @@ func TestControllableSessionsAreListedWithTheirCapabilities(t *testing.T) {
 		}
 	}
 
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "sessions-controllable.json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, "sessions-controllable.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,59 @@
+{
+  "Items": [
+    {
+      "BackdropImageTags": [],
+      "CanDelete": false,
+      "ChannelId": null,
+      "CommunityRating": 0,
+      "Container": "",
+      "Id": "",
+      "ImageBlurHashes": {
+        "Backdrop": {
+          "77520719c853fc6ec850b3b103f887a7": ""
+        },
+        "Primary": {
+          "3663d498eca2f1d1aea62fd86fb7a175": "",
+          "3d8d60522bc6ed26cfdb3a4173275943": ""
+        }
+      },
+      "ImageTags": {
+        "Primary": ""
+      },
+      "IndexNumber": 0,
+      "IsFolder": false,
+      "LocationType": "",
+      "MediaType": "",
+      "Name": "",
+      "Overview": "",
+      "ParentBackdropImageTags": [
+        ""
+      ],
+      "ParentBackdropItemId": "",
+      "ParentIndexNumber": 0,
+      "ParentPrimaryImageItemId": "",
+      "ParentPrimaryImageTag": "",
+      "PremiereDate": "",
+      "PrimaryImageAspectRatio": 0,
+      "ProductionYear": 0,
+      "RunTimeTicks": 0,
+      "SeasonId": "",
+      "SeasonName": "",
+      "SeriesId": "",
+      "SeriesName": "",
+      "SeriesPrimaryImageTag": "",
+      "ServerId": "",
+      "Type": "",
+      "UserData": {
+        "IsFavorite": false,
+        "ItemId": "",
+        "Key": "",
+        "PlayCount": 0,
+        "PlaybackPositionTicks": 0,
+        "Played": false
+      },
+      "VideoType": ""
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

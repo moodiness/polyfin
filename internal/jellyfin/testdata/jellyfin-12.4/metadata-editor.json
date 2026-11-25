@@ -1,0 +1,33 @@
+{
+  "ContentTypeOptions": [],
+  "Countries": [
+    {
+      "DisplayName": "",
+      "Name": "",
+      "ThreeLetterISORegionName": "",
+      "TwoLetterISORegionName": ""
+    }
+  ],
+  "Cultures": [
+    {
+      "DisplayName": "",
+      "Name": "",
+      "ThreeLetterISOLanguageName": "",
+      "ThreeLetterISOLanguageNames": [
+        ""
+      ],
+      "TwoLetterISOLanguageName": ""
+    }
+  ],
+  "ExternalIdInfos": [
+    {
+      "Key": "",
+      "Name": ""
+    }
+  ],
+  "ParentalRatingOptions": [
+    {
+      "Name": ""
+    }
+  ]
+}

@@ -473,7 +473,7 @@ var peopleShapes = shapeRules{
 
 // TestPeopleResponsesMatchJellyfin compares person pages, people lists,
 // a person's titles and similar titles with those recorded from Jellyfin
-// 12.2 by scripts/jellyfin-fixtures.sh, with the same requests.
+// 12.4 by scripts/jellyfin-fixtures.sh, with the same requests.
 func TestPeopleResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()
 	p := newPeopleSetup(t, true)
@@ -492,7 +492,7 @@ func TestPeopleResponsesMatchJellyfin(t *testing.T) {
 			t.Errorf("%s: %d %s", fixture, status, body)
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}

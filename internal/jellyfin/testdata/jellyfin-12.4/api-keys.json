@@ -1,0 +1,18 @@
+{
+  "Items": [
+    {
+      "AccessToken": "",
+      "AppName": "",
+      "AppVersion": "",
+      "DateCreated": "",
+      "DateLastActivity": "",
+      "DeviceId": "",
+      "DeviceName": "",
+      "Id": 0,
+      "IsActive": false,
+      "UserId": ""
+    }
+  ],
+  "StartIndex": 0,
+  "TotalRecordCount": 0
+}

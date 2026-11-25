@@ -1,0 +1,50 @@
+{
+  "LyricFetchers": [],
+  "MediaSegmentProviders": [],
+  "MetadataReaders": [
+    {
+      "DefaultEnabled": false,
+      "Name": ""
+    }
+  ],
+  "MetadataSavers": [
+    {
+      "DefaultEnabled": false,
+      "Name": ""
+    }
+  ],
+  "SubtitleFetchers": [],
+  "TypeOptions": [
+    {
+      "DefaultImageOptions": [
+        {
+          "Limit": 0,
+          "MinWidth": 0,
+          "Type": ""
+        }
+      ],
+      "ImageFetchers": [
+        {
+          "DefaultEnabled": false,
+          "Name": ""
+        }
+      ],
+      "MetadataFetchers": [
+        {
+          "DefaultEnabled": false,
+          "Name": ""
+        }
+      ],
+      "SimilarItemProviders": [
+        {
+          "DefaultEnabled": false,
+          "Name": ""
+        }
+      ],
+      "SupportedImageTypes": [
+        ""
+      ],
+      "Type": ""
+    }
+  ]
+}

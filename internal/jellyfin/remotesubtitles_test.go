@@ -248,7 +248,7 @@ var remoteSubtitleInfoTypes = map[string]string{
 func TestRemoteSubtitleSearchMatchesJellyfin(t *testing.T) {
 	t.Parallel()
 	p := remoteSubtitles(t)
-	raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", "remote-subtitles.json"))
+	raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, "remote-subtitles.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

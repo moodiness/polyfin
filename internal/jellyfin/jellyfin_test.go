@@ -579,7 +579,7 @@ func TestPublicUsersListsOnlyVisibleEnabledUsers(t *testing.T) {
 }
 
 // TestResponsesMatchJellyfin compares the JSON structure of Polyfin's
-// responses with fixtures recorded from Jellyfin 12.2 by
+// responses with fixtures recorded from Jellyfin 12.4 by
 // scripts/jellyfin-fixtures.sh: same keys at every level and same types.
 func TestResponsesMatchJellyfin(t *testing.T) {
 	t.Parallel()
@@ -610,7 +610,7 @@ func TestResponsesMatchJellyfin(t *testing.T) {
 		"user":                   user,
 		"branding-configuration": branding,
 	} {
-		raw, err := os.ReadFile(filepath.Join("testdata", "jellyfin-12.2", fixture+".json"))
+		raw, err := os.ReadFile(filepath.Join(jellyfinFixtures, fixture+".json"))
 		if err != nil {
 			t.Fatal(err)
 		}
