@@ -12,9 +12,20 @@ import (
 // A statement Exec runs commits with synchronous_commit off, its
 // transaction only: the connection goes back to the pool with the
 // setting as it was, and a statement run as usual still waits for the
-// disk. Its commit leaves the write-ahead log to the WAL writer: the
-// connection that writes 20 rows as usual writes the log itself, at each
-// commit; through Exec, it does not.
+// disk, as the commit modes noted show. Its commit leaves the write-ahead
+// log to the WAL writer: through Exec, the connection does not write the
+// log itself; as usual, it does.
+//
+// Not at each usual commit, though: PostgreSQL writes in one go the
+// records of all the commits waiting, whichever connection's, and a commit
+// whose record another connection or the WAL writer wrote first has
+// nothing left to write. On a busy server, as the other packages' tests
+// make it, half the commits or more may find so. The rows are therefore
+// written in pairs, one through Exec, one as usual, under the same load,
+// until the usual ones had the connection write the log 10 times, in 10
+// pairs on a quiet server: the Exec ones, as many, had it write the log at
+// most twice, when the log's buffers were full. Another flush only takes
+// writes away, from the usual commits; it never adds any to the Exec ones.
 func TestExecCommitsWithoutWaitingForTheDisk(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -47,31 +58,29 @@ func TestExecCommitsWithoutWaitingForTheDisk(t *testing.T) {
 		return writes
 	}
 
-	before := logWrites()
-	for i := range 20 {
+	var unsyncedWrites, syncedWrites int64
+	var want []string
+	writes := logWrites()
+	for i := 0; syncedWrites < 10 && i < 200; i++ {
 		tag, err := Exec(ctx, pool, "INSERT INTO written VALUES ($1)", i)
 		if err != nil || tag.RowsAffected() != 1 {
 			t.Fatalf("%v, %v", tag, err)
 		}
-	}
-	unsyncedWrites := logWrites() - before
-	var after string
-	if err := pool.QueryRow(ctx, "SELECT current_setting('synchronous_commit')").Scan(&after); err != nil || after != "on" {
-		t.Errorf("the connection after: %q, %v", after, err)
-	}
-	before = logWrites()
-	for i := range 20 {
+		unsynced := logWrites()
+		unsyncedWrites += unsynced - writes
 		if _, err := pool.Exec(ctx, "INSERT INTO written VALUES ($1)", i); err != nil {
 			t.Fatal(err)
 		}
+		writes = logWrites()
+		syncedWrites += writes - unsynced
+		want = append(want, "off", "on")
 	}
-	syncedWrites := logWrites() - before
 
-	want := slices.Concat(slices.Repeat([]string{"off"}, 20), slices.Repeat([]string{"on"}, 20))
 	if got := modes("written"); !slices.Equal(got, want) {
 		t.Errorf("commit modes: %v", got)
 	}
-	if syncedWrites < 20 || unsyncedWrites > 2 {
-		t.Errorf("the connection wrote the log %d times for 20 rows written through Exec, %d for 20 written as usual", unsyncedWrites, syncedWrites)
+	if syncedWrites < 10 || unsyncedWrites > 2 {
+		t.Errorf("the connection wrote the log %d times for %d rows written through Exec, %d for as many written as usual",
+			unsyncedWrites, len(want)/2, syncedWrites)
 	}
 }
