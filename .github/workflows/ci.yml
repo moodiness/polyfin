@@ -851,7 +851,10 @@ jobs:
     needs: tested
     if: needs.tested.outputs.macos == 'true'
     runs-on: macos-15
-    timeout-minutes: 30
+    # internal/jellyfin starts up to 10 minutes in, after the build and the
+    # packages before it, and may take its 18 (see the Test step): the job
+    # still ends on go test's own timeout, which tells the test that hung.
+    timeout-minutes: 35
     env:
       POLYFIN_TEST_DATABASE_URL: postgresql://polyfin:polyfin@127.0.0.1:5432/polyfin
     steps:
@@ -878,8 +881,11 @@ jobs:
       - name: Test
         # TestLargeLineupsStayFast is the check job's (make bounds): a
         # minute of large IPTV line-ups, which runs alone, for nothing a
-        # Linux runner does not check.
-        run: go test -p 2 -skip '^TestLargeLineupsStayFast$' ./...
+        # Linux runner does not check. internal/jellyfin took from 7 minutes
+        # to more than 10 on this runner, go test's default bound, which a
+        # slower run reached with no test failing: it keeps the larger bound
+        # the Makefile gives it (see test-jellyfin-1).
+        run: go test -p 2 -timeout 18m -skip '^TestLargeLineupsStayFast$' ./...
       - *save-go-caches
 
   image:
