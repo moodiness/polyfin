@@ -10,6 +10,7 @@ Moonfin's apps run on TVs, phones, tablets, desktops and in a browser. On a serv
 |---|---|---|---|
 | **Serve Moonfin's companion** | **Settings › General** | On | Moonfin's apps find Polyfin's companion. Each user can be set apart (see [A user set apart](#a-user-set-apart)). |
 | **Moonfin's defaults** | **Settings › General**, under it | None | The settings Moonfin's apps take for what a user never set (see [The defaults](#the-defaults)). |
+| **Messages to Moonfin's apps** | **Settings › General**, under it | None | Notes from you that the apps show in their messages window (see [Server messages](#server-messages)). |
 
 - With the setting off, Polyfin answers Moonfin's apps as a server without the companion. The apps hide what depends on it.
 - Playback, home rows, skip buttons and Watch together (SyncPlay in Jellyfin) go through the Jellyfin API: they work either way.
@@ -31,6 +32,7 @@ Moonfin's setup offers to install Moonbase on a Jellyfin server. That offer can'
 | Live updates | A change saved on one device reaches the user's other open apps at once, on the Jellyfin address |
 | Ratings on title pages | The IMDb, critics', audience and Metacritic scores Polyfin keeps from MDBList, with the server's MDBList key |
 | TMDB extras | Reviews, a person's IMDb page and social accounts, episode and season ratings, a series' next episode, and details of titles the server doesn't hold, with the server's TMDB key |
+| Server messages | Notes the administrator writes, each to its audience and between its dates, in the apps' messages window (see [Server messages](#server-messages)) |
 | App reports | **Send report to server** works on the Silo address too, as on the Jellyfin address |
 | Custom themes | None: the list is empty, and the apps keep their own themes |
 
@@ -41,7 +43,7 @@ The server's MDBList and TMDB keys stay on the server: Polyfin asks MDBList and 
 Polyfin tells the apps these features are not served, and the apps hide them:
 
 - the request service and its calendar, download queue and notifications;
-- phone notifications, server messages and sign-in PINs kept on the server;
+- phone notifications and sign-in PINs kept on the server;
 - smart search, the seasonal row, custom rows and chart rows;
 - anime filler markers, poster labels and retro games;
 - watch parties, which Watch together replaces;
@@ -112,5 +114,25 @@ The **Moonfin** section of a user's page, and **My account › Moonfin**, show w
 - when they were last saved, and by which app.
 
 **Reset** on the user's page, and **Reset my synced settings** on My account, forget them. The user's devices then start again from the defaults, or from their own settings at their next sync.
+
+## Server messages
+
+**Messages to Moonfin's apps**, under **Serve Moonfin's companion** in **Settings › General**, holds the notes you write to the users of Moonfin's apps: a maintenance, a change, news. The apps show them in their messages window, in the order of the list. **Write a message** opens the form, with a preview of the message as the apps show it:
+
+| Field | What it does |
+|---|---|
+| **Title** and **Message** | The message's words, a title or a message at least. The message is Markdown: bold, italic, headings, lists, quotes, code and links. Images are left out. 120 and 2,000 characters at most. |
+| **Color** | The color the apps give it: white, blue, green, yellow or red. |
+| **How it arrives** | **Badge on the menu** marks the messages button unread. **Opens on its own** opens the messages window by itself, once. |
+| **Shown to** | **Everyone**, **Chosen users**, picked by name, or **Administrators**. |
+| **From** and **Until** | When it shows, in your time zone. Empty: from now on, and with no end. |
+| **Link button** | A label and an `http` or `https` address: a button under the message that opens it. |
+
+- Each user gets only the messages meant for them that show now: Polyfin picks them, so a message meant for one user never reaches another.
+- A message reaches the open apps of the users it is meant for at once, on the Jellyfin address, when it is saved, deleted, or reaches its start or end. A user whose app was closed gets it at their next sign-in.
+- Each app keeps which messages its user read: Polyfin keeps no read state. An edited message keeps its place in the list, and stays read where it was read.
+- The arrows beside a message move it up or down the list. A new message comes first. Up to 50 messages are kept, ended ones included, until you delete them.
+- A user who is deleted leaves the users a message was chosen for.
+- The messages reach Moonfin's apps only: not the web player, other Jellyfin apps or the notification targets.
 
 API details: [Companion routes for Moonfin](jellyfin-api.md#companion-routes-for-moonfin) and [Moonfin in the admin API](jellyfin-api.md#moonfin-in-the-admin-api).
