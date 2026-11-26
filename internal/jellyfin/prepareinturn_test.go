@@ -2,6 +2,7 @@ package jellyfin
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,14 +15,16 @@ import (
 
 // turnProbe is an ffprobe whose nth run fails when the file fail<n> is
 // there, and waits while the file hold<n> is, before answering the
-// analysis of probe.
+// analysis of probe. A run takes its number, the first free, by making
+// the folder run<n>: in one step, so that two runs that overlap never
+// take the same, and a run the test counts already knows its number.
 type turnProbe struct{ path string }
 
 func newTurnProbe(t *testing.T) turnProbe {
 	t.Helper()
 	probe := newFakeProbe(t, true)
 	p := turnProbe{path: probe.path + "-turns"}
-	script := "#!/bin/sh\necho run >> \"$0.runs\"\nn=$(grep -c run \"$0.runs\")\n" +
+	script := "#!/bin/sh\nn=1\nwhile ! mkdir \"$0.run$n\" 2> /dev/null; do n=$((n + 1)); done\n" +
 		"if [ -e \"$0.fail$n\" ]; then exit 1; fi\n" +
 		"while [ -e \"$0.hold$n\" ]; do sleep 0.01; done\n" +
 		"exec cat \"" + probe.path + ".json\"\n"
@@ -30,8 +33,9 @@ func newTurnProbe(t *testing.T) turnProbe {
 	}
 	// A run still held ends with the test.
 	t.Cleanup(func() {
-		for n := 1; n <= 3; n++ {
-			_ = os.Remove(p.path + ".hold" + strconv.Itoa(n))
+		holds, _ := filepath.Glob(p.path + ".hold*")
+		for _, hold := range holds {
+			_ = os.Remove(hold)
 		}
 	})
 	return p
@@ -45,8 +49,13 @@ func (p turnProbe) mark(t *testing.T, what string, run int) {
 }
 
 func (p turnProbe) runs() int {
-	data, _ := os.ReadFile(p.path + ".runs")
-	return strings.Count(string(data), "run")
+	n := 0
+	for {
+		if _, err := os.Stat(p.path + ".run" + strconv.Itoa(n+1)); err != nil {
+			return n
+		}
+		n++
+	}
 }
 
 // fresh are versions of the files the test addon serves, as copies no
