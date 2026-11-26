@@ -44,6 +44,8 @@ type Store struct {
 
 	mu       sync.Mutex
 	watchers map[accounts.ID]map[chan struct{}]struct{}
+	// messages tells those who watch a user's messages of their changes.
+	messages messageWatch
 }
 
 // New returns the store of the database db.
