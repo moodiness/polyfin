@@ -58,6 +58,7 @@ func (h *Handler) moonfinRoutes(rt *router) {
 	}
 	admin(http.MethodGet, "/Moonfin/Settings/{userId}", h.userMoonfinSettings)
 	admin(http.MethodPost, "/Moonfin/Settings/{userId}", h.saveUserMoonfinSettings)
+	h.moonfinMessageRoutes(route)
 	h.moonfinExtraRoutes(route)
 }
 
@@ -165,9 +166,9 @@ func (h *Handler) moonfinPing(w http.ResponseWriter, r *http.Request) {
 		"tmdbPersonLinksSupported": tmdb,
 		"tmdbReviewsSupported":     tmdb,
 		"clientLogSupported":       true,
+		"messagesSupported":        true,
 		// The features Polyfin does not serve: the app hides them.
 		"seerrEnabled":                      false,
-		"messagesSupported":                 false,
 		"recommendationsSupported":          false,
 		"pinSupported":                      false,
 		"discoverChartsSupported":           false,
@@ -308,7 +309,8 @@ func (h *Handler) deleteMoonfinProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 // moonfinStream tells the caller's open apps, as server-sent events, that
-// their settings changed, as "settingsUpdated": each then asks for them
+// their settings changed, as "settingsUpdated", and that their messages
+// did, as "messagesChanged": each then asks for them
 // again. A comment every moonfinHeartbeat keeps the connection alive. The
 // stream stays open until the app closes it, and is no request under way
 // for the work that waits for the apps' requests to end (see
@@ -316,8 +318,11 @@ func (h *Handler) deleteMoonfinProfile(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) moonfinStream(w http.ResponseWriter, r *http.Request) {
 	h.requests.end()
 	defer h.requests.begin()
-	changed, stop := h.Moonfin.Watch(callerFrom(r.Context()).User.ID)
+	user := callerFrom(r.Context()).User.ID
+	changed, stop := h.Moonfin.Watch(user)
 	defer stop()
+	messages, stopMessages := h.Moonfin.WatchMessages(r.Context(), user)
+	defer stopMessages()
 	header := w.Header()
 	header.Set("Content-Type", "text/event-stream")
 	header.Set("Cache-Control", "no-cache")
@@ -340,6 +345,10 @@ func (h *Handler) moonfinStream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-changed:
 			if !flush("data: {\"type\":\"settingsUpdated\"}\n\n") {
+				return
+			}
+		case <-messages:
+			if !flush("data: {\"type\":\"messagesChanged\"}\n\n") {
 				return
 			}
 		case <-heartbeat.C:

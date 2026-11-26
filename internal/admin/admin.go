@@ -420,6 +420,7 @@ func New(options Options) http.Handler {
 	mux.Handle("PUT /admin/api/moonfin/defaults/{profile}", h.administrator(h.setMoonfinDefaults))
 	mux.Handle("POST /admin/api/moonfin/defaults/{profile}/copy", h.administrator(h.copyMoonfinDefaults))
 	mux.Handle("POST /admin/api/moonfin/apply", h.administrator(h.applyMoonfinDefaults))
+	h.moonfinMessageRoutes(mux)
 	mux.Handle("GET /admin/api/account/audio-region", h.signedIn(h.ownAudioRegion))
 	mux.Handle("PUT /admin/api/account/audio-region", h.signedIn(h.setOwnAudioRegion))
 	mux.Handle("GET /admin/api/account/sound", h.signedIn(h.ownSound))

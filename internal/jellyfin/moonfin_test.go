@@ -62,7 +62,7 @@ func TestMoonfinPingTellsWhatIsServed(t *testing.T) {
 	if defaults["theme"] != "oled" || defaults["clock"] != "always" {
 		t.Errorf("TV defaults: %v", defaults)
 	}
-	for _, flag := range []string{"mdblistAvailable", "tmdbAvailable", "tmdbReviewsSupported", "seerrEnabled", "messagesSupported",
+	for _, flag := range []string{"mdblistAvailable", "tmdbAvailable", "tmdbReviewsSupported", "seerrEnabled",
 		"recommendationsSupported", "pinSupported", "pushSupported", "calendarAvailable", "smartSearchEnabled"} {
 		if ping[flag] != false {
 			t.Errorf("%s: %v", flag, ping[flag])
