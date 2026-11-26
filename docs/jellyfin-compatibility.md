@@ -313,7 +313,8 @@ API details: [Refresh metadata for apps](jellyfin-api.md#refresh-metadata-for-ap
 Moonfin's apps look on a server for a companion of their own, Moonbase, a plugin on Jellyfin. Polyfin answers its routes itself while **Serve Moonfin's companion**, in **Settings › General**, is on, as it is by default:
 
 - each user's settings, synced across their devices, with the administrator's defaults;
-- ratings from MDBList and extras from TMDB, with the server's keys, which stay on the server.
+- ratings from MDBList and extras from TMDB, with the server's keys, which stay on the server;
+- messages from the administrator, each shown to its audience between its dates.
 
 An administrator sets each user apart, on or off, on the user's page. Without the companion, Moonfin's apps hide what depends on it and play as any Jellyfin app. See [Moonfin](moonfin.md).
 
