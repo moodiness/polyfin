@@ -97,6 +97,13 @@ export const settingEntries: readonly SettingEntry[] = [
   },
   {
     section: 'general',
+    anchor: 'moonfin-messages',
+    label: (t) => s(t).moonfinMessages.title,
+    help: (t) => s(t).moonfinMessages.help,
+    keywords: ['Moonfin', 'Moonbase', 'messages', 'announcement', 'Markdown', 'popup'],
+  },
+  {
+    section: 'general',
     anchor: 'update-check',
     label: (t) => s(t).updateCheck,
     help: (t) => s(t).updateCheckHelp,

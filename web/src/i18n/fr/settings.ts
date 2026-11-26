@@ -119,6 +119,79 @@ const settings: typeof en = {
             ? '1 utilisateur mis à jour.'
             : `${count} utilisateurs mis à jour.`,
     },
+    moonfinMessages: {
+      title: 'Messages aux applications Moonfin',
+      help: 'Vos annonces aux utilisateurs des applications Moonfin, affichées dans leur fenêtre de messages, dans cet ordre. Chaque utilisateur ne reçoit que les messages qui lui sont destinés, entre leurs dates, même si son application était fermée quand vous les avez écrits.',
+      loading: 'Chargement des messages…',
+      empty: 'Aucun message',
+      emptyHint:
+        'Écrivez un message pour prévenir les utilisateurs d’un changement, d’une maintenance ou d’une nouveauté.',
+      add: 'Écrire un message',
+      addTitle: 'Écrire un message',
+      editTitle: (name: string) => `Modifier ${name}`,
+      untitled: 'Message sans titre',
+      edit: 'Modifier',
+      delete: 'Supprimer',
+      deleteTitle: (name: string) => `Supprimer ${name}\u202f?`,
+      deleteBody:
+        'Le message quitte aussitôt les applications des utilisateurs à qui il était destiné.',
+      deleted: (name: string) => `${name} est supprimé.`,
+      saved: (name: string) =>
+        `${name} est enregistré. Les applications ouvertes l’affichent aussitôt.`,
+      create: 'Envoyer',
+      creating: 'Envoi…',
+      titleLabel: 'Titre',
+      body: 'Message',
+      bodyHelp: (length: number, max: number) =>
+        `Markdown\u202f: **gras**, *italique*, listes, [liens](https://…). ${length} caractères sur ${max}.`,
+      noText: 'Écrivez un titre ou un message.',
+      preview: 'Aperçu',
+      previewEmpty: 'Le message s’affiche ici à mesure que vous l’écrivez.',
+      color: 'Couleur',
+      colors: { white: 'Blanc', blue: 'Bleu', green: 'Vert', yellow: 'Jaune', red: 'Rouge' },
+      delivery: 'Arrivée',
+      deliveries: { inbox: 'Pastille sur le menu', popup: 'S’ouvre tout seul' },
+      deliveryHelp: {
+        inbox: 'Le bouton des messages le montre non lu jusqu’à ce que l’utilisateur l’ouvre.',
+        popup:
+          'La fenêtre des messages s’ouvre d’elle-même, une fois, dès que l’application le reçoit.',
+      },
+      audience: 'Destinataires',
+      audiences: { all: 'Tout le monde', users: 'Utilisateurs choisis', admins: 'Administrateurs' },
+      noUser: 'Choisissez au moins un utilisateur.',
+      users: 'Utilisateurs',
+      findUser: 'Trouver un utilisateur',
+      chosenCount: (count: number) =>
+        count === 0
+          ? 'Aucun utilisateur choisi'
+          : count === 1
+            ? '1 utilisateur choisi'
+            : `${count} utilisateurs choisis`,
+      noUserFound: 'Aucun utilisateur ne porte ce nom.',
+      administrator: 'Administrateur',
+      dates: 'Quand',
+      start: 'À partir du',
+      end: 'Jusqu’au',
+      datesHelp: 'Dans votre fuseau horaire. Vide\u202f: dès maintenant, et sans fin.',
+      dateOrder: 'La fin doit venir après le début.',
+      link: 'Bouton de lien',
+      linkHelp: 'Facultatif\u202f: un bouton sous le message qui ouvre une adresse web.',
+      linkLabel: 'Libellé du bouton',
+      linkUrl: 'Adresse',
+      linkInvalid: 'Écrivez une adresse qui commence par http:// ou https://.',
+      linkHalf: 'Donnez au bouton un libellé et une adresse, ou ni l’un ni l’autre.',
+      shownToAll: 'Pour tout le monde',
+      shownToAdmins: 'Pour les administrateurs',
+      shownToUsers: (names: string[]) =>
+        names.length <= 3
+          ? `Pour ${names.join(', ')}`
+          : `Pour ${names.slice(0, 2).join(', ')} et ${names.length - 2} autres`,
+      someone: 'un utilisateur inconnu',
+      from: (date: string) => `à partir du ${date}`,
+      until: (date: string) => `jusqu’au ${date}`,
+      popupBadge: 'S’ouvre tout seul',
+      states: { scheduled: 'Programmé', ended: 'Terminé' },
+    },
     updateCheck: 'Rechercher les nouvelles versions',
     updateCheckHelp:
       'Une fois par jour, et peu après le démarrage, Polyfin demande à GitHub sa dernière version publiée, en n’envoyant que sa propre version. Une version plus récente s’affiche sur l’Accueil et dans Système › Santé, et est envoyée aux notifications «\u202fNouvelle version\u202f». Désactivé, Polyfin ne contacte jamais GitHub.',

@@ -281,6 +281,9 @@ const common = {
     web_theme_locked: 'Your administrator chose your web player theme.',
     invalid_moonfin: 'Choose Server default, On or Off.',
     moonfin_locked: 'Your administrator chose whether Moonfin’s companion serves you.',
+    invalid_moonfin_message:
+      'Write a title or a message within their lengths, choose at least one user for chosen users, end it after its start, and give a link button both a label and an http or https address.',
+    too_many_moonfin_messages: 'There are already 50 messages: delete one first.',
     invalid_moonfin_defaults: 'The defaults must be a JSON object of at most 256 KB.',
     moonfin_settings_not_found: 'This account has no synced settings in that profile.',
     theme_copy_running: 'A copy of the theme is being made already. Try again in a moment.',

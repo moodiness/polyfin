@@ -302,6 +302,9 @@ const common: typeof en = {
     web_theme_locked: 'Su administrador eligió el tema de su reproductor web.',
     invalid_moonfin: 'Elija Valor del servidor, Activado o Desactivado.',
     moonfin_locked: 'Su administrador eligió si el compañero de Moonfin le da servicio.',
+    invalid_moonfin_message:
+      'Escriba un título o un mensaje dentro de sus longitudes, elija al menos un usuario para usuarios elegidos, haga que termine después de su inicio y dé a un botón de enlace un texto y una dirección http o https.',
+    too_many_moonfin_messages: 'Ya hay 50 mensajes: elimine uno primero.',
     invalid_moonfin_defaults:
       'Los valores predeterminados deben ser un objeto JSON de 256 KB como máximo.',
     moonfin_settings_not_found: 'Esta cuenta no tiene ajustes sincronizados en ese perfil.',

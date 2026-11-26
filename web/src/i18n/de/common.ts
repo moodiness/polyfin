@@ -312,6 +312,9 @@ const common: typeof en = {
     web_theme_locked: 'Dein Administrator hat das Theme deines Web-Players gewählt.',
     invalid_moonfin: 'Wähle Vorgabe des Servers, Ein oder Aus.',
     moonfin_locked: 'Dein Administrator hat gewählt, ob Moonfins Begleiter dich bedient.',
+    invalid_moonfin_message:
+      'Schreibe einen Titel oder eine Nachricht in ihren Längen, wähle für ausgewählte Benutzer mindestens einen, lass sie nach ihrem Beginn enden und gib einer Link-Schaltfläche eine Beschriftung und eine http- oder https-Adresse.',
+    too_many_moonfin_messages: 'Es gibt bereits 50 Nachrichten: Lösche zuerst eine.',
     invalid_moonfin_defaults: 'Die Standardwerte müssen ein JSON-Objekt von höchstens 256 KB sein.',
     moonfin_settings_not_found:
       'Dieses Konto hat keine synchronisierten Einstellungen in diesem Profil.',

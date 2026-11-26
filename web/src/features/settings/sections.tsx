@@ -44,6 +44,7 @@ import DlnaSection from './DlnaSection'
 import TorrentsSection from './TorrentsSection'
 import MetricsToken from './MetricsToken'
 import MoonfinDefaults from './MoonfinDefaults'
+import MoonfinMessages from './MoonfinMessages'
 import { FieldRow, ListRows, PlainRow, SettingsGroup, TextRow } from './parts'
 import type { SectionFormApi } from './SectionForm'
 import SegmentSources from './SegmentSources'
@@ -201,6 +202,11 @@ function General({ form, update, error, range, limits, saved }: SectionFormApi) 
       {form.moonfin && (
         <PlainRow anchor="moonfin-defaults">
           <MoonfinDefaults />
+        </PlainRow>
+      )}
+      {form.moonfin && (
+        <PlainRow anchor="moonfin-messages">
+          <MoonfinMessages />
         </PlainRow>
       )}
       <SettingRow

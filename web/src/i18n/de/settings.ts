@@ -119,6 +119,77 @@ const settings: typeof en = {
             ? '1 Benutzer aktualisiert.'
             : `${count} Benutzer aktualisiert.`,
     },
+    moonfinMessages: {
+      title: 'Nachrichten an die Moonfin-Apps',
+      help: 'Mitteilungen an die Benutzer der Moonfin-Apps, in deren Nachrichtenfenster in dieser Reihenfolge angezeigt. Jeder Benutzer erhält nur die Nachrichten, die für ihn bestimmt sind, zwischen ihren Daten, auch wenn seine App beim Schreiben geschlossen war.',
+      loading: 'Nachrichten werden geladen…',
+      empty: 'Keine Nachricht',
+      emptyHint:
+        'Schreibe eine Nachricht, um Benutzer über eine Änderung, eine Wartung oder Neuigkeiten zu informieren.',
+      add: 'Nachricht schreiben',
+      addTitle: 'Nachricht schreiben',
+      editTitle: (name: string) => `${name} bearbeiten`,
+      untitled: 'Nachricht ohne Titel',
+      edit: 'Bearbeiten',
+      delete: 'Löschen',
+      deleteTitle: (name: string) => `${name} löschen?`,
+      deleteBody:
+        'Die Nachricht verschwindet sofort aus den Apps der Benutzer, für die sie bestimmt war.',
+      deleted: (name: string) => `${name} gelöscht.`,
+      saved: (name: string) => `${name} gespeichert. Geöffnete Apps zeigen sie sofort.`,
+      create: 'Senden',
+      creating: 'Wird gesendet…',
+      titleLabel: 'Titel',
+      body: 'Nachricht',
+      bodyHelp: (length: number, max: number) =>
+        `Markdown: **fett**, *kursiv*, Listen, [Links](https://…). ${length} von ${max} Zeichen.`,
+      noText: 'Schreibe einen Titel oder eine Nachricht.',
+      preview: 'Vorschau',
+      previewEmpty: 'Die Nachricht erscheint hier, während du sie schreibst.',
+      color: 'Farbe',
+      colors: { white: 'Weiß', blue: 'Blau', green: 'Grün', yellow: 'Gelb', red: 'Rot' },
+      delivery: 'Zustellung',
+      deliveries: { inbox: 'Markierung im Menü', popup: 'Öffnet sich von selbst' },
+      deliveryHelp: {
+        inbox: 'Die Nachrichtenschaltfläche zeigt sie als ungelesen, bis der Benutzer sie öffnet.',
+        popup: 'Das Nachrichtenfenster öffnet sich einmal von selbst, sobald die App sie erhält.',
+      },
+      audience: 'Angezeigt für',
+      audiences: { all: 'Alle', users: 'Ausgewählte Benutzer', admins: 'Administratoren' },
+      noUser: 'Wähle mindestens einen Benutzer.',
+      users: 'Benutzer',
+      findUser: 'Benutzer suchen',
+      chosenCount: (count: number) =>
+        count === 0
+          ? 'Kein Benutzer ausgewählt'
+          : count === 1
+            ? '1 Benutzer ausgewählt'
+            : `${count} Benutzer ausgewählt`,
+      noUserFound: 'Kein Benutzer heißt so.',
+      administrator: 'Administrator',
+      dates: 'Wann',
+      start: 'Ab',
+      end: 'Bis',
+      datesHelp: 'In deiner Zeitzone. Leer: ab sofort und ohne Ende.',
+      dateOrder: 'Das Ende muss nach dem Beginn liegen.',
+      link: 'Link-Schaltfläche',
+      linkHelp: 'Optional: eine Schaltfläche unter der Nachricht, die eine Webadresse öffnet.',
+      linkLabel: 'Beschriftung',
+      linkUrl: 'Adresse',
+      linkInvalid: 'Gib eine Adresse ein, die mit http:// oder https:// beginnt.',
+      linkHalf: 'Gib der Schaltfläche eine Beschriftung und eine Adresse, oder keins von beiden.',
+      shownToAll: 'Für alle',
+      shownToAdmins: 'Für Administratoren',
+      shownToUsers: (names: string[]) =>
+        names.length <= 3
+          ? `Für ${names.join(', ')}`
+          : `Für ${names.slice(0, 2).join(', ')} und ${names.length - 2} weitere`,
+      someone: 'einen unbekannten Benutzer',
+      from: (date: string) => `ab ${date}`,
+      until: (date: string) => `bis ${date}`,
+      popupBadge: 'Öffnet sich von selbst',
+      states: { scheduled: 'Geplant', ended: 'Beendet' },
+    },
     updateCheck: 'Nach neuen Versionen suchen',
     updateCheckHelp:
       'Einmal täglich und kurz nach dem Start fragt Polyfin bei GitHub die neueste Veröffentlichung ab und sendet dabei nur seine Version. Eine neuere Version wird auf der Startseite und unter System › Systemzustand angezeigt und an die Benachrichtigungen für neue Versionen gesendet. Wenn aus, kontaktiert Polyfin GitHub nie.',

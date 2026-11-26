@@ -4587,6 +4587,59 @@ export const copyMoonfinDefaults = (
 export const applyMoonfinDefaults = async (reset: boolean) =>
   (await request<{ users: number }>('POST', '/moonfin/apply', { reset })).users
 
+/** The colors of a message to Moonfin's apps, in the order the dialog offers them. */
+export const moonfinMessageColors = ['white', 'blue', 'green', 'yellow', 'red'] as const
+export type MoonfinMessageColor = (typeof moonfinMessageColors)[number]
+
+/** How Moonfin's apps tell of a message not read: a badge, or the window opening on its own. */
+export type MoonfinMessageDelivery = 'inbox' | 'popup'
+
+/** Whom a message is meant for: every user, the users chosen, or the administrators. */
+export type MoonfinMessageAudience = 'all' | 'users' | 'admins'
+
+/**
+ * A message to the users of Moonfin's apps, as it is written: `start` and `end` are RFC 3339,
+ * empty for no bound; `linkLabel` and `linkUrl` make a button, both empty for none.
+ */
+export type MoonfinMessageDraft = {
+  title: string
+  body: string
+  color: MoonfinMessageColor
+  delivery: MoonfinMessageDelivery
+  audience: MoonfinMessageAudience
+  users: string[]
+  start: string
+  end: string
+  linkLabel: string
+  linkUrl: string
+}
+
+/** A message as kept: when it was written and changed, and whether its dates show it now. */
+export type MoonfinMessage = MoonfinMessageDraft & {
+  id: string
+  createdAt: string
+  updatedAt: string
+  state: 'scheduled' | 'shown' | 'ended'
+}
+
+/** Every message, in the order Moonfin's apps show them, whatever their dates. */
+export const fetchMoonfinMessages = (signal?: AbortSignal) =>
+  request<{ messages: MoonfinMessage[] }>('GET', '/moonfin/messages', undefined, signal)
+
+/** Adds a message before the others. */
+export const createMoonfinMessage = (draft: MoonfinMessageDraft) =>
+  request<MoonfinMessage>('POST', '/moonfin/messages', draft)
+
+export const updateMoonfinMessage = (id: string, draft: MoonfinMessageDraft) =>
+  request<MoonfinMessage>('PATCH', `/moonfin/messages/${seg(id)}`, draft)
+
+export const deleteMoonfinMessage = (id: string) =>
+  request<void>('DELETE', `/moonfin/messages/${seg(id)}`)
+
+/** Puts the messages in this order, and answers them. */
+export const orderMoonfinMessages = (ids: string[]) =>
+  request<{ messages: MoonfinMessage[] }>('PUT', '/moonfin/messages/order', { ids })
+
 const scopePath = (scope: Scope) => `/scopes/${seg(scope)}`
 
 export const fetchAddons = (scope: Scope, signal?: AbortSignal) =>
@@ -6463,6 +6516,7 @@ export const queryKeys = {
   usersMoonfin: ['moonfin', 'users'] as const,
   userMoonfin: (id: string) => ['moonfin', 'users', id] as const,
   moonfinDefaults: ['moonfin', 'defaults'] as const,
+  moonfinMessages: ['moonfin', 'messages'] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */
