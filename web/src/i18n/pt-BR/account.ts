@@ -70,6 +70,40 @@ const account: typeof en = {
         'O Polyfin esquece as configurações que os aplicativos do Moonfin sincronizaram para você. Seus dispositivos recomeçam então dos padrões do servidor.',
       resetUser: 'Redefinir',
       resetDone: 'Configurações sincronizadas redefinidas.',
+      pin: {
+        title: 'PIN de entrada',
+        none: 'Nenhum. Um PIN definido em um aplicativo do Moonfin chega aqui na próxima vez que for digitado.',
+        ownSet:
+          'Os aplicativos do Moonfin pedem o PIN antes de abrir seu perfil, em cada dispositivo.',
+        userSet:
+          'Os aplicativos do Moonfin pedem o PIN antes de abrir este perfil, em cada dispositivo.',
+        waiting: (time: string) =>
+          `Tentativas erradas demais: nenhuma é verificada antes das ${time}.`,
+        wrong: (count: number) =>
+          count === 1
+            ? '1 tentativa errada desde o último PIN correto.'
+            : `${count} tentativas erradas desde o último PIN correto.`,
+        add: 'Definir um PIN',
+        change: 'Alterar o PIN',
+        remove: 'Remover o PIN',
+        addTitle: 'Definir um PIN de entrada',
+        changeTitle: 'Alterar o PIN de entrada',
+        ownText:
+          'Os aplicativos do Moonfin pedem o PIN na escolha de usuário antes de abrir seu perfil, em cada dispositivo. Os outros aplicativos e a entrada no Polyfin nunca pedem.',
+        userText: (name: string) =>
+          `Os aplicativos do Moonfin pedem o PIN na escolha de usuário antes de abrir o perfil de ${name}. Um PIN novo substitui o antigo sem pedi-lo, que é como um PIN esquecido é redefinido, e encerra qualquer espera após tentativas erradas.`,
+        current: 'PIN atual',
+        forgot: 'Esqueceu? Um administrador pode definir um novo.',
+        new: 'PIN novo',
+        digits: 'Quatro dígitos.',
+        save: 'Salvar o PIN',
+        removeTitle: 'Remover seu PIN de entrada?',
+        removeText: 'Os aplicativos do Moonfin passam a abrir seu perfil sem pedir um PIN.',
+        userRemoveTitle: (name: string) => `Remover o PIN de entrada de ${name}?`,
+        userRemoveText: 'Os aplicativos do Moonfin passam a abrir o perfil sem pedir um PIN.',
+        saved: 'PIN salvo.',
+        removed: 'PIN removido.',
+      },
     },
     audioRegion: {
       help: 'A dublagem que você prefere quando um idioma é dublado à parte para uma região: o francês da França ou do Québec, o espanhol da Espanha ou da América Latina, o português do Brasil ou de Portugal. Ela vale para o idioma de áudio escolhido nos seus aplicativos, ou então o do servidor, quando ele é o idioma da região, e o define quando nenhum foi escolhido. Nesse idioma, as faixas de áudio da região tocam primeiro, e as versões dela vêm primeiro quando o servidor ordena as versões por idioma.',

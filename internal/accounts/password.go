@@ -114,6 +114,18 @@ func verifyPassword(password, encoded string) (bool, error) {
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 
+// HashSecret returns a hash of secret as a password's (see hashPassword),
+// for a secret Polyfin checks without keeping it, such as the PIN of a
+// user's Moonfin profile.
+func HashSecret(secret string) string {
+	return hashPassword(secret)
+}
+
+// VerifySecret checks secret against a hash HashSecret made.
+func VerifySecret(secret, encoded string) (bool, error) {
+	return verifyPassword(secret, encoded)
+}
+
 // unknownUserHash is verified when a name matches no account, so a failed
 // sign-in takes as long whether or not the account exists.
 var unknownUserHash = hashPassword("polyfin-unknown-user")

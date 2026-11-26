@@ -313,6 +313,9 @@ const common: typeof en = {
     invalid_moonfin_defaults:
       'Les valeurs par défaut doivent être un objet JSON de 256 Ko au plus.',
     moonfin_settings_not_found: 'Ce compte n’a pas de réglages synchronisés dans ce profil.',
+    invalid_moonfin_pin: 'Un code PIN compte quatre chiffres.',
+    wrong_moonfin_pin: 'Le code PIN actuel est erroné.',
+    moonfin_pin_wait: 'Trop de codes PIN erronés. Patientez un peu, puis réessayez.',
     theme_copy_running: 'Une copie du thème est déjà en cours. Réessayez dans un instant.',
     theme_copy_nothing: 'Les textes personnalisés enregistrés ne chargent rien d’ailleurs.',
     theme_copy_failed: 'Aucun fichier n’a pu être enregistré, donc aucune copie n’a été faite.',

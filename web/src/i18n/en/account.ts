@@ -68,6 +68,38 @@ const account = {
         'Polyfin forgets the settings Moonfin’s apps synced for you. Your devices then start again from the server’s defaults.',
       resetUser: 'Reset',
       resetDone: 'Synced settings reset.',
+      /** The sign-in PIN of Moonfin's user picker, on My account and on a user's page. */
+      pin: {
+        title: 'Sign-in PIN',
+        none: 'None. A PIN set in one of Moonfin’s apps comes here the next time it is typed.',
+        ownSet: 'Moonfin’s apps ask for it before they open your profile, on every device.',
+        userSet: 'Moonfin’s apps ask for it before they open this profile, on every device.',
+        waiting: (time: string) => `Too many wrong guesses: no guess is checked before ${time}.`,
+        wrong: (count: number) =>
+          count === 1
+            ? '1 wrong guess since the last right PIN.'
+            : `${count} wrong guesses since the last right PIN.`,
+        add: 'Set a PIN',
+        change: 'Change PIN',
+        remove: 'Remove PIN',
+        addTitle: 'Set a sign-in PIN',
+        changeTitle: 'Change the sign-in PIN',
+        ownText:
+          'Moonfin’s apps ask for it on their user picker before they open your profile, on every device. Other apps and Polyfin’s sign-in never ask for it.',
+        userText: (name: string) =>
+          `Moonfin’s apps ask for it on their user picker before they open ${name}’s profile. A new PIN replaces the old one without it, which is how a forgotten PIN is reset, and ends any wait after wrong guesses.`,
+        current: 'Current PIN',
+        forgot: 'Forgot it? An administrator can set a new one.',
+        new: 'New PIN',
+        digits: 'Four digits.',
+        save: 'Save PIN',
+        removeTitle: 'Remove your sign-in PIN?',
+        removeText: 'Moonfin’s apps then open your profile without asking for a PIN.',
+        userRemoveTitle: (name: string) => `Remove ${name}’s sign-in PIN?`,
+        userRemoveText: 'Moonfin’s apps then open their profile without asking for a PIN.',
+        saved: 'PIN saved.',
+        removed: 'PIN removed.',
+      },
     },
     /** My account › Audio region, and the names of the regions offered there and on a user's page. */
     audioRegion: {

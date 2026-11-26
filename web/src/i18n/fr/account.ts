@@ -70,6 +70,42 @@ const account: typeof en = {
         'Polyfin oublie les réglages que les applications Moonfin ont synchronisés pour vous. Vos appareils repartent ensuite des valeurs par défaut du serveur.',
       resetUser: 'Réinitialiser',
       resetDone: 'Réglages synchronisés réinitialisés.',
+      pin: {
+        title: 'Code PIN de connexion',
+        none: 'Aucun. Un code PIN défini dans une application Moonfin arrive ici la prochaine fois qu’il est saisi.',
+        ownSet:
+          'Les applications Moonfin le demandent avant d’ouvrir votre profil, sur chaque appareil.',
+        userSet:
+          'Les applications Moonfin le demandent avant d’ouvrir ce profil, sur chaque appareil.',
+        waiting: (time: string) =>
+          `Trop d’essais erronés\u202f: aucun n’est vérifié avant ${time}.`,
+        wrong: (count: number) =>
+          count <= 1
+            ? `${count} essai erroné depuis le dernier code PIN correct.`
+            : `${count} essais erronés depuis le dernier code PIN correct.`,
+        add: 'Définir un code PIN',
+        change: 'Changer le code PIN',
+        remove: 'Retirer le code PIN',
+        addTitle: 'Définir un code PIN de connexion',
+        changeTitle: 'Changer le code PIN de connexion',
+        ownText:
+          'Les applications Moonfin le demandent sur leur écran de choix de l’utilisateur avant d’ouvrir votre profil, sur chaque appareil. Les autres applications et la connexion à Polyfin ne le demandent jamais.',
+        userText: (name: string) =>
+          `Les applications Moonfin le demandent sur leur écran de choix de l’utilisateur avant d’ouvrir le profil de ${name}. Un nouveau code PIN remplace l’ancien sans le demander, ce qui permet de réinitialiser un code PIN oublié, et met fin à toute attente après des essais erronés.`,
+        current: 'Code PIN actuel',
+        forgot: 'Oublié\u202f? Un administrateur peut en définir un nouveau.',
+        new: 'Nouveau code PIN',
+        digits: 'Quatre chiffres.',
+        save: 'Enregistrer le code PIN',
+        removeTitle: 'Retirer votre code PIN de connexion\u202f?',
+        removeText:
+          'Les applications Moonfin ouvrent alors votre profil sans demander de code PIN.',
+        userRemoveTitle: (name: string) => `Retirer le code PIN de connexion de ${name}\u202f?`,
+        userRemoveText:
+          'Les applications Moonfin ouvrent alors son profil sans demander de code PIN.',
+        saved: 'Code PIN enregistré.',
+        removed: 'Code PIN retiré.',
+      },
     },
     audioRegion: {
       help: 'Le doublage que vous préférez quand une langue est doublée à part pour une région\u202f: le français de France ou du Québec, l’espagnol d’Espagne ou d’Amérique latine, le portugais du Brésil ou du Portugal. Elle s’applique à la langue audio choisie dans vos applis, sinon celle du serveur, quand c’est la langue de la région, et la choisit quand aucune ne l’est. Dans cette langue, les pistes audio de la région sont lues en premier, et ses versions passent en premier quand le serveur trie les versions par langue.',
