@@ -291,6 +291,9 @@ const common: typeof en = {
     web_theme_locked: 'Seu administrador escolheu o tema do seu player web.',
     invalid_moonfin: 'Escolha Padrão do servidor, Ligado ou Desligado.',
     moonfin_locked: 'Seu administrador escolheu se o companheiro do Moonfin atende você.',
+    invalid_moonfin_message:
+      'Escreva um título ou uma mensagem dentro dos seus tamanhos, escolha pelo menos um usuário para usuários escolhidos, faça-a terminar depois do início e dê a um botão de link um texto e um endereço http ou https.',
+    too_many_moonfin_messages: 'Já existem 50 mensagens: exclua uma primeiro.',
     invalid_moonfin_defaults: 'Os padrões devem ser um objeto JSON de no máximo 256 KB.',
     moonfin_settings_not_found: 'Esta conta não tem configurações sincronizadas nesse perfil.',
     theme_copy_running: 'Uma cópia do tema já está sendo feita. Tente de novo em um instante.',

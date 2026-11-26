@@ -116,6 +116,76 @@ const settings: typeof en = {
             ? '1 usuário atualizado.'
             : `${count} usuários atualizados.`,
     },
+    moonfinMessages: {
+      title: 'Mensagens aos apps do Moonfin',
+      help: 'Avisos para os usuários dos apps do Moonfin, mostrados na janela de mensagens deles nesta ordem. Cada usuário recebe só as mensagens destinadas a ele, entre as datas delas, mesmo que o app estivesse fechado quando você as escreveu.',
+      loading: 'Carregando as mensagens…',
+      empty: 'Nenhuma mensagem',
+      emptyHint:
+        'Escreva uma mensagem para avisar os usuários de uma mudança, uma manutenção ou uma novidade.',
+      add: 'Escrever uma mensagem',
+      addTitle: 'Escrever uma mensagem',
+      editTitle: (name: string) => `Editar ${name}`,
+      untitled: 'Mensagem sem título',
+      edit: 'Editar',
+      delete: 'Excluir',
+      deleteTitle: (name: string) => `Excluir ${name}?`,
+      deleteBody: 'A mensagem sai na hora dos apps dos usuários a quem era destinada.',
+      deleted: (name: string) => `${name} excluída.`,
+      saved: (name: string) => `${name} salva. Os apps abertos a mostram na hora.`,
+      create: 'Enviar',
+      creating: 'Enviando…',
+      titleLabel: 'Título',
+      body: 'Mensagem',
+      bodyHelp: (length: number, max: number) =>
+        `Markdown: **negrito**, *itálico*, listas, [links](https://…). ${length} de ${max} caracteres.`,
+      noText: 'Escreva um título ou uma mensagem.',
+      preview: 'Prévia',
+      previewEmpty: 'A mensagem aparece aqui enquanto você a escreve.',
+      color: 'Cor',
+      colors: { white: 'Branco', blue: 'Azul', green: 'Verde', yellow: 'Amarelo', red: 'Vermelho' },
+      delivery: 'Como chega',
+      deliveries: { inbox: 'Indicador no menu', popup: 'Abre sozinha' },
+      deliveryHelp: {
+        inbox: 'O botão de mensagens a mostra como não lida até o usuário abri-la.',
+        popup: 'A janela de mensagens abre sozinha, uma vez, assim que o app a recebe.',
+      },
+      audience: 'Para',
+      audiences: { all: 'Todos', users: 'Usuários escolhidos', admins: 'Administradores' },
+      noUser: 'Escolha pelo menos um usuário.',
+      users: 'Usuários',
+      findUser: 'Encontrar um usuário',
+      chosenCount: (count: number) =>
+        count === 0
+          ? 'Nenhum usuário escolhido'
+          : count === 1
+            ? '1 usuário escolhido'
+            : `${count} usuários escolhidos`,
+      noUserFound: 'Nenhum usuário tem este nome.',
+      administrator: 'Administrador',
+      dates: 'Quando',
+      start: 'A partir de',
+      end: 'Até',
+      datesHelp: 'No seu fuso horário. Vazio: a partir de agora e sem fim.',
+      dateOrder: 'O fim deve vir depois do início.',
+      link: 'Botão de link',
+      linkHelp: 'Opcional: um botão abaixo da mensagem que abre um endereço web.',
+      linkLabel: 'Texto do botão',
+      linkUrl: 'Endereço',
+      linkInvalid: 'Escreva um endereço que comece com http:// ou https://.',
+      linkHalf: 'Dê ao botão um texto e um endereço, ou nenhum dos dois.',
+      shownToAll: 'Para todos',
+      shownToAdmins: 'Para os administradores',
+      shownToUsers: (names: string[]) =>
+        names.length <= 3
+          ? `Para ${names.join(', ')}`
+          : `Para ${names.slice(0, 2).join(', ')} e mais ${names.length - 2}`,
+      someone: 'um usuário desconhecido',
+      from: (date: string) => `a partir de ${date}`,
+      until: (date: string) => `até ${date}`,
+      popupBadge: 'Abre sozinha',
+      states: { scheduled: 'Agendada', ended: 'Encerrada' },
+    },
     updateCheck: 'Verificar novas versões',
     updateCheckHelp:
       'Uma vez por dia, e logo após a inicialização, o Polyfin consulta o GitHub sobre sua versão mais recente, enviando apenas a própria versão. Uma versão mais nova aparece no Início e em Sistema › Integridade, e é enviada às notificações de Nova versão. Desativado, o Polyfin nunca contata o GitHub.',
