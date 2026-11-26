@@ -34,6 +34,7 @@ Moonfin's setup offers to install Moonbase on a Jellyfin server. That offer can'
 | TMDB extras | Reviews, a person's IMDb page and social accounts, episode and season ratings, a series' next episode, and details of titles the server doesn't hold, with the server's TMDB key |
 | Server messages | Notes the administrator writes, each to its audience and between its dates, in the apps' messages window (see [Server messages](#server-messages)) |
 | App reports | **Send report to server** works on the Silo address too, as on the Jellyfin address |
+| Sign-in PINs | The PIN that locks a user's profile on the apps' user picker, kept on the server for all their devices (see [Sign-in PINs](#sign-in-pins)) |
 | Custom themes | None: the list is empty, and the apps keep their own themes |
 
 The server's MDBList and TMDB keys stay on the server: Polyfin asks MDBList and TMDB itself. A feature without its key is hidden in the apps. A user who enters their own key in Moonfin keeps it for the features the app runs itself.
@@ -43,7 +44,7 @@ The server's MDBList and TMDB keys stay on the server: Polyfin asks MDBList and 
 Polyfin tells the apps these features are not served, and the apps hide them:
 
 - the request service and its calendar, download queue and notifications;
-- phone notifications and sign-in PINs kept on the server;
+- phone notifications;
 - smart search, the seasonal row, custom rows and chart rows;
 - anime filler markers, poster labels and retro games;
 - watch parties, which Watch together replaces;
@@ -134,5 +135,25 @@ The **Moonfin** section of a user's page, and **My account › Moonfin**, show w
 - The arrows beside a message move it up or down the list. A new message comes first. Up to 50 messages are kept, ended ones included, until you delete them.
 - A user who is deleted leaves the users a message was chosen for.
 - The messages reach Moonfin's apps only: not the web player, other Jellyfin apps or the notification targets.
+
+## Sign-in PINs
+
+Moonfin's apps let a user lock their profile on the app's user picker with a four-digit PIN. Polyfin keeps it on the server, so a PIN set on one device is asked for on all of them.
+
+| Where | Who | What |
+|---|---|---|
+| The settings of Moonfin's apps | The user | Sets, changes or removes their PIN, with the current one |
+| **My account › Moonfin** | The user | The same: **Set a PIN**, **Change PIN** and **Remove PIN**, with the current one |
+| The **Moonfin** section of the user's page, under **Users** | An administrator | Sees whether the user has a PIN and their wrong guesses. **Set a PIN** or **Change PIN** sets a new one, and **Remove PIN** removes it, without the current one |
+
+- Polyfin keeps a salted hash of the PIN, made as a password's, never the PIN itself. No answer and no log line holds either.
+- The first five wrong guesses in a row are free. Each one after them makes the next guess wait 30 seconds longer, up to 15 minutes. While the user waits, every guess is refused, the right one included, and the app says how long to wait.
+- A wrong current PIN, given to change or remove the PIN, counts as a wrong guess.
+- The count is the user's, whatever device or address the guesses come from, and a restart keeps it. A right PIN once the wait is over starts it again, and so does a new PIN an administrator sets.
+- **A forgotten PIN:** an administrator sets a new one, or removes it, on the user's page. An administrator who forgot their own can also remove it in the app, with **Forgot PIN?** and their password.
+- A PIN a device set before Polyfin kept PINs stays on that device until it is next typed there: the app then hands it to Polyfin.
+- When Polyfin can't be reached, an app checks the PIN against the last one typed right on that device.
+- The PIN locks Moonfin's user picker only. Polyfin's sign-in, other Jellyfin apps and Silo's own apps never ask for it.
+- A user the companion is not served to has no PIN on the server: their apps keep one on each device. Deleting a user deletes their PIN.
 
 API details: [Companion routes for Moonfin](jellyfin-api.md#companion-routes-for-moonfin) and [Moonfin in the admin API](jellyfin-api.md#moonfin-in-the-admin-api).

@@ -60,6 +60,7 @@ func (h *Handler) moonfinRoutes(rt *router) {
 	admin(http.MethodPost, "/Moonfin/Settings/{userId}", h.saveUserMoonfinSettings)
 	h.moonfinMessageRoutes(route)
 	h.moonfinExtraRoutes(route)
+	h.moonfinPinRoutes(route, admin)
 }
 
 // moonfinServed serves next to a user the companion is served to, and
@@ -167,10 +168,10 @@ func (h *Handler) moonfinPing(w http.ResponseWriter, r *http.Request) {
 		"tmdbReviewsSupported":     tmdb,
 		"clientLogSupported":       true,
 		"messagesSupported":        true,
+		"pinSupported":             true,
 		// The features Polyfin does not serve: the app hides them.
 		"seerrEnabled":                      false,
 		"recommendationsSupported":          false,
-		"pinSupported":                      false,
 		"discoverChartsSupported":           false,
 		"smartSearchEnabled":                false,
 		"calendarAvailable":                 false,

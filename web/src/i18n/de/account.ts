@@ -70,6 +70,40 @@ const account: typeof en = {
         'Polyfin vergisst die Einstellungen, die die Apps von Moonfin für dich synchronisiert haben. Deine Geräte beginnen dann wieder bei den Standardwerten des Servers.',
       resetUser: 'Zurücksetzen',
       resetDone: 'Synchronisierte Einstellungen zurückgesetzt.',
+      pin: {
+        title: 'Anmelde-PIN',
+        none: 'Keine. Eine in einer App von Moonfin festgelegte PIN kommt hierher, sobald sie das nächste Mal eingegeben wird.',
+        ownSet:
+          'Die Apps von Moonfin fragen danach, bevor sie dein Profil öffnen, auf jedem Gerät.',
+        userSet:
+          'Die Apps von Moonfin fragen danach, bevor sie dieses Profil öffnen, auf jedem Gerät.',
+        waiting: (time: string) => `Zu viele falsche Versuche: Vor ${time} wird keiner geprüft.`,
+        wrong: (count: number) =>
+          count === 1
+            ? '1 falscher Versuch seit der letzten richtigen PIN.'
+            : `${count} falsche Versuche seit der letzten richtigen PIN.`,
+        add: 'PIN festlegen',
+        change: 'PIN ändern',
+        remove: 'PIN entfernen',
+        addTitle: 'Anmelde-PIN festlegen',
+        changeTitle: 'Anmelde-PIN ändern',
+        ownText:
+          'Die Apps von Moonfin fragen in ihrer Benutzerauswahl danach, bevor sie dein Profil öffnen, auf jedem Gerät. Andere Apps und die Anmeldung bei Polyfin fragen nie danach.',
+        userText: (name: string) =>
+          `Die Apps von Moonfin fragen in ihrer Benutzerauswahl danach, bevor sie das Profil von ${name} öffnen. Eine neue PIN ersetzt die alte, ohne nach ihr zu fragen: So wird eine vergessene PIN zurückgesetzt, und jede Wartezeit nach falschen Versuchen endet.`,
+        current: 'Aktuelle PIN',
+        forgot: 'Vergessen? Ein Administrator kann eine neue festlegen.',
+        new: 'Neue PIN',
+        digits: 'Vier Ziffern.',
+        save: 'PIN speichern',
+        removeTitle: 'Deine Anmelde-PIN entfernen?',
+        removeText: 'Die Apps von Moonfin öffnen dein Profil dann, ohne nach einer PIN zu fragen.',
+        userRemoveTitle: (name: string) => `Die Anmelde-PIN von ${name} entfernen?`,
+        userRemoveText:
+          'Die Apps von Moonfin öffnen das Profil dann, ohne nach einer PIN zu fragen.',
+        saved: 'PIN gespeichert.',
+        removed: 'PIN entfernt.',
+      },
     },
     audioRegion: {
       help: 'Die Synchronfassung, die du bevorzugst, wenn eine Sprache für eine Region eigens synchronisiert wird: Französisch für Frankreich oder für Québec, Spanisch für Spanien oder für Lateinamerika, Portugiesisch für Brasilien oder für Portugal. Sie gilt für die Audiosprache, die du in deinen Apps gewählt hast, sonst die des Servers, wenn es die Sprache der Region ist, und legt sie fest, wenn keine gewählt ist. In dieser Sprache werden die Audiospuren der Region zuerst abgespielt, und ihre Versionen kommen zuerst, wenn der Server Versionen nach Sprache sortiert.',

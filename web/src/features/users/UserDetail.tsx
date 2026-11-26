@@ -39,6 +39,7 @@ import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
 import { ShareLinkList } from '@/features/account/SharedLinks'
 import { moonfinOptions, MoonfinSyncRow } from '@/features/account/Moonfin'
+import { UserMoonfinPin } from '@/features/account/MoonfinPin'
 import { sourceName, TitlesNotFoundDialog } from '@/features/imports/TitlesNotFound'
 import { errorMessage, languageOptions } from '@/format'
 import { useI18n } from '@/i18n'
@@ -874,7 +875,7 @@ function WebThemeSection({ user }: { user: User }) {
 /**
  * Whether Moonfin's companion serves the user: the server's default, naming whether it is on, On
  * or Off, saved as it changes, and whether they may change it themselves under My account; then
- * the settings Moonfin's apps synced for them, with Reset.
+ * the settings Moonfin's apps synced for them, with Reset, and their sign-in PIN.
  */
 function MoonfinSection({ user }: { user: User }) {
   const { t } = useI18n()
@@ -953,6 +954,7 @@ function MoonfinSection({ user }: { user: User }) {
           confirm={t.users.moonfinResetConfirm}
         />
       )}
+      <UserMoonfinPin id={user.id} name={user.name} />
     </PageSection>
   )
 }

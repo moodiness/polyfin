@@ -70,6 +70,40 @@ const account: typeof en = {
         'Polyfin olvida los ajustes que las aplicaciones de Moonfin sincronizaron para usted. Sus dispositivos vuelven a partir de los valores predeterminados del servidor.',
       resetUser: 'Restablecer',
       resetDone: 'Ajustes sincronizados restablecidos.',
+      pin: {
+        title: 'PIN de inicio de sesión',
+        none: 'Ninguno. Un PIN definido en una aplicación de Moonfin llega aquí la próxima vez que se escribe.',
+        ownSet:
+          'Las aplicaciones de Moonfin lo piden antes de abrir su perfil, en cada dispositivo.',
+        userSet:
+          'Las aplicaciones de Moonfin lo piden antes de abrir este perfil, en cada dispositivo.',
+        waiting: (time: string) =>
+          `Demasiados intentos erróneos: ninguno se comprueba antes de las ${time}.`,
+        wrong: (count: number) =>
+          count === 1
+            ? '1 intento erróneo desde el último PIN correcto.'
+            : `${count} intentos erróneos desde el último PIN correcto.`,
+        add: 'Definir un PIN',
+        change: 'Cambiar el PIN',
+        remove: 'Quitar el PIN',
+        addTitle: 'Definir un PIN de inicio de sesión',
+        changeTitle: 'Cambiar el PIN de inicio de sesión',
+        ownText:
+          'Las aplicaciones de Moonfin lo piden en su selector de usuario antes de abrir su perfil, en cada dispositivo. Las demás aplicaciones y el inicio de sesión de Polyfin nunca lo piden.',
+        userText: (name: string) =>
+          `Las aplicaciones de Moonfin lo piden en su selector de usuario antes de abrir el perfil de ${name}. Un PIN nuevo reemplaza al anterior sin pedirlo, que es como se restablece un PIN olvidado, y pone fin a cualquier espera tras intentos erróneos.`,
+        current: 'PIN actual',
+        forgot: '¿Lo olvidó? Un administrador puede definir uno nuevo.',
+        new: 'PIN nuevo',
+        digits: 'Cuatro dígitos.',
+        save: 'Guardar el PIN',
+        removeTitle: '¿Quitar su PIN de inicio de sesión?',
+        removeText: 'Las aplicaciones de Moonfin abren entonces su perfil sin pedir un PIN.',
+        userRemoveTitle: (name: string) => `¿Quitar el PIN de inicio de sesión de ${name}?`,
+        userRemoveText: 'Las aplicaciones de Moonfin abren entonces su perfil sin pedir un PIN.',
+        saved: 'PIN guardado.',
+        removed: 'PIN quitado.',
+      },
     },
     audioRegion: {
       help: 'El doblaje que prefiere cuando un idioma se dobla aparte para una región: el francés de Francia o de Quebec, el español de España o de Latinoamérica, el portugués de Brasil o de Portugal. Se aplica al idioma de audio que eligió en sus aplicaciones, o si no al del servidor, cuando es el idioma de la región, y lo elige cuando no hay ninguno. En ese idioma, las pistas de audio de la región se reproducen primero, y sus versiones van primero cuando el servidor ordena las versiones por idioma.',

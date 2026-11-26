@@ -2583,6 +2583,34 @@ export const fetchUserMoonfin = (id: string, signal?: AbortSignal) =>
 export const forgetUserMoonfin = (id: string) =>
   request<void>('DELETE', `/users/${seg(id)}/moonfin`)
 
+/**
+ * The sign-in PIN of an account for Moonfin's user picker: whether it has one, the wrong guesses
+ * given since the last right one, and, while the next guess waits, until when. Never the PIN.
+ */
+export type MoonfinPin = { set: boolean; wrongGuesses: number; waitUntil: string | null }
+
+export const fetchOwnMoonfinPin = (signal?: AbortSignal) =>
+  request<MoonfinPin>('GET', '/account/moonfin/pin', undefined, signal)
+
+/** Sets the signed-in user's PIN, with the current one when they have one. */
+export const saveOwnMoonfinPin = (pin: string, currentPin: string) =>
+  request<MoonfinPin>('PUT', '/account/moonfin/pin', { pin, currentPin })
+
+/** Removes the signed-in user's PIN, with the current one. */
+export const removeOwnMoonfinPin = (currentPin: string) =>
+  request<MoonfinPin>('DELETE', '/account/moonfin/pin', { currentPin })
+
+/** A user's PIN, for an administrator. */
+export const fetchUserMoonfinPin = (id: string, signal?: AbortSignal) =>
+  request<MoonfinPin>('GET', `/users/${seg(id)}/moonfin/pin`, undefined, signal)
+
+/** Gives a user a new PIN without the current one, which also ends the wait of wrong guesses. */
+export const saveUserMoonfinPin = (id: string, pin: string) =>
+  request<MoonfinPin>('PUT', `/users/${seg(id)}/moonfin/pin`, { pin })
+
+export const removeUserMoonfinPin = (id: string) =>
+  request<MoonfinPin>('DELETE', `/users/${seg(id)}/moonfin/pin`)
+
 /** The signed-in user's preferred audio region ('' for none) and the ones they may choose. */
 export type AudioRegion = { region: string; regions: string[] }
 
@@ -6517,6 +6545,10 @@ export const queryKeys = {
   userMoonfin: (id: string) => ['moonfin', 'users', id] as const,
   moonfinDefaults: ['moonfin', 'defaults'] as const,
   moonfinMessages: ['moonfin', 'messages'] as const,
+  /** Prefix of every Moonfin PIN, the signed-in user's and each user's: refreshed on a change. */
+  moonfinPins: ['moonfin-pin'] as const,
+  ownMoonfinPin: ['moonfin-pin', 'own'] as const,
+  userMoonfinPin: (id: string) => ['moonfin-pin', 'user', id] as const,
   tracking: ['account', 'tracking'] as const,
   users: ['users'] as const,
   /** Prefix of every group query: invalidating it refreshes the list and each group. */

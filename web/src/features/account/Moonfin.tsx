@@ -22,6 +22,7 @@ import {
   SkeletonRows,
   useToast,
 } from '@/ui'
+import { OwnMoonfinPin } from './MoonfinPin'
 
 /** The choices of Moonfin's companion: the server's default, naming whether it is on, On, Off. */
 export function moonfinOptions(serverDefault: boolean, t: Messages) {
@@ -131,7 +132,7 @@ export function MoonfinSyncRow({
 /**
  * My account › Moonfin: whether Moonfin's companion serves the user, a setting row saved as it
  * changes, read only, with why, while the administrator keeps them from changing it; then the
- * settings Moonfin's apps synced for them, with Reset my synced settings.
+ * settings Moonfin's apps synced for them, with Reset my synced settings, and their sign-in PIN.
  */
 export function OwnMoonfin() {
   const { t } = useI18n()
@@ -187,6 +188,7 @@ export function OwnMoonfin() {
         title={text.resetTitle}
         confirm={text.resetConfirm}
       />
+      <OwnMoonfinPin />
     </div>
   )
 }
