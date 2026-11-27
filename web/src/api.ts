@@ -2326,6 +2326,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Whether a request failed because Polyfin did not answer: no answer at all (fetch rejects with a
+ * TypeError), or a reverse proxy's 502, 503 or 504 in its place, without Polyfin's own error.
+ */
+export function unanswered(error: unknown): boolean {
+  if (error instanceof TypeError) return true
+  return (
+    error instanceof ApiError &&
+    error.status >= 502 &&
+    error.status <= 504 &&
+    error.code === 'unknown'
+  )
+}
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 const apiBase = `${import.meta.env.BASE_URL}api`

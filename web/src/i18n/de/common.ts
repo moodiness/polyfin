@@ -35,6 +35,8 @@ const common: typeof en = {
   errors: {
     generic: 'Etwas ist schiefgelaufen. Bitte versuche es erneut.',
     network: 'Der Server ist nicht erreichbar. Prüfe, ob Polyfin läuft.',
+    internal:
+      'Polyfin ist auf einen Fehler gestoßen. Versuche es erneut. Tritt er wieder auf, sieh im Serverprotokoll nach.',
     unauthenticated: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
     forbidden: 'Du hast keine Berechtigung für diese Aktion.',
     cross_origin: 'Die Anfrage wurde abgelehnt, weil sie nicht von dieser Seite stammt.',
@@ -743,7 +745,6 @@ const common: typeof en = {
     alertKind: { danger: 'Fehler', warn: 'Warnung', info: 'Hinweis' },
     secret: {
       saved: 'Gespeichert',
-      notSet: 'Nicht festgelegt',
       removing: 'Wird beim Speichern entfernt',
       pastePlaceholder: 'Hier einfügen',
       replacePlaceholder: 'Neuen Wert einfügen',
@@ -755,6 +756,15 @@ const common: typeof en = {
       show: 'Schlüssel anzeigen',
       hide: 'Schlüssel ausblenden',
       savedHidden: 'Gespeicherter Schlüssel, ausgeblendet',
+    },
+    loadFailure: {
+      unreachableTitle: 'Polyfin antwortet nicht',
+      unreachable:
+        'Prüfe, ob Polyfin läuft und dieses Gerät es erreicht, und versuche es dann erneut.',
+      databaseTitle: 'Die Datenbank antwortet nicht',
+      database:
+        'Polyfin läuft, erreicht aber seine PostgreSQL-Datenbank nicht. Prüfe, ob die Datenbank läuft, und versuche es dann erneut.',
+      otherTitle: 'Diese Seite konnte nicht geladen werden',
     },
   },
 }

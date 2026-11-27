@@ -35,6 +35,8 @@ const common: typeof en = {
   errors: {
     generic: 'Si è verificato un errore. Riprova.',
     network: 'Impossibile raggiungere il server. Verifica che Polyfin sia in esecuzione.',
+    internal:
+      'Polyfin ha riscontrato un errore. Riprova e, se succede di nuovo, consulta il log del server.',
     unauthenticated: 'La sessione è scaduta. Accedi di nuovo.',
     forbidden: 'Non hai i permessi per eseguire questa operazione.',
     cross_origin: 'La richiesta è stata rifiutata perché non proviene da questa pagina.',
@@ -725,7 +727,6 @@ const common: typeof en = {
     alertKind: { danger: 'Errore', warn: 'Avviso', info: 'Nota' },
     secret: {
       saved: 'Salvato',
-      notSet: 'Non impostato',
       removing: 'Verrà rimosso al salvataggio',
       pastePlaceholder: 'Incollalo qui',
       replacePlaceholder: 'Incolla il nuovo valore',
@@ -737,6 +738,15 @@ const common: typeof en = {
       show: 'Mostra chiave',
       hide: 'Nascondi chiave',
       savedHidden: 'Chiave salvata, nascosta',
+    },
+    loadFailure: {
+      unreachableTitle: 'Polyfin non risponde',
+      unreachable:
+        'Verifica che Polyfin sia in esecuzione e che questo dispositivo possa raggiungerlo, poi riprova.',
+      databaseTitle: 'Il database non risponde',
+      database:
+        'Polyfin è in esecuzione, ma non raggiunge il suo database PostgreSQL. Verifica che il database sia in esecuzione, poi riprova.',
+      otherTitle: 'Impossibile caricare questa pagina',
     },
   },
 }

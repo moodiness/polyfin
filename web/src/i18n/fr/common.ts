@@ -35,6 +35,8 @@ const common: typeof en = {
   errors: {
     generic: 'Une erreur est survenue. Veuillez réessayer.',
     network: 'Impossible de joindre le serveur. Vérifiez que Polyfin est bien lancé.',
+    internal:
+      'Polyfin a rencontré une erreur. Réessayez, et si elle se reproduit, consultez le journal du serveur.',
     unauthenticated: 'Votre session a expiré. Veuillez vous reconnecter.',
     forbidden: 'Vous n’êtes pas autorisé à effectuer cette action.',
     cross_origin: 'La requête a été refusée, car elle ne provient pas de cette page.',
@@ -734,7 +736,6 @@ const common: typeof en = {
     alertKind: { danger: 'Erreur', warn: 'Attention', info: 'À noter' },
     secret: {
       saved: 'Valeur enregistrée',
-      notSet: 'Aucune valeur',
       removing: 'Supprimée à l’enregistrement',
       pastePlaceholder: 'Collez la valeur ici',
       replacePlaceholder: 'Collez la nouvelle valeur',
@@ -746,6 +747,15 @@ const common: typeof en = {
       show: 'Afficher la clé',
       hide: 'Masquer la clé',
       savedHidden: 'Clé enregistrée, masquée',
+    },
+    loadFailure: {
+      unreachableTitle: 'Polyfin ne répond pas',
+      unreachable:
+        'Vérifiez que Polyfin est bien lancé et que cet appareil peut le joindre, puis réessayez.',
+      databaseTitle: 'La base de données ne répond pas',
+      database:
+        'Polyfin est lancé, mais ne joint pas sa base de données PostgreSQL. Vérifiez qu’elle est bien lancée, puis réessayez.',
+      otherTitle: 'Impossible de charger cette page',
     },
   },
 }
