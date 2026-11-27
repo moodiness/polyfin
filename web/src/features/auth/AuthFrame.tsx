@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { cx } from '@/ui'
 
 /** The form of a signed-out page: its wells 16 px apart. */
@@ -8,9 +8,30 @@ export const authForm = 'flex flex-col gap-4'
 export const wideButton = 'min-h-11 w-full text-lead'
 
 /**
- * The frame of the pages shown before anyone is signed in: the logo, the title (the greeting's
- * size) and a lede, then the form, if any, in wells straight on the room, with no panel around it.
- * The public shell around it has the brand and the language at the top right.
+ * The first field of a signed-out page, for its `ref`: typing works at once, yet the page opens
+ * with nothing lit. Rather than taking the focus on arrival, which lights its well before anyone
+ * acts, the field takes it at the first character typed while nothing else has it, and that
+ * character goes into it. A click or Tab lights it as any field.
+ */
+export function useFirstField() {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return
+      const active = document.activeElement
+      if (active !== null && active !== document.body && active.id !== 'main') return
+      ref.current?.focus()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+  return ref
+}
+
+/**
+ * The frame of the pages shown before anyone is signed in: the title (the greeting's size) and a
+ * lede, then the form, if any, in wells straight on the room, with no panel around it. The public
+ * shell around it carries the one logo, with the product's name, and the language at the top.
  */
 export function AuthFrame({
   title,
@@ -28,18 +49,11 @@ export function AuthFrame({
   return (
     <div
       className={cx(
-        'mx-auto w-full pt-[min(9vh,6rem)] max-md:pt-2',
+        'mx-auto w-full pt-[min(12vh,8rem)] max-md:pt-4',
         wide ? 'max-w-[37.5rem]' : 'max-w-[32.5rem]',
       )}
     >
-      <img
-        src={`${import.meta.env.BASE_URL}polyfin.svg`}
-        alt=""
-        width={56}
-        height={56}
-        className="size-12 max-md:size-11"
-      />
-      <h1 className="mt-5 text-display break-words text-ink max-md:mt-4">{title}</h1>
+      <h1 className="text-display break-words text-ink">{title}</h1>
       <p className="mt-2 max-w-[46ch] text-lead text-ink-2">{lede}</p>
       {children !== undefined && <div className="mt-8 max-md:mt-6">{children}</div>}
     </div>

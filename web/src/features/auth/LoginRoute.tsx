@@ -16,7 +16,7 @@ import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
 import type en from '@/i18n/en/auth'
 import { Button, ExternalButtonLink, Field, Notice, TextInput } from '@/ui'
-import { AuthFrame, authForm, wideButton } from './AuthFrame'
+import { AuthFrame, authForm, useFirstField, wideButton } from './AuthFrame'
 
 /** What the identity provider's sign-in can come back with, as the server names it. */
 type ProviderOutcome = keyof typeof en.login.providerOutcomes
@@ -70,6 +70,7 @@ export default function LoginRoute() {
   const [password, setPassword] = useState('')
   const [step, setStep] = useState<Step>({ kind: 'password' })
   const [code, setCode] = useState('')
+  const firstField = useFirstField()
   const provider = useQuery({
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
@@ -197,7 +198,7 @@ export default function LoginRoute() {
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            autoFocus
+            ref={firstField}
             required
           />
         </Field>
