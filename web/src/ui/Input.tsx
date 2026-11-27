@@ -1,5 +1,6 @@
 import { EyeIcon, EyeSlashIcon, type Icon } from '@phosphor-icons/react'
 import {
+  useRef,
   useState,
   type InputHTMLAttributes,
   type ReactNode,
@@ -197,7 +198,9 @@ export type NumberInputProps = Omit<
 
 /**
  * A number field, with tabular figures. `min`, `max` and `step` go to the browser; show
- * the range in the Field's help ("From 50 to 100. 90 by default.").
+ * the range in the Field's help ("From 50 to 100. 90 by default."). Focus selects the number, so
+ * that typing replaces it ("2", not "02"); leaving the field writes the number as it is kept
+ * ("2" for "02", empty for text that is no number).
  */
 export function NumberInput({
   value,
@@ -208,10 +211,16 @@ export function NumberInput({
   className,
   id,
   'aria-describedby': ownDescribedBy,
+  onFocus,
+  onMouseDown,
+  onMouseUp,
+  onBlur,
   ...rest
 }: NumberInputProps) {
   const controlProps = useControlProps(id, ownDescribedBy, invalid)
   const well = wellSizes[size]
+  // Set by a click that focuses the field, until it lets go.
+  const focusingClick = useRef(false)
   return (
     <div className={cx(fieldBox, well.box, size === 'compact' ? 'w-24' : 'w-32', className)}>
       <input
@@ -222,6 +231,25 @@ export function NumberInput({
           const text = event.target.value.trim()
           const number = Number(text)
           onValue(text === '' || !Number.isFinite(number) ? null : number)
+        }}
+        onMouseDown={(event) => {
+          onMouseDown?.(event)
+          focusingClick.current = document.activeElement !== event.currentTarget
+        }}
+        onFocus={(event) => {
+          onFocus?.(event)
+          event.currentTarget.select()
+        }}
+        onMouseUp={(event) => {
+          onMouseUp?.(event)
+          // The release of the click that focused the field would put the caret in the number.
+          if (focusingClick.current) event.preventDefault()
+          focusingClick.current = false
+        }}
+        onBlur={(event) => {
+          onBlur?.(event)
+          const kept = value === null ? '' : String(value)
+          if (event.currentTarget.value !== kept) event.currentTarget.value = kept
         }}
         className={cx(
           control,

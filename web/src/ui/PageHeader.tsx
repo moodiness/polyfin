@@ -113,7 +113,9 @@ export function Block({
           {count !== undefined && <Count>{count}</Count>}
         </h2>
         {aside !== undefined && (
-          <div className="-mr-3 flex items-center gap-2 text-small text-ink-2">{aside}</div>
+          <div data-block-aside className="flex items-center gap-2 text-small text-ink-2">
+            {aside}
+          </div>
         )}
       </div>
       {children}
@@ -142,6 +144,8 @@ export function TextLink({
       to={to}
       className={cx(
         'group focus-lit inline-flex items-center gap-1 rounded-[0.5rem] px-2.5 py-1 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
+        // Ending a Block's aside, its chevron lines up with the page's right edge, past its padding.
+        arrow && '[[data-block-aside]>&:last-child]:-mr-3',
         className,
       )}
     >

@@ -49,7 +49,7 @@ export function Menu({
   trigger,
   align = 'start',
   width = 256,
-  fit = false,
+  fit = true,
   children,
   className,
 }: {
@@ -63,8 +63,8 @@ export function Menu({
   width?: number
   /**
    * Grows past `width` to fit its longest item, up to the room between its button and the edge
-   * of the screen, where an item wraps onto more lines rather than being cut: a row's actions,
-   * whose labels run long in some languages.
+   * of the screen, where an item wraps onto more lines rather than being cut: labels run long in
+   * some languages. On by default; `false` keeps the menu at `width` and cuts a longer item.
    */
   fit?: boolean
   /** MenuItem, MenuSeparator, MenuHeader and MenuGroup. */
@@ -199,8 +199,9 @@ export function Menu({
 }
 
 // A row of the raised panel, 38 px (32 in Compact); the arrows light it like any other control.
+// A disabled one takes the inactive inks, as a disabled setting row does.
 const itemClass =
-  'flex min-h-9.5 w-full cursor-pointer items-center gap-2.5 rounded-choice px-3 text-left text-control leading-snug outline-none transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 focus-visible:lit focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-45 max-sm:min-h-11'
+  'flex min-h-9.5 w-full cursor-pointer items-center gap-2.5 rounded-choice px-3 text-left text-control leading-snug outline-none transition-[background-color,color] duration-300 ease-nuit hover:bg-s2 focus-visible:lit focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:inactive max-sm:min-h-11'
 
 /**
  * One entry of a Menu: a link with `to` (or `href` for outside the app), or an action with
@@ -248,7 +249,7 @@ export function MenuItem({
       {end !== undefined && <span className="shrink-0 text-small text-ink-3">{end}</span>}
     </>
   )
-  const className = cx(itemClass, danger ? 'text-danger' : 'text-ink')
+  const className = cx(itemClass, danger ? 'text-danger aria-disabled:text-danger/60' : 'text-ink')
   if (to !== undefined) {
     return (
       <Link

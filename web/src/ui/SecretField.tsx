@@ -39,8 +39,9 @@ export type SecretFieldProps = {
   /** Offers to remove a saved secret. Defaults to true. */
   removable?: boolean
   /**
-   * The line under the field. By default it says whether a secret is saved; pass your own (such
-   * as "Saved and checked on 2 October"), or `null` for none.
+   * The line under the field. By default it says that a secret is saved, and nothing for none,
+   * which the empty field's placeholder says; pass your own (such as "Saved and checked on 2
+   * October"), or `null` for none.
    */
   status?: ReactNode | null
   /** The error from the server, shown under the field. */
@@ -139,13 +140,12 @@ export function SecretField({
   }
 
   const helpId = help ? `${id}-help` : undefined
-  const statusId = `${id}-status`
   const errors = [error, revealError === null ? undefined : errorMessage(t, revealError)].filter(
     (message): message is string => message !== undefined,
   )
   const errorIds = errors.map((_, index) => `${id}-error-${index}`)
-  const described = describedBy(helpId, statusId, ...errorIds)
 
+  const statusId = `${id}-status`
   const statusLine =
     status === null ? null : removing ? (
       <StatusLine id={statusId} tone="warn">
@@ -153,11 +153,12 @@ export function SecretField({
       </StatusLine>
     ) : status !== undefined ? (
       <StatusLine id={statusId}>{status}</StatusLine>
-    ) : (
-      <StatusLine id={statusId} tone={saved ? 'ok' : 'muted'}>
-        {saved ? text.saved : text.notSet}
+    ) : saved ? (
+      <StatusLine id={statusId} tone="ok">
+        {text.saved}
       </StatusLine>
-    )
+    ) : null
+  const described = describedBy(helpId, statusLine ? statusId : undefined, ...errorIds)
 
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
@@ -177,7 +178,7 @@ export function SecretField({
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {removing || !typing ? (
-          <div className={cx(fieldBox, well.box, 'flex-1', removing && 'opacity-50')}>
+          <div className={cx(fieldBox, well.box, 'sm:flex-1', removing && 'opacity-50')}>
             <output
               id={`${id}-saved`}
               tabIndex={-1}
@@ -208,7 +209,7 @@ export function SecretField({
             )}
           </div>
         ) : (
-          <div className={cx(fieldBox, well.box, 'flex-1')}>
+          <div className={cx(fieldBox, well.box, 'sm:flex-1')}>
             <input
               ref={input}
               id={id}
@@ -229,7 +230,7 @@ export function SecretField({
               className={cx(
                 'h-full min-w-0 flex-1 bg-transparent font-mono text-ink outline-none placeholder:font-sans placeholder:text-ink-3 focus-visible:outline-none',
                 size === 'md'
-                  ? 'px-5.5 text-small placeholder:text-[1.3125rem] placeholder:font-medium max-sm:placeholder:text-[1.1875rem]'
+                  ? 'px-5.5 text-small placeholder:text-control placeholder:font-medium'
                   : size === 'sm'
                     ? 'px-4.5 text-small placeholder:text-control'
                     : 'px-3.5 text-micro placeholder:text-small',
@@ -298,7 +299,7 @@ function StatusLine({
   children,
 }: {
   id: string
-  tone?: 'ok' | 'warn' | 'muted'
+  tone?: 'ok' | 'warn'
   children: ReactNode
 }) {
   const Glyph = tone === 'ok' ? CheckCircleIcon : InfoIcon
@@ -308,7 +309,7 @@ function StatusLine({
         <Glyph
           size="1.25rem"
           aria-hidden="true"
-          className={cx('shrink-0', tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : '')}
+          className={cx('shrink-0', tone === 'ok' ? 'text-ok' : 'text-warn')}
         />
       )}
       <span>{children}</span>
