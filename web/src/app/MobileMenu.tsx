@@ -87,7 +87,8 @@ export function MobileMenu({
     if (!element) return
     if (open && !element.open) {
       element.showModal()
-      // The light starts on the current area, as the menu opens.
+      // Focus starts on the current area, as the menu opens. It lights only when the menu was
+      // opened from the keyboard: the browser shows no focus after a tap or a click.
       element.querySelector<HTMLElement>('[data-area][aria-current="page"]')?.focus()
     }
     if (!open && element.open) element.close()
@@ -97,14 +98,21 @@ export function MobileMenu({
     <>
       <button
         type="button"
-        aria-label={t.nav.menu}
         title={t.nav.menu}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className={cx(topControl, 'size-11 justify-center')}
+        className={cx(topControl, 'relative size-11 justify-center')}
       >
         <ListIcon size="1.25rem" aria-hidden="true" />
+        <span className="sr-only">{t.nav.menu}</span>
+        {/* Health's count rides on the button, as the area words are behind it. Its own pill sits
+            on the page's colour, so the button's fill does not tint it. */}
+        {user.isAdministrator && (
+          <span className="absolute -top-1.5 -right-1.5 rounded-full bg-bg empty:hidden">
+            <ProblemCount className="ml-0" />
+          </span>
+        )}
       </button>
       <dialog
         ref={dialog}
@@ -238,7 +246,7 @@ export function MobileMenu({
   )
 }
 
-/** An area as a section title's word (lit while current), and its pages as smaller words under it. */
+/** An area as a section title's word (with a bar while current), and its pages as smaller words. */
 function Area({
   section,
   current,
@@ -257,8 +265,15 @@ function Area({
         to={section.to}
         data-area
         aria-current={current ? 'page' : undefined}
-        className="focus-lit -mx-1 flex min-h-12 items-center justify-between gap-3 rounded-row px-3 text-h2 text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:lit"
+        className="focus-lit relative -mx-1 flex min-h-12 items-center justify-between gap-3 rounded-row px-3 text-h2 text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.02] aria-[current=page]:text-ink"
       >
+        {/* The current area's mark: a leading bar, as the section lists have. */}
+        {current && (
+          <span
+            aria-hidden="true"
+            className="absolute top-1/2 left-0 h-6 w-1 -translate-y-1/2 rounded-full bg-lit-edge"
+          />
+        )}
         <span className="min-w-0 break-words">{section.label(t)}</span>
         {section.id === 'system' && (
           <ProblemCount className="ml-0 h-auto rounded-full px-2 py-0.5 text-small" />
