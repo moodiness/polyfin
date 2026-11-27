@@ -580,7 +580,9 @@ async function rest(page) {
 
 /**
  * Runs in the page with unsaved changes: the Save button shows, lies inside its card, and takes a
- * click at its centre, rather than what paints over it.
+ * click at its centre, rather than what paints over it. Save is scrolled to the middle of the
+ * window first and measured there, in the window's coordinates; the phone's bar, fixed, stays in
+ * view, unless an ancestor's transform holds it at its own foot.
  */
 function saveReach() {
   const saves = [...document.querySelectorAll('button[type="submit"]')].filter(
@@ -589,7 +591,7 @@ function saveReach() {
   if (saves.length === 0) return [{ kind: 'step', detail: 'no Save button shows after a change' }]
   const found = []
   for (const button of saves) {
-    button.scrollIntoView({ block: 'nearest' })
+    button.scrollIntoView({ block: 'center' })
     const name = `"${button.innerText.trim()}"`
     const box = button.getBoundingClientRect()
     const card = button.parentElement.getBoundingClientRect()
@@ -606,7 +608,7 @@ function saveReach() {
       const text = (hit?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 40)
       found.push({
         kind: 'step',
-        detail: `${name} cannot be clicked: its centre (${Math.round(x)}, ${Math.round(y)}) lands on <${hit?.tagName.toLowerCase() ?? 'nothing'}>${text ? ` "${text}"` : ''}`,
+        detail: `${name} cannot be clicked: its centre (${Math.round(x)}, ${Math.round(y)}) in a ${innerWidth} × ${innerHeight} px window lands on <${hit?.tagName.toLowerCase() ?? 'nothing'}>${text ? ` "${text}"` : ''}`,
       })
     }
   }
