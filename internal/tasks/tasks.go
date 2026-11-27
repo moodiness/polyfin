@@ -75,8 +75,22 @@ type Task struct {
 	// such as making thumbnails: work that waits for quiet waits for it
 	// too (see HeavyRunning).
 	Heavy bool
-	Run   func(ctx context.Context) error
+	// Effect is what a run does that cannot be taken back, which the admin
+	// app asks about before starting it: empty for most tasks.
+	Effect Effect
+	Run    func(ctx context.Context) error
 }
+
+// Effect is what a task's run does that cannot be taken back.
+type Effect string
+
+const (
+	// Sends: the run sends messages, such as e-mails or notifications.
+	Sends Effect = "sends"
+	// Forgets: the run deletes what is still in use, which has to be
+	// fetched again afterwards.
+	Forgets Effect = "forgets"
+)
 
 // State is a task's state, as Jellyfin's TaskState.
 type State string
@@ -118,6 +132,7 @@ type Info struct {
 	Defaults []Trigger
 	Custom   bool
 	Limits   Limits
+	Effect   Effect
 	State    State
 	// Last is the last run that ended, kept across restarts once the
 	// registry is loaded; nil when none did.
@@ -565,7 +580,7 @@ func (e *entry) info(language string) Info {
 	if named, ok := categoryText[category]; ok {
 		category = named.In(language)
 	}
-	info := Info{ID: e.id, Key: e.Key, Name: text.Name, Description: text.Description, Category: category,
+	info := Info{ID: e.id, Key: e.Key, Name: text.Name, Description: text.Description, Category: category, Effect: e.Effect,
 		Triggers: slices.Clone(e.triggers), Defaults: slices.Clone(e.Task.Triggers), Custom: e.custom, Limits: e.Limits, State: e.state}
 	if info.Triggers == nil {
 		info.Triggers = []Trigger{}

@@ -1181,7 +1181,8 @@ The web player's dashboard and other Jellyfin apps reach the server's administra
   - `triggers`: the current triggers, each `{"type": "daily" | "weekly" | "interval" | "startup"}` with `time` (minutes from midnight, daily and weekly), `day` (0 to 6 from Sunday, weekly), `interval` (minutes) and `maxRuntime` (minutes) as they apply;
   - `defaultTriggers`: the task's defaults;
   - `custom`: true once an administrator changed them;
-  - `limits`: `locked` (empty, or `settings`, `recordings`, `notifications` or `byHand`, why the triggers cannot change), `types`, `minInterval` and `maxInterval` (minutes, 40320 at most), `maxTriggers` (8) and `keepOne` (true when the task needs a trigger).
+  - `limits`: `locked` (empty, or `settings`, `recordings`, `notifications` or `byHand`, why the triggers cannot change), `types`, `minInterval` and `maxInterval` (minutes, 40320 at most), `maxTriggers` (8) and `keepOne` (true when the task needs a trigger);
+  - `effect`: what a run cannot take back, which the admin app asks about before **Run now**: `sends` (the three summaries, Look for versions of watchlist titles), `forgets` (Forget the version lists, Empty the cache of files being read), or empty.
 - `PUT /admin/api/tasks/{id}/triggers` with `{"triggers": [...]}` replaces them, and answers the task. It answers 400 with `task_locked` or `invalid_triggers`, and 404 with `not_found`. A `maxRuntime` the admin app does not show is kept as sent.
 - `DELETE /admin/api/tasks/{id}/triggers` gives the task its defaults again, and answers the task.
 

@@ -25,6 +25,9 @@ type taskJSON struct {
 	DefaultTriggers []tasks.Trigger `json:"defaultTriggers"`
 	Custom          bool            `json:"custom"`
 	Limits          taskLimitsJSON  `json:"limits"`
+	// Effect is what a run does that cannot be taken back: "sends",
+	// "forgets", or empty.
+	Effect tasks.Effect `json:"effect"`
 	// State is Idle, Running or Cancelling.
 	State string          `json:"state"`
 	Last  *taskResultJSON `json:"last"`
@@ -71,7 +74,7 @@ func (h *handler) taskLanguage(r *http.Request) string {
 
 func newTaskJSON(info tasks.Info) taskJSON {
 	result := taskJSON{ID: info.ID, Key: info.Key, Name: info.Name, Description: info.Description, Category: info.Category,
-		Triggers: info.Triggers, DefaultTriggers: info.Defaults, Custom: info.Custom, State: string(info.State), Next: info.Next,
+		Triggers: info.Triggers, DefaultTriggers: info.Defaults, Custom: info.Custom, Effect: info.Effect, State: string(info.State), Next: info.Next,
 		Limits: taskLimitsJSON{Locked: info.Limits.Locked, Types: info.Limits.AllowedTypes(), MinInterval: int64(max(info.Limits.MinInterval, time.Minute) / time.Minute),
 			MaxInterval: int64(tasks.MaxInterval / time.Minute), MaxTriggers: tasks.MaxTriggers, KeepOne: info.Limits.KeepOne}}
 	if info.Limits.Locked != "" {

@@ -48,6 +48,9 @@ func TestEmptyTheSourceCacheTask(t *testing.T) {
 	if task.Category != tasks.CategoryMaintenance || len(task.Triggers) != 0 || task.Limits.Locked != "" || task.Limits.MinInterval != 6*time.Hour {
 		t.Errorf("not a Maintenance task without triggers by default: %+v", task)
 	}
+	if task.Effect != tasks.Forgets {
+		t.Errorf("effect %q, want forgets: the admin app asks first", task.Effect)
+	}
 	for _, language := range []string{"en", "fr", "de", "es", "it", "pt-BR"} {
 		if text := task.Text[language]; text.Name == "" || text.Description == "" {
 			t.Errorf("no %s text: %+v", language, text)
