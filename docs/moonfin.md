@@ -8,9 +8,9 @@ Moonfin's apps run on TVs, phones, tablets, desktops and in a browser. On a serv
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Serve Moonfin's companion** | **Settings › General** | On | Moonfin's apps find Polyfin's companion. Each user can be set apart (see [A user set apart](#a-user-set-apart)). |
-| **Moonfin's defaults** | **Settings › General**, under it | None | The settings Moonfin's apps take for what a user never set (see [The defaults](#the-defaults)). |
-| **Messages to Moonfin's apps** | **Settings › General**, under it | None | Notes from you that the apps show in their messages window (see [Server messages](#server-messages)). |
+| **Serve Moonfin's companion** | **Settings › Moonfin** | On | Moonfin's apps find Polyfin's companion. Each user can be set apart (see [A user set apart](#a-user-set-apart)). |
+| **Moonfin's defaults** | **Settings › Moonfin**, under it | None | The settings Moonfin's apps take for what a user never set, saved with the section (see [The defaults](#the-defaults)). |
+| **Messages to Moonfin's apps** | **Settings › Moonfin**, under it | None | Notes from you that the apps show in their messages window (see [Server messages](#server-messages)). |
 
 - With the setting off, Polyfin answers Moonfin's apps as a server without the companion. The apps hide what depends on it.
 - Playback, home rows, skip buttons and Watch together (SyncPlay in Jellyfin) go through the Jellyfin API: they work either way.
@@ -69,7 +69,7 @@ When an app asks for its settings, each takes the first value set, in this order
 
 ## The defaults
 
-The defaults are the settings Moonfin's apps take for what a user never set. They live under **Serve Moonfin's companion**, in **Settings › General**, as four profiles:
+The defaults are the settings Moonfin's apps take for what a user never set. They live under **Serve Moonfin's companion**, in **Settings › Moonfin**, as four profiles:
 
 | Profile | Applies to |
 |---|---|
@@ -80,7 +80,7 @@ Moonfin has many settings, so the defaults come from an account rather than from
 
 1. Set Moonfin up as you want it on one account.
 2. In **Moonfin's defaults**, open a profile and choose **Take from an account**. Pick the account and one of its synced profiles, then **Copy**.
-3. Adjust the JSON in the editor if needed, then **Save**.
+3. Adjust the JSON in the editor if needed, then **Save** in the bar at the bottom, which saves the edited profiles with the other changes of the section.
 
 - A setting left out of the defaults stays each user's choice.
 - A user's own API keys and hidden titles never go into the defaults.
@@ -118,7 +118,7 @@ The **Moonfin** section of a user's page, and **My account › Moonfin**, show w
 
 ## Server messages
 
-**Messages to Moonfin's apps**, under **Serve Moonfin's companion** in **Settings › General**, holds the notes you write to the users of Moonfin's apps: a maintenance, a change, news. The apps show them in their messages window, in the order of the list. **Write a message** opens the form, with a preview of the message as the apps show it:
+**Messages to Moonfin's apps**, under **Serve Moonfin's companion** in **Settings › Moonfin**, holds the notes you write to the users of Moonfin's apps: a maintenance, a change, news. The apps show them in their messages window, in the order of the list. **Write a message** opens the form, with a preview of the message as the apps show it:
 
 | Field | What it does |
 |---|---|

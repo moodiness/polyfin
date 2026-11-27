@@ -16,9 +16,9 @@ Playing a torrent means joining its swarm:
 |---|---|---|---|
 | **Play torrent streams** | **Settings › Torrents** | Off | Turns torrents on. It cannot be on without a route. |
 | **Route** | **Settings › Torrents** | **SOCKS5 proxy**, with no address | **Network interface**, **SOCKS5 proxy** or **WireGuard tunnel** (see [Routes](#routes)). |
-| **Download limit (Mbps, 0 = none)** | **Settings › Torrents** | 0 | Bounds the download, from 0 to 10000. |
-| **Upload limit (Mbps, 0 = no sharing)** | **Settings › Torrents** | 0 | Bounds the upload, from 0 to 10000. Sharing stops when the playback ends. |
-| **Torrents at once (0 = no limit)** | **Settings › Torrents** | 10 | Bounds the torrents running at once for the whole server, from 0 to 100 (see [Torrents at once](#torrents-at-once)). A server set up before Polyfin 0.84.0 keeps its value, 0 unless it was changed. |
+| **Download limit (Mbps)** | **Settings › Torrents** | 0, no limit | Bounds the download, from 0 to 10000. |
+| **Upload limit (Mbps)** | **Settings › Torrents** | 0, no sharing | Bounds the upload, from 0 to 10000. Sharing stops when the playback ends. |
+| **Torrents at once** | **Settings › Torrents** | 10 | Bounds the torrents running at once for the whole server, from 0, no limit, to 100 (see [Torrents at once](#torrents-at-once)). A server set up before Polyfin 0.84.0 keeps its value, 0 unless it was changed. |
 | **Trackers added to every torrent** | **Settings › Torrents** | Empty | Announce URLs asked for every torrent, one a line, 30 at most (see [Trackers](#trackers)). Polyfin comes with no list. |
 | **Can play torrent streams** | The **Access** section of the user's page under **Users**, next to **Can download** | Off | Offers this user torrent versions (see [Playing torrent streams](user-limits.md#playing-torrent-streams)). |
 
@@ -396,7 +396,7 @@ The time is the piece's at the swarm's speed. The playback shares that speed whi
 
 ## Torrents at once
 
-On a slow link, or a route that allows few connections, torrents running at once share the bandwidth and the peers. Each then starts more slowly. **Torrents at once (0 = no limit)**, under **Settings › Torrents**, bounds them for the whole server.
+On a slow link, or a route that allows few connections, torrents running at once share the bandwidth and the peers. Each then starts more slowly. **Torrents at once**, under **Settings › Torrents**, bounds them for the whole server.
 
 It also bounds the memory torrents take. Each torrent running holds its info dictionary, and the pieces it is downloading until they are whole and checked (see [Torrent peers and pieces](torrent-peers.md)). All torrents together share 256 MiB of such pieces, but each may always download one piece, so that no torrent keeps another from playing: past that share, the memory grows with the torrents running.
 

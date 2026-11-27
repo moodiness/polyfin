@@ -32,7 +32,7 @@ In the admin app, after a right password, the sign-in page asks for the code, or
 - The app's code changes every 30 seconds. Polyfin also accepts those of the 30 seconds before and after, for a phone clock a little off.
 - Each code is accepted once: entered again, even within its 30 seconds, it is refused.
 - Wrong codes count as wrong passwords toward the client's failed attempts (429 once too many). They also count toward the account's, whatever the client, with the same limit.
-- A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords (0 = never)**.
+- A right password between wrong codes does not reset them. They do not count toward **Block an account after this many wrong passwords**.
 - Each code counts toward the limit on arrival, before checking, as passwords, PINs and tokens do. Of codes sent at once, those past the limit are refused unchecked.
 - The key is encrypted when the server has a `POLYFIN_SECRET_KEY`, and stored as is otherwise, like other stored keys, and never shown again once set up (see [Stored keys and tokens](configuration.md#stored-keys-and-tokens)).
 
@@ -216,9 +216,9 @@ API details: [Identity provider sign-in](jellyfin-api.md#identity-provider-sign-
 | **Users may import their watch history from another server or app** | **Settings › Security** | On | Shows under **My account** the imports from a Jellyfin, Emby or Plex server, a Letterboxd export and an app (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history) and [Importing from an app](moving-to-polyfin.md#importing-from-an-app)). |
 | **Allow share links** | **Settings › Security** | Off | Lets users with **Can share titles** give a movie or episode to someone without an account, through an expiring link (see [Share links](invite-and-share-links.md#share-links)). Off, every link is refused but kept. |
 | **Import connected accounts every** | **Settings › Security** | 6 h (or 15 min, 30 min, 1 h, 2 h, 3 h, 12 h, 24 h) | How often apps users stay connected to, and watch histories from tracking services, are imported again (see [How often connected accounts are imported](moving-to-polyfin.md#how-often-connected-accounts-are-imported)). |
-| **Block an account after this many wrong passwords (0 = never)** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an address's sign-ins to an account for 15 minutes after that many wrong passwords in a row from it. |
+| **Block an account after this many wrong passwords** | **Settings › Security** | 0, never (or 3 to 20) | Blocks an address's sign-ins to an account for 15 minutes after that many wrong passwords in a row from it. |
 | **Require two-step sign-in for administrators** | **Settings › Security** | Off | Administrators must enter an authenticator app code after their password (see [Two-step sign-in](#two-step-sign-in)). |
-| **Sign out devices unused for (days, 0 = never)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps unused for that many days. |
+| **Sign out devices unused for (days)** | **Settings › Security** | 0, never (or 1 to 365 days) | Signs out Jellyfin apps unused for that many days. |
 | **Known proxies** | **Settings › Security** | None (up to 64 addresses, networks or host names) | Reverse proxies whose `X-Forwarded-For` or `X-Real-IP` header names their requests' client (see [Known proxies](reverse-proxy.md#known-proxies)). |
 | **Identity provider** | **Settings › Security** | None | An OpenID Connect provider for signing in to the admin app and web player (see [Signing in with an identity provider](#signing-in-with-an-identity-provider) and [Identity provider](#identity-provider-settings)). |
 | **Detailed log (to diagnose a problem)** | **Settings › Diagnostics** | Off | Logs at the `debug` level until turned off (see [Detailed log](configuration.md#detailed-log)). |

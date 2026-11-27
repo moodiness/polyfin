@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { fetchServerActions, queryKeys } from '@/api'
 import { ActionDialog } from '@/features/home/ServerActions'
 import { useI18n } from '@/i18n'
-import { Button } from '@/ui'
+import { Button, SettingHelp } from '@/ui'
 import { PlainRow } from './parts'
 
 /**
@@ -30,9 +30,7 @@ export default function SigningSecret() {
         <p id="signing-secret-title" className="text-h3 text-ink max-md:text-[1.125rem]">
           {s.signingSecret}
         </p>
-        <p id="signing-secret-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
-          {s.signingSecretHelp}
-        </p>
+        <SettingHelp id="signing-secret-help">{s.signingSecretHelp}</SettingHelp>
         <Button
           className="mt-3.5"
           icon={KeyIcon}

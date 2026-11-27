@@ -26,6 +26,11 @@ export type SettingEntry = {
   keywords?: readonly string[]
   /** Server error codes about this setting, shown under it. */
   codes?: readonly string[]
+  /**
+   * The setting a search result shows the value of: a switch's On or Off, a number, a text. Left
+   * out where the value needs its row to be read (a choice, a scaled number, a list, a secret).
+   */
+  setting?: keyof Settings
 }
 
 const s = (text: SettingsText) => text.settings
@@ -43,6 +48,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'server-name',
+    setting: 'serverName',
     label: (t) => s(t).serverName,
     help: (t, r) => s(t).serverNameHelp(r('serverName')),
     codes: ['invalid_server_name'],
@@ -64,12 +70,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'quick-connect',
+    setting: 'quickConnectEnabled',
     label: (t) => s(t).quickConnect,
     help: (t) => s(t).quickConnectHelp,
   },
   {
     section: 'general',
     anchor: 'legacy-authorization',
+    setting: 'legacyAuthorization',
     label: (t) => s(t).legacyAuthorization,
     help: (t) => `${s(t).legacyAuthorizationHelp} ${s(t).legacyWarning}`,
     keywords: ['X-Emby', 'api_key'],
@@ -77,26 +85,28 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'silo-apps',
+    setting: 'siloApps',
     label: (t) => s(t).siloApps,
     help: (t) => s(t).siloAppsHelp,
     keywords: ['Silo', '/api/v2'],
   },
   {
-    section: 'general',
+    section: 'moonfin',
     anchor: 'moonfin',
+    setting: 'moonfin',
     label: (t) => s(t).moonfin,
     help: (t) => s(t).moonfinHelp,
     keywords: ['Moonfin', 'Moonbase', 'MDBList', 'TMDB', 'sync', 'synchronisation'],
   },
   {
-    section: 'general',
+    section: 'moonfin',
     anchor: 'moonfin-defaults',
     label: (t) => s(t).moonfinDefaults.title,
     help: (t) => s(t).moonfinDefaults.help,
     keywords: ['Moonfin', 'JSON', 'defaults', 'profile', 'TV', 'desktop', 'mobile'],
   },
   {
-    section: 'general',
+    section: 'moonfin',
     anchor: 'moonfin-messages',
     label: (t) => s(t).moonfinMessages.title,
     help: (t) => s(t).moonfinMessages.help,
@@ -105,6 +115,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'update-check',
+    setting: 'updateCheck',
     label: (t) => s(t).updateCheck,
     help: (t) => s(t).updateCheckHelp,
     keywords: ['GitHub', 'update', 'release', 'mise à jour'],
@@ -112,6 +123,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'include-prereleases',
+    setting: 'includePrereleases',
     label: (t) => s(t).includePrereleases,
     help: (t) => s(t).includePrereleasesHelp,
     keywords: ['pre-release', 'prerelease', 'beta', 'rc', 'préversion', 'Polyfin Desktop'],
@@ -119,6 +131,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'local-discovery',
+    setting: 'localDiscovery',
     label: (t) => s(t).localDiscovery,
     help: (t) => s(t).localDiscoveryHelp,
     keywords: ['discovery', 'découverte', 'UDP', '7359', 'broadcast', 'auto discovery'],
@@ -126,6 +139,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'local-address',
+    setting: 'localAddress',
     label: (t) => s(t).localAddress,
     help: (t) => s(t).localAddressHelp,
     keywords: ['PublishedServerUrl', 'LocalAddress', 'Docker', 'IP', 'URL'],
@@ -134,6 +148,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'metrics',
+    setting: 'metrics',
     label: (t) => s(t).metrics,
     help: (t) => s(t).metricsHelp,
     keywords: [
@@ -156,6 +171,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'restart-confirmed',
+    setting: 'restartConfirmed',
     label: (t) => s(t).restartConfirmed,
     help: (t) => s(t).restartConfirmedHelp,
     keywords: ['restart', 'redémarrer', 'Docker', 'restart policy', 'unless-stopped', 'systemd'],
@@ -163,6 +179,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'general',
     anchor: 'update-tool-url',
+    setting: 'updateToolUrl',
     label: (t) => s(t).updateToolUrl,
     help: (t) => s(t).updateToolUrlHelp,
     keywords: ['update', 'mise à jour', 'Docker', 'image', 'API'],
@@ -188,12 +205,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'prepare-ahead',
+    setting: 'prepareAhead',
     label: (t) => s(t).prepareAhead,
     help: (t) => s(t).prepareAheadHelp,
   },
   {
     section: 'playback',
     anchor: 'prefer-direct-play',
+    setting: 'preferDirectPlay',
     label: (t) => s(t).preferDirectPlay,
     help: (t) => s(t).preferDirectPlayHelp,
   },
@@ -228,6 +247,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'name-how-versions-play',
+    setting: 'nameHowVersionsPlay',
     label: (t) => s(t).nameHowVersionsPlay,
     help: (t) => s(t).nameHowVersionsPlayHelp,
     keywords: ['direct play', 'lecture directe', 'transcoding'],
@@ -235,6 +255,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'sync-addon-subtitles',
+    setting: 'syncAddonSubtitles',
     label: (t) => s(t).syncAddonSubtitles,
     help: (t) => s(t).syncAddonSubtitlesHelp,
     keywords: ['subtitles', 'sous-titres', 'sync', 'recaler'],
@@ -242,6 +263,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'analysis-timeout',
+    setting: 'analysisTimeout',
     label: (t) => s(t).analysisTimeout,
     help: (t, r) => s(t).analysisTimeoutHelp(r('analysisTimeout')),
     codes: ['invalid_analysis_timeout'],
@@ -249,6 +271,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'version-attempts',
+    setting: 'versionAttempts',
     label: (t) => s(t).versionAttempts,
     help: (t, r) => s(t).versionAttemptsHelp(r('versionAttempts')),
     codes: ['invalid_version_attempts'],
@@ -264,6 +287,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'cache-size',
+    setting: 'cacheSizeGb',
     label: (t) => s(t).cacheSize,
     help: (t, r) => s(t).cacheSizeHelp(r('cacheSizeGb')),
     keywords: ['cache', 'POLYFIN_CACHE_SIZE'],
@@ -272,6 +296,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'source-cache-days',
+    setting: 'sourceCacheDays',
     label: (t) => s(t).sourceCacheDays,
     help: (t, r) => s(t).sourceCacheDaysHelp(r('sourceCacheDays')),
     keywords: ['cache', 'restart', 'retention'],
@@ -279,6 +304,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'source-cache-credit',
+    setting: 'sourceCacheCreditDays',
     label: (t) => s(t).sourceCacheCreditDays,
     help: (t, r) => s(t).sourceCacheCreditDaysHelp(r('sourceCacheCreditDays')),
     keywords: ['cache', 'retention'],
@@ -294,6 +320,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'preload-next-episodes',
+    setting: 'preloadNextEpisodes',
     label: (t) => s(t).preloadNextEpisodes,
     help: (t) => s(t).preloadNextEpisodesHelp,
     keywords: ['cache', 'preload', 'next up', 'episodes'],
@@ -302,6 +329,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'preload-episodes',
+    setting: 'preloadEpisodes',
     label: (t) => s(t).preloadEpisodes,
     help: (t, r) => s(t).preloadEpisodesHelp(r('preloadEpisodes')),
     keywords: ['preload', 'episodes'],
@@ -309,6 +337,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'preload-mbps',
+    setting: 'preloadMbps',
     label: (t) => s(t).preloadMbps,
     help: (t, r) => s(t).preloadMbpsHelp(r('preloadMbps')),
     keywords: ['preload', 'bandwidth', 'speed'],
@@ -316,6 +345,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'preload-reserve',
+    setting: 'preloadReserveGb',
     label: (t) => s(t).preloadReserveGb,
     help: (t, r) => s(t).preloadReserveGbHelp(r('preloadReserveGb')),
     keywords: ['preload', 'disk', 'free space'],
@@ -323,6 +353,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'preload-whole-files',
+    setting: 'preloadWholeFiles',
     label: (t) => s(t).preloadWholeFiles,
     help: (t) => s(t).preloadWholeFilesHelp,
     keywords: ['preload', 'cache'],
@@ -330,18 +361,20 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'remuxdb',
+    setting: 'remuxDb',
     label: (t) => s(t).remuxDb,
     help: (t) => s(t).remuxDbHelp,
   },
   {
     section: 'playback',
     anchor: 'remuxdb-url',
+    setting: 'remuxDbUrl',
     label: (t) => s(t).remuxDbUrl,
     help: (t) => s(t).remuxDbUrlHelp,
     codes: ['invalid_remuxdb_url'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-order',
     label: (t) => s(t).versionOrder.label,
     help: (t) => s(t).versionOrder.help,
@@ -358,7 +391,7 @@ export const settingEntries: readonly SettingEntry[] = [
     codes: ['invalid_version_order'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-codec-order',
     label: (t) => s(t).versionCodecOrder.label,
     help: (t) => s(t).versionCodecOrder.help,
@@ -366,7 +399,7 @@ export const settingEntries: readonly SettingEntry[] = [
     codes: ['invalid_version_codec_order'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-source-order',
     label: (t) => s(t).versionSourceOrder.label,
     help: (t) => s(t).versionSourceOrder.help,
@@ -374,7 +407,7 @@ export const settingEntries: readonly SettingEntry[] = [
     codes: ['invalid_version_source_order'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-edition-order',
     label: (t) => s(t).versionEditionOrder.label,
     help: (t) => s(t).versionEditionOrder.help,
@@ -382,36 +415,38 @@ export const settingEntries: readonly SettingEntry[] = [
     codes: ['invalid_version_edition_order'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-mb-per-minute',
+    setting: 'versionMbPerMinute',
     label: (t) => s(t).versionMbPerMinute,
     help: (t, r) => s(t).versionMbPerMinuteHelp(r('versionMbPerMinute')),
     keywords: ['bitrate', 'size', 'taille'],
     codes: ['invalid_version_mb_per_minute'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'hide-versions-larger',
+    setting: 'hideVersionsLargerGb',
     label: (t) => s(t).hideVersionsLarger,
     help: (t, r) => s(t).hideVersionsLargerHelp(r('hideVersionsLargerGb')),
     codes: ['invalid_hide_versions_larger'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'hidden-version-codecs',
     label: (t) => s(t).hiddenVersionCodecs,
     help: (t) => s(t).hiddenVersionCodecsHelp,
     codes: ['invalid_hidden_version_codecs'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'hidden-version-words',
     label: (t) => s(t).hiddenVersionWords,
     help: (t, r) => s(t).hiddenVersionWordsHelp(r('hiddenVersionWords')),
     codes: ['invalid_hidden_version_words'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'hidden-releases',
     label: (t) => s(t).hiddenReleases,
     help: (t) => s(t).hiddenReleasesHelp,
@@ -419,7 +454,7 @@ export const settingEntries: readonly SettingEntry[] = [
     codes: ['invalid_hidden_releases'],
   },
   {
-    section: 'playback',
+    section: 'versions',
     anchor: 'version-label-rules',
     label: (t) => s(t).versionLabelRules.label,
     help: (t, r) => s(t).versionLabelRules.help(r('versionLabelRules').max),
@@ -429,6 +464,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'playback-history',
+    setting: 'playbackHistory',
     label: (t) => s(t).playbackHistory,
     help: (t) => s(t).playbackHistoryHelp,
     keywords: ['statistics', 'statistiques'],
@@ -436,6 +472,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'playback',
     anchor: 'playback-history-days',
+    setting: 'playbackHistoryDays',
     label: (t) => s(t).playbackHistoryDays,
     help: (t, r) => s(t).playbackHistoryDaysHelp(r('playbackHistoryDays')),
     codes: ['invalid_playback_history_days'],
@@ -459,12 +496,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'transcoding',
+    setting: 'transcoding',
     label: (t) => s(t).transcoding,
     help: (t) => s(t).transcodingHelp,
   },
   {
     section: 'conversion',
     anchor: 'max-conversions',
+    setting: 'maxConversions',
     label: (t) => s(t).maxConversions,
     help: (t, r) => s(t).maxConversionsHelp(r('maxConversions')),
     codes: ['invalid_max_conversions'],
@@ -479,6 +518,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'converted-downloads',
+    setting: 'convertedDownloads',
     label: (t) => s(t).convertedDownloads,
     help: (t) => s(t).convertedDownloadsHelp,
     keywords: ['download', 'offline', 'Streamyfin'],
@@ -502,6 +542,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'subtitle-ocr-tracks',
+    setting: 'subtitleOcrTracks',
     label: (t) => c(t).subtitleOcrTracks,
     help: (t, r) => c(t).subtitleOcrTracksHelp(r('subtitleOcrTracks')),
     keywords: ['OCR', 'Tesseract'],
@@ -510,6 +551,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'subtitle-ocr-download',
+    setting: 'subtitleOcrDownload',
     label: (t) => c(t).subtitleOcrDownload,
     help: (t) => c(t).subtitleOcrDownloadHelp,
     keywords: ['OCR', 'Tesseract', 'traineddata', 'tessdata', 'download', 'télécharger'],
@@ -573,6 +615,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'allow-hevc-encoding',
+    setting: 'allowHevcEncoding',
     label: (t) => c(t).allowHevcEncoding,
     help: (t) => c(t).allowHevcEncodingHelp,
     keywords: ['h265'],
@@ -588,6 +631,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'tone-mapping',
+    setting: 'toneMapping',
     label: (t) => c(t).toneMapping,
     help: (t) => c(t).toneMappingHelp,
     keywords: ['hdr', 'sdr'],
@@ -602,6 +646,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'gpu-tone-mapping',
+    setting: 'gpuToneMapping',
     label: (t) => c(t).gpuToneMappingSetting,
     help: (t) => c(t).gpuToneMappingSettingHelp,
     keywords: ['hdr', 'sdr', 'gpu', 'nvidia', 'intel', 'vaapi', 'qsv', 'videotoolbox'],
@@ -632,6 +677,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'deinterlace-double-rate',
+    setting: 'deinterlaceDoubleRate',
     label: (t) => c(t).deinterlaceDoubleRate,
     help: (t) => c(t).deinterlaceDoubleRateHelp,
   },
@@ -646,6 +692,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'downmix-boost',
+    setting: 'downmixBoost',
     label: (t) => c(t).downmixBoost,
     help: (t, r) => c(t).downmixBoostHelp(r('downmixBoost')),
     codes: ['invalid_downmix_boost'],
@@ -653,6 +700,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'normalize-converted-audio',
+    setting: 'normalizeConvertedAudio',
     label: (t) => c(t).normalizeConvertedAudio,
     help: (t) => c(t).normalizeConvertedAudioHelp,
     keywords: ['loudness', 'loudnorm', 'volume', 'quiet'],
@@ -675,6 +723,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'audio-bitrate-per-channel',
+    setting: 'audioBitratePerChannel',
     label: (t) => c(t).audioBitratePerChannel,
     help: (t, r) => c(t).audioBitratePerChannelHelp(r('audioBitratePerChannel')),
     codes: ['invalid_audio_bitrate_per_channel'],
@@ -682,6 +731,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'encoding-threads',
+    setting: 'encodingThreads',
     label: (t) => c(t).encodingThreads,
     help: (t, r) => c(t).encodingThreadsHelp(r('encodingThreads')),
     codes: ['invalid_encoding_threads'],
@@ -689,6 +739,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'ahead-seconds',
+    setting: 'aheadSeconds',
     label: (t) => c(t).aheadSeconds,
     help: (t, r) => c(t).aheadSecondsHelp(r('aheadSeconds')),
     keywords: ['throttle'],
@@ -697,6 +748,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'keep-converted-video',
+    setting: 'keepConvertedVideo',
     label: (t) => c(t).keepConvertedVideo,
     help: (t) => c(t).keepConvertedVideoHelp,
     keywords: ['audio track', 'language'],
@@ -704,6 +756,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'conversion',
     anchor: 'fast-start',
+    setting: 'fastStart',
     label: (t) => c(t).fastStart,
     help: (t) => c(t).fastStartHelp,
     keywords: ['keyframe', 'first picture', 'remote', 'torrent'],
@@ -712,6 +765,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'skip-buttons',
+    setting: 'skipButtons',
     label: (t) => s(t).skipButtons,
     help: (t) => s(t).skipButtonsHelp,
   },
@@ -742,6 +796,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'audio-intros',
+    setting: 'audioIntros',
     label: (t) => s(t).audioIntros,
     help: (t) => s(t).audioIntrosHelp,
     keywords: ['intro', 'credits', 'audio', 'fingerprint', 'local'],
@@ -749,12 +804,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'similar-titles',
+    setting: 'similarTitles',
     label: (t) => s(t).similarTitles,
     help: (t) => s(t).similarTitlesHelp,
   },
   {
     section: 'content',
     anchor: 'generate-images',
+    setting: 'generateImages',
     label: (t) => s(t).generateImages,
     help: (t) => s(t).generateImagesHelp,
     keywords: ['poster', 'collection', 'smart list', 'mosaic', 'image'],
@@ -779,6 +836,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'wait-digital-release',
+    setting: 'waitDigitalRelease',
     label: (t) => s(t).waitDigitalRelease,
     help: (t) => s(t).waitDigitalReleaseHelp,
     keywords: [
@@ -810,6 +868,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'poster-badges',
+    setting: 'posterBadges',
     label: (t) => s(t).posterBadges,
     help: (t) => s(t).posterBadgesHelp,
     keywords: ['badges', 'posters', 'ratings', 'IMDb', 'new episode', 'new season', 'Primary'],
@@ -832,6 +891,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'poster-template',
+    setting: 'posterTemplate',
     label: (t) => s(t).posterTemplate,
     help: (t) => s(t).posterTemplateHelp,
     keywords: ['posters', 'template', 'IMDb', 'TMDB', 'address'],
@@ -840,6 +900,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'lyrics',
+    setting: 'lyrics',
     label: (t) => s(t).lyrics,
     help: (t) => s(t).lyricsHelp,
     keywords: ['LRCLIB', 'lyrics', 'music', 'songs'],
@@ -847,6 +908,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'even-volume',
+    setting: 'evenVolume',
     label: (t) => s(t).evenVolume,
     help: (t) => s(t).evenVolumeHelp,
     keywords: ['ReplayGain', 'NormalizationGain', 'volume', 'loudness', 'music', 'songs'],
@@ -862,6 +924,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'played-percent',
+    setting: 'playedPercent',
     label: (t) => s(t).playedPercent,
     help: (t, r) => s(t).playedPercentHelp(r('playedPercent')),
     codes: ['invalid_played_percent'],
@@ -869,6 +932,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'content',
     anchor: 'resume-percent',
+    setting: 'resumePercent',
     label: (t) => s(t).resumePercent,
     help: (t, r) => s(t).resumePercentHelp(r('resumePercent')),
     codes: ['invalid_resume_percent', 'resume_not_below_played'],
@@ -877,6 +941,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'catalog-limit',
+    setting: 'catalogLimit',
     label: (t) => s(t).catalogLimit,
     help: (t, r) => s(t).catalogLimitHelp(r('catalogLimit')),
     codes: ['invalid_catalog_limit'],
@@ -884,6 +949,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'channel-limit',
+    setting: 'channelLimit',
     label: (t) => s(t).channelLimit,
     help: (t, r) => s(t).channelLimitHelp(r('channelLimit')),
     codes: ['invalid_channel_limit'],
@@ -891,6 +957,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'version-list-minutes',
+    setting: 'versionListMinutes',
     label: (t) => s(t).versionListMinutes,
     help: (t, r) => s(t).versionListMinutesHelp(r('versionListMinutes')),
     codes: ['invalid_version_list_minutes'],
@@ -898,6 +965,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'catalog-refresh-minutes',
+    setting: 'catalogRefreshMinutes',
     label: (t) => s(t).catalogRefreshMinutes,
     help: (t, r) => s(t).catalogRefreshMinutesHelp(r('catalogRefreshMinutes')),
     codes: ['invalid_catalog_refresh_minutes'],
@@ -913,6 +981,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'watchlist-check-hours',
+    setting: 'watchlistCheckHours',
     label: (t) => s(t).watchlistCheckHours,
     help: (t, r) => s(t).watchlistCheckHoursHelp(r('watchlistCheckHours')),
     keywords: ['watchlist', 'available', 'versions', 'streams'],
@@ -921,6 +990,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'local-scan-hours',
+    setting: 'localScanHours',
     label: (t) => s(t).localScanHours,
     help: (t, r) => s(t).localScanHoursHelp(r('localScanHours')),
     keywords: ['folder', 'scan'],
@@ -929,6 +999,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'catalogs',
     anchor: 'watch-local-folders',
+    setting: 'watchLocalFolders',
     label: (t) => s(t).watchLocalFolders,
     help: (t) => `${anyServer(s(t).watchLocalFoldersHelp)} ${s(t).watchSharesHelp}`,
     keywords: ['folder', 'scan', 'inotify', 'share', 'SMB', 'WebDAV', 'S3', 'SFTP', 'rclone'],
@@ -937,6 +1008,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'thumbnails',
     anchor: 'trickplay',
+    setting: 'trickplay',
     label: (t) => s(t).trickplay,
     help: (t) => `${s(t).trickplayHelp} ${s(t).thumbnailsHelp}`,
     keywords: ['trickplay'],
@@ -944,6 +1016,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'thumbnails',
     anchor: 'trickplay-interval',
+    setting: 'trickplayInterval',
     label: (t) => s(t).trickplayInterval,
     help: (t, r) => s(t).trickplayIntervalHelp(r('trickplayInterval')),
     codes: ['invalid_trickplay_interval'],
@@ -958,12 +1031,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'thumbnails',
     anchor: 'chapter-images',
+    setting: 'chapterImages',
     label: (t) => s(t).chapterImages,
     help: (t) => s(t).chapterImagesHelp,
   },
   {
     section: 'thumbnails',
     anchor: 'thumbnail-storage',
+    setting: 'thumbnailStorageGB',
     label: (t) => s(t).thumbnailStorage,
     help: (t, r) => s(t).thumbnailStorageHelp(r('thumbnailStorageGB')),
     codes: ['invalid_thumbnail_storage_gb'],
@@ -972,12 +1047,14 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'personal-addons',
+    setting: 'personalAddons',
     label: (t) => s(t).personalAddons,
     help: (t) => s(t).personalAddonsHelp,
   },
   {
     section: 'security',
     anchor: 'server-imports',
+    setting: 'serverImports',
     label: (t) => s(t).serverImports,
     help: (t) => s(t).serverImportsHelp,
   },
@@ -991,6 +1068,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'share-links',
+    setting: 'shareLinks',
     label: (t) => s(t).shareLinks,
     help: (t) => s(t).shareLinksHelp,
     keywords: ['share', 'guest', 'link'],
@@ -998,6 +1076,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'login-attempts',
+    setting: 'loginAttempts',
     label: (t) => s(t).loginAttempts,
     help: (t, r) => s(t).loginAttemptsHelp(r('loginAttempts')),
     codes: ['invalid_login_attempts'],
@@ -1005,6 +1084,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'two-step-administrators',
+    setting: 'twoStepAdministrators',
     label: (t) => s(t).twoStepAdministrators,
     help: (t) => s(t).twoStepAdministratorsHelp,
     keywords: ['2FA', 'MFA', 'TOTP', 'authenticator', 'two-factor', 'authentification'],
@@ -1012,6 +1092,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'inactive-device-days',
+    setting: 'inactiveDeviceDays',
     label: (t) => s(t).inactiveDeviceDays,
     help: (t, r) => s(t).inactiveDeviceDaysHelp(r('inactiveDeviceDays')),
     codes: ['invalid_inactive_device_days'],
@@ -1053,6 +1134,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-issuer',
+    setting: 'providerIssuer',
     label: (t) => p(t).issuer,
     help: (t) => p(t).issuerHelp,
     keywords: ['OpenID Connect', 'OIDC', 'SSO', 'issuer', 'discovery'],
@@ -1061,6 +1143,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-name',
+    setting: 'providerName',
     label: (t) => p(t).name,
     help: (t) => p(t).nameHelp,
     keywords: ['OpenID Connect', 'SSO'],
@@ -1068,6 +1151,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-client-id',
+    setting: 'providerClientId',
     label: (t) => p(t).clientId,
     help: (t) => p(t).clientIdHelp,
     keywords: ['OpenID Connect', 'OIDC', 'client_id'],
@@ -1082,6 +1166,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-user-claim',
+    setting: 'providerUserClaim',
     label: (t) => p(t).userClaim,
     help: (t) => p(t).userClaimHelp,
     keywords: ['preferred_username', 'email', 'claim'],
@@ -1089,6 +1174,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-create-accounts',
+    setting: 'providerCreateAccounts',
     label: (t) => p(t).createAccounts,
     help: (t) => p(t).createAccountsHelp,
     keywords: ['OpenID Connect', 'SSO', 'accounts', 'comptes'],
@@ -1096,6 +1182,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-admin-claim',
+    setting: 'providerAdminClaim',
     label: (t) => p(t).adminClaim,
     help: (t) => p(t).adminClaimHelp,
     keywords: ['groups', 'roles', 'administrator'],
@@ -1103,6 +1190,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'provider-admin-value',
+    setting: 'providerAdminValue',
     label: (t) => p(t).adminValue,
     help: (t) => p(t).adminValueHelp,
     keywords: ['groups', 'roles', 'administrator'],
@@ -1118,6 +1206,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'https-port',
+    setting: 'httpsPort',
     label: (t) => h(t).port,
     help: (t, r) => h(t).portHelp(r('httpsPort')),
     keywords: ['HTTPS', '8920', '443'],
@@ -1126,6 +1215,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'https-redirect',
+    setting: 'httpsRedirect',
     label: (t) => h(t).redirect,
     help: (t) => h(t).redirectHelp,
     keywords: ['HTTPS', '308', 'redirect', 'redirection'],
@@ -1133,6 +1223,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'https-certificate',
+    setting: 'httpsCertificate',
     label: (t) => h(t).certificate,
     help: (t) => h(t).certificateHelp,
     keywords: ['HTTPS', 'PEM', 'fullchain.pem', 'certificat'],
@@ -1146,6 +1237,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'https-private-key',
+    setting: 'httpsPrivateKey',
     label: (t) => h(t).privateKey,
     help: (t) => h(t).privateKeyHelp,
     keywords: ['HTTPS', 'PEM', 'privkey.pem', 'RSA', 'ECDSA'],
@@ -1166,6 +1258,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'acme-email',
+    setting: 'acmeEmail',
     label: (t) => h(t).email,
     help: (t) => h(t).emailHelp,
     keywords: ['Let’s Encrypt', 'ACME'],
@@ -1174,6 +1267,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'security',
     anchor: 'acme-terms',
+    setting: 'acmeTerms',
     label: (t) => h(t).terms,
     help: (t) => h(t).termsHelp,
     keywords: ['Let’s Encrypt', 'ACME'],
@@ -1191,6 +1285,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'tracking',
     anchor: 'trakt-client-id',
+    setting: 'traktClientId',
     label: (t) => tr(t).traktClientId,
     help: (t) =>
       `${tr(t).traktClientIdHelp} ${tr(t).traktSetup} ${tr(t).redirectUri} ${tr(t).traktOlderApps}`,
@@ -1207,6 +1302,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'tracking',
     anchor: 'simkl-client-id',
+    setting: 'simklClientId',
     label: (t) => tr(t).simklClientId,
     help: (t) => `${tr(t).simklClientIdHelp} ${tr(t).simklSetup}`,
     keywords: ['Simkl'],
@@ -1215,6 +1311,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'tracking',
     anchor: 'anilist-client-id',
+    setting: 'aniListClientId',
     label: (t) => tr(t).aniListClientId,
     help: (t) => `${tr(t).aniListClientIdHelp} ${tr(t).aniListSetup} ${tr(t).redirectUri}`,
     keywords: ['AniList', 'anime'],
@@ -1230,6 +1327,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'tracking',
     anchor: 'myanimelist-client-id',
+    setting: 'myAnimeListClientId',
     label: (t) => tr(t).myAnimeListClientId,
     help: (t) => `${tr(t).myAnimeListClientIdHelp} ${tr(t).myAnimeListSetup} ${tr(t).redirectUri}`,
     keywords: ['MyAnimeList', 'MAL', 'anime'],
@@ -1245,6 +1343,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'tracking',
     anchor: 'lastfm-api-key',
+    setting: 'lastFmApiKey',
     label: (t) => tr(t).lastFmApiKey,
     help: (t) => `${tr(t).lastFmApiKeyHelp} ${tr(t).lastFmSetup}`,
     keywords: ['Last.fm', 'scrobble'],
@@ -1261,6 +1360,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'live-tv',
     anchor: 'live-tv-refresh-hours',
+    setting: 'liveTvRefreshHours',
     label: (t) => s(t).liveTvRefreshHours,
     help: (t, r) => s(t).liveTvRefreshHoursHelp(r('liveTvRefreshHours')),
     keywords: ['iptv', 'xmltv', 'epg'],
@@ -1269,6 +1369,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'live-tv',
     anchor: 'live-tv-buffer-minutes',
+    setting: 'liveTvBufferMinutes',
     label: (t) => s(t).liveTvBufferMinutes,
     help: (t, r) => s(t).liveTvBufferMinutesHelp(r('liveTvBufferMinutes')),
     keywords: ['pause', 'rewind', 'timeshift', 'buffer'],
@@ -1277,6 +1378,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'live-tv',
     anchor: 'live-tv-buffer-gigabytes',
+    setting: 'liveTvBufferGigabytes',
     label: (t) => s(t).liveTvBufferGigabytes,
     help: (t, r) => s(t).liveTvBufferGigabytesHelp(r('liveTvBufferGigabytes')),
     keywords: ['pause', 'rewind', 'timeshift', 'buffer', 'disk'],
@@ -1286,6 +1388,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'recording',
+    setting: 'recording',
     label: (t) => s(t).recording,
     help: (t) => s(t).recordingHelp,
     keywords: ['dvr', 'POLYFIN_RECORDINGS_DIR'],
@@ -1293,6 +1396,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'recordings-folder',
+    setting: 'recordingsFolder',
     label: (t) => s(t).recordingsFolderLabel,
     help: (t) => anyServer(s(t).recordingsFolderHelp),
     keywords: ['POLYFIN_RECORDINGS_DIR'],
@@ -1315,6 +1419,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'recording-retention-days',
+    setting: 'recordingRetentionDays',
     label: (t) => s(t).recordingRetentionDays,
     help: (t, r) => s(t).recordingRetentionDaysHelp(r('recordingRetentionDays')),
     codes: ['invalid_recording_retention_days'],
@@ -1322,6 +1427,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'recording-commercials',
+    setting: 'recordingCommercials',
     label: (t) => s(t).recordingCommercials,
     help: (t) => s(t).recordingCommercialsHelp,
     keywords: ['commercials', 'adverts', 'ads', 'skip', 'segments'],
@@ -1329,6 +1435,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'convert-recordings',
+    setting: 'convertRecordings',
     label: (t) => s(t).convertRecordings,
     help: (t) => s(t).convertRecordingsHelp,
     keywords: ['HEVC', 'H.265', 'x265'],
@@ -1347,6 +1454,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'recordings',
     anchor: 'convert-recordings-on-processor',
+    setting: 'convertRecordingsOnProcessor',
     label: (t) => s(t).convertRecordingsOnProcessor,
     help: (t) => s(t).convertRecordingsOnProcessorHelp,
     keywords: ['CPU', 'x265'],
@@ -1355,6 +1463,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-streams',
+    setting: 'torrentStreams',
     label: (t) => s(t).torrents.play,
     help: (t) => s(t).torrents.playHelp,
     keywords: ['torrent', 'magnet', 'BitTorrent', 'P2P'],
@@ -1370,6 +1479,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-interface',
+    setting: 'torrentInterface',
     label: (t) => s(t).torrents.interface,
     help: (t) => s(t).torrents.interfaceHelp,
     keywords: ['torrent', 'VPN', 'WireGuard', 'wg0', 'SO_BINDTODEVICE'],
@@ -1377,6 +1487,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-proxy',
+    setting: 'torrentProxy',
     label: (t) => s(t).torrents.proxy,
     help: (t) => s(t).torrents.proxyHelp,
     keywords: ['torrent', 'VPN', 'SOCKS5', 'proxy'],
@@ -1384,6 +1495,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-proxy-user',
+    setting: 'torrentProxyUser',
     label: (t) => s(t).torrents.proxyUser,
     help: (t) => s(t).torrents.proxyUserHelp,
     keywords: ['torrent', 'SOCKS5'],
@@ -1406,6 +1518,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-download-limit',
+    setting: 'torrentDownloadMbps',
     label: (t) => s(t).torrents.downloadLimit,
     help: (t, r) => s(t).torrents.downloadLimitHelp(r('torrentDownloadMbps')),
     keywords: ['torrent', 'Mbps', 'Mbit/s'],
@@ -1414,6 +1527,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrent-upload-limit',
+    setting: 'torrentUploadMbps',
     label: (t) => s(t).torrents.uploadLimit,
     help: (t, r) => s(t).torrents.uploadLimitHelp(r('torrentUploadMbps')),
     keywords: ['torrent', 'seed', 'share', 'partage'],
@@ -1422,6 +1536,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'torrents',
     anchor: 'torrents-at-once',
+    setting: 'torrentsAtOnce',
     label: (t) => s(t).torrents.atOnce,
     help: (t, r) => s(t).torrents.atOnceHelp(r('torrentsAtOnce')),
     keywords: ['torrent', 'cap', 'limit', 'swarm'],
@@ -1439,6 +1554,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'dlna',
     anchor: 'dlna',
+    setting: 'dlna',
     label: (t) => s(t).dlna.share,
     help: (t) => s(t).dlna.shareHelp,
     keywords: ['DLNA', 'UPnP', 'SSDP', '1900', 'TV', 'télé', 'POLYFIN_DLNA_PORT'],
@@ -1446,6 +1562,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'dlna',
     anchor: 'dlna-name',
+    setting: 'dlnaName',
     label: (t) => s(t).dlna.name,
     help: (t) => s(t).dlna.nameHelp,
     keywords: ['DLNA', 'UPnP', 'friendlyName'],
@@ -1462,6 +1579,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'dlna',
     anchor: 'dlna-mark-played',
+    setting: 'dlnaMarkPlayed',
     label: (t) => s(t).dlna.markPlayed,
     help: (t) => s(t).dlna.markPlayedHelp,
     keywords: ['DLNA', 'played', 'vu'],
@@ -1484,6 +1602,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'backups',
     anchor: 'backups',
+    setting: 'backups',
     label: (t) => s(t).backups,
     help: (t) => s(t).backupsHelp,
     keywords: ['POLYFIN_BACKUP_DIR'],
@@ -1491,6 +1610,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'backups',
     anchor: 'backup-folder',
+    setting: 'backupFolder',
     label: (t) => s(t).backupFolderLabel,
     help: (t) => anyServer(s(t).backupFolderHelp),
     keywords: ['POLYFIN_BACKUP_DIR'],
@@ -1499,6 +1619,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'backups',
     anchor: 'backups-kept',
+    setting: 'backupsKept',
     label: (t) => s(t).backupsKept,
     help: (t, r) => s(t).backupsKeptHelp(r('backupsKept')),
     codes: ['invalid_backups_kept'],
@@ -1528,6 +1649,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'public-address',
+    setting: 'publicAddress',
     label: (t) => s(t).publicAddress,
     help: (t) => s(t).publicAddressHelp,
     keywords: ['webhook', 'Discord', 'ntfy', 'URL'],
@@ -1552,6 +1674,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'smtp-host',
+    setting: 'smtpHost',
     label: (t) => s(t).smtpHost,
     help: (t) => s(t).smtpHostHelp,
     keywords: ['email', 'SMTP'],
@@ -1560,6 +1683,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'smtp-port',
+    setting: 'smtpPort',
     label: (t) => s(t).smtpPort,
     help: (t) => s(t).smtpPortHelp,
     keywords: ['email'],
@@ -1576,6 +1700,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'smtp-user',
+    setting: 'smtpUser',
     label: (t) => s(t).smtpUser,
     help: (t) => s(t).smtpUserHelp,
     keywords: ['email'],
@@ -1591,6 +1716,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'smtp-from',
+    setting: 'smtpFrom',
     label: (t) => s(t).smtpFrom,
     help: (t) => s(t).smtpFromHelp,
     keywords: ['email', 'SMTP'],
@@ -1599,6 +1725,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'notifications',
     anchor: 'smtp-from-name',
+    setting: 'smtpFromName',
     label: (t) => s(t).smtpFromName,
     help: (t) => s(t).smtpFromNameHelp,
     keywords: ['email', 'SMTP'],
@@ -1653,6 +1780,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'web-player',
     anchor: 'add-versions-to-open-page',
+    setting: 'addVersionsToOpenPage',
     label: (t) => s(t).addVersionsToOpenPage,
     help: (t) => s(t).addVersionsToOpenPageHelp,
     keywords: ['versions', 'jellyfin-web'],
@@ -1660,6 +1788,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'web-player',
     anchor: 'version-badges',
+    setting: 'versionBadges',
     label: (t) => s(t).versionBadges,
     help: (t) => s(t).versionBadgesHelp,
     keywords: ['badges', 'HDR', 'Dolby Vision', 'Atmos', 'jellyfin-web'],
@@ -1667,6 +1796,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'web-player',
     anchor: 'poster-ratings',
+    setting: 'posterRatings',
     label: (t) => s(t).posterRatings,
     help: (t) => s(t).posterRatingsHelp,
     keywords: ['ratings', 'posters', 'cards', 'jellyfin-web'],
@@ -1682,6 +1812,7 @@ export const settingEntries: readonly SettingEntry[] = [
   {
     section: 'diagnostics',
     anchor: 'detailed-log',
+    setting: 'detailedLog',
     label: (t) => s(t).detailedLog,
     help: (t) => s(t).detailedLogHelp,
     keywords: ['debug', 'POLYFIN_LOG_LEVEL'],

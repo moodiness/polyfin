@@ -1,5 +1,4 @@
 import { PlusIcon, XIcon } from '@phosphor-icons/react'
-import { useId } from 'react'
 import type { VersionLabelRule } from '@/api'
 import { useI18n } from '@/i18n'
 import { Button, Checkbox, FieldError, IconButton, NumberInput, Select, TextInput } from '@/ui'
@@ -14,7 +13,7 @@ const maxScore = 100
 /**
  * The label rules, in order: each row is a word or a regular expression, and what it does with
  * the versions whose labels it matches, adding its score to theirs or hiding them; a button adds
- * a rule, up to `max`.
+ * a rule, up to `max`. Its title and help are its group's.
  */
 export default function LabelRules({
   rules,
@@ -29,28 +28,21 @@ export default function LabelRules({
 }) {
   const { t } = useI18n()
   const text = t.settings.versionLabelRules
-  const id = useId()
 
   function change(index: number, changes: Partial<VersionLabelRule>) {
     onChange(rules.map((rule, at) => (at === index ? { ...rule, ...changes } : rule)))
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
-        {text.label}
-      </p>
-      <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
-        {text.help(String(max))}
-      </p>
+    <div>
       {rules.length === 0 ? (
-        <p className="mt-3.5 text-small text-ink-2">{text.none}</p>
+        <p className="text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-3.5 grid gap-2">
+        <ol aria-label={text.label} className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {rules.map((rule, index) => (
             <li
               key={index}
-              className="flex rounded-row bg-s2 flex-wrap items-center gap-3 py-2 pr-2.5 pl-3.5"
+              className="flex flex-wrap items-center gap-3 rounded-row bg-s1 py-2 pr-2.5 pl-3.5"
             >
               <TextInput
                 aria-label={text.text(index + 1)}

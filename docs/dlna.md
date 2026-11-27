@@ -88,7 +88,7 @@ What the device gets depends on its profile:
 
 The user's limits apply as for apps (see [Playback and access limits](user-limits.md#playback-and-access-limits)):
 
-- Conversions count against **Video conversions at once (0 = no limit)**, under **Settings › Conversion (transcoding) › General**.
+- Conversions count against **Video conversions at once**, under **Settings › Conversion (transcoding) › General**.
 - Every playback counts against the user's **Playbacks at once (0 = no limit)**.
 - **Maximum quality**, **Can convert video (transcoding)** and **Can convert audio (transcoding)** apply.
 - A user who may not have video converted plays only what the device takes as it is, or with its video copied.

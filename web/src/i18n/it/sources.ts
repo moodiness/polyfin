@@ -59,7 +59,7 @@ const sources: typeof en = {
       'Descrizioni, sottotitoli e risultati di ricerca seguono questo ordine tra le origini del server; le origini personali dei membri vengono dopo.',
     orderHelpMine:
       'Descrizioni, sottotitoli e risultati di ricerca seguono questo ordine tra le tue origini, dopo quelle del server.',
-    versionOrderLink: 'L’ordine delle versioni si imposta in Impostazioni › Riproduzione.',
+    versionOrderLink: 'L’ordine delle versioni si imposta in Impostazioni › Scelta delle versioni.',
     problemsTitle: 'Da sistemare',
     inOrderTitle: 'Nel loro ordine',
     moved: (name: string, position: number, count: number) =>

@@ -15,6 +15,7 @@ import {
   KeyIcon,
   ListChecksIcon,
   MagnetIcon,
+  MoonIcon,
   PlayCircleIcon,
   PuzzlePieceIcon,
   QrCodeIcon,
@@ -23,6 +24,7 @@ import {
   ShareNetworkIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
+  SortAscendingIcon,
   StackIcon,
   StethoscopeIcon,
   TelevisionSimpleIcon,
@@ -69,27 +71,33 @@ export const systemPages: readonly NavPage[] = [
   { id: 'api-keys', to: '/system/api-keys', label: (t) => t.nav.apiKeys, icon: KeyIcon },
 ]
 
-/** The sections of Settings, in order, as `/settings/:section`. */
+/** The groups of the Settings list, in order, each under a heading word. */
+export const settingsGroups = ['server', 'streaming', 'library', 'apps'] as const
+
+/** The sections of Settings, in order, as `/settings/:section`, each in its group of the list. */
 export const settingsSections = [
-  { id: 'general', key: 'general', icon: SlidersHorizontalIcon },
-  { id: 'playback', key: 'playback', icon: PlayCircleIcon },
-  { id: 'conversion', key: 'conversion', icon: CpuIcon },
-  { id: 'content', key: 'content', icon: FilmSlateIcon },
-  { id: 'catalogs', key: 'catalogs', icon: BooksIcon },
-  { id: 'thumbnails', key: 'thumbnails', icon: ImagesSquareIcon },
-  { id: 'security', key: 'security', icon: ShieldCheckIcon },
-  { id: 'tracking', key: 'tracking', icon: ListChecksIcon },
-  { id: 'live-tv', key: 'liveTv', icon: TelevisionSimpleIcon },
-  { id: 'recordings', key: 'recordings', icon: RecordIcon },
-  { id: 'dlna', key: 'dlna', icon: ShareNetworkIcon },
-  { id: 'torrents', key: 'torrents', icon: MagnetIcon },
-  { id: 'backups', key: 'backups', icon: ArchiveIcon },
-  { id: 'notifications', key: 'notifications', icon: BellIcon },
-  { id: 'web-player', key: 'webPlayer', icon: BrowserIcon },
-  { id: 'diagnostics', key: 'diagnostics', icon: StethoscopeIcon },
+  { id: 'general', key: 'general', group: 'server', icon: SlidersHorizontalIcon },
+  { id: 'security', key: 'security', group: 'server', icon: ShieldCheckIcon },
+  { id: 'notifications', key: 'notifications', group: 'server', icon: BellIcon },
+  { id: 'backups', key: 'backups', group: 'server', icon: ArchiveIcon },
+  { id: 'diagnostics', key: 'diagnostics', group: 'server', icon: StethoscopeIcon },
+  { id: 'playback', key: 'playback', group: 'streaming', icon: PlayCircleIcon },
+  { id: 'versions', key: 'versions', group: 'streaming', icon: SortAscendingIcon },
+  { id: 'conversion', key: 'conversion', group: 'streaming', icon: CpuIcon },
+  { id: 'torrents', key: 'torrents', group: 'streaming', icon: MagnetIcon },
+  { id: 'content', key: 'content', group: 'library', icon: FilmSlateIcon },
+  { id: 'catalogs', key: 'catalogs', group: 'library', icon: BooksIcon },
+  { id: 'thumbnails', key: 'thumbnails', group: 'library', icon: ImagesSquareIcon },
+  { id: 'live-tv', key: 'liveTv', group: 'library', icon: TelevisionSimpleIcon },
+  { id: 'recordings', key: 'recordings', group: 'library', icon: RecordIcon },
+  { id: 'web-player', key: 'webPlayer', group: 'apps', icon: BrowserIcon },
+  { id: 'moonfin', key: 'moonfin', group: 'apps', icon: MoonIcon },
+  { id: 'dlna', key: 'dlna', group: 'apps', icon: ShareNetworkIcon },
+  { id: 'tracking', key: 'tracking', group: 'apps', icon: ListChecksIcon },
 ] as const satisfies readonly {
   id: string
   key: keyof Messages['nav']['settingsSections']
+  group: (typeof settingsGroups)[number]
   icon: Icon
 }[]
 

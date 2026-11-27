@@ -726,7 +726,7 @@ function OrderRow({
           {scope === 'shared' && (
             <p className="mt-1 text-small">
               <Link
-                to={settingsPath('playback', 'version-source-order')}
+                to={settingsPath('versions', 'version-source-order')}
                 className="focus-lit rounded-[0.375rem] font-medium text-link transition-colors duration-160 hover:text-link-hover"
               >
                 {t.sources.versionOrderLink}

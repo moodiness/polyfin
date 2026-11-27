@@ -102,7 +102,7 @@ An NVIDIA GPU refuses to start a conversion at a level that does not hold what i
 
 ### Audio bitrate
 
-Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb/s (0 = automatic)** at 0:
+Converted audio gets Jellyfin's bitrates, with **Audio bitrate per channel in kb/s** at 0:
 
 | Channels | Bitrate |
 |---|---|

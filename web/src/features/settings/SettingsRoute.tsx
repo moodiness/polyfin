@@ -1,11 +1,12 @@
 import { MagnifyingGlassIcon, TerminalIcon } from '@phosphor-icons/react'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { useLocation, useParams } from 'react-router'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Navigate, useLocation, useParams } from 'react-router'
 import { fetchSettings, fetchVariables, queryKeys, type Settings } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import {
   isSettingsSection,
+  settingsGroups,
   settingsPath,
   settingsSections,
   type SettingsSectionId,
@@ -24,14 +25,23 @@ import {
   SkeletonText,
 } from '@/ui'
 import { rangeText } from './bounds'
-import { settingEntries, variableAnchor, type RangeOf } from './catalog'
+import { settingEntries, variableAnchor, type RangeOf, type SettingEntry } from './catalog'
 import SectionForm from './SectionForm'
 import { sectionFields } from './sections'
 
-/** `/settings/:section`: one section of the server settings. */
+/**
+ * `/settings/:section`: one section of the server settings. A link to a setting that moved to
+ * another section (`/settings/general#moonfin-defaults`, now in Moonfin) opens it there.
+ */
 export default function SettingsRoute() {
   const { section } = useParams()
+  const { hash } = useLocation()
   if (!isSettingsSection(section)) return <NotFoundRoute />
+  const anchor = decodeURIComponent(hash.slice(1))
+  const home = anchor === '' ? undefined : settingEntries.find((entry) => entry.anchor === anchor)
+  if (home !== undefined && home.section !== section) {
+    return <Navigate to={settingsPath(home.section, anchor)} replace />
+  }
   return <SettingsPage section={section} />
 }
 
@@ -47,6 +57,7 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
   })
   const [search, setSearch] = useState('')
   const location = useLocation()
+  const searching = search.trim() !== ''
 
   // Opening a setting (from the search, the palette or a link) ends the search.
   const [openedKey, setOpenedKey] = useState(location.key)
@@ -86,11 +97,19 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
       nav={
         <SectionNav
           label={t.nav.settingsSectionsLabel}
-          items={settingsSections.map((item) => ({
-            id: item.id,
-            label: t.nav.settingsSections[item.key],
-            to: settingsPath(item.id),
+          items={settingsGroups.map((group) => ({
+            id: group,
+            label: text.sectionGroups[group],
+            items: settingsSections
+              .filter((item) => item.group === group)
+              .map((item) => ({
+                id: item.id,
+                label: t.nav.settingsSections[item.key],
+                to: settingsPath(item.id),
+              })),
           }))}
+          // While the results show, no section is the one shown.
+          current={searching ? null : undefined}
           search={{
             value: search,
             onChange: setSearch,
@@ -100,10 +119,8 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
         />
       }
     >
-      {search.trim() !== '' && (
-        <SearchResults query={search.trim()} bounds={settings.data?.bounds} />
-      )}
-      <div hidden={search.trim() !== ''}>
+      {searching && <SearchResults query={search.trim()} settings={settings.data} />}
+      <div hidden={searching}>
         <header className="max-md:pt-4">
           <h2 className="text-h2 text-ink">{t.nav.settingsSections[current.key]}</h2>
           {lede !== undefined && <p className="mt-1 max-w-[72ch] text-lead text-ink-2">{lede}</p>}
@@ -154,8 +171,12 @@ function sectionLede(
   switch (section) {
     case 'general':
       return ledes.general
+    case 'moonfin':
+      return ledes.moonfin
     case 'playback':
       return ledes.playback
+    case 'versions':
+      return ledes.versions
     case 'conversion':
       return s.conversion.description
     case 'content':
@@ -191,19 +212,17 @@ function sectionLede(
   }
 }
 
+/** Where each section comes in the list: results follow that order. */
+const sectionOrder = new Map(settingsSections.map((item, index) => [item.id, index]))
+
 /**
- * The settings of every section that match the search, each opening at its anchor; their help
- * texts give the bounds once the settings are loaded.
+ * The settings of every section that match the search, in the order of the list, each opening at
+ * its anchor: its name, where it is, the words of its help that matched, and its value. Their
+ * help texts give the bounds once the settings are loaded.
  */
-function SearchResults({
-  query,
-  bounds,
-}: {
-  query: string
-  bounds: Settings['bounds'] | undefined
-}) {
+function SearchResults({ query, settings }: { query: string; settings: Settings | undefined }) {
   const { t, language } = useI18n()
-  const range: RangeOf = (name, scale) => rangeText(bounds?.[name], language, scale)
+  const range: RangeOf = (name, scale) => rangeText(settings?.bounds[name], language, scale)
   const text = t.settingsPage
   const variables = useQuery({
     queryKey: queryKeys.variables,
@@ -212,22 +231,28 @@ function SearchResults({
   })
   const words = searchable(query)
   const sectionOf = (id: SettingsSectionId) => settingsSections.find((item) => item.id === id)!
+  const trail = (id: SettingsSectionId) =>
+    `${t.nav.settings} › ${t.nav.settingsSections[sectionOf(id).key]}`
   const matches = [
     ...settingEntries
-      .filter((entry) =>
+      .map((entry) => ({ entry, label: entry.label(t), help: entry.help?.(t, range) ?? '' }))
+      .filter(({ entry, label, help }) =>
         searchable(
           [
-            entry.label(t),
-            entry.help?.(t, range) ?? '',
+            label,
+            help,
             ...(entry.keywords ?? []),
             t.nav.settingsSections[sectionOf(entry.section).key],
           ].join(' '),
         ).includes(words),
       )
-      .map((entry) => ({
+      .sort((a, b) => sectionOrder.get(a.entry.section)! - sectionOrder.get(b.entry.section)!)
+      .map(({ entry, label, help }) => ({
         key: `${entry.section}:${entry.anchor}`,
-        label: entry.label(t),
-        hint: t.nav.settingsSections[sectionOf(entry.section).key],
+        title: <Marked text={label} words={words} />,
+        trail: trail(entry.section),
+        excerpt: excerpt(help, words),
+        value: settingValue(entry, settings, t, language),
         icon: sectionOf(entry.section).icon,
         to: settingsPath(entry.section, entry.anchor),
       })),
@@ -235,8 +260,10 @@ function SearchResults({
       .filter((variable) => searchable(variable.name).includes(words))
       .map((variable) => ({
         key: `variable:${variable.name}`,
-        label: variable.name,
-        hint: text.variableHint,
+        title: <Marked text={variable.name} words={words} />,
+        trail: `${trail('diagnostics')} › ${text.variableHint}`,
+        excerpt: undefined,
+        value: undefined,
         icon: TerminalIcon,
         to: settingsPath('diagnostics', variableAnchor(variable.name)),
       })),
@@ -257,8 +284,22 @@ function SearchResults({
             <Row
               key={match.key}
               leading={match.icon}
-              title={match.label}
-              meta={`${t.nav.settings} › ${match.hint}`}
+              title={match.title}
+              meta={
+                <>
+                  <span>{match.trail}</span>
+                  {match.excerpt !== undefined && (
+                    <span className="line-clamp-1 basis-full text-ink-2">
+                      <Marked text={match.excerpt} words={words} />
+                    </span>
+                  )}
+                </>
+              }
+              trailing={
+                match.value === undefined ? undefined : (
+                  <span className="block max-w-[14rem] truncate">{match.value}</span>
+                )
+              }
               to={match.to}
             />
           ))}
@@ -266,4 +307,70 @@ function SearchResults({
       )}
     </section>
   )
+}
+
+/**
+ * A text and where, accents and case aside, it holds the searched words: the start and end of
+ * each match in the text as written.
+ */
+function matchesIn(text: string, words: string): [start: number, end: number][] {
+  // Each character folded on its own, so that a place in the folded text maps back to the text.
+  let folded = ''
+  const at: number[] = []
+  for (let index = 0; index < text.length; index++) {
+    const piece = searchable(text[index])
+    folded += piece
+    for (let count = 0; count < piece.length; count++) at.push(index)
+  }
+  const found: [number, number][] = []
+  if (words === '') return found
+  for (let from = folded.indexOf(words); from !== -1; from = folded.indexOf(words, from + 1)) {
+    found.push([at[from], at[from + words.length - 1] + 1])
+    from += words.length - 1
+  }
+  return found
+}
+
+/** The words of a text that matched the search, marked. */
+function Marked({ text, words }: { text: string; words: string }) {
+  const parts: ReactNode[] = []
+  let last = 0
+  for (const [start, end] of matchesIn(text, words)) {
+    parts.push(text.slice(last, start))
+    parts.push(
+      <mark key={start} className="rounded-[0.25rem] bg-link/25 text-ink">
+        {text.slice(start, end)}
+      </mark>,
+    )
+    last = end
+  }
+  parts.push(text.slice(last))
+  return <>{parts}</>
+}
+
+/** How many characters of a help come before its first match, at most, in a result. */
+const leadIn = 48
+
+/** The part of a help around its first match, or nothing when it does not match. */
+function excerpt(help: string, words: string): string | undefined {
+  const first = matchesIn(help, words)[0]
+  if (first === undefined) return undefined
+  if (first[0] <= leadIn) return help
+  const space = help.indexOf(' ', first[0] - leadIn)
+  return `…${help.slice(space === -1 || space >= first[0] ? first[0] - leadIn : space + 1)}`
+}
+
+/** A setting's value as a result shows it: On or Off, a number, a text; nothing while empty. */
+function settingValue(
+  entry: SettingEntry,
+  settings: Settings | undefined,
+  t: Messages,
+  language: string,
+): string | undefined {
+  if (entry.setting === undefined || settings === undefined) return undefined
+  const value: unknown = settings[entry.setting]
+  if (typeof value === 'boolean') return value ? t.ui.on : t.ui.off
+  if (typeof value === 'number') return new Intl.NumberFormat(language).format(value)
+  if (typeof value === 'string' && value !== '') return value
+  return undefined
 }

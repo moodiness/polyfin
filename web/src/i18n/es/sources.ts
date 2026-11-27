@@ -59,7 +59,7 @@ const sources: typeof en = {
       'Las descripciones, los subtítulos y los resultados de búsqueda siguen este orden entre las fuentes del servidor; las fuentes propias de los miembros van detrás.',
     orderHelpMine:
       'Las descripciones, los subtítulos y los resultados de búsqueda siguen este orden entre sus fuentes, después de las del servidor.',
-    versionOrderLink: 'El orden de las versiones se ajusta en Ajustes › Reproducción.',
+    versionOrderLink: 'El orden de las versiones se ajusta en Ajustes › Elección de versiones.',
     problemsTitle: 'Requieren atención',
     inOrderTitle: 'En su orden',
     moved: (name: string, position: number, count: number) =>

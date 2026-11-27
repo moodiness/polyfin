@@ -313,7 +313,7 @@ FFmpeg converts that stream in real time:
 The stream plays as an IPTV channel's HLS stream does (see [How a channel plays](#how-a-channel-plays)). It is relayed to apps, converted again only for an app that cannot take it, and recorded from the same playlist.
 
 - **One FFmpeg per channel:** it airs the channel whoever watches or records it, from the first player on, and stops a minute after the last one left.
-- **Limits:** it counts among the server's 16 live encodings, and among the **Video conversions at once (0 = no limit)**.
+- **Limits:** it counts among the server's 16 live encodings, and among the **Video conversions at once**.
 - **Quality groups:** a user whose group is below the shared stream, such as 720p for a 1080p programme, gets it converted down by a live encoding of their own. The same holds for any channel taller than their group (see [Quality groups](user-limits.md#quality-groups)). Without the permission to convert video, the channel is refused to them.
 
 Each programme plays from its title's versions:

@@ -221,7 +221,7 @@ Polyfin looks for versions of the titles of each user's Watchlist playlist they 
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Look for versions of watchlist titles every (hours, 0 = never)** | **Settings › Catalogs** | 6 | How long before a title is checked again. 0 turns the checks off. |
+| **Look for versions of watchlist titles every (hours)** | **Settings › Catalogs** | 6 | How long before a title is checked again. 0 turns the checks off. |
 
 Every hour, Polyfin checks up to 20 titles of each user's Watchlist playlist: those never checked first, then those checked longest ago.
 

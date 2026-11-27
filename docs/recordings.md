@@ -66,7 +66,7 @@ API details: [Recordings and timers for apps](jellyfin-api.md#recordings-and-tim
 | **Recordings folder** | **Settings › Recordings** | Empty, `recordings` in the data folder | Where recordings are written (see [Recordings folder](#recordings-folder)). |
 | **Start recordings early (minutes)** | **Settings › Recordings** | 0, none, as in Jellyfin (0 to 60) | Starts a recording this many minutes before its programme. Apps can change it per timer. |
 | **Keep recording after the end (minutes)** | **Settings › Recordings** | 0, none, as in Jellyfin (0 to 60) | Goes on recording this many minutes after the programme. Apps can change it per timer. |
-| **Keep recordings for (days, 0 = forever)** | **Settings › Recordings** | 0, forever (up to 3,650) | Deletes older recordings once a day. |
+| **Keep recordings for (days)** | **Settings › Recordings** | 0, forever (up to 3,650) | Deletes older recordings once a day. |
 | **Find commercials in recordings** | **Settings › Recordings** | Off | Reads each recording once it ends, partial ones included, for its commercial breaks, which apps then offer to skip. See [Commercials of recordings](#commercials-of-recordings). |
 | **Convert finished recordings to HEVC** | **Settings › Recordings** | Off | Converts finished recordings to HEVC at night, so that they take less space. See [Smaller recordings](#smaller-recordings). |
 | **Convert between** | **Settings › Recordings** | 1:00 to 6:00, in the server's time zone | The hours conversions run. A conversion still running at the end stops, and starts over the next night. |
@@ -110,12 +110,12 @@ With **Find commercials in recordings** on, Polyfin finds the commercial breaks 
 A recording copies the channel's stream at the channel's own bitrate. With **Convert finished recordings to HEVC** on, Polyfin converts finished recordings, partial ones included, to HEVC. HEVC takes about half the space of H.264, and a smaller share still of MPEG-2's.
 
 - **Order:** one recording at a time, the one that finished first, between the hours of **Convert between**.
-- **GPU:** the one **Graphics card used to convert** chooses, in **Settings › Conversion (transcoding) › Graphics card**. The conversion uses the **HEVC quality (0 = by bitrate)** and the **Deinterlacing method** of the conversion settings (see [Transcoding](transcoding.md#conversion-settings)).
-  - With **HEVC quality (0 = by bitrate)** at 0, recordings use 28, Jellyfin's value.
+- **GPU:** the one **Graphics card used to convert** chooses, in **Settings › Conversion (transcoding) › Graphics card**. The conversion uses the **HEVC quality** and the **Deinterlacing method** of the conversion settings (see [Transcoding](transcoding.md#conversion-settings)).
+  - With **HEVC quality** at 0, recordings use 28, Jellyfin's value.
   - Without a GPU that encodes HEVC, recordings are converted on the processor with x265, at its lowest priority. That needs **Use the processor when there is no graphics card** on.
 - **Picture:** it keeps its size, in 8 bits, deinterlaced when it is interlaced. The audio and subtitles are copied as they are.
 - **Bitrate:** the copy's never goes above the recording's.
-- **Conversions at once:** a conversion counts as one of the **Video conversions at once (0 = no limit)**, and waits while playbacks fill them. Playbacks started meanwhile count it too.
+- **Conversions at once:** a conversion counts as one of the **Video conversions at once**, and waits while playbacks fill them. Playbacks started meanwhile count it too.
 - **Disk space:** a conversion starts only with free space on the recordings' disk for a copy as large as the recording. Otherwise it waits.
 - **End of the hours:** a conversion still running stops, and its copy is deleted. The recording starts over the next night, as it does when Polyfin stops.
 
@@ -156,7 +156,7 @@ Recordings are listed newest first, and in a **Recordings** folder.
 
 - For parental control, Jellyfin judges recorded videos as "Other" items, and scheduled programmes as "LiveTvProgram".
 - A recording plays through PlaybackInfo only once finished.
-- Jellyfin's keep-until choices are kept, but only **Keep recordings for (days, 0 = forever)** and **Keep up to** delete recordings.
+- Jellyfin's keep-until choices are kept, but only **Keep recordings for (days)** and **Keep up to** delete recordings.
 - Jellyfin's `IsPrePaddingRequired` and `IsPostPaddingRequired` are not kept.
 
 API details: [Recordings and timers for apps](jellyfin-api.md#recordings-and-timers-for-apps).

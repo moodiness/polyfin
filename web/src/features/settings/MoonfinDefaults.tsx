@@ -1,6 +1,6 @@
-import { ArrowsClockwiseIcon, CopyIcon, FloppyDiskIcon } from '@phosphor-icons/react'
+import { ArrowsClockwiseIcon, CopyIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
   applyMoonfinDefaults,
   copyMoonfinDefaults,
@@ -29,6 +29,7 @@ import {
   useToast,
 } from '@/ui'
 import CodeEditor from './CodeEditor'
+import type { SideEdits } from './SectionForm'
 
 /** The largest defaults of a profile the server takes, in bytes of JSON. */
 const maxBytes = 256 * 1024
@@ -57,13 +58,14 @@ const settingCount = (defaults: Defaults, profile: MoonfinProfile) =>
   Object.keys(defaults.profiles[profile] ?? {}).length
 
 /**
- * Settings › General › Moonfin's defaults, under Serve Moonfin's companion: the settings Moonfin's
+ * Settings › Moonfin › Moonfin's defaults, under Serve Moonfin's companion: the settings Moonfin's
  * apps take for what a user never set, by profile, each with how many it sets. A profile's
- * settings are taken from an account's synced ones, or edited as JSON and saved. Apply to users
- * writes the saved defaults into every synced user's settings, merged or in place of theirs, once
- * confirmed, and tells how many users were updated.
+ * settings are taken from an account's synced ones, or edited as JSON, which the section's dock
+ * counts and saves with the settings (`side`). Apply to users writes the saved defaults into every
+ * synced user's settings, merged or in place of theirs, once confirmed, and tells how many users
+ * were updated.
  */
-export default function MoonfinDefaults() {
+export default function MoonfinDefaults({ side }: { side: (edits: SideEdits | null) => void }) {
   const { t } = useI18n()
   const text = t.settings.moonfinDefaults
   const names = t.account.moonfin.profiles
@@ -72,13 +74,15 @@ export default function MoonfinDefaults() {
   const [profile, setProfile] = useState<MoonfinProfile>('global')
   // The edited text of each profile, kept while another profile is shown.
   const [drafts, setDrafts] = useState<Partial<Record<MoonfinProfile, string>>>({})
-  const [invalid, setInvalid] = useState(false)
+  // The profiles whose text the last save found not to be a JSON object.
+  const [invalid, setInvalid] = useState<ReadonlySet<MoonfinProfile>>(new Set())
   const [taking, setTaking] = useState(false)
   const [applying, setApplying] = useState(false)
   const defaults = useQuery({
     queryKey: queryKeys.moonfinDefaults,
     queryFn: ({ signal }) => fetchMoonfinDefaults(signal),
   })
+  const data = defaults.data
 
   /** Shows the server's answer, dropping the draft of the profile it saved. */
   function adopt(answer: Defaults, saved: MoonfinProfile) {
@@ -86,14 +90,37 @@ export default function MoonfinDefaults() {
     setDrafts(({ [saved]: _, ...others }) => others)
   }
 
-  const save = useMutation({
-    mutationFn: (change: { profile: MoonfinProfile; settings: MoonfinSettings }) =>
-      saveMoonfinDefaults(change.profile, change.settings),
-    onSuccess: (answer, change) => {
-      adopt(answer, change.profile)
-      toast(text.saved(names[change.profile]))
-    },
-  })
+  // The edited profiles, for the dock: counted, checked, saved one after the other, discarded.
+  const edits = useMemo<SideEdits | null>(() => {
+    if (data === undefined) return null
+    const changed = moonfinProfiles.filter(
+      (name) => drafts[name] !== undefined && drafts[name] !== jsonText(data.profiles[name]),
+    )
+    return {
+      changes: changed.length,
+      check: () => {
+        const wrong = changed.filter((name) => parseSettings(drafts[name] ?? '') === null)
+        setInvalid(new Set(wrong))
+        if (wrong.length > 0 && !wrong.includes(profile)) setProfile(wrong[0])
+        return wrong.length === 0
+      },
+      save: async () => {
+        for (const name of changed) {
+          const settings = parseSettings(drafts[name] ?? '')
+          if (settings === null) continue
+          const answer = await saveMoonfinDefaults(name, settings)
+          queryClient.setQueryData<Defaults>(queryKeys.moonfinDefaults, answer)
+          setDrafts(({ [name]: _, ...others }) => others)
+        }
+      },
+      discard: () => {
+        setDrafts({})
+        setInvalid(new Set())
+      },
+    }
+  }, [data, drafts, profile])
+  useEffect(() => side(edits), [side, edits])
+  useEffect(() => () => side(null), [side])
 
   if (defaults.isPending) return <SkeletonRows rows={3} label={t.common.loading} />
   if (defaults.isError) {
@@ -103,19 +130,9 @@ export default function MoonfinDefaults() {
       </InlineError>
     )
   }
-  const data = defaults.data
-  const saved = jsonText(data.profiles[profile])
-  const draft = drafts[profile] ?? saved
-  const dirty = draft !== saved
-  const anyDirty = moonfinProfiles.some(
-    (name) => drafts[name] !== undefined && drafts[name] !== jsonText(data.profiles[name]),
-  )
-
-  function submit() {
-    const settings = parseSettings(draft)
-    setInvalid(settings === null)
-    if (settings !== null) save.mutate({ profile, settings })
-  }
+  const loaded = defaults.data
+  const draft = drafts[profile] ?? jsonText(loaded.profiles[profile])
+  const anyDirty = (edits?.changes ?? 0) > 0
 
   return (
     <div className="flex flex-col gap-4" data-testid="moonfin-defaults">
@@ -127,22 +144,18 @@ export default function MoonfinDefaults() {
         variant="underline"
         label={text.profiles}
         value={profile}
-        onChange={(id) => {
-          setProfile(id as MoonfinProfile)
-          setInvalid(false)
-          save.reset()
-        }}
+        onChange={(id) => setProfile(id as MoonfinProfile)}
         items={moonfinProfiles.map((name) => ({
           id: name,
           label: names[name],
-          count: settingCount(data, name),
+          count: settingCount(loaded, name),
           panelId,
         }))}
       />
       <div id={panelId} role="tabpanel" aria-label={names[profile]} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-control text-ink-2" data-testid="moonfin-defaults-count">
-            {text.count(settingCount(data, profile))}
+            {text.count(settingCount(loaded, profile))}
           </p>
           <Button icon={CopyIcon} onClick={() => setTaking(true)}>
             {text.take}
@@ -154,34 +167,16 @@ export default function MoonfinDefaults() {
           value={draft}
           onValue={(value) => {
             setDrafts((current) => ({ ...current, [profile]: value }))
-            setInvalid(false)
+            setInvalid((current) => {
+              const next = new Set(current)
+              next.delete(profile)
+              return next
+            })
           }}
           maxBytes={maxBytes}
           rows={12}
-          error={invalid ? text.notObject : save.isError ? errorMessage(t, save.error) : undefined}
+          error={invalid.has(profile) ? text.notObject : undefined}
         />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="primary"
-            icon={FloppyDiskIcon}
-            disabled={!dirty}
-            loading={save.isPending}
-            onClick={submit}
-          >
-            {save.isPending ? t.common.saving : t.common.save}
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={!dirty || save.isPending}
-            onClick={() => {
-              setDrafts(({ [profile]: _, ...others }) => others)
-              setInvalid(false)
-              save.reset()
-            }}
-          >
-            {t.ui.discard}
-          </Button>
-        </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-4">
         <Button icon={ArrowsClockwiseIcon} disabled={anyDirty} onClick={() => setApplying(true)}>
@@ -193,13 +188,16 @@ export default function MoonfinDefaults() {
       </div>
       {taking && (
         <TakeDialog
-          defaults={data}
+          defaults={loaded}
           profile={profile}
           onClose={() => setTaking(false)}
           onCopied={(answer) => {
             adopt(answer, profile)
-            setInvalid(false)
-            save.reset()
+            setInvalid((current) => {
+              const next = new Set(current)
+              next.delete(profile)
+              return next
+            })
             setTaking(false)
             toast(text.copied(names[profile]))
           }}

@@ -574,7 +574,7 @@ The order of **Content › Sources** comes first. Each user's own addons follow,
 - which addon describes a title: the first that knows it;
 - the order of the addons' subtitles;
 - the order of search results;
-- the order of a title's versions, addon after addon. **Order versions by**, in **Settings › Playback › Version order**, can say otherwise (see [Version order](versions.md#version-order)).
+- the order of a title's versions, addon after addon. **Order versions by**, in **Settings › Version choice**, can say otherwise (see [Version order](versions.md#version-order)).
 
 ## Languages
 
