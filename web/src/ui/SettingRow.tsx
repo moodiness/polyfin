@@ -122,8 +122,8 @@ export type SettingRowProps<T extends string | number = string> = Common &
  * apart (`grid grid-cols-[minmax(0,1fr)] gap-1.5`).
  *
  * A `disabled` row is an inactive control (`data-inactive`), dimmed as WCAG allows for one: its
- * fill, and the inks of its name, help and children (`inactive`), its control as a whole. Its
- * More, links and buttons, which still work, and its error keep their full contrast.
+ * fill, and the inks of its name, help, control and children (`inactive`). Its More, links and
+ * buttons, which still work, and its error keep their full contrast.
  */
 export function SettingRow<T extends string | number = string>(props: SettingRowProps<T>) {
   const {
@@ -188,8 +188,8 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
     <span
       aria-hidden="true"
       className={cx(
-        'absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full bg-link',
-        disabled && 'opacity-60',
+        'absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full',
+        disabled ? 'bg-link/60' : 'bg-link',
       )}
     />
   )
@@ -247,7 +247,8 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
             below && 'basis-full justify-start',
             // A changed value is written in the link color, as the dot.
             changed && '[&_[role=combobox]]:text-link [&_input]:text-link',
-            disabled && 'opacity-60',
+            // Its words take the inactive inks and its wells' fills fade with the row's.
+            disabled && 'inactive [&_.well]:bg-s2/60!',
           )}
         >
           {changed && (
@@ -330,7 +331,9 @@ export function SettingHelp({
           aria-expanded={open}
           aria-controls={id}
           onClick={() => setOpen(!open)}
-          className="-mx-1 shrink-0 cursor-pointer rounded-[0.375rem] px-1 font-semibold whitespace-nowrap text-ink-2 focus-lit hover:text-ink"
+          // 3 px more above and below than the caption's line, taken back by the margins: a target
+          // at least 24 px tall, in Compact too, that does not move the words.
+          className="-mx-1 -my-[3px] shrink-0 cursor-pointer rounded-[0.375rem] px-1 py-[3px] font-semibold whitespace-nowrap text-ink-2 focus-lit hover:text-ink"
         >
           {open ? t.ui.lessHelp : t.ui.moreHelp}
         </button>
