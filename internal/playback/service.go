@@ -124,10 +124,10 @@ type Service struct {
 	// of a version.
 	extractedMu sync.Mutex
 	extractions *cache.Cache[accounts.ID, *extracted]
-	// locations are the subtitle streams versions' indexes list, and
-	// unlocated the versions whose index could not be read. locateTime is
-	// locateTime, which tests shorten.
-	locations  *cache.Cache[accounts.ID, []int]
+	// locations are what versions' indexes tell of their subtitle streams,
+	// and unlocated the versions whose index could not be read. locateTime
+	// is locateTime, which tests shorten.
+	locations  *cache.Cache[accounts.ID, subtitleIndex]
 	unlocated  *cache.Cache[accounts.ID, error]
 	locateTime time.Duration
 	// numbered are the container's own numbers of versions' tracks, by
@@ -175,6 +175,9 @@ type Service struct {
 	received *bandwidth.Meters
 	// analyzed is told each version analyzed (see OnAnalyzed).
 	analyzed atomic.Pointer[func(version library.Version)]
+	// fills read the subtitle tracks awaited into the source cache (see
+	// subtitlefill.go).
+	fills fillState
 }
 
 // New returns a playback service running ffprobe from ffprobePath, reading
@@ -230,7 +233,7 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		warming:     map[accounts.ID]*warmRun{},
 		warmed:      cache.New[accounts.ID, time.Duration](500, warmedFor),
 		extractions: cache.New[accounts.ID, *extracted](200, 6*time.Hour),
-		locations:   cache.New[accounts.ID, []int](2000, time.Hour),
+		locations:   cache.New[accounts.ID, subtitleIndex](2000, time.Hour),
 		unlocated:   cache.New[accounts.ID, error](2000, failureTTL),
 		locateTime:  locateTime,
 		numbered:    cache.New[accounts.ID, map[int]uint64](2000, time.Hour),
@@ -244,14 +247,16 @@ func New(db *pgxpool.Pool, opener source.Opener, ffprobePath string, signer Sign
 		attached:    cache.New[accounts.ID, []container.Attachment](8, 10*time.Minute).Sized(maxKeptAttached, attachedSize),
 		speech:      newSpeechState(),
 		switches:    newSwitchState(),
+		fills:       newFillState(),
 	}
 	server.live = s.serveLive
 	sources.OnRecovered(s.retryRefused)
 	return s, nil
 }
 
-// Close stops the source server.
+// Close stops the source server, and the fills under way.
 func (s *Service) Close() error {
+	s.stopFills()
 	return s.loopback.Close()
 }
 

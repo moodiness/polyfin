@@ -481,6 +481,35 @@ func (c *Cache) Read(id accounts.ID) bool {
 	return s != nil && s.refs > 0
 }
 
+// Playing reports whether a playback reads a file of host now (see
+// Source.Urge), host as its origin names it (see Source.Host): background
+// reads from that host wait for its end.
+func (c *Cache) Playing(host string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, s := range c.sources {
+		if s.refs == 0 {
+			continue
+		}
+		s.mu.Lock()
+		playing := s.urged > 0 && strings.EqualFold(hostOf(s.origin.URL), host)
+		s.mu.Unlock()
+		if playing {
+			return true
+		}
+	}
+	return false
+}
+
+// Host is the host the source's origin names, as Cache.Playing matches it:
+// for the files of a storage the server reads itself, as SFTP or S3, the
+// storage's, not the server's own address its version's link names.
+func (s *Source) Host() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.ToLower(hostOf(s.origin.URL))
+}
+
 // Discard removes what the cache holds of the source of id, whose file
 // changed, unless a reader holds it: it reports whether nothing is left.
 func (c *Cache) Discard(id accounts.ID) bool {

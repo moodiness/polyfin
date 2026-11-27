@@ -380,6 +380,9 @@ func New(options Options) *Handler {
 	}
 	if options.Playback != nil {
 		options.Playback.OnAnalyzed(func(version library.Version) { h.tracksChanged(version.Item) })
+		// Subtitle tracks are read into the source cache while no app
+		// plays, as next episodes are preloaded.
+		options.Playback.IdleWhen(func() bool { return len(h.sessions.All()) == 0 })
 	}
 	options.RemuxDB.OnDescribed(func(versions []library.Version) {
 		for _, version := range versions {

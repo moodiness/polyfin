@@ -1104,7 +1104,11 @@ func (h *Handler) decidedSource(r *http.Request, p playable, d decided, request 
 	}
 	h.logPlay(r, p.item.ID, version, decision, streamed)
 	h.queueTextCopies(r.Context(), p, decision, streams, version, analysis)
-	h.deliverable(r.Context(), decision, streams, version, analysis, streamed)
+	if h.deliverable(r.Context(), decision, streams, version, analysis, streamed) {
+		// The app is about to play the version: the tracks it would have
+		// as files are read for its next plays.
+		h.Playback.FillSubtitles(version, analysis)
+	}
 	h.prefetchSubtitle(r.Context(), decision, streams, version, analysis)
 	h.prefetchTorrentSubtitle(r.Context(), p, decision, version)
 
@@ -1193,8 +1197,11 @@ func (h *Handler) fastStart(r *http.Request, version library.Version, decision p
 // remuxes extracted whole or that the version's index lists block by block,
 // and the PGS tracks it lists so, as external files; text subtitles as HLS
 // renditions; and the pictures chosen, an image track or a picture file,
-// burned into converted video. Any other is left out.
-func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, streamed bool) {
+// burned into converted video. Any other is left out. It reports whether
+// an embedded track wanted as a file was left out: the tracks of the
+// version awaiting a fill may then be read into the source cache, for the
+// plays after (see playback.Service.FillSubtitles).
+func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, streams []playback.MediaStream, version library.Version, analysis media.Analysis, streamed bool) (awaited bool) {
 	files := subtitleFiles(streams)
 	whole := h.Playback.SubtitlesExtracted(ctx, version.ID, analysis.Duration)
 	// The index is read only when an embedded track would go out as a file.
@@ -1223,9 +1230,11 @@ func (h *Handler) deliverable(ctx context.Context, decision playback.Decision, s
 		case delivery.Method == "Encode" && streamed && decision.Video != nil && stream.Index == decision.SubtitleStreamIndex &&
 			burnable(streams, analysis, stream.Index):
 		default:
+			awaited = awaited || delivery.Method == "External" && (extractable || pgs)
 			decision.Subtitles[stream.Index] = playback.SubtitleDelivery{Method: "Drop"}
 		}
 	}
+	return awaited
 }
 
 // subtitleFiles counts a version's subtitle files, which come first among
@@ -1834,8 +1843,9 @@ func (h *Handler) sourceVersion(r *http.Request, item accounts.ID) (library.Vers
 // embeddedTrack returns an embedded text track of the version a subtitle
 // URL names, stream being its FFmpeg index. A track the version's index
 // lists is read whole through it, now if it was not before: its file keeps
-// what the WebVTT remuxes extract loses, ASS styles first. Else it is the
-// track remuxes extracted whole, if they did.
+// what the WebVTT remuxes extract loses, ASS styles first; asking for one
+// awaiting a fill queues it (see playback.Service.SubtitleTrack). Else it
+// is the track remuxes extracted whole, if they did.
 func (h *Handler) embeddedTrack(r *http.Request, item accounts.ID, stream int) (subtitleText, bool) {
 	version, ok := h.sourceVersion(r, item)
 	if !ok {
@@ -1845,13 +1855,11 @@ func (h *Handler) embeddedTrack(r *http.Request, item accounts.ID, stream int) (
 	if !ok || !playback.ExtractableSubtitle(analysis, stream) {
 		return subtitleText{}, false
 	}
-	if h.Playback.SubtitlesLocated(r.Context(), version, analysis)[stream] {
-		ctx, cancel := context.WithTimeout(r.Context(), trackWait)
-		defer cancel()
-		if track, err := h.Playback.SubtitleTrack(ctx, version, analysis, stream); err == nil {
-			if text, err := readSubtitleText(track.Data); err == nil {
-				return text, true
-			}
+	ctx, cancel := context.WithTimeout(r.Context(), trackWait)
+	defer cancel()
+	if track, err := h.Playback.SubtitleTrack(ctx, version, analysis, stream); err == nil {
+		if text, err := readSubtitleText(track.Data); err == nil {
+			return text, true
 		}
 	}
 	cues, ok := h.Playback.ExtractedTrack(r.Context(), version.ID, analysis.Duration, stream)

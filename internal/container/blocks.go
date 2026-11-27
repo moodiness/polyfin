@@ -347,45 +347,12 @@ type blockReader struct {
 	headers map[uint64]int64
 }
 
-// check reads a Cluster holding blocks of the track whole, and fails with
-// ErrIncompleteIndex when it holds blocks the Cues do not list. It returns
-// the length of the Cluster's header, which the others' likely share.
-//
-// The Cluster checked is a small one, by where the next Cluster the Cues
-// know begins, among those with the most blocks listed: a muxer listing
-// only some blocks shows it where several share a Cluster.
+// check reads a Cluster holding blocks of the track whole, the one checked
+// picks, and fails with ErrIncompleteIndex when it holds blocks the Cues
+// do not list. It returns the length of the Cluster's header, which the
+// others' likely share.
 func (r *blockReader) check(ctx context.Context, cues []cueBlock, clusters []uint64) (int64, error) {
-	segment := uint64(min(r.m.segment.end, r.m.size) - r.m.segment.data)
-	listed := map[uint64]map[uint64]bool{}
-	for _, cue := range cues {
-		if listed[cue.cluster] == nil {
-			listed[cue.cluster] = map[uint64]bool{}
-		}
-		listed[cue.cluster][cue.relative] = true
-	}
-	type candidate struct {
-		cluster, bound uint64
-		count          int
-	}
-	candidates := make([]candidate, 0, len(listed))
-	for cluster, relatives := range listed {
-		bound := segment - cluster
-		if i, _ := slices.BinarySearch(clusters, cluster+1); i < len(clusters) {
-			bound = clusters[i] - cluster
-		}
-		candidates = append(candidates, candidate{cluster, bound, len(relatives)})
-	}
-	small := func(c candidate) int {
-		if c.bound <= smallCluster {
-			return 0
-		}
-		return 1
-	}
-	best := slices.MinFunc(candidates, func(a, b candidate) int {
-		return cmp.Or(cmp.Compare(small(a), small(b)), cmp.Compare(b.count, a.count),
-			cmp.Compare(a.bound, b.bound), cmp.Compare(a.cluster, b.cluster))
-	})
-
+	best, listed := r.m.checked(cues, clusters)
 	at := r.m.segment.data + int64(best.cluster)
 	h, err := r.clusterHeader(ctx, best.cluster)
 	if err != nil {
@@ -421,6 +388,58 @@ func (r *blockReader) check(ctx context.Context, cues []cueBlock, clusters []uin
 		return 0, fmt.Errorf("track %d at %d: %w: %w", r.number, at, errMisplaced, errInvalid)
 	}
 	return int64(h.length), nil
+}
+
+// checkedCluster is a Cluster check may read: its position relative to
+// the Segment's data, bound, how far past it the next Cluster the Cues
+// know begins, or the Segment ends, and count, the blocks of the track the
+// Cues list in it.
+type checkedCluster struct {
+	cluster, bound uint64
+	count          int
+}
+
+// checked returns the Cluster check reads, and the blocks the Cues list,
+// by Cluster and position relative to its data. It is a small one, by
+// where the next Cluster the Cues know begins, among those with the most
+// blocks listed: a muxer listing only some blocks shows it where several
+// share a Cluster. cues holds a block at least.
+func (m *Matroska) checked(cues []cueBlock, clusters []uint64) (checkedCluster, map[uint64]map[uint64]bool) {
+	segment := uint64(min(m.segment.end, m.size) - m.segment.data)
+	listed := map[uint64]map[uint64]bool{}
+	for _, cue := range cues {
+		if listed[cue.cluster] == nil {
+			listed[cue.cluster] = map[uint64]bool{}
+		}
+		listed[cue.cluster][cue.relative] = true
+	}
+	candidates := make([]checkedCluster, 0, len(listed))
+	for cluster, relatives := range listed {
+		bound := segment - cluster
+		if i, _ := slices.BinarySearch(clusters, cluster+1); i < len(clusters) {
+			bound = clusters[i] - cluster
+		}
+		candidates = append(candidates, checkedCluster{cluster, bound, len(relatives)})
+	}
+	small := func(c checkedCluster) int {
+		if c.bound <= smallCluster {
+			return 0
+		}
+		return 1
+	}
+	best := slices.MinFunc(candidates, func(a, b checkedCluster) int {
+		return cmp.Or(cmp.Compare(small(a), small(b)), cmp.Compare(b.count, a.count),
+			cmp.Compare(a.bound, b.bound), cmp.Compare(a.cluster, b.cluster))
+	})
+	return best, listed
+}
+
+// checkedBytes returns the bytes of the file check reads of the Cluster
+// c, from its header to its end, within maxCluster: where the next
+// Cluster the Cues know begins bounds it.
+func (m *Matroska) checkedBytes(c checkedCluster) (start, end int64) {
+	start = m.segment.data + int64(c.cluster)
+	return start, min(start+int64(min(c.bound, maxCluster+maxHeader)), m.size)
 }
 
 // trackBlocks returns the positions of the blocks of track in a Cluster's
@@ -563,20 +582,59 @@ func groupBlocks(blocks []located, l layout) []group {
 
 // SingleRangeRequests returns about how many requests SubtitleBlocks takes
 // to read subtitle track number from a host that serves a range per
-// request: one per range of blocks close together, and two for the
-// Cluster checked. The Cluster headers, of a few bytes, are not counted in
-// the blocks' positions, which they barely move.
-func (m *Matroska) SingleRangeRequests(ctx context.Context, number uint64) (int, error) {
+// request, through a Fetcher that reads what cached reports held, from
+// start to end, with no request: one per range of blocks close together
+// not held, and two for the Cluster checked when it is not. The Cluster
+// headers, of a few bytes, are not counted in the blocks' positions, which
+// they barely move: a range is held with maxHeader bytes more.
+func (m *Matroska) SingleRangeRequests(ctx context.Context, number uint64, cached func(start, end int64) bool) (int, error) {
 	index, err := m.cueIndex(ctx)
 	if err != nil {
 		return 0, err
 	}
 	cues := index.blocks[number]
+	if len(cues) == 0 {
+		return 0, nil
+	}
+	requests := 0
+	best, _ := m.checked(cues, index.clusters)
+	if !cached(m.checkedBytes(best)) {
+		requests += 2
+	}
 	blocks := make([]located, len(cues))
 	for i, cue := range cues {
 		blocks[i] = located{cue: cue, at: m.segment.data + int64(cue.cluster) + int64(cue.relative)}
 	}
-	return len(groupBlocks(blocks, defaultLayout)) + 2, nil
+	for _, group := range groupBlocks(blocks, defaultLayout) {
+		if !cached(group.start, min(group.end+maxHeader, m.size)) {
+			requests++
+		}
+	}
+	return requests, nil
+}
+
+// SubtitleSpan returns the bytes of the file SubtitleBlocks reads track
+// number within, from start to end: from the first of the Clusters holding
+// its blocks to past its last block, and the Cluster it checks. A cache
+// holding them serves the read whole, but for a block longer than the
+// window read at its position, which the window ending the span may cut.
+func (m *Matroska) SubtitleSpan(ctx context.Context, number uint64) (start, end int64, err error) {
+	index, err := m.cueIndex(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	cues := index.blocks[number]
+	if index.unlocated[number] || len(cues) == 0 {
+		return 0, 0, fmt.Errorf("track %d: %w", number, ErrIncompleteIndex)
+	}
+	best, _ := m.checked(cues, index.clusters)
+	start, end = m.checkedBytes(best)
+	for _, cue := range cues {
+		cluster := m.segment.data + int64(cue.cluster)
+		start = min(start, cluster)
+		end = max(end, cluster+int64(cue.relative)+maxHeader+defaultLayout.window)
+	}
+	return start, min(end, m.size), nil
 }
 
 // readGroups reads groups with a request each, at most limit at once, into

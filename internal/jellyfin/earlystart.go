@@ -309,7 +309,9 @@ func (h *Handler) encodeEarly(ctx context.Context, from *http.Request, owner ear
 	if !plays || !d.decision.HLS {
 		return false
 	}
-	h.deliverable(ctx, d.decision, d.source.MediaStreams, version, analysis, true)
+	// Nothing plays yet: no subtitle track is read into the source cache
+	// for it (see decidedSource).
+	_ = h.deliverable(ctx, d.decision, d.source.MediaStreams, version, analysis, true)
 	_, tokenless := integratedPlayer(r, request)
 	grant := playback.Grant{Version: version.ID, User: user.ID, Device: owner.device, Relay: tokenless || mustRelay(r, version)}
 	session := h.grant(grant)
