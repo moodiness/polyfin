@@ -83,6 +83,9 @@ const auth = {
     confirmPassword: 'Confirm password',
     submit: 'Create my account',
     submitting: 'Creating…',
+    /** On a link that can no longer create an account, for a guest who already has one. */
+    haveAccount: 'If you already have an account, sign in with your name and password.',
+    signIn: 'Sign in',
     gone: {
       invite_unknown: {
         title: 'This invite link does not work',

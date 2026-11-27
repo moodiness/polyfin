@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { UserPlusIcon } from '@phosphor-icons/react'
+import { SignInIcon, UserPlusIcon } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router'
 import {
@@ -13,9 +13,18 @@ import {
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Field, InlineError, Notice, Spinner, TextInput } from '@/ui'
+import {
+  Button,
+  ButtonLink,
+  ExternalButtonLink,
+  Field,
+  InlineError,
+  Notice,
+  Spinner,
+  TextInput,
+} from '@/ui'
 import { signInToWebClient } from '@/webClientSession'
-import { AuthFrame, authForm, wideButton } from './AuthFrame'
+import { AuthFrame, authForm, useFirstField, wideButton } from './AuthFrame'
 
 /** The codes of a link that can no longer create an account, each with a page of its own. */
 const goneCodes = ['invite_unknown', 'invite_used_up', 'invite_expired', 'invite_revoked'] as const
@@ -49,6 +58,7 @@ export default function InviteRoute() {
     queryFn: ({ signal }) => fetchStatus(signal),
   })
   const [name, setName] = useState('')
+  const firstField = useFirstField()
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [mismatch, setMismatch] = useState(false)
@@ -84,7 +94,22 @@ export default function InviteRoute() {
   const gone = goneCode(invite.error) ?? goneCode(mutation.error)
   if (gone !== null) {
     const page = t.invite.gone[gone]
-    return <AuthFrame title={page.title} lede={page.description} />
+    // The guest may already have an account, made by this link or another: signing in is the way
+    // on, where an invite's account lands, on the web client when the server has one.
+    return (
+      <AuthFrame title={page.title} lede={page.description}>
+        <p className="max-w-[46ch] text-body text-ink-2">{t.invite.haveAccount}</p>
+        {status.data?.webClient ? (
+          <ExternalButtonLink href="/web/" icon={SignInIcon} className="mt-4">
+            {t.invite.signIn}
+          </ExternalButtonLink>
+        ) : (
+          <ButtonLink to="/" icon={SignInIcon} className="mt-4">
+            {t.invite.signIn}
+          </ButtonLink>
+        )}
+      </AuthFrame>
+    )
   }
   if (invite.isPending || status.isPending) {
     return (
@@ -133,7 +158,7 @@ export default function InviteRoute() {
             }}
             autoComplete="username"
             maxLength={64}
-            autoFocus
+            ref={firstField}
             required
             invalid={nameError !== undefined}
           />

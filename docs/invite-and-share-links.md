@@ -39,7 +39,7 @@ The link opens `/admin/invite/…`, an admin app page needing no account, in the
 
 - It shows the server's name and asks for **Your name**, a **Password** and **Confirm password**, under the rules of **Create a user**.
 - The new account lands on the [web player](web-client.md), signed in. Without the web player, it lands signed in on the admin app, where a member sees their own pages.
-- A used up, expired or revoked link says so, as does an address that is no link.
+- A used up, expired or revoked link says so, as does an address that is no link. The page then tells a guest who already has an account to sign in with their name and password, and its **Sign in** button leads to the web player's sign-in, or to the admin app's without the web player.
 
 The activity log records each account, as "sam joined through alex's invite", then "sam joined the group Kids" when the link names a group. Notification targets that chose **User joined** are told (see [Notifications](notifications.md#events)).
 

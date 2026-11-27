@@ -86,6 +86,9 @@ const auth: typeof en = {
     confirmPassword: 'Passwort bestätigen',
     submit: 'Mein Konto erstellen',
     submitting: 'Wird erstellt…',
+    haveAccount:
+      'Wenn du schon ein Konto hast, melde dich mit deinem Namen und deinem Passwort an.',
+    signIn: 'Anmelden',
     gone: {
       invite_unknown: {
         title: 'Dieser Einladungslink funktioniert nicht',
