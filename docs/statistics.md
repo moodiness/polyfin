@@ -74,7 +74,7 @@ The "Clean the playback history" task, under **System › Schedule**, deletes th
 | **Busiest hours** | The hours watched at each hour of the week, in the browser's time zone. Each playback is spread over the hours it lasted. |
 | **Recent playbacks** | The history itself, with the data sent for each playback. |
 
-**Export CSV** downloads the playbacks of the period, for everyone or for the user chosen.
+**Export CSV** downloads the playbacks of the period, for everyone or for the user chosen. A period without playbacks shows only that it has none, and **Export CSV** is off.
 
 The same history feeds three [notifications](notifications.md):
 

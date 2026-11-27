@@ -40,6 +40,7 @@ const system: typeof en = {
       nextRun: 'Próxima ejecución',
       notRunYet: 'Aún no se ha ejecutado',
       byHandOnly: 'Solo ejecución manual',
+      fixed: 'Programación fija',
       took: (span: string) => `duró ${span}`,
       results: {
         Completed: 'Completada',
@@ -50,6 +51,11 @@ const system: typeof en = {
       cancelling: 'Deteniendo',
       runNow: 'Ejecutar ahora',
       runLabel: (name: string) => `Ejecutar ${name} ahora`,
+      confirm: {
+        title: (name: string) => `¿Ejecutar «${name}» ahora?`,
+        sends: 'Los mensajes enviados no se pueden recuperar.',
+        forgets: 'Lo que se olvida no se puede recuperar: se vuelve a obtener cuando hace falta.',
+      },
       stop: 'Detener',
       stopLabel: (name: string) => `Detener ${name}`,
       started: (name: string) => `Se ha iniciado ${name}.`,
@@ -150,7 +156,7 @@ const system: typeof en = {
         open: 'Abrir',
       },
       checksTitle: 'Comprobaciones',
-      moreTitle: 'También en esta página',
+      moreTitle: 'Otras medidas',
       checks: {
         summary: (total: number, parts: string[]) =>
           `${total === 1 ? '1 comprobación' : `${total} comprobaciones`}${parts.length > 0 ? ` · ${parts.join(', ')}` : ''}`,
@@ -159,10 +165,8 @@ const system: typeof en = {
         quietCount: (count: number) => `${count} desactivadas o en espera`,
         none: 'Ninguna',
         off: 'Desactivado',
-        ready: 'Listo',
+        failedLately: 'Fallos recientes',
         full: 'Al límite',
-        fine: 'Correcto',
-        encrypted: 'Cifradas',
         notEncrypted: 'Sin cifrar',
         keySet: 'Clave secreta definida',
         keyNotSet: 'Sin clave secreta',

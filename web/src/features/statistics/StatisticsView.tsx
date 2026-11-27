@@ -67,6 +67,8 @@ export default function StatisticsView({ scope }: { scope: StatisticsScope }) {
     queryFn: ({ signal }) => fetchUsers(signal),
     enabled: scope === 'server',
   })
+  // A period without playbacks says so once: no export of nothing, no second empty list.
+  const nothing = statistics.data?.plays === 0
 
   return (
     <>
@@ -89,14 +91,20 @@ export default function StatisticsView({ scope }: { scope: StatisticsScope }) {
             className="sm:w-56"
           />
         )}
-        <ExternalButtonLink
-          href={historyExportUrl(scope, query)}
-          download="playback-history.csv"
-          icon={DownloadSimpleIcon}
-          className="sm:ml-auto"
-        >
-          {text.exportCsv}
-        </ExternalButtonLink>
+        {nothing ? (
+          <Button icon={DownloadSimpleIcon} disabled className="sm:ml-auto">
+            {text.exportCsv}
+          </Button>
+        ) : (
+          <ExternalButtonLink
+            href={historyExportUrl(scope, query)}
+            download="playback-history.csv"
+            icon={DownloadSimpleIcon}
+            className="sm:ml-auto"
+          >
+            {text.exportCsv}
+          </ExternalButtonLink>
+        )}
       </div>
       {statistics.data && !statistics.data.historyEnabled && (
         <Notice
@@ -129,7 +137,7 @@ export default function StatisticsView({ scope }: { scope: StatisticsScope }) {
       ) : (
         <Figures scope={scope} statistics={statistics.data} />
       )}
-      <History scope={scope} query={query} />
+      <History scope={scope} query={query} hideEmpty={nothing} />
     </>
   )
 }
@@ -282,8 +290,19 @@ function timeColumns(
   return columns
 }
 
-/** The playbacks of the period, the latest first, a page at a time. */
-function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQuery }) {
+/**
+ * The playbacks of the period, the latest first, a page at a time. `hideEmpty`, when the empty
+ * state above already says the period has none, leaves an empty list out.
+ */
+function History({
+  scope,
+  query,
+  hideEmpty,
+}: {
+  scope: StatisticsScope
+  query: PlaybacksQuery
+  hideEmpty: boolean
+}) {
   const { language, t } = useI18n()
   const text = t.statistics
   const history = useInfiniteQuery({
@@ -297,6 +316,7 @@ function History({ scope, query }: { scope: StatisticsScope; query: PlaybacksQue
     },
   })
   const entries = history.data?.pages.flatMap((page) => page.items) ?? []
+  if (hideEmpty && !history.isError && entries.length === 0) return null
   return (
     <Block title={text.history} count={history.data?.pages.at(-1)?.total}>
       {history.isPending ? (

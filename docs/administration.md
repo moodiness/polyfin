@@ -251,6 +251,13 @@ See [The Statistics page](statistics.md#the-statistics-page).
 
 Schedule covers the server's addons, IPTV sources and guides first. Those users keep under **My sources** follow, each marked with its owner.
 
+With a mouse, from 768 px wide, a task shows **Triggers** and **Run now** once the pointer or the keyboard reaches its row; a running task always shows **Stop**.
+
+**Run now** asks first for the tasks whose run cannot be taken back, and its dialog repeats what the task does:
+
+- **They send messages:** Send the weekly summary, Send the month in review, Send the year in review, and Look for versions of watchlist titles, which tells users of the titles it finds versions for.
+- **They forget what is still in use:** Forget the version lists and Empty the cache of files being read.
+
 ### Scheduled tasks
 
 | Task | When it runs on its own, by default |
@@ -315,7 +322,7 @@ Each task allows some types, and a shortest interval:
 | Empty the cache of files being read | all four | 6 hours |
 | Back up the database | daily, weekly, interval | 6 hours |
 
-Some tasks are locked: their dialog tells why, and their triggers cannot change.
+Some tasks are locked: their row says **Fixed schedule**, their dialog tells why, and their triggers cannot change.
 
 - **Their settings set when they run:** Refresh Live TV guides, Scan local folders and Sign out unused devices.
 - **Series recordings depend on it:** Schedule series recordings.
@@ -337,7 +344,7 @@ See [Health](health.md) for each check, warning and error.
 
 ## Logs
 
-**System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**.
+**System › Logs** follows the in-memory log, redacted as it is for Jellyfin apps (see [Server logs](#server-logs)). It has a **Level** filter, a search box, **Follow** and **Pause**, and **Download**. Each line shows its time, its level and its message, with its other keys as `key=value` pairs under it; the search reads the whole line, and **Download** gives the lines as written.
 
 What the log hides, on the page and in the downloaded file:
 

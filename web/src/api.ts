@@ -5395,6 +5395,8 @@ export type Task = {
   defaultTriggers: TaskTrigger[]
   custom: boolean
   limits: TaskLimits
+  /** What a run cannot take back, which the app asks about first; "" for most tasks. */
+  effect: '' | 'sends' | 'forgets'
 }
 
 export const fetchTasks = (language: Language, signal?: AbortSignal) =>

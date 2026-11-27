@@ -6,7 +6,7 @@ This page is for administrators. It covers what **System › Health** shows, eac
 
 **System › Health** puts problems first, under **To look at**: each one is a tile, marked **Error** or **Warning**, with a link to what fixes it. A new version of Polyfin is a tile there too, when one is out (see [New versions](updates-and-restarts.md#new-versions)). The problems update every 10 seconds, the rest of the page every 30.
 
-Under **Checks**, a tile for each main part tells its state at a glance: **Addons**, **IPTV sources**, **Programme guides**, **Database**, **Transcoder**, **Backups**, **Source cache** and **Stored keys**. The other parts are rows under **Also on this page**, each with its value, when they apply. A tile or a row opens its details over the page, and has its own address, such as `/admin/system/health#process`, which the problems and notifications link to.
+Under **Checks**, a tile for each main part tells its state at a glance: **Addons**, **IPTV sources**, **Programme guides**, **Database**, **Transcoder**, **Backups**, **Source cache** and **Stored keys**. A part that is fine says **OK**, and its tile's lines tell the rest; **Addons** says **Recent failures** while an addon that answers again failed a request in the last hour. The other parts are rows under **Other measures**, each with its value, when they apply. A tile or a row opens its details over the page, and has its own address, such as `/admin/system/health#process`, which the problems and notifications link to.
 
 - **Addons**, from the requests Polyfin made to each addon since start, for apps and in the background: last answer, last failure and response time.
   - **Requests by origin**, over the last hour and the last 24 hours: first those users wait for, the plays and pages in apps, then background work: preloading, watchlist checks, catalogs and home rows, ratings, source refreshes, imports, and other background work, such as the requests that follow an answer. A bar shows the share of the last hour that was background work, and each origin tells its failed requests. Polyfin counts them in memory, by minute for the hour and by hour for the day, and starts again at each start.
@@ -262,7 +262,7 @@ API details: [Health problems](jellyfin-api.md#health-problems-in-the-admin-api)
 
 ## Artwork and people
 
-**Artwork**, a row under **Also on this page** in **System › Health**, tells why images stay blank in apps. It needs no **Detailed log (to diagnose a problem)**. Its details show:
+**Artwork**, a row under **Other measures** in **System › Health**, tells why images stay blank in apps. It needs no **Detailed log (to diagnose a problem)**. Its details show:
 
 - the artwork downloads that failed in the last hour, by kind: **Not found** (`404` or `410`), **Asked to slow down** (`429`, or a `503` with `Retry-After`), **Timed out**, **Server errors** (other `5xx`) and **Other failures**;
 - the servers that failed, by host name, the 10 that failed most first. No address is shown;

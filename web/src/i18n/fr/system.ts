@@ -40,6 +40,7 @@ const system: typeof en = {
       nextRun: 'Prochaine exécution',
       notRunYet: 'Pas encore lancée',
       byHandOnly: 'Lancée à la main seulement',
+      fixed: 'Planification fixe',
       took: (span: string) => `en ${span}`,
       results: {
         Completed: 'Terminée',
@@ -50,6 +51,12 @@ const system: typeof en = {
       cancelling: 'Arrêt en cours',
       runNow: 'Lancer',
       runLabel: (name: string) => `Lancer ${name} maintenant`,
+      confirm: {
+        title: (name: string) => `Lancer «\u202f${name}\u202f» maintenant\u202f?`,
+        sends: 'Les messages envoyés ne peuvent pas être repris.',
+        forgets:
+          'Ce qui est oublié ne peut pas être récupéré\u202f: il est de nouveau téléchargé quand il le faut.',
+      },
       stop: 'Arrêter',
       stopLabel: (name: string) => `Arrêter ${name}`,
       started: (name: string) => `${name} est lancée.`,
@@ -153,19 +160,17 @@ const system: typeof en = {
         open: 'Ouvrir',
       },
       checksTitle: 'Vérifications',
-      moreTitle: 'Aussi sur cette page',
+      moreTitle: 'Autres mesures',
       checks: {
         summary: (total: number, parts: string[]) =>
           `${total === 1 ? '1 vérification' : `${total} vérifications`}${parts.length > 0 ? ` · ${parts.join(', ')}` : ''}`,
-        fineCount: (count: number) => `${count} en ordre`,
+        fineCount: (count: number) => `${count} OK`,
         failingCount: (count: number) => `${count} en échec`,
         quietCount: (count: number) => `${count} désactivées ou en attente`,
         none: 'Aucun',
         off: 'Désactivé',
-        ready: 'Prêt',
+        failedLately: 'Échecs récents',
         full: 'Complet',
-        fine: 'En ordre',
-        encrypted: 'Chiffrées',
         notEncrypted: 'Non chiffrées',
         keySet: 'Clé secrète définie',
         keyNotSet: 'Aucune clé secrète',

@@ -33,6 +33,8 @@ import {
   Badge,
   Block,
   Button,
+  ConfirmDialog,
+  cx,
   EmptyState,
   InlineError,
   Panel,
@@ -170,8 +172,9 @@ function TaskRow({ task, act, asked }: { task: Task; act: Act; asked: boolean })
     document.getElementById(`${id}-triggers`)?.focus()
   }, [editing, id])
   const error = task.state === 'Idle' && task.last !== null ? task.last.error : ''
+  const quiet = task.state === 'Idle' && !(act.isPending && act.variables.task.id === task.id)
   return (
-    <li className="grid min-h-15 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-row bg-s1 py-2 pr-2.5 pl-4 lg:grid-cols-[minmax(0,1fr)_16.5rem_10rem_auto] lg:gap-y-1">
+    <li className="group grid min-h-15 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-row bg-s1 py-2 pr-2.5 pl-4 transition-[background-color,box-shadow] duration-350 ease-nuit hover:bg-s2 has-[:focus-visible]:lit-row lg:grid-cols-[minmax(0,1fr)_16.5rem_10rem_auto] lg:gap-y-1">
       <div className="col-span-full min-w-0 lg:col-span-1">
         <p className="text-h3 break-words hyphens-auto text-ink">{task.name}</p>
         {task.description !== '' && (
@@ -184,12 +187,19 @@ function TaskRow({ task, act, asked }: { task: Task; act: Act; asked: boolean })
         <LastRun task={task} />
         <NextRun task={task} />
       </div>
-      <div className="col-span-full flex flex-wrap justify-end gap-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:self-end lg:col-start-4 lg:row-start-1 lg:self-center">
+      <div
+        className={cx(
+          'col-span-full flex flex-wrap justify-end gap-2 transition-opacity duration-350 ease-nuit sm:col-span-1 sm:col-start-2 sm:row-start-2 sm:self-end lg:col-start-4 lg:row-start-1 lg:self-center',
+          // With a mouse, from 768 px up, an idle row shows its buttons once lit: 27 rows of two
+          // buttons are a wall. The keyboard lights the row as it reaches them.
+          quiet && 'md:pointer-fine:[.group:not(:hover,:focus-within)_&]:opacity-0',
+        )}
+      >
         <Button
           id={`${id}-triggers`}
           size="sm"
           variant="ghost"
-          icon={task.limits.locked === '' ? ClockIcon : LockSimpleIcon}
+          icon={ClockIcon}
           aria-label={text.triggersLabel(task.name)}
           onClick={() => setEditing(true)}
         >
@@ -211,32 +221,58 @@ function TaskRow({ task, act, asked }: { task: Task; act: Act; asked: boolean })
   )
 }
 
-function TaskButton({ task, act }: { task: Task; act: Act }) {
+/**
+ * Run now, or Stop while the task runs. A task whose run cannot be taken back (it sends messages,
+ * or forgets what is still in use) asks first, naming what it does.
+ */
+function TaskButton({ task, act, label }: { task: Task; act: Act; label?: string }) {
   const { t } = useI18n()
   const text = t.system.schedule
+  const [asking, setAsking] = useState(false)
   const busy = act.isPending && act.variables.task.id === task.id
-  return task.state === 'Idle' ? (
-    <Button
-      size="sm"
-      icon={PlayIcon}
-      aria-label={text.runLabel(task.name)}
-      disabled={act.isPending && !busy}
-      loading={busy}
-      onClick={() => act.mutate({ task, action: 'run' })}
-    >
-      {text.runNow}
-    </Button>
-  ) : (
-    <Button
-      size="sm"
-      icon={StopIcon}
-      aria-label={text.stopLabel(task.name)}
-      disabled={(act.isPending && !busy) || task.state === 'Cancelling'}
-      loading={busy}
-      onClick={() => act.mutate({ task, action: 'stop' })}
-    >
-      {task.state === 'Cancelling' ? text.cancelling : text.stop}
-    </Button>
+  const effect = task.effect
+  if (task.state !== 'Idle') {
+    return (
+      <Button
+        size="sm"
+        icon={StopIcon}
+        aria-label={text.stopLabel(task.name)}
+        disabled={(act.isPending && !busy) || task.state === 'Cancelling'}
+        loading={busy}
+        onClick={() => act.mutate({ task, action: 'stop' })}
+      >
+        {task.state === 'Cancelling' ? text.cancelling : text.stop}
+      </Button>
+    )
+  }
+  const run = () => act.mutate({ task, action: 'run' }, { onSettled: () => setAsking(false) })
+  return (
+    <>
+      <Button
+        size="sm"
+        icon={PlayIcon}
+        aria-label={text.runLabel(task.name)}
+        disabled={act.isPending && !busy}
+        loading={busy && !asking}
+        onClick={() => (effect === '' ? run() : setAsking(true))}
+      >
+        {label ?? text.runNow}
+      </Button>
+      {effect !== '' && (
+        <ConfirmDialog
+          open={asking}
+          onClose={() => setAsking(false)}
+          onConfirm={run}
+          title={text.confirm.title(task.name)}
+          confirmLabel={label ?? text.runNow}
+          tone={effect === 'forgets' ? 'danger' : 'primary'}
+          busy={busy}
+        >
+          {task.description !== '' && <p>{task.description}</p>}
+          <p className={task.description !== '' ? 'mt-2' : undefined}>{text.confirm[effect]}</p>
+        </ConfirmDialog>
+      )}
+    </>
   )
 }
 
@@ -258,6 +294,12 @@ function NextRun({ task }: { task: Task }) {
         triggers === '' && <span className="text-ink lg:block">{text.byHandOnly}</span>
       )}
       {triggers !== '' && <span className="text-ink-3 lg:block lg:text-micro">{triggers}</span>}
+      {task.limits.locked !== '' && (
+        <span className="inline-flex items-center gap-1 text-ink-3 lg:flex lg:text-micro">
+          <LockSimpleIcon size="1em" aria-hidden="true" className="shrink-0" />
+          {text.fixed}
+        </span>
+      )}
     </div>
   )
 }
@@ -317,7 +359,6 @@ function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
     queryFn: ({ signal }) => fetchHealth(signal),
   })
   const task = tasks?.find((each) => each.key === backupTaskKey)
-  const running = task !== undefined && task.state !== 'Idle'
   const ran = task?.last?.end
   // Reads the health again once a backup run ends, so the new file shows.
   useRefetchOn(ran, () => void health.refetch())
@@ -329,9 +370,7 @@ function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {health.data?.backup && <RestoreBackup unavailable={health.data.backup.restore} />}
-            {task && (
-              <TaskButtonLabelled task={task} act={act} running={running} label={text.backUpNow} />
-            )}
+            {task && <TaskButton task={task} act={act} label={text.backUpNow} />}
           </div>
         }
       >
@@ -353,34 +392,6 @@ function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
         )}
       </Panel>
     </Anchor>
-  )
-}
-
-function TaskButtonLabelled({
-  task,
-  act,
-  running,
-  label,
-}: {
-  task: Task
-  act: Act
-  running: boolean
-  label: string
-}) {
-  const { t } = useI18n()
-  if (running) return <TaskButton task={task} act={act} />
-  const busy = act.isPending && act.variables.task.id === task.id
-  return (
-    <Button
-      size="sm"
-      icon={PlayIcon}
-      aria-label={t.system.schedule.runLabel(task.name)}
-      disabled={act.isPending && !busy}
-      loading={busy}
-      onClick={() => act.mutate({ task, action: 'run' })}
-    >
-      {label}
-    </Button>
   )
 }
 
