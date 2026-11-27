@@ -14,6 +14,8 @@ const libraries: typeof en = {
       'Wenn ein Add-on installiert wird, werden seine Sammlungskataloge zu Bibliotheken: Jede zeigt ihre Sammlungen (zum Beispiel Genres oder Jahrzehnte), die sich mit ihren Filmen und Serien öffnen. Bei einem Add-on ohne Sammlungen werden seine Film-, Serien- und TV-Kataloge zu Bibliotheken. Polyfin macht das nur, bis der Server insgesamt 20 Bibliotheken hat, die aller Add-ons zusammen. Das ist nur ein Ausgangspunkt: Aktiviere so viele Kataloge, wie du möchtest. Jede Bibliothek fügt dem Startbildschirm der Jellyfin-Apps eine Zeile hinzu, außer TV-Kataloge, deren Kanäle unter Live-TV erscheinen.',
     manyWarning: 'Mehr als 20 Bibliotheken können den Startbildschirm der Jellyfin-Apps überladen.',
     noAddons: 'Füge zuerst eine Quelle hinzu: Ihre Kataloge werden dann hier aufgelistet.',
+    noCatalogsYet:
+      'Noch keine Quelle hat einen Katalog: Kataloge werden hier aufgelistet, sobald Quellen welche bringen.',
     shownEmpty: 'Keine Bibliothek: Jellyfin-Apps zeigen nichts aus diesen Add-ons an.',
     name: 'Name in Apps',
     nameHelp: 'Leer lassen, um den Namen des Katalogs zu verwenden.',

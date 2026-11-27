@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   addIptvSource,
@@ -22,6 +22,7 @@ import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
 import { Button, Checkbox, cx, Field, FieldError, Segmented, TextInput } from '@/ui'
 import { invalidateScope } from './model'
+import { AddActions } from './addActions'
 
 type Kind = 'm3u' | 'xtream'
 type Account = {
@@ -151,6 +152,7 @@ export function IptvAddFlow({
   const text = t.sourceAdd
   const files = useSessionUser().isAdministrator
   const [step, setStep] = useState<'account' | 'categories'>('account')
+  const formId = useId()
   const [name, setName] = useState('')
   const [kind, setKind] = useState<Kind>('m3u')
   const [account, setAccount] = useState(emptyAccount)
@@ -220,7 +222,7 @@ export function IptvAddFlow({
         ))}
       </ol>
       {step === 'account' ? (
-        <form onSubmit={next} noValidate className="flex flex-col gap-4">
+        <form id={formId} onSubmit={next} noValidate className="flex flex-col gap-4">
           <Field label={text.name}>
             <TextInput
               value={name}
@@ -282,9 +284,10 @@ export function IptvAddFlow({
               />
             </Field>
           )}
-          <div>
+          <AddActions>
             <Button
               type="submit"
+              form={formId}
               variant="primary"
               disabled={
                 name.trim() === '' ||
@@ -293,7 +296,7 @@ export function IptvAddFlow({
             >
               {text.next}
             </Button>
-          </div>
+          </AddActions>
         </form>
       ) : (
         <div className="flex flex-col gap-4">
@@ -307,7 +310,14 @@ export function IptvAddFlow({
             load={(by, signal) => previewNewSource(scope, accountJSON, by, signal)}
           />
           {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
-          <div className="flex flex-wrap gap-2">
+          <AddActions>
+            <Button
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => setStep('account')}
+            >
+              {text.back}
+            </Button>
             <Button
               variant="primary"
               loading={mutation.isPending}
@@ -316,14 +326,7 @@ export function IptvAddFlow({
             >
               {text.import}
             </Button>
-            <Button
-              variant="secondary"
-              disabled={mutation.isPending}
-              onClick={() => setStep('account')}
-            >
-              {text.back}
-            </Button>
-          </div>
+          </AddActions>
         </div>
       )}
     </div>

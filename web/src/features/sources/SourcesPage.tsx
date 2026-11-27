@@ -1,6 +1,6 @@
 import { ArrowLeftIcon, MagnifyingGlassIcon, PlusIcon, StackIcon } from '@phosphor-icons/react'
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   fetchAddons,
@@ -35,6 +35,7 @@ import {
 } from '@/ui'
 import { AddSourceModal, type AddKind } from './AddSource'
 import {
+  hasProblem,
   invalidateScope,
   isIptv,
   kindOf,
@@ -53,7 +54,9 @@ export type SourcesArea = 'content' | 'mine'
 
 /**
  * What a source's row of the list holds beside its link: its switch, and ↑ ↓ to move it among the
- * sources of its scope, so that turning it off or reordering it never opens it.
+ * rows of its scope in the list, so that turning it off or reordering it never opens it. The
+ * arrows show on the open row and on the row under the mouse or the keyboard, which reaches them
+ * as ever; under 1024 px, where a row opens a page of its own, that page's Order moves it.
  */
 function RowControls({
   scope,
@@ -73,6 +76,11 @@ function RowControls({
   const toggle = useSourceToggle(scope, addon.id)
   return (
     <>
+      {count > 1 && (
+        <span className="opacity-0 transition-opacity duration-300 ease-nuit max-lg:hidden pointer-coarse:opacity-100 [li:focus-within_&]:opacity-100 [li:has([aria-current])_&]:opacity-100 [li:hover_&]:opacity-100">
+          <MoveButtons name={addon.name} index={index} count={count} onMove={onMove} />
+        </span>
+      )}
       <Switch
         checked={toggle.isPending ? (toggle.variables ?? addon.enabled) : addon.enabled}
         label={t.sources.enabledLabel(addon.name)}
@@ -84,7 +92,6 @@ function RowControls({
           })
         }
       />
-      {count > 1 && <MoveButtons name={addon.name} index={index} count={count} onMove={onMove} />}
     </>
   )
 }
@@ -104,6 +111,33 @@ function useWide(): boolean {
     },
     () => window.matchMedia(wideQuery).matches,
   )
+}
+
+/**
+ * Marks a box that scrolls `data-more-below` while some of its content lies below its bottom
+ * edge, for a fade that says so; the mark goes at the end of the scroll. Returns its ref.
+ */
+function useMoreBelow() {
+  const [node, setNode] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (node === null) return
+    const update = () =>
+      node.toggleAttribute(
+        'data-more-below',
+        node.scrollTop + node.clientHeight < node.scrollHeight - 1,
+      )
+    update()
+    node.addEventListener('scroll', update, { passive: true })
+    // The box changes with the window, the list with its rows and filters.
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    for (const child of node.children) observer.observe(child)
+    return () => {
+      node.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
+  }, [node])
+  return setNode
 }
 
 type Filters = { kind: KindFilter | 'all'; owner: string; search: string }
@@ -182,7 +216,8 @@ function rowMeta(t: Messages, language: string, addon: Addon): string {
  * lit, and the source's page beside it; Add a source at the top right. Without a source in the
  * address, the wide page opens the one chosen with `?source=`, else the first of the list. On a
  * phone (and under 1024 px) the list and a source's page are each a page of their own.
- * `?add=hdhomerun` (where Jellyfin's tuner setup leads) opens Add a source on its tuner tab. My
+ * `?add=source` opens Add a source, `?add=hdhomerun` (where Jellyfin's tuner setup leads) on its
+ * tuner tab, on the server's Sources. My
  * sources offers no Add a source while the user's own sources are not used (see useOwnSources):
  * none could be added.
  */
@@ -205,6 +240,7 @@ export function SourcesPage({
   const user = useSessionUser()
   const navigate = useNavigate()
   const wide = useWide()
+  const listBox = useMoreBelow()
   const [params, setParams] = useSearchParams()
   const content = area === 'content'
   const own = useOwnSources(!content)
@@ -215,11 +251,15 @@ export function SourcesPage({
 
   const [adding, setAdding] = useState(false)
   const [startKind, setStartKind] = useState<AddKind>()
-  const addTuner = params.get('add') === 'hdhomerun'
-  // The address opens the panel once, then leaves the URL: closing it does not open it again.
+  // `?add=source` (the palette's Add a source) or `?add=hdhomerun` (where Jellyfin's tuner setup
+  // leads), on the server's Sources only.
+  const addParam = params.get('add')
+  const addAsked = content && (addParam === 'source' || addParam === 'hdhomerun')
+  // The address opens the panel once, then leaves the URL: closing it, Back or a reload does not
+  // open it again.
   useEffect(() => {
-    if (!addTuner || !content) return
-    setStartKind('tuner')
+    if (!addAsked) return
+    setStartKind(addParam === 'hdhomerun' ? 'tuner' : undefined)
     setAdding(true)
     setParams(
       (current) => {
@@ -228,7 +268,7 @@ export function SourcesPage({
       },
       { replace: true },
     )
-  }, [addTuner, content, setParams])
+  }, [addAsked, addParam, setParams])
 
   const [filters, setFiltersState] = useState<Filters>(() => remembered[area])
   function setFilters(patch: Partial<Filters>) {
@@ -316,6 +356,9 @@ export function SourcesPage({
           .toLocaleLowerCase(language)
           .includes(needle)),
   )
+  // A source with a problem leads the list, out of the order; the others follow in their order.
+  const problems = visible.filter((entry) => hasProblem(entry.addon))
+  const ordered = visible.filter((entry) => !hasProblem(entry.addon))
   const counts = {
     all: byOwner.length,
     stremio: byOwner.filter((e) => kindOf(e.addon) === 'stremio').length,
@@ -333,10 +376,14 @@ export function SourcesPage({
   const chosen = open
     ? entries.find((entry) => entry.scope === open.scope && entry.addon.id === open.id)
     : (entries.find((entry) => entry.key === chosenKey) ??
-      (wide ? (visible[0] ?? entries[0]) : undefined))
-  const missing =
+      (wide ? (problems[0] ?? ordered[0] ?? entries[0]) : undefined))
+  const missing = open !== undefined && chosen === undefined
+  // An IPTV source's part the address names wrongly (an old or mistyped link) opens its Summary.
+  const strayed =
     open !== undefined &&
-    (chosen === undefined || (isIptv(chosen.addon) ? !isLineupSection(open.section) : false))
+    chosen !== undefined &&
+    isIptv(chosen.addon) &&
+    !isLineupSection(open.section)
 
   const loading = queries.some((query) => query.isPending)
   const failed = queries.find((query) => query.isError)
@@ -360,6 +407,8 @@ export function SourcesPage({
       <Skeleton className="h-[4.5rem] w-80 rounded-row" />
       <Skeleton className="mt-10 h-[26.25rem] rounded-panel" />
     </div>
+  ) : strayed ? (
+    <Navigate to={sourcePath(open.scope, open.id)} replace />
   ) : missing ? (
     <EmptyState
       icon={StackIcon}
@@ -399,6 +448,57 @@ export function SourcesPage({
       />
     )
   )
+
+  /**
+   * One row of the list. `peers` are the rows its arrows move it among: those of its scope in
+   * their order, as the list shows them; none for a source with a problem, which leads the list
+   * out of its order (its page's Order still moves it).
+   */
+  function listRow(entry: Entry, peers: Entry[]) {
+    const scope = entry.scope
+    const siblings = scope === null ? [] : scopeEntries(scope)
+    return (
+      <Row
+        key={entry.key}
+        leading={<SourceTile addon={entry.addon} selected={entry === chosen} />}
+        title={entry.addon.name}
+        muted={!entry.addon.enabled}
+        meta={
+          <span className="flex min-w-0 items-center gap-x-2">
+            <SourceStatus addon={entry.addon} quiet className="text-micro" />
+            <span className="min-w-0 truncate">{rowMeta(t, language, entry.addon)}</span>
+            {entry.owner !== null && content && <OwnerLabel entry={entry} selfId={user.id} />}
+            {entry.owner === null && entry.addon.usedBy.mode === 'listed' && (
+              <UsedByChip usedBy={entry.addon.usedBy} />
+            )}
+          </span>
+        }
+        selected={entry === chosen && !missing}
+        chevron={false}
+        // Another user's source has no page of its own: the list opens it beside itself.
+        to={
+          scope !== null
+            ? sourcePath(scope, entry.addon.id)
+            : `/sources?source=${encodeURIComponent(entry.key)}`
+        }
+        actions={
+          scope === null ? undefined : (
+            <RowControls
+              key={entry.addon.id}
+              scope={scope}
+              addon={entry.addon}
+              index={peers.indexOf(entry)}
+              count={peers.length}
+              // To the place of the row it passes, in the scope's whole order.
+              onMove={(to) =>
+                movers[scope].move(siblings.indexOf(entry), siblings.indexOf(peers[to]))
+              }
+            />
+          )
+        }
+      />
+    )
+  }
 
   const list = (
     <section aria-label={text.listLabel} className="min-w-0">
@@ -468,52 +568,33 @@ export function SourcesPage({
           {text.noMatch}
         </EmptyState>
       ) : (
-        <RowList variant="separate" aria-label={text.listLabel}>
-          {visible.map((entry) => {
-            const scope = entry.scope
-            const siblings = scope === null ? [] : scopeEntries(scope)
-            return (
-              <Row
-                key={entry.key}
-                leading={<SourceTile addon={entry.addon} selected={entry === chosen} />}
-                title={entry.addon.name}
-                muted={!entry.addon.enabled}
-                meta={
-                  <span className="flex min-w-0 items-center gap-x-2">
-                    <SourceStatus addon={entry.addon} quiet className="text-micro" />
-                    <span className="min-w-0 truncate">{rowMeta(t, language, entry.addon)}</span>
-                    {entry.owner !== null && content && (
-                      <OwnerLabel entry={entry} selfId={user.id} />
-                    )}
-                    {entry.owner === null && entry.addon.usedBy.mode === 'listed' && (
-                      <UsedByChip usedBy={entry.addon.usedBy} />
-                    )}
-                  </span>
-                }
-                selected={entry === chosen && !missing}
-                chevron={false}
-                // Another user's source has no page of its own: the list opens it beside itself.
-                to={
-                  scope !== null
-                    ? sourcePath(scope, entry.addon.id)
-                    : `/sources?source=${encodeURIComponent(entry.key)}`
-                }
-                actions={
-                  scope === null ? undefined : (
-                    <RowControls
-                      key={entry.addon.id}
-                      scope={scope}
-                      addon={entry.addon}
-                      index={siblings.indexOf(entry)}
-                      count={siblings.length}
-                      onMove={(to) => movers[scope].move(siblings.indexOf(entry), to)}
-                    />
-                  )
-                }
-              />
-            )
-          })}
-        </RowList>
+        <>
+          {problems.length > 0 && (
+            <>
+              <h2 className="mb-1.5 px-1 text-small font-semibold text-danger">
+                {text.problemsTitle}
+              </h2>
+              <RowList variant="separate" aria-label={text.problemsTitle}>
+                {problems.map((entry) => listRow(entry, []))}
+              </RowList>
+              {ordered.length > 0 && (
+                <h2 className="mt-4 mb-1.5 px-1 text-small font-semibold text-ink-2">
+                  {text.inOrderTitle}
+                </h2>
+              )}
+            </>
+          )}
+          {ordered.length > 0 && (
+            <RowList variant="separate" aria-label={text.listLabel}>
+              {ordered.map((entry) =>
+                listRow(
+                  entry,
+                  ordered.filter((other) => entry.scope !== null && other.scope === entry.scope),
+                ),
+              )}
+            </RowList>
+          )}
+        </>
       )}
       {content && <p className="mt-3 px-1 text-small text-ink-3">{text.listNote}</p>}
     </section>
@@ -559,8 +640,12 @@ export function SourcesPage({
   } else {
     body = (
       <div className="grid items-start gap-8 lg:grid-cols-[28rem_minmax(0,1fr)] max-[1180px]:gap-6 max-[1180px]:lg:grid-cols-[24rem_minmax(0,1fr)]">
-        {/* The list stays in view beside a long page; a list taller than the screen scrolls. */}
-        <div className="min-w-0 lg:sticky lg:top-6 lg:-m-3 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:p-3">
+        {/* The list stays in view beside a long page; a list taller than the screen scrolls,
+            its bottom edge fading while rows lie below it. */}
+        <div
+          ref={listBox}
+          className="min-w-0 lg:sticky lg:top-6 lg:-m-3 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto lg:p-3 lg:data-[more-below]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-3.5rem),transparent)]"
+        >
           {list}
         </div>
         {wide ? (

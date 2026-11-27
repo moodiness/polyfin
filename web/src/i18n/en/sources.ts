@@ -53,6 +53,13 @@ const sources = {
     enabledHelp: 'Turning a source off hides its libraries in Jellyfin apps without losing them.',
     order: 'Order',
     position: (position: number, count: number) => `${position} of ${count}`,
+    orderHelpShared:
+      'Descriptions, subtitles and search results follow this order, among the server’s sources; members’ own sources come after them.',
+    orderHelpMine:
+      'Descriptions, subtitles and search results follow this order among your sources, after the server’s.',
+    versionOrderLink: 'The order of versions is in Settings › Playback.',
+    problemsTitle: 'Needs attention',
+    inOrderTitle: 'In their order',
     moved: (name: string, position: number, count: number) =>
       `${name} moved to position ${position} of ${count}.`,
     description: 'Description',
@@ -122,6 +129,7 @@ const sources = {
     manifestCalls: (name: string) => `Its manifest calls it “${name}”.`,
     nameSaved: (name: string) => `${name}: its name was saved.`,
     edit: 'Edit the account',
+    editAddress: 'Edit the address',
     saved: 'Source saved.',
     remove: 'Remove',
     removeTitle: (name: string) => `Remove ${name}?`,

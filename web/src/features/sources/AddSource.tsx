@@ -5,12 +5,13 @@ import {
   MusicNotesIcon,
   PuzzlePieceIcon,
 } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { installAddon, queryClient, queryKeys, type Addon, type Scope, type UsedBy } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
 import { Button, Modal, Field, Segmented, TextInput, useToast, type ToastOptions } from '@/ui'
+import { AddActions, AddFooter } from './addActions'
 import { addedParts, IptvAddFlow } from './IptvForms'
 import { LocalFolderAddForm } from './LocalFolders'
 import { invalidateScope } from './model'
@@ -46,6 +47,8 @@ export function AddSourceModal({
   // Who uses a server source, Everyone unless chosen otherwise; it applies to every kind.
   const [usedBy, setUsedBy] = useState<UsedBy>(everyone)
   const shared = scope === 'shared' ? usedBy : undefined
+  // The end of the footer, where the form shown puts its buttons.
+  const [footer, setFooter] = useState<HTMLElement | null>(null)
 
   /** An IPTV source or a tuner added: its toast tells what it brings. */
   function sourceAdded(source: Addon) {
@@ -65,55 +68,71 @@ export function AddSourceModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={text.title} width={720}>
-      <div key={round} className="flex flex-col gap-5 p-5">
-        <div className="flex flex-col gap-2">
-          <p aria-hidden="true" className="text-h3 text-ink">
-            {text.kind}
-          </p>
-          <Segmented<AddKind>
-            label={text.kind}
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
-              { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
-              { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
-              // Tuners and local folders are the server's: a member's own sources have none.
-              ...(scope === 'shared'
-                ? [
-                    { value: 'tuner' as const, label: text.kinds.tuner, icon: CellTowerIcon },
-                    { value: 'local' as const, label: text.kinds.local, icon: FolderIcon },
-                  ]
-                : []),
-            ]}
-            className="self-start max-sm:self-stretch"
-          />
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={text.title}
+      width={720}
+      // Cancel, then the buttons of the kind shown (see AddActions).
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            {t.common.cancel}
+          </Button>
+          <span ref={setFooter} className="contents" />
+        </>
+      }
+    >
+      <AddFooter value={footer}>
+        <div key={round} className="flex flex-col gap-5 p-5">
+          <div className="flex flex-col gap-2">
+            <p aria-hidden="true" className="text-h3 text-ink">
+              {text.kind}
+            </p>
+            <Segmented<AddKind>
+              label={text.kind}
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'stremio', label: text.kinds.stremio, icon: PuzzlePieceIcon },
+                { value: 'music', label: text.kinds.music, icon: MusicNotesIcon },
+                { value: 'iptv', label: text.kinds.iptv, icon: BroadcastIcon },
+                // Tuners and local folders are the server's: a member's own sources have none.
+                ...(scope === 'shared'
+                  ? [
+                      { value: 'tuner' as const, label: text.kinds.tuner, icon: CellTowerIcon },
+                      { value: 'local' as const, label: text.kinds.local, icon: FolderIcon },
+                    ]
+                  : []),
+              ]}
+              className="self-start max-sm:self-stretch"
+            />
+          </div>
+          {scope === 'shared' && <UsedByPicker value={usedBy} onChange={setUsedBy} />}
+          {kind === 'local' ? (
+            <LocalFolderAddForm
+              usedBy={usedBy}
+              onAdded={(added) => done(added, t.localFolders.added(added.name))}
+            />
+          ) : kind === 'tuner' ? (
+            <TunerAddFlow usedBy={usedBy} onAdded={sourceAdded} />
+          ) : kind === 'iptv' ? (
+            <IptvAddFlow scope={scope} usedBy={shared} onAdded={sourceAdded} />
+          ) : (
+            <InstallForm
+              key={kind}
+              scope={scope}
+              usedBy={shared}
+              help={kind === 'music' ? text.musicHelp : text.stremioHelp}
+              onInstalled={(added) => {
+                const note = installedNote(text, scope, added)
+                // A note tells why the apps show nothing yet: it stays long enough to be read.
+                done(added, note ?? text.installed(added.name), note ? noteToast : undefined)
+              }}
+            />
+          )}
         </div>
-        {scope === 'shared' && <UsedByPicker value={usedBy} onChange={setUsedBy} />}
-        {kind === 'local' ? (
-          <LocalFolderAddForm
-            usedBy={usedBy}
-            onAdded={(added) => done(added, t.localFolders.added(added.name))}
-          />
-        ) : kind === 'tuner' ? (
-          <TunerAddFlow usedBy={usedBy} onAdded={sourceAdded} />
-        ) : kind === 'iptv' ? (
-          <IptvAddFlow scope={scope} usedBy={shared} onAdded={sourceAdded} />
-        ) : (
-          <InstallForm
-            key={kind}
-            scope={scope}
-            usedBy={shared}
-            help={kind === 'music' ? text.musicHelp : text.stremioHelp}
-            onInstalled={(added) => {
-              const note = installedNote(text, scope, added)
-              // A note tells why the apps show nothing yet: it stays long enough to be read.
-              done(added, note ?? text.installed(added.name), note ? noteToast : undefined)
-            }}
-          />
-        )}
-      </div>
+      </AddFooter>
     </Modal>
   )
 }
@@ -159,6 +178,7 @@ function InstallForm({
   const { t } = useI18n()
   const text = t.sourceAdd
   const [manifestUrl, setManifestUrl] = useState('')
+  const formId = useId()
   const mutation = useMutation({
     mutationFn: (url: string) => installAddon(scope, url, usedBy),
     onSuccess: (installed) => {
@@ -176,7 +196,7 @@ function InstallForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+    <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
       <p className="text-small text-ink-3">{help}</p>
       <Field
         label={text.manifestUrl}
@@ -199,11 +219,11 @@ function InstallForm({
           autoFocus
         />
       </Field>
-      <div>
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+      <AddActions>
+        <Button type="submit" form={formId} variant="primary" loading={mutation.isPending}>
           {text.install}
         </Button>
-      </div>
+      </AddActions>
     </form>
   )
 }

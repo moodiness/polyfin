@@ -55,6 +55,14 @@ const sources: typeof en = {
       'Wenn du eine Quelle deaktivierst, werden ihre Bibliotheken in Jellyfin-Apps ausgeblendet, ohne verloren zu gehen.',
     order: 'Reihenfolge',
     position: (position: number, count: number) => `${position} von ${count}`,
+    orderHelpShared:
+      'Beschreibungen, Untertitel und Suchergebnisse folgen dieser Reihenfolge unter den Quellen des Servers; eigene Quellen von Mitgliedern kommen danach.',
+    orderHelpMine:
+      'Beschreibungen, Untertitel und Suchergebnisse folgen dieser Reihenfolge unter deinen Quellen, nach denen des Servers.',
+    versionOrderLink:
+      'Die Reihenfolge der Versionen legst du unter Einstellungen › Wiedergabe fest.',
+    problemsTitle: 'Braucht Aufmerksamkeit',
+    inOrderTitle: 'In ihrer Reihenfolge',
     moved: (name: string, position: number, count: number) =>
       `${name} wurde auf Position ${position} von ${count} verschoben.`,
     description: 'Beschreibung',
@@ -124,6 +132,7 @@ const sources: typeof en = {
     manifestCalls: (name: string) => `Sein Manifest nennt es „${name}“.`,
     nameSaved: (name: string) => `${name}: Der Name wurde gespeichert.`,
     edit: 'Konto bearbeiten',
+    editAddress: 'Adresse bearbeiten',
     saved: 'Quelle gespeichert.',
     remove: 'Entfernen',
     removeTitle: (name: string) => `${name} entfernen?`,

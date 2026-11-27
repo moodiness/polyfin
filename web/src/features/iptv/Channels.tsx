@@ -170,8 +170,9 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
             {t.lineup.keyword.title}
           </Button>
         </div>
-        <div className="flex flex-wrap items-end gap-2.5">
-          <Field label={text.search} className="min-w-56 flex-[2_1_16.625rem]">
+        {/* Six filters on two lines of three (two then one column on narrower screens). */}
+        <div className="grid grid-cols-3 items-end gap-2.5 max-md:grid-cols-2 max-sm:grid-cols-1">
+          <Field label={text.search} className="min-w-0">
             <TextInput
               type="search"
               size="compact"
@@ -181,7 +182,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
               onValue={(value) => refilter(() => setSearch(value))}
             />
           </Field>
-          <Field label={text.category} className="min-w-48 flex-[1_1_14.25rem]">
+          <Field label={text.category} className="min-w-0">
             <Select
               size="compact"
               value={category}
@@ -331,7 +332,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
           </ul>
         )}
         {channels.data !== undefined && channels.data.total > 0 && (
-          <div className="mt-4 pl-4">{paging && <Pager {...paging} end />}</div>
+          <div className="mt-4 pl-4 empty:hidden">{paging && <Pager {...paging} end />}</div>
         )}
       </Block>
       <Modal
@@ -361,7 +362,7 @@ function TristateSelect({
 }) {
   const { t } = useI18n()
   return (
-    <Field label={label} className="min-w-36 flex-1 basis-36 max-sm:basis-[40%]">
+    <Field label={label} className="min-w-0">
       <Select
         size="compact"
         value={value}

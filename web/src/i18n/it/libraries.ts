@@ -15,6 +15,8 @@ const libraries: typeof en = {
     manyWarning:
       'Più di 20 librerie possono appesantire la schermata iniziale delle applicazioni Jellyfin.',
     noAddons: 'Aggiungi prima un’origine: i suoi cataloghi verranno elencati qui.',
+    noCatalogsYet:
+      'Nessuna origine ha ancora un catalogo: i cataloghi verranno elencati qui quando le origini ne porteranno.',
     shownEmpty: 'Nessuna libreria: le applicazioni Jellyfin non mostrano nulla di questi add-on.',
     name: 'Nome nelle applicazioni',
     nameHelp: 'Lascialo vuoto per usare il nome del catalogo.',

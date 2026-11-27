@@ -66,6 +66,8 @@ export default function Mappings({
     busy: mappings.isFetching,
     onOffset: setOffset,
   }
+  // Paging shows only past one page.
+  const paged = mappings.data !== undefined && (offset > 0 || mappings.data.total > pageSize)
 
   return (
     <Block title={text.title} count={mappings.data?.total}>
@@ -104,9 +106,7 @@ export default function Mappings({
       <p aria-live="polite" className="mt-4 text-small text-ok empty:hidden">
         {announcement}
       </p>
-      {mappings.data !== undefined && mappings.data.total > 0 && (
-        <div className="mt-4 mb-2 pl-5 max-sm:pl-4">{paging && <Pager {...paging} />}</div>
-      )}
+      {paged && <div className="mt-4 mb-2 pl-5 max-sm:pl-4">{paging && <Pager {...paging} />}</div>}
       {mappings.isPending ? (
         <div className="mt-4">
           <SkeletonRows rows={6} />
@@ -131,6 +131,7 @@ export default function Mappings({
           aria-busy={mappings.isFetching}
           className={cx(
             'grid grid-cols-[minmax(0,1fr)] gap-1.5 transition-opacity duration-160',
+            !paged && 'mt-4',
             mappings.isPlaceholderData && 'opacity-60',
           )}
         >
@@ -170,9 +171,7 @@ export default function Mappings({
           ))}
         </ul>
       )}
-      {mappings.data !== undefined && mappings.data.total > 0 && (
-        <div className="mt-4 pl-5 max-sm:pl-4">{paging && <Pager {...paging} end />}</div>
-      )}
+      {paged && <div className="mt-4 pl-5 max-sm:pl-4">{paging && <Pager {...paging} end />}</div>}
     </Block>
   )
 }

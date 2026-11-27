@@ -1,5 +1,5 @@
 import { CellTowerIcon, MagnifyingGlassIcon } from '@phosphor-icons/react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   addIptvSource,
@@ -24,6 +24,7 @@ import {
   RowList,
   TextInput,
 } from '@/ui'
+import { AddActions } from './addActions'
 import { invalidateScope, sourcePath } from './model'
 
 /** A failed add, told for a tuner: an address the server refuses says what a tuner's looks like. */
@@ -49,6 +50,7 @@ export function TunerAddFlow({
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
+  const formId = useId()
   const find = useMutation({ mutationFn: () => findTuners() })
   const add = useMutation({
     mutationFn: (tuner: { url: string; name: string; found: boolean }) =>
@@ -159,7 +161,7 @@ export function TunerAddFlow({
           ))}
         {failed?.found === true && <FieldError>{addError(t, add.error)}</FieldError>}
       </section>
-      <form onSubmit={submit} noValidate className="mt-3 flex flex-col gap-4">
+      <form id={formId} onSubmit={submit} noValidate className="mt-3 flex flex-col gap-4">
         <Field
           label={text.tunerAddress}
           help={text.tunerAddressHint}
@@ -190,16 +192,17 @@ export function TunerAddFlow({
             autoComplete="off"
           />
         </Field>
-        <div>
+        <AddActions>
           <Button
             type="submit"
+            form={formId}
             variant="primary"
             loading={adding?.found === false}
             disabled={address.trim() === '' || add.isPending}
           >
             {text.byAddress}
           </Button>
-        </div>
+        </AddActions>
       </form>
     </div>
   )

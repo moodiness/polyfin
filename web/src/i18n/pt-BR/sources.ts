@@ -55,6 +55,13 @@ const sources: typeof en = {
       'Desativar uma fonte oculta as bibliotecas dela nos aplicativos Jellyfin sem perdê-las.',
     order: 'Ordem',
     position: (position: number, count: number) => `${position} de ${count}`,
+    orderHelpShared:
+      'Descrições, legendas e resultados de pesquisa seguem esta ordem entre as fontes do servidor; as fontes próprias dos membros vêm depois.',
+    orderHelpMine:
+      'Descrições, legendas e resultados de pesquisa seguem esta ordem entre as suas fontes, depois das do servidor.',
+    versionOrderLink: 'A ordem das versões fica em Configurações › Reprodução.',
+    problemsTitle: 'Precisam de atenção',
+    inOrderTitle: 'Na ordem delas',
     moved: (name: string, position: number, count: number) =>
       `${name} movido para a posição ${position} de ${count}.`,
     description: 'Descrição',
@@ -124,6 +131,7 @@ const sources: typeof en = {
     manifestCalls: (name: string) => `O manifesto dele o chama de “${name}”.`,
     nameSaved: (name: string) => `${name}: o nome foi salvo.`,
     edit: 'Editar a conta',
+    editAddress: 'Editar o endereço',
     saved: 'Fonte salva.',
     remove: 'Remover',
     removeTitle: (name: string) => `Remover ${name}?`,

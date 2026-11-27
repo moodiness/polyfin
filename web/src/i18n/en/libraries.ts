@@ -13,6 +13,8 @@ const libraries = {
       'When an addon is installed, its collection catalogs become libraries: each one shows its collections (for example genres or decades), which open on their movies and series. An addon without collections gets its movie, series and TV catalogs as libraries. Polyfin does this only until the server has 20 libraries in all, counting those of every addon. This is only a starting point: enable as many catalogs as you like. Each library adds a row to the home screen of Jellyfin apps, except TV catalogs, whose channels appear in Live TV.',
     manyWarning: 'More than 20 libraries can make the home screen of Jellyfin apps heavy.',
     noAddons: 'Add a source first: its catalogs will be listed here.',
+    noCatalogsYet:
+      'No source has a catalog yet: catalogs will be listed here as sources bring them.',
     shownEmpty: 'No library: Jellyfin apps show nothing from these addons.',
     name: 'Name in apps',
     nameHelp: 'Leave it empty to use the catalog name.',

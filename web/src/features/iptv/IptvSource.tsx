@@ -76,24 +76,21 @@ export const isLineupSection = (section: string | undefined) =>
 const summaryChannels = 6
 
 /**
- * One IPTV source's page under its head, part by part: its six words (Summary, Import options,
- * Categories, Channels, Guides, Guide mapping), then the part the address names. The Summary
- * holds its problem, its figures, its first channels, `forWhom` (Enabled, Used by, Order) and
- * its lists.
+ * One IPTV source's page under its head (and its alert, when its download failed), part by part:
+ * its six words (Summary, Import options, Categories, Channels, Guides, Guide mapping), then the
+ * part the address names. The Summary holds its figures, its first channels, `forWhom` (Enabled,
+ * Used by, Order) and its lists.
  */
 export function IptvSource({
   scope,
   addon: given,
   section: named,
   forWhom,
-  retry,
 }: {
   scope: Scope
   addon: Addon
   section?: string
   forWhom: ReactNode
-  /** The button that downloads the lists again, under a failed download's alert. */
-  retry?: ReactNode
 }) {
   const { t } = useI18n()
   const id = given.id
@@ -128,7 +125,7 @@ export function IptvSource({
       />
       <div className="mt-5">
         {section === 'summary' ? (
-          <Summary scope={scope} addon={addon} source={source} forWhom={forWhom} retry={retry} />
+          <Summary scope={scope} addon={addon} source={source} forWhom={forWhom} />
         ) : section === 'options' ? (
           <Options key={id} scope={scope} id={id} source={source} />
         ) : !liveTv ? (
@@ -194,13 +191,11 @@ function Summary({
   addon,
   source,
   forWhom,
-  retry,
 }: {
   scope: Scope
   addon: Addon
   source: Source
   forWhom: ReactNode
-  retry?: ReactNode
 }) {
   const { t } = useI18n()
   const number = useNumber()
@@ -215,20 +210,6 @@ function Summary({
   const figures = 'grid grid-cols-4 gap-2.5 max-lg:grid-cols-2'
   return (
     <div>
-      {source.error !== '' && (
-        <AlertTile
-          tone="danger"
-          title={t.iptv.errors[source.error] ?? t.errors.generic}
-          className="mb-8 max-md:mb-7"
-          actions={retry}
-        >
-          {source.checkedAt !== null && (
-            <>
-              {text.lastAttempt}: <RelativeTime iso={source.checkedAt} />
-            </>
-          )}
-        </AlertTile>
-      )}
       {source.tuner !== null && (
         <TunerPart scope={scope} id={addon.id} source={source} tuner={source.tuner} />
       )}
@@ -327,14 +308,10 @@ function Summary({
               {item.iso ? <RelativeTime iso={item.iso} /> : item.none}
             </Fact>
           ))}
-          <Fact label={t.iptv.address} wide>
-            <span className="font-mono text-body break-all">{source.address}</span>
+          <Fact label={t.iptv.address}>
+            <span className="font-mono text-small break-all">{source.address}</span>
           </Fact>
-          {network !== '' && (
-            <Fact label={t.sources.network} wide>
-              {t.sources.networks[network]}
-            </Fact>
-          )}
+          {network !== '' && <Fact label={t.sources.network}>{t.sources.networks[network]}</Fact>}
         </Facts>
         <p className="mt-4 max-w-[66ch] px-2 text-small text-ink-3">{text.refreshHelp}</p>
       </Group>
