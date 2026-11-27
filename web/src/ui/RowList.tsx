@@ -7,7 +7,7 @@ import { useInPanel } from './Panel'
 /**
  * - `boxed`: each row a soft tile, 8 px apart (settings-like rows, devices, an ordered list).
  * - `separate`: the same tiles, 6 px apart, for a narrow list beside its detail (sources), where
- *   the open one is lit.
+ *   the open one wears the current mark (`current-row`).
  * - `plain`: no tiles; a row fills only on hover or focus (recent activity, a log).
  *
  * Inside a Panel every list is drawn `plain`, so no card sits inside a card.
@@ -84,7 +84,10 @@ export type RowProps = {
    * (a row that opens nothing, such as a choice).
    */
   chevron?: boolean
-  /** The row shown in the detail beside the list: lit, with `aria-current`. */
+  /**
+   * The row shown in the detail beside the list: the current mark (`current-row`, a bar on its
+   * leading edge), with `aria-current`. The lit edge stays for focus.
+   */
   selected?: boolean
   /** Greys the label, for a source turned off or a service not configured. */
   muted?: boolean
@@ -180,7 +183,7 @@ export function Row({
   const lit = cx(
     // Over the tile's s1, the lit fill adds one more s1: one step up, as a hover.
     (interactive || selected) && '[--lit-fill:var(--color-s1)]',
-    selected && !interactive && 'lit-row',
+    selected && !interactive && 'current-row',
   )
   const rowClass = cx(
     'flex w-full items-center text-left',
@@ -191,7 +194,7 @@ export function Row({
     actions === undefined && lit,
     interactive &&
       (actions === undefined
-        ? 'focus-lit-row cursor-pointer not-aria-[current]:hover:bg-s1 aria-[current]:lit-row'
+        ? 'focus-lit-row cursor-pointer not-aria-[current]:hover:bg-s1 aria-[current]:current-row'
         : 'cursor-pointer focus-visible:outline-none'),
     className,
   )
@@ -224,7 +227,7 @@ export function Row({
             radius,
             lit,
             interactive &&
-              'not-has-[[aria-current]]:hover:bg-s1 has-[[aria-current]]:lit-row has-[:focus-visible]:lit-row',
+              'not-has-[[aria-current]]:hover:bg-s1 has-[[aria-current]]:current-row has-[:focus-visible]:lit-row',
           )}
         >
           {head}

@@ -1211,10 +1211,31 @@ export default function UiGallery() {
               ]}
             />
           </Specimen>
-          <Specimen name="SectionNav: see the setting rows above (a strip below 768 px)">
-            <p className="text-small text-ink-2">
-              The section list with its search sits beside the setting rows, the dock under it.
-            </p>
+          <Specimen name="SectionNav: groups under a heading word (a strip below 768 px)">
+            <div className="w-60 max-md:w-full">
+              <SectionNav
+                label="Account sections"
+                current="devices"
+                items={[
+                  {
+                    id: 'account',
+                    label: 'Account',
+                    items: [
+                      { id: 'password', label: 'Password', to: '#gallery-password' },
+                      { id: 'devices', label: 'Devices', to: '#gallery-devices' },
+                    ],
+                  },
+                  {
+                    id: 'watching',
+                    label: 'What I watch',
+                    items: [
+                      { id: 'languages', label: 'Languages and sound', to: '#gallery-languages' },
+                      { id: 'import', label: 'Import', to: '#gallery-import' },
+                    ],
+                  },
+                ]}
+              />
+            </div>
           </Specimen>
         </div>
       </Block>

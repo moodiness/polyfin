@@ -256,11 +256,50 @@
  * is under the keyboard, the mouse or the remote, open or chosen. It stays dark: its fill goes at
  * most one step up (`--lit-fill`, `s2` by default), its words stay white and their size, and a
  * 2 px edge of the accent marks it. Nothing inside switches color. Never the only cue: keep
- * `aria-current`, `aria-expanded`…
+ * `aria-current`, `aria-expanded`… The current item of a list (the section shown, the source
+ * open) wears `current-row` instead.
  */
 @utility lit-row {
   background-color: var(--lit-fill, var(--color-s2));
   box-shadow: inset 0 0 0 2px var(--color-lit-edge);
+}
+
+/*
+ * The current item of a list (the section shown, the source open in the detail): not lit, as
+ * the edge means only "under the keyboard, the mouse or the remote". It keeps the lit fill
+ * (`--lit-fill`, `s2` by default) and gains a 3 px bar of `lit-edge` on its leading edge, inset
+ * from the rounded corners (3.24 to 3.62:1 on the fills). When it has focus too, it wears both.
+ * Never the only cue: keep `aria-current` and semibold words.
+ */
+@utility current-row {
+  position: relative;
+  background-color: var(--lit-fill, var(--color-s2));
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 25%;
+    inset-inline-start: 0;
+    width: 3px;
+    border-start-end-radius: 9999px;
+    border-end-end-radius: 9999px;
+    background-color: var(--color-lit-edge);
+    pointer-events: none;
+  }
+}
+
+/*
+ * The current word of a strip (the section list on a phone): the bar becomes a 16 px underline
+ * under the word, as the top bar's current area. Wear it with `current-row`.
+ */
+@utility current-under {
+  &::before {
+    inset-block: auto 0.25rem;
+    inset-inline: 0;
+    width: 1rem;
+    height: 3px;
+    margin-inline: auto;
+    border-radius: 9999px;
+  }
 }
 
 /*

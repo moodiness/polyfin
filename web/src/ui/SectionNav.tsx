@@ -14,10 +14,21 @@ export type SectionNavItem = {
   to: string
 }
 
+/**
+ * A heading word above a group of sections ("Account", then its sections). On a phone, where the
+ * list is a strip, the heading is read to screen readers only and the groups follow one another.
+ */
+type SectionNavGroup = {
+  id: string
+  label: string
+  items: readonly SectionNavItem[]
+}
+
 export type SectionNavProps = {
   /** The accessible name: "Settings sections". */
   label: string
-  items: readonly SectionNavItem[]
+  /** Sections, groups of sections under a heading, or both. */
+  items: readonly (SectionNavItem | SectionNavGroup)[]
   /**
    * For anchors: the id of the section in view. Page links follow the address on their own.
    */
@@ -34,25 +45,64 @@ export type SectionNavProps = {
 }
 
 // A long label ("Konvertierung (Transkodierung)") wraps inside its fill in the column; on a
-// phone, where the list is a strip, it stays on one line. The current section is filled, bold
-// and lit as a row, with a chevron; the one under the keyboard is lit as a row too.
+// phone, where the list is a strip, it stays on one line. The current section is filled and
+// bold, with a bar on its leading edge (an underline on the strip) and a chevron; the one under
+// the keyboard is lit as a row, its edge.
 const linkClass = cx(
   'group flex min-h-9 shrink-0 items-center justify-between gap-2 rounded-[0.5rem] px-3 py-1 text-control leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
-  'aria-[current]:font-semibold aria-[current]:text-ink aria-[current]:lit-row',
-  'max-md:min-h-10 max-md:bg-s1 max-md:px-3 max-md:py-0 max-md:whitespace-nowrap',
+  'aria-[current]:font-semibold aria-[current]:text-ink aria-[current]:current-row',
+  'max-md:min-h-10 max-md:bg-s1 max-md:px-3 max-md:py-0 max-md:whitespace-nowrap max-md:aria-[current]:current-under',
 )
 
 /**
  * The list of a split page's sections on the left (Settings, My account, a user), with an
- * optional search. Place it in the first column of `PageLayout`'s `nav`; it stays in view while
- * the page scrolls. Below 768 px it becomes a strip of words under the title that scrolls
- * sideways, sticky at the top, with the current one lit and kept in view.
+ * optional search and optional groups under a heading. Place it in the first column of
+ * `PageLayout`'s `nav`; it stays in view while the page scrolls. Below 768 px it becomes a strip
+ * of words under the title that scrolls sideways, sticky at the top, with the current one
+ * underlined and kept in view.
  */
 export function SectionNav({ label, items, current, search, className }: SectionNavProps) {
   const row = useRef<HTMLDivElement>(null)
-  const hintId = useId()
+  const id = useId()
+  const hintId = `${id}-hint`
   useEffect(() => keepCurrentInView(row.current))
   useScrollFade(row)
+
+  const link = (item: SectionNavItem) => {
+    const content = (
+      <>
+        <span className="flex min-w-0 items-center gap-2">
+          {item.icon && (
+            <item.icon
+              size="1rem"
+              aria-hidden="true"
+              className="shrink-0 text-ink-3 max-md:hidden"
+            />
+          )}
+          {item.label}
+        </span>
+        <CaretRightIcon
+          size="1rem"
+          aria-hidden="true"
+          className="shrink-0 opacity-0 group-aria-[current]:opacity-80 max-md:hidden"
+        />
+      </>
+    )
+    return item.to.startsWith('#') ? (
+      <a
+        key={item.id}
+        href={item.to}
+        aria-current={current === item.id ? 'true' : undefined}
+        className={linkClass}
+      >
+        {content}
+      </a>
+    ) : (
+      <NavLink key={item.id} to={item.to} className={linkClass}>
+        {content}
+      </NavLink>
+    )
+  }
 
   return (
     // On a phone the wrapper steps aside (`contents`), so that the strip sticks along the page.
@@ -84,39 +134,25 @@ export function SectionNav({ label, items, current, search, className }: Section
           ref={row}
           className="flex flex-col gap-0.5 max-md:scroll-fade max-md:scrollbar-none max-md:flex-row max-md:gap-1 max-md:overflow-x-auto max-md:px-5 max-md:py-2"
         >
-          {items.map((item) => {
-            const content = (
-              <>
-                <span className="flex min-w-0 items-center gap-2">
-                  {item.icon && (
-                    <item.icon
-                      size="1rem"
-                      aria-hidden="true"
-                      className="shrink-0 text-ink-3 max-md:hidden"
-                    />
-                  )}
-                  {item.label}
-                </span>
-                <CaretRightIcon
-                  size="1rem"
-                  aria-hidden="true"
-                  className="shrink-0 opacity-0 group-aria-[current]:opacity-80 max-md:hidden"
-                />
-              </>
-            )
-            return item.to.startsWith('#') ? (
-              <a
-                key={item.id}
-                href={item.to}
-                aria-current={current === item.id ? 'true' : undefined}
-                className={linkClass}
+          {items.map((entry) => {
+            if (!('items' in entry)) return link(entry)
+            const headingId = `${id}-${entry.id}`
+            return (
+              // A group adds a heading, then its sections, in the same column (or strip).
+              <div
+                key={entry.id}
+                role="group"
+                aria-labelledby={headingId}
+                className="flex flex-col gap-0.5 not-first:mt-4 max-md:contents"
               >
-                {content}
-              </a>
-            ) : (
-              <NavLink key={item.id} to={item.to} className={linkClass}>
-                {content}
-              </NavLink>
+                <div
+                  id={headingId}
+                  className="px-3 pb-1 text-micro font-semibold text-ink-3 max-md:sr-only"
+                >
+                  {entry.label}
+                </div>
+                {entry.items.map(link)}
+              </div>
             )
           })}
         </div>
