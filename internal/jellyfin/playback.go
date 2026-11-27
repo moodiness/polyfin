@@ -1485,10 +1485,11 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	// An app that may not be told where the version comes from gets it
 	// through Polyfin, whatever its grant asks (see keptFromSource). A
 	// player that authenticates with a header might send it to the source
-	// too: relay instead of redirecting it.
+	// too, and one that refuses redirects across protocols cannot follow
+	// them (see mustRelay): relay instead of redirecting it.
 	relayed := func(version library.Version) (kept, relay bool) {
 		kept = h.keptFromSource(r, user, version)
-		return kept, grant.Relay || kept || strings.Contains(r.Header.Get("Authorization"), "Token=")
+		return kept, grant.Relay || kept || mustRelay(r, version) || strings.Contains(r.Header.Get("Authorization"), "Token=")
 	}
 	kept, relay := relayed(version)
 	// A player with no play session about to be sent from the start to a
