@@ -41,6 +41,7 @@ const system: typeof en = {
       nextRun: 'Nächste Ausführung',
       notRunYet: 'Noch nicht ausgeführt',
       byHandOnly: 'Nur manuelle Ausführung',
+      fixed: 'Fester Zeitplan',
       took: (span: string) => `dauerte ${span}`,
       results: {
         Completed: 'Abgeschlossen',
@@ -51,6 +52,12 @@ const system: typeof en = {
       cancelling: 'Wird gestoppt',
       runNow: 'Jetzt ausführen',
       runLabel: (name: string) => `${name} jetzt ausführen`,
+      confirm: {
+        title: (name: string) => `„${name}“ jetzt ausführen?`,
+        sends: 'Gesendete Nachrichten lassen sich nicht zurückholen.',
+        forgets:
+          'Was vergessen wird, lässt sich nicht zurückholen: Es wird bei Bedarf erneut abgerufen.',
+      },
       stop: 'Stoppen',
       stopLabel: (name: string) => `${name} stoppen`,
       started: (name: string) => `${name} gestartet.`,
@@ -151,19 +158,17 @@ const system: typeof en = {
         open: 'Öffnen',
       },
       checksTitle: 'Prüfungen',
-      moreTitle: 'Außerdem auf dieser Seite',
+      moreTitle: 'Weitere Messwerte',
       checks: {
         summary: (total: number, parts: string[]) =>
           `${total === 1 ? '1 Prüfung' : `${total} Prüfungen`}${parts.length > 0 ? ` · ${parts.join(', ')}` : ''}`,
-        fineCount: (count: number) => `${count} in Ordnung`,
+        fineCount: (count: number) => `${count} OK`,
         failingCount: (count: number) => `${count} mit Fehlern`,
         quietCount: (count: number) => `${count} aus oder wartend`,
         none: 'Keine',
         off: 'Aus',
-        ready: 'Bereit',
+        failedLately: 'Kürzliche Fehler',
         full: 'Ausgelastet',
-        fine: 'In Ordnung',
-        encrypted: 'Verschlüsselt',
         notEncrypted: 'Nicht verschlüsselt',
         keySet: 'Geheimer Schlüssel gesetzt',
         keyNotSet: 'Kein geheimer Schlüssel',

@@ -16,6 +16,7 @@ import {
   KeyIcon,
   PuzzlePieceIcon,
   TelevisionSimpleIcon,
+  type Icon,
 } from '@phosphor-icons/react'
 import {
   ApiError,
@@ -39,13 +40,11 @@ import {
   InlineError,
   Modal,
   Notice,
-  ProgressBar,
   RelativeTime,
   Row,
   RowList,
   Skeleton,
   SkeletonRows,
-  SkeletonText,
   StatusPill,
   type StatusTone,
 } from '@/ui'
@@ -61,7 +60,6 @@ import {
 import { errorMessage, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
 import type { Messages } from '@/i18n'
-import { CheckTile } from './CheckTile'
 import {
   addonTone,
   DetailBody,
@@ -164,14 +162,7 @@ function HealthSkeleton() {
       </div>
       <div>
         <Skeleton className="mb-3 h-6 w-32" />
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((index) => (
-            <div key={index} className="min-h-[9.25rem] rounded-panel bg-s1 px-4 py-3.5">
-              <Skeleton className="mb-5 size-7.5 rounded-full" />
-              <SkeletonText lines={3} />
-            </div>
-          ))}
-        </div>
+        <SkeletonRows rows={6} />
       </div>
     </>
   )
@@ -396,15 +387,19 @@ function downloadError(t: Messages, error: unknown): string {
 
 type CheckState = { tone: Exclude<StatusTone, 'live'>; word: string }
 
+/**
+ * A check of Health on a row: its part, a line or two on it, then on the right its name or figure
+ * over its state, an icon and a word. The row opens the part's details, or `to` elsewhere.
+ */
 type Check = {
   id: string
-  to: Parameters<typeof CheckTile>[0]['to']
+  to: { hash: DetailId } | string
   state: CheckState
-  icon: Parameters<typeof CheckTile>[0]['icon']
+  icon: Icon
   kind: string
-  title: ReactNode
+  title?: ReactNode
   body?: ReactNode
-  foot: ReactNode
+  foot?: ReactNode
 }
 
 /** A label and its value, as one line: "Last answer: 3 minutes ago". */
@@ -424,10 +419,15 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
   const text = t.system.health
   const words = text.checks
   const number = (value: number) => value.toLocaleString(language)
+  const navigate = useNavigate()
   const checks: Check[] = []
 
   const addons = health.addons
   const addonTones = addons.map((addon) => addonTone(addon)[0])
+  // An addon answering again after a failure in the last hour is not quite fine yet.
+  const failedLately = addons.some(
+    (addon) => addon.enabled && addon.hour.some((origin) => origin.failures > 0),
+  )
   const one = addons.length === 1 ? addons[0] : undefined
   const answered = latest(addons.map((addon) => addon.lastSuccessAt))
   checks.push({
@@ -440,11 +440,13 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         ? { tone: 'muted', word: words.none }
         : addonTones.includes('warn')
           ? { tone: 'warn', word: text.addonStatus.failing }
-          : addonTones.includes('ok')
-            ? { tone: 'ok', word: text.addonStatus.ok }
-            : addons.every((addon) => !addon.enabled)
-              ? { tone: 'muted', word: text.addonStatus.off }
-              : { tone: 'muted', word: text.addonStatus.unknown },
+          : failedLately
+            ? { tone: 'warn', word: words.failedLately }
+            : addonTones.includes('ok')
+              ? { tone: 'ok', word: text.ok }
+              : addons.every((addon) => !addon.enabled)
+                ? { tone: 'muted', word: text.addonStatus.off }
+                : { tone: 'muted', word: text.addonStatus.unknown },
     title: one ? one.name : addons.length === 0 ? words.none : words.addons(addons.length),
     body:
       addons.length === 0 ? (
@@ -513,9 +515,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         <Said label={t.iptv.nextFetch}>
           <RelativeTime iso={next} />
         </Said>
-      ) : (
-        words.details
-      ),
+      ) : undefined,
     })
 
     const catalogs = sources.guides.filter((library) => (library.guides ?? []).length > 0)
@@ -568,11 +568,10 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
     state: health.database.busy
       ? { tone: 'warn', word: text.busy }
       : health.database.reachable
-        ? { tone: 'ok', word: text.reachable }
+        ? { tone: 'ok', word: text.ok }
         : { tone: 'danger', word: text.unreachable },
     title: health.database.size !== null ? formatBytes(health.database.size, language) : '–',
     body: words.databaseSize,
-    foot: words.details,
   })
 
   const transcoder = health.transcoder
@@ -590,7 +589,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         ? { tone: 'muted', word: words.off }
         : transcoder.limit > 0 && transcoder.conversions >= transcoder.limit
           ? { tone: 'warn', word: words.full }
-          : { tone: 'ok', word: words.ready },
+          : { tone: 'ok', word: text.ok },
       title: hardware ? t.dashboard.live.gpu(hardware.method) : words.processor,
       body: hardware ? (
         <>
@@ -616,9 +615,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
       icon: ArchiveIcon,
       kind: text.backupTitle,
       state: { tone: 'muted', word: words.off },
-      title: words.off,
       body: text.backupOff,
-      foot: words.openSettings,
     })
   } else {
     const problem = backup.destinations
@@ -636,16 +633,14 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
             ? { tone: problem.tone === 'danger' ? 'danger' : 'warn', word: problem.label }
             : backup.ranAt === null
               ? { tone: 'muted', word: text.backup.none }
-              : { tone: 'ok', word: text.backup.succeeded },
+              : { tone: 'ok', word: text.ok },
       title: backup.madeAt ? <RelativeTime iso={backup.madeAt} /> : text.backup.none,
       body: backup.madeAt ? text.backup.made : undefined,
       foot: backup.next ? (
         <Said label={text.backup.next}>
           <RelativeTime iso={backup.next} />
         </Said>
-      ) : (
-        words.details
-      ),
+      ) : undefined,
     })
   }
 
@@ -656,26 +651,13 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
       to: { hash: 'cache' },
       icon: HardDrivesIcon,
       kind: text.cacheTitle,
-      state: { tone: 'ok', word: words.fine },
+      state: { tone: 'ok', word: text.ok },
       title: text.cacheUse(formatBytes(cache.used, language), formatBytes(cache.limit, language)),
-      body: (
-        <>
-          {text.keptFor(cache.days)}
-          <ProgressBar
-            value={cache.limit > 0 ? cache.used / cache.limit : 0}
-            label={text.cacheTitle}
-            variant="neutral"
-            size="md"
-            className="mt-3"
-          />
-        </>
-      ),
+      body: text.keptFor(cache.days),
       foot:
         cache.hits + cache.misses > 0 ? (
           <Said label={text.hitRatio}>{hitRatio(text, cache, language)}</Said>
-        ) : (
-          words.details
-        ),
+        ) : undefined,
     })
   }
 
@@ -690,7 +672,7 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         secrets.unreadable.length > 0
           ? { tone: 'danger', word: text.unreadable }
           : secrets.encrypted
-            ? { tone: 'ok', word: words.encrypted }
+            ? { tone: 'ok', word: text.ok }
             : { tone: 'warn', word: words.notEncrypted },
       title: secrets.encrypted ? words.keySet : words.keyNotSet,
       body: <Said label={text.storedPlain}>{number(secrets.plaintext)}</Said>,
@@ -704,9 +686,6 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
     })
   }
 
-  // Three columns: one wide tile first, or a wide one first and last, so that no row ends with a
-  // hole (see CheckTile for two columns).
-  const holes = (3 - (checks.length % 3)) % 3
   const fine = checks.filter((check) => check.state.tone === 'ok').length
   const failing = checks.filter(
     (check) => check.state.tone === 'warn' || check.state.tone === 'danger',
@@ -728,22 +707,42 @@ function Checks({ health, sources }: { health: Health; sources: Sources | undefi
         </span>
       }
     >
-      <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-        {checks.map((check, index) => (
-          <CheckTile
+      <RowList aria-label={text.checksTitle} className="lg:grid-cols-2">
+        {checks.map((check) => (
+          <Row
             key={check.id}
-            to={check.to}
-            wide={(holes >= 1 && index === 0) || (holes === 2 && index === checks.length - 1)}
-            icon={check.icon}
-            kind={check.kind}
-            title={check.title}
-            state={<StatusPill tone={check.state.tone}>{check.state.word}</StatusPill>}
-            foot={check.foot}
-          >
-            {check.body}
-          </CheckTile>
+            leading={check.icon}
+            title={check.kind}
+            meta={
+              check.title === undefined &&
+              check.body === undefined &&
+              check.foot === undefined ? undefined : (
+                <>
+                  {/* A phone puts the name or figure here, leaving the right to the state. */}
+                  {check.title !== undefined && (
+                    <span className="basis-full text-ink figures md:hidden">{check.title}</span>
+                  )}
+                  {check.body !== undefined && <span className="basis-full">{check.body}</span>}
+                  {check.foot !== undefined && <span className="basis-full">{check.foot}</span>}
+                </>
+              )
+            }
+            trailing={
+              <>
+                {check.title !== undefined && (
+                  <span className="break-words text-ink figures max-md:hidden">{check.title}</span>
+                )}
+                <StatusPill tone={check.state.tone}>{check.state.word}</StatusPill>
+              </>
+            }
+            onClick={() =>
+              void (typeof check.to === 'string'
+                ? navigate(check.to)
+                : navigate(check.to, { state: detailOpened, preventScrollReset: true }))
+            }
+          />
         ))}
-      </div>
+      </RowList>
     </Block>
   )
 }

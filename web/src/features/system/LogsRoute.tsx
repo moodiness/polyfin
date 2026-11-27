@@ -65,7 +65,18 @@ function useWide(): boolean {
   )
 }
 
-type Line = { seq: number; time: string; level: Level; text: string }
+/**
+ * A line of the log: its time, its level, its text, which the search reads, and that text as its
+ * message and its other keys.
+ */
+type Line = {
+  seq: number
+  time: string
+  level: Level
+  text: string
+  message: string
+  fields: [string, string][]
+}
 
 /** Each level as a state: an icon and the word, in the color of a warning or an error. */
 const levelLooks: Record<Level, { tone: StatusTone; icon: Icon }> = {
@@ -91,7 +102,37 @@ function parse(raw: string, seq: number): Line {
     level = levelMatch[1] as Level
     rest = rest.slice(levelMatch[0].length)
   }
-  return { seq, time, level, text: rest }
+  return { seq, time, level, text: rest, ...splitFields(rest) }
+}
+
+/** One `key=value` of logfmt, the value bare or quoted as Go quotes it. */
+const logfmtPair = /([^\s="]+)=("(?:[^"\\]|\\.)*"|[^\s"]*)\s*/y
+
+/**
+ * Splits the logfmt of a line into its message, `msg`, and its other keys in their order. A line
+ * that is not logfmt, or has no message, is all message.
+ */
+function splitFields(text: string): Pick<Line, 'message' | 'fields'> {
+  const pairs: [string, string][] = []
+  for (let at = 0; at < text.length; at = logfmtPair.lastIndex) {
+    logfmtPair.lastIndex = at
+    const match = logfmtPair.exec(text)
+    if (match === null) return { message: text, fields: [] }
+    pairs.push([match[1], unquote(match[2])])
+  }
+  const message = pairs.findIndex(([key]) => key === 'msg')
+  if (message < 0) return { message: text, fields: [] }
+  return { message: pairs[message][1], fields: pairs.filter((_, index) => index !== message) }
+}
+
+/** A logfmt value without its quotes and escapes; one JSON does not read keeps its escapes. */
+function unquote(value: string): string {
+  if (!value.startsWith('"')) return value
+  try {
+    return JSON.parse(value) as string
+  } catch {
+    return value.slice(1, -1)
+  }
 }
 
 /** `/system/logs`: the server's log, followed live, filtered by level and words. */
@@ -311,19 +352,29 @@ export default function LogsRoute() {
 }
 
 /**
- * A line of the log. Lines never change once read, so each is drawn once, not again at each read
- * that adds lines after it.
+ * A line of the log: its message, then its keys as muted pairs under it. Lines never change once
+ * read, so each is drawn once, not again at each read that adds lines after it. Download keeps
+ * the raw text.
  */
 const LogLine = memo(function LogLine({ line }: { line: Line }) {
   return (
-    <li className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-center gap-x-3 rounded-[0.5rem] px-3 py-1 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2">
+    <li className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-baseline gap-x-3 rounded-[0.5rem] px-3 py-1.5 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2">
       <span className="text-micro text-ink-2 figures">{line.time}</span>
       <StatusPill tone={levelLooks[line.level].tone} icon={levelLooks[line.level].icon}>
         {line.level}
       </StatusPill>
-      <span className="min-w-0 font-mono text-[0.8125rem] leading-5 whitespace-pre-wrap text-ink [overflow-wrap:anywhere] max-md:col-span-2">
-        {line.text}
-      </span>
+      <div className="min-w-0 font-mono text-small [overflow-wrap:anywhere] max-md:col-span-2">
+        <p className="whitespace-pre-wrap text-ink">{line.message}</p>
+        {line.fields.length > 0 && (
+          <p className="mt-0.5 flex flex-wrap gap-x-4 text-ink-3">
+            {line.fields.map(([key, value], index) => (
+              <span key={index} className="min-w-0 whitespace-pre-wrap">
+                {key}=<span className="text-ink-2">{value}</span>
+              </span>
+            ))}
+          </p>
+        )}
+      </div>
     </li>
   )
 })

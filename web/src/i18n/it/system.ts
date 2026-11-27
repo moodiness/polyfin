@@ -40,6 +40,7 @@ const system: typeof en = {
       nextRun: 'Prossima esecuzione',
       notRunYet: 'Non ancora eseguita',
       byHandOnly: 'Solo esecuzione manuale',
+      fixed: 'Pianificazione fissa',
       took: (span: string) => `durata ${span}`,
       results: {
         Completed: 'Completata',
@@ -50,6 +51,12 @@ const system: typeof en = {
       cancelling: 'Interruzione in corso',
       runNow: 'Esegui ora',
       runLabel: (name: string) => `Esegui ${name} ora`,
+      confirm: {
+        title: (name: string) => `Eseguire «${name}» ora?`,
+        sends: 'I messaggi inviati non si possono richiamare.',
+        forgets:
+          'Ciò che viene dimenticato non si può recuperare: viene scaricato di nuovo quando serve.',
+      },
       stop: 'Interrompi',
       stopLabel: (name: string) => `Interrompi ${name}`,
       started: (name: string) => `${name} avviata.`,
@@ -151,19 +158,17 @@ const system: typeof en = {
         open: 'Apri',
       },
       checksTitle: 'Controlli',
-      moreTitle: 'Anche in questa pagina',
+      moreTitle: 'Altre misure',
       checks: {
         summary: (total: number, parts: string[]) =>
           `${total === 1 ? '1 controllo' : `${total} controlli`}${parts.length > 0 ? ` · ${parts.join(', ')}` : ''}`,
-        fineCount: (count: number) => `${count} in ordine`,
+        fineCount: (count: number) => `${count} OK`,
         failingCount: (count: number) => `${count} con errori`,
         quietCount: (count: number) => `${count} disattivati o in attesa`,
         none: 'Nessuno',
         off: 'Disattivato',
-        ready: 'Pronto',
+        failedLately: 'Errori recenti',
         full: 'Al limite',
-        fine: 'In ordine',
-        encrypted: 'Cifrate',
         notEncrypted: 'Non cifrate',
         keySet: 'Chiave segreta impostata',
         keyNotSet: 'Nessuna chiave segreta',
