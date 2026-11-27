@@ -21,8 +21,9 @@ export function useNumber(): (n: number) => string {
 }
 
 /**
- * Previous and next buttons over a paged list, with where the page stands. A list paged above
- * and below gives the one below `end`, for a name of its own.
+ * Previous and next buttons over a paged list, with where the page stands; nothing while the list
+ * fits in one page, whose count its title already gives. A list paged above and below gives the
+ * one below `end`, for a name of its own.
  */
 export function Pager({
   offset,
@@ -41,7 +42,7 @@ export function Pager({
 }) {
   const { t } = useI18n()
   const number = useNumber()
-  if (total === 0) return null
+  if (offset === 0 && total <= limit) return null
   return (
     <nav
       aria-label={end ? t.lineup.pager.labelEnd : t.lineup.pager.label}

@@ -1,4 +1,5 @@
 import {
+  CheckCircleIcon,
   CloudIcon,
   FilmSlateIcon,
   FolderIcon,
@@ -62,6 +63,7 @@ import {
   Notice,
   NumberInput,
   SecretField,
+  SettingHelp,
   Segmented,
   Select,
   Skeleton,
@@ -72,10 +74,14 @@ import {
   useToast,
 } from '@/ui'
 import { folderFailure, invalidateScope, replaceCachedAddon } from './model'
+import { AddActions } from './addActions'
 import { Group } from './parts'
 import TitleSearch from './TitleSearch'
 
-/** A part of a folder's page: a group with its title and help, or the figures without one. */
+/**
+ * A part of a folder's page: a group with its title and help (two lines, with More for the rest),
+ * or the figures without one.
+ */
 function FolderSection({
   title,
   description,
@@ -85,11 +91,14 @@ function FolderSection({
   description?: ReactNode
   children: ReactNode
 }) {
+  const helpId = useId()
   if (title === undefined) return <div className="mt-13 max-md:mt-10">{children}</div>
   return (
     <Group title={title}>
       {description !== undefined && (
-        <p className="mb-5 max-w-[66ch] text-small text-ink-2">{description}</p>
+        <div className="mb-4">
+          <SettingHelp id={helpId}>{description}</SettingHelp>
+        </div>
       )}
       {children}
     </Group>
@@ -275,6 +284,7 @@ export function LocalFolderAddForm({
   const [draft, setDraft] = useState<RemoteDraft>(() => remoteDraft())
   const share = location === 'local' ? null : location
   const system = useServerSystem()
+  const formId = useId()
   const mutation = useMutation({
     mutationFn: () =>
       addLocalFolder({
@@ -304,7 +314,7 @@ export function LocalFolderAddForm({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+    <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-4">
       <Field
         label={text.location}
         help={share === null ? text.help[computer(system)] : text.shareHelp[share]}
@@ -402,11 +412,11 @@ export function LocalFolderAddForm({
         </Field>
       )}
       {mutation.isError && <FieldError>{errorMessage(t, mutation.error)}</FieldError>}
-      <div>
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+      <AddActions>
+        <Button type="submit" form={formId} variant="primary" loading={mutation.isPending}>
           {text.add}
         </Button>
-      </div>
+      </AddActions>
     </form>
   )
 }
@@ -922,10 +932,40 @@ function KindChange({ folder, kind }: { folder: LocalFolder; kind: FolderKind })
 }
 
 /**
- * A folder's figures: its files, those matched, how, and the others, its last scan, and why it
- * cannot be read when it cannot. A music folder's are its tracks, albums and artists, its tracks
- * with a gain and those measured, and its tracks left out; a home videos folder's its videos, by
- * where their dates come from.
+ * Why a folder cannot be read, when it cannot, with `actions` that fix it (scan again, change the
+ * folder): the first thing of its page, under its head.
+ */
+export function FolderAlert({
+  folder,
+  actions,
+  className,
+}: {
+  folder: LocalFolder
+  actions?: ReactNode
+  className?: string
+}) {
+  const { t } = useI18n()
+  const text = t.localFolders
+  const failure = folderFailure(folder)
+  if (failure === '') return null
+  const errors = folder.share === '' ? text.errors : text.shareErrors
+  return (
+    <AlertTile
+      tone="danger"
+      title={folder.share === '' ? text.errorTitle : text.errorTitleShare}
+      actions={actions}
+      className={className}
+    >
+      {Object.hasOwn(errors, failure) ? errors[failure] : t.errors.generic}{' '}
+      {folder.files > 0 && text.keptNote}
+    </AlertTile>
+  )
+}
+
+/**
+ * A folder's figures: its files, those matched, how, and the others. A music folder's are its
+ * tracks, albums and artists, its tracks with a gain and those measured, and its tracks left out;
+ * a home videos folder's its videos, by where their dates come from.
  */
 export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const { language, t } = useI18n()
@@ -963,20 +1003,8 @@ export function LocalFolderFigures({ folder }: { folder: LocalFolder }) {
   const skippedParts = linkReasons
     .filter((reason) => skipped[reason] > 0)
     .map((reason) => text.skippedLinks[reason](skipped[reason].toLocaleString(language)))
-  const errors = folder.share === '' ? text.errors : text.shareErrors
-  const failure = folderFailure(folder)
   return (
     <FolderSection>
-      {failure !== '' && (
-        <AlertTile
-          tone="danger"
-          title={folder.share === '' ? text.errorTitle : text.errorTitleShare}
-          className="mb-5"
-        >
-          {Object.hasOwn(errors, failure) ? errors[failure] : t.errors.generic}{' '}
-          {folder.files > 0 && text.keptNote}
-        </AlertTile>
-      )}
       <div
         className={cx(
           'grid gap-2.5 max-md:grid-cols-2',
@@ -1086,7 +1114,11 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
     queryFn: ({ signal }) => fetchUnmatchedFiles(addon.id, signal),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === addon.id ? previous : undefined,
+    // Without files left over, the figures say it all: nothing to list.
+    enabled: folder.unmatched > 0,
   })
+  // Every file found was matched: one line says so, without the help on matching.
+  const allMatched = folder.unmatched === 0
   const unlink = useMutation({
     mutationFn: (unit: string) => unlinkLocalFile(addon.id, unit),
     onSuccess: (updated, unit) => {
@@ -1113,50 +1145,56 @@ export function UnmatchedFiles({ addon, folder }: { addon: Addon; folder: LocalF
 
   return (
     <>
-      <FolderSection
-        title={folder.kind === 'music' ? text.leftOutTitle : text.unmatchedTitle}
-        description={folder.kind === 'music' ? text.leftOutHelp : text.unmatchedHelp}
-      >
-        {unmatched.isPending ? (
-          <Skeleton className="h-24 rounded-panel" />
-        ) : unmatched.isError ? (
-          <InlineError onRetry={() => void unmatched.refetch()} retrying={unmatched.isRefetching}>
-            {errorMessage(t, unmatched.error)}
-          </InlineError>
-        ) : unmatched.data.files.length === 0 ? (
-          <p className="text-control text-ink-3">
-            {folder.kind === 'music' ? text.noLeftOut : text.noUnmatched}
-          </p>
-        ) : (
-          <>
-            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
-              {unmatched.data.files.map((file, i, files) => {
-                const disc = file.discTitle?.discPath
-                return (
-                  <Fragment key={file.path}>
-                    {disc !== undefined && files[i - 1]?.discTitle?.discPath !== disc && (
-                      <DiscSuggestion
-                        addon={addon}
-                        folder={folder}
-                        titles={files.filter((other) => other.discTitle?.discPath === disc)}
-                      />
-                    )}
-                    <UnmatchedRow addon={addon} folder={folder} file={file} />
-                  </Fragment>
-                )
-              })}
-            </ul>
-            {unmatched.data.total > unmatched.data.files.length && (
-              <p className="mt-3 text-small text-ink-3">
-                {text.shownOf(
-                  unmatched.data.files.length.toLocaleString(language),
-                  unmatched.data.total.toLocaleString(language),
-                )}
-              </p>
-            )}
-          </>
-        )}
-      </FolderSection>
+      {/* A folder never read, or unreadable, has no file to tell of. */}
+      {folder.files > 0 && (
+        <FolderSection
+          title={folder.kind === 'music' ? text.leftOutTitle : text.unmatchedTitle}
+          description={
+            allMatched ? undefined : folder.kind === 'music' ? text.leftOutHelp : text.unmatchedHelp
+          }
+        >
+          {allMatched || unmatched.data?.files.length === 0 ? (
+            <p className="flex items-center gap-2 text-control text-ink-2">
+              <CheckCircleIcon size="1.125rem" aria-hidden="true" className="shrink-0 text-ok" />
+              {folder.kind === 'music' ? text.noLeftOut : text.noUnmatched}
+            </p>
+          ) : unmatched.isPending ? (
+            <Skeleton className="h-24 rounded-panel" />
+          ) : unmatched.isError ? (
+            <InlineError onRetry={() => void unmatched.refetch()} retrying={unmatched.isRefetching}>
+              {errorMessage(t, unmatched.error)}
+            </InlineError>
+          ) : (
+            <>
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
+                {unmatched.data.files.map((file, i, files) => {
+                  const disc = file.discTitle?.discPath
+                  return (
+                    <Fragment key={file.path}>
+                      {disc !== undefined && files[i - 1]?.discTitle?.discPath !== disc && (
+                        <DiscSuggestion
+                          addon={addon}
+                          folder={folder}
+                          titles={files.filter((other) => other.discTitle?.discPath === disc)}
+                        />
+                      )}
+                      <UnmatchedRow addon={addon} folder={folder} file={file} />
+                    </Fragment>
+                  )
+                })}
+              </ul>
+              {unmatched.data.total > unmatched.data.files.length && (
+                <p className="mt-3 text-small text-ink-3">
+                  {text.shownOf(
+                    unmatched.data.files.length.toLocaleString(language),
+                    unmatched.data.total.toLocaleString(language),
+                  )}
+                </p>
+              )}
+            </>
+          )}
+        </FolderSection>
+      )}
       {folder.kind === 'shows' && folder.unlistedEpisodes > 0 && (
         <UnlistedEpisodes addon={addon} folder={folder} />
       )}

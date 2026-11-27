@@ -479,7 +479,8 @@ function LibraryForm({
             ) : undefined
           }
         >
-          {t.libraries.noAddons}
+          {/* With sources but no catalog yet, adding a source is not what is missing. */}
+          {addons.length > 0 ? t.libraries.noCatalogsYet : t.libraries.noAddons}
         </EmptyState>
       </Block>
     )

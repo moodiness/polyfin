@@ -39,8 +39,8 @@ export function MappingText({ mapping }: { mapping: GuideMapping | null }) {
 }
 
 /**
- * The actions on one channel's mapping: choose a guide channel, pin "no guide", or go back to
- * automatic. The picker opens under the actions, full width.
+ * One channel's Change, which opens under it, full width, the choice of its guide channel, with
+ * "No guide" and, once set by hand, "Back to automatic" beside Cancel.
  */
 export function MappingControls({
   scope,
@@ -70,44 +70,24 @@ export function MappingControls({
   })
   const clear = useMutation({
     mutationFn: () => clearMapping(scope, target, channelId),
-    onSuccess: onChanged,
+    onSuccess: (item) => {
+      setPicking(false)
+      onChanged(item)
+    },
   })
   const busy = set.isPending || clear.isPending
   return (
     <>
-      <div className="flex flex-wrap gap-1.5">
-        <Button
-          size="sm"
-          aria-expanded={picking}
-          aria-label={text.chooseLabel(channelName)}
-          disabled={busy}
-          onClick={() => setPicking((open) => !open)}
-        >
-          {text.choose}
-        </Button>
-        {!(mapping?.manual && mapping.guideChannelId === null) && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            aria-label={text.noGuideLabel(channelName)}
-            onClick={() => set.mutate(null)}
-          >
-            {text.noGuide}
-          </Button>
-        )}
-        {mapping?.manual && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            aria-label={text.automaticLabel(channelName)}
-            onClick={() => clear.mutate()}
-          >
-            {text.backToAutomatic}
-          </Button>
-        )}
-      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-expanded={picking}
+        aria-label={text.changeLabel(channelName)}
+        disabled={busy}
+        onClick={() => setPicking((open) => !open)}
+      >
+        {text.change}
+      </Button>
       {(set.isError || clear.isError) && (
         <div className="w-full">
           <FieldError>{errorMessage(t, set.error ?? clear.error)}</FieldError>
@@ -124,6 +104,32 @@ export function MappingControls({
               set.mutate({ guideId: channel.guideId, guideChannelId: channel.id })
             }
             onCancel={() => setPicking(false)}
+            actions={
+              <>
+                {!(mapping?.manual && mapping.guideChannelId === null) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    aria-label={text.noGuideLabel(channelName)}
+                    onClick={() => set.mutate(null)}
+                  >
+                    {text.noGuide}
+                  </Button>
+                )}
+                {mapping?.manual && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    aria-label={text.automaticLabel(channelName)}
+                    onClick={() => clear.mutate()}
+                  >
+                    {text.backToAutomatic}
+                  </Button>
+                )}
+              </>
+            }
           />
         </div>
       )}

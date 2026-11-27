@@ -1,5 +1,5 @@
 import { MagnifyingGlassIcon } from '@phosphor-icons/react'
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   fetchCatalogGuides,
@@ -19,12 +19,14 @@ const pageSize = 50
 /**
  * Searches the channels of a catalog's guides, to map a channel to one by hand. The search starts
  * from the channel's name; each result shows its names, id, guide, icon and what airs now.
+ * `actions` (No guide, Back to automatic) sit beside Cancel.
  */
 export default function GuidePicker({
   scope,
   target,
   channelName,
   busy = false,
+  actions,
   onPick,
   onCancel,
 }: {
@@ -32,6 +34,7 @@ export default function GuidePicker({
   target: CatalogTarget
   channelName: string
   busy?: boolean
+  actions?: ReactNode
   onPick: (channel: GuideChannel) => void
   onCancel: () => void
 }) {
@@ -56,13 +59,16 @@ export default function GuidePicker({
 
   return (
     <section aria-labelledby={titleId} className="mt-2 mb-3 min-w-0 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <h3 id={titleId} className="min-w-0 text-control font-semibold break-words text-ink">
           {text.title(channelName)}
         </h3>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          {t.common.cancel}
-        </Button>
+        <div className="flex flex-wrap gap-1.5">
+          {actions}
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            {t.common.cancel}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-2.5">
         <Field label={text.search} hideLabel className="min-w-48 flex-[2_1_19rem]">

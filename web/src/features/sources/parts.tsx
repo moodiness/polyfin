@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { Addon } from '@/api'
 import { useI18n } from '@/i18n'
-import { cx, IconTile, StatusPill } from '@/ui'
+import { cx, IconTile, Panel, StatusPill } from '@/ui'
 import { folderFailure, kindIcon } from './model'
 
 type LogoState = 'loading' | 'loaded' | 'failed'
@@ -163,43 +163,28 @@ export function Group({
 }
 
 /**
- * Facts of a source as tiles, two side by side (one on a phone): `Fact`s inside. A fact alone on
- * its line takes the whole line, so no line ends with a hole.
+ * Facts of a source, read-only: label and value pairs in one panel, the labels in a column on the
+ * left (above their value on a phone), so that nothing looks like a setting to change.
  */
 export function Facts({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <dl aria-label={label} className="figures flex flex-wrap gap-1.5">
-      {children}
-    </dl>
+    <Panel as="div">
+      <dl
+        aria-label={label}
+        className="figures grid grid-cols-[minmax(0,1fr)] gap-y-3 md:grid-cols-[minmax(9rem,max-content)_minmax(0,1fr)] md:gap-x-8 md:gap-y-2.5"
+      >
+        {children}
+      </dl>
+    </Panel>
   )
 }
 
-/**
- * One fact on a tile: the label on the left and the value on the right, or, for a long value (an
- * address, a description), the value under the label across the whole row (`wide`).
- */
-export function Fact({
-  label,
-  children,
-  wide = false,
-}: {
-  label: ReactNode
-  children: ReactNode
-  wide?: boolean
-}) {
+/** One fact of `Facts`: its label, then its value (an address wraps anywhere it must). */
+export function Fact({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div
-      className={cx(
-        'flex min-h-12 min-w-0 rounded-row bg-s1 px-4 py-2.5 max-md:basis-full',
-        wide
-          ? 'basis-full flex-col justify-center gap-1'
-          : 'grow basis-[calc(50%-0.1875rem)] flex-wrap items-center justify-between gap-x-5 gap-y-0.5',
-      )}
-    >
-      <dt className="text-h3 text-ink">{label}</dt>
-      <dd className={cx('min-w-0 text-control break-words text-ink-2', !wide && 'text-right')}>
-        {children}
-      </dd>
+    <div className="grid min-w-0 gap-y-0.5 md:col-span-2 md:grid-cols-subgrid md:items-baseline">
+      <dt className="text-control text-ink-2">{label}</dt>
+      <dd className="min-w-0 text-control break-words text-ink">{children}</dd>
     </div>
   )
 }

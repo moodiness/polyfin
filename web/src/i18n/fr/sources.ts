@@ -55,6 +55,13 @@ const sources: typeof en = {
       'Désactiver une source masque ses bibliothèques dans les applications Jellyfin sans les perdre.',
     order: 'Ordre',
     position: (position: number, count: number) => `${position} sur ${count}`,
+    orderHelpShared:
+      'Les descriptions, les sous-titres et les résultats de recherche suivent cet ordre, parmi les sources du serveur\u202f; les sources personnelles des membres viennent après.',
+    orderHelpMine:
+      'Les descriptions, les sous-titres et les résultats de recherche suivent cet ordre parmi vos sources, après celles du serveur.',
+    versionOrderLink: 'L’ordre des versions se règle dans Paramètres › Lecture.',
+    problemsTitle: 'À régler',
+    inOrderTitle: 'Dans leur ordre',
     moved: (name: string, position: number, count: number) =>
       `${name} est maintenant en position ${position} sur ${count}.`,
     description: 'Description',
@@ -126,6 +133,7 @@ const sources: typeof en = {
     manifestCalls: (name: string) => `Son manifeste le nomme «\u202f${name}\u202f».`,
     nameSaved: (name: string) => `${name}\u202f: son nom a été enregistré.`,
     edit: 'Modifier le compte',
+    editAddress: 'Modifier l’adresse',
     saved: 'Source enregistrée.',
     remove: 'Supprimer',
     removeTitle: (name: string) => `Supprimer ${name}\u202f?`,

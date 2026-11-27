@@ -103,3 +103,13 @@ export function folderFailure(folder: LocalFolder): string {
   if (folder.error !== '') return folder.error
   return folder.offeredHostKey !== '' ? 'host_key_changed' : ''
 }
+
+/**
+ * Whether a source turned on does not work: its last IPTV download failed, or its local folder
+ * cannot be read. Such a source leads the list, and its alert its page.
+ */
+export function hasProblem(addon: Addon): boolean {
+  if (!addon.enabled) return false
+  if (addon.source !== null && addon.source.error !== '') return true
+  return addon.folder !== null && folderFailure(addon.folder) !== ''
+}

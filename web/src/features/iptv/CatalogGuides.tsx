@@ -394,7 +394,6 @@ function Automap({
           {run.isPending && run.variables === 'unmapped' ? text.running : text.unmapped}
         </Button>
         <Button
-          variant="danger"
           disabled={run.isPending}
           onClick={() => {
             run.reset()

@@ -55,6 +55,13 @@ const sources: typeof en = {
       'Disattivare un’origine nasconde le sue librerie nelle applicazioni Jellyfin senza perderle.',
     order: 'Ordine',
     position: (position: number, count: number) => `${position} di ${count}`,
+    orderHelpShared:
+      'Descrizioni, sottotitoli e risultati di ricerca seguono questo ordine tra le origini del server; le origini personali dei membri vengono dopo.',
+    orderHelpMine:
+      'Descrizioni, sottotitoli e risultati di ricerca seguono questo ordine tra le tue origini, dopo quelle del server.',
+    versionOrderLink: 'L’ordine delle versioni si imposta in Impostazioni › Riproduzione.',
+    problemsTitle: 'Da sistemare',
+    inOrderTitle: 'Nel loro ordine',
     moved: (name: string, position: number, count: number) =>
       `${name} spostata alla posizione ${position} di ${count}.`,
     description: 'Descrizione',
@@ -124,6 +131,7 @@ const sources: typeof en = {
     manifestCalls: (name: string) => `Il suo manifest lo chiama «${name}».`,
     nameSaved: (name: string) => `${name}: nome salvato.`,
     edit: 'Modifica l’account',
+    editAddress: 'Modifica l’indirizzo',
     saved: 'Origine salvata.',
     remove: 'Rimuovi',
     removeTitle: (name: string) => `Rimuovere ${name}?`,

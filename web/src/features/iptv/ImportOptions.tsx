@@ -7,6 +7,7 @@ import { useI18n, type Messages } from '@/i18n'
 import {
   Button,
   Checkbox,
+  cx,
   FieldError,
   InlineError,
   Notice,
@@ -437,7 +438,13 @@ function ExclusionPicker({
               {listed.map((category) => (
                 <li
                   key={category.key}
-                  className="min-w-0 [contain-intrinsic-size:auto_2rem] [content-visibility:auto]"
+                  // A long list draws only the rows in view; a short one draws at once, never
+                  // showing its box empty for a frame.
+                  className={cx(
+                    'min-w-0',
+                    listed.length > 200 &&
+                      '[contain-intrinsic-size:auto_2rem] [content-visibility:auto]',
+                  )}
                 >
                   <Checkbox
                     checked={!set.has(category.key)}

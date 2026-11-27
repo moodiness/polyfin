@@ -6,7 +6,8 @@ import {
   PencilSimpleIcon,
   TrashIcon,
 } from '@phosphor-icons/react'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   deleteAddon,
@@ -22,6 +23,7 @@ import {
   type Scope,
 } from '@/api'
 import { useSessionUser } from '@/app/session'
+import { settingsPath } from '@/app/navigation'
 import { IptvSource } from '@/features/iptv/IptvSource'
 import { catalogTypeLabel, errorMessage, languageOptions, stremioLabel } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
@@ -42,6 +44,7 @@ import {
   MoveButtons,
   Notice,
   RelativeTime,
+  SettingHelp,
   SettingRow,
   TextInput,
   useToast,
@@ -52,6 +55,7 @@ import { AddonSettings, MusicBadge } from './AddonSettings'
 import { IptvEditForm } from './IptvForms'
 import {
   computer,
+  FolderAlert,
   LocalFolderEditForm,
   LocalFolderFigures,
   UnmatchedFiles,
@@ -218,7 +222,14 @@ export function SourceDetail({
     .filter(Boolean)
     .join(' · ')
   const when = lastTime(addon)
-  const editLabel = folder !== null ? t.localFolders.edit : iptv ? text.edit : text.replace
+  const editLabel =
+    folder !== null
+      ? t.localFolders.edit
+      : addon.kind === 'xtream'
+        ? text.edit
+        : iptv
+          ? text.editAddress
+          : text.replace
   const refreshLabel =
     folder !== null ? t.localFolders.scan : iptv ? t.lineup.summary.refresh : text.refresh
 
@@ -313,6 +324,7 @@ export function SourceDetail({
         {scope === 'shared' && <SourceUsedBy key={addon.id} addon={addon} />}
         {onMove && count > 1 && (
           <OrderRow
+            scope={scope}
             name={addon.name}
             index={index}
             count={count}
@@ -329,6 +341,44 @@ export function SourceDetail({
       <FieldError>{errorMessage(t, refresh.error)}</FieldError>
     </div>
   )
+
+  // What fixes a source that does not work, under its alert: read it again, or change it.
+  const fixes = scope !== null && (
+    <>
+      <Button
+        icon={ArrowsClockwiseIcon}
+        loading={refresh.isPending || (folder?.scanning ?? false)}
+        onClick={() => {
+          toggle.reset()
+          refresh.reset()
+          refresh.mutate()
+        }}
+      >
+        {iptv && refresh.isPending ? t.lineup.summary.refreshing : refreshLabel}
+      </Button>
+      <Button icon={PencilSimpleIcon} variant="ghost" onClick={() => setEditing(true)}>
+        {editLabel}
+      </Button>
+    </>
+  )
+  // A source that does not work says so first, before any of its settings, with its fix.
+  const alert =
+    addon.source !== null && addon.source.error !== '' ? (
+      <AlertTile
+        tone="danger"
+        title={t.iptv.errors[addon.source.error] ?? t.errors.generic}
+        actions={fixes}
+        className="mt-6"
+      >
+        {addon.source.checkedAt !== null && (
+          <>
+            {t.lineup.summary.lastAttempt}: <RelativeTime iso={addon.source.checkedAt} />
+          </>
+        )}
+      </AlertTile>
+    ) : (
+      folder !== null && <FolderAlert folder={folder} actions={fixes} className="mt-6" />
+    )
 
   return (
     <article aria-labelledby={`source-${addon.id}`} className="min-w-0">
@@ -352,38 +402,14 @@ export function SourceDetail({
         {actions}
       </header>
       {failure}
+      {alert}
 
       {iptv && scope !== null ? (
-        <IptvSource
-          scope={scope}
-          addon={addon}
-          section={section}
-          forWhom={forWhom}
-          retry={
-            <Button
-              icon={ArrowsClockwiseIcon}
-              loading={refresh.isPending}
-              onClick={() => {
-                toggle.reset()
-                refresh.reset()
-                refresh.mutate()
-              }}
-            >
-              {refresh.isPending ? t.lineup.summary.refreshing : t.lineup.summary.refresh}
-            </Button>
-          }
-        />
+        <IptvSource scope={scope} addon={addon} section={section} forWhom={forWhom} />
       ) : (
         <>
           {scope === null && (
             <Notice className="mt-8">{text.readOnly(entry.owner?.name ?? '')}</Notice>
-          )}
-          {addon.source !== null && addon.source.error !== '' && (
-            <AlertTile
-              tone="danger"
-              title={t.iptv.errors[addon.source.error] ?? t.errors.generic}
-              className="mt-8"
-            />
           )}
           {renamable &&
             (nameWithSettings ? (
@@ -420,12 +446,9 @@ export function SourceDetail({
                 </Fact>
               )}
               {!iptv && folder === null && addon.description !== '' && (
-                <Fact label={text.description} wide>
-                  {addon.description}
-                </Fact>
+                <Fact label={text.description}>{addon.description}</Fact>
               )}
               <Fact
-                wide
                 label={
                   folder !== null
                     ? folder.share === ''
@@ -436,21 +459,17 @@ export function SourceDetail({
                       : text.manifestUrl
                 }
               >
-                <span className="font-mono text-body break-all">{addon.manifestUrl}</span>
+                <span className="font-mono text-small break-all">{addon.manifestUrl}</span>
               </Fact>
-              {network !== '' && (
-                <Fact label={text.network} wide>
-                  {text.networks[network]}
-                </Fact>
-              )}
+              {network !== '' && <Fact label={text.network}>{text.networks[network]}</Fact>}
               {folder !== null && folder.share === 's3' && (
-                <Fact label={t.localFolders.endpoint} wide>
-                  <span className="font-mono text-body break-all">{folder.endpoint}</span>
+                <Fact label={t.localFolders.endpoint}>
+                  <span className="font-mono text-small break-all">{folder.endpoint}</span>
                 </Fact>
               )}
               {folder !== null && folder.share === 'rclone' && (
-                <Fact label={t.localFolders.rcloneRemote} wide>
-                  <span className="font-mono text-body break-all">{folder.rcloneRemote}</span>
+                <Fact label={t.localFolders.rcloneRemote}>
+                  <span className="font-mono text-small break-all">{folder.rcloneRemote}</span>
                 </Fact>
               )}
               {folder !== null && folder.share !== '' && folder.user !== '' && (
@@ -465,7 +484,7 @@ export function SourceDetail({
               )}
               {!iptv && folder === null && addon.resources.length > 0 && (
                 <Fact label={text.provides}>
-                  <span className="flex flex-wrap justify-end gap-1.5">
+                  <span className="flex flex-wrap gap-1.5">
                     {addon.resources.map((resource) => (
                       <Badge key={resource}>{stremioLabel(t.stremioResources, resource)}</Badge>
                     ))}
@@ -474,7 +493,7 @@ export function SourceDetail({
               )}
               {!iptv && folder === null && addon.types.length > 0 && (
                 <Fact label={text.types}>
-                  <span className="flex flex-wrap justify-end gap-1.5">
+                  <span className="flex flex-wrap gap-1.5">
                     {addon.types.map((type) => (
                       <Badge key={type} tone="accent">
                         {catalogTypeLabel(t, type)}
@@ -674,14 +693,19 @@ export function SourceDetail({
   )
 }
 
-/** Where a source stands among its scope's sources, "2 of 3", with the buttons that move it. */
+/**
+ * Where a source stands among its scope's sources, "2 of 3", with the buttons that move it, and
+ * what this order decides: the server's leads to the order of versions, which is another.
+ */
 function OrderRow({
+  scope,
   name,
   index,
   count,
   onMove,
   error,
 }: {
+  scope: Scope
   name: string
   index: number
   count: number
@@ -689,11 +713,28 @@ function OrderRow({
   error?: ReactNode
 }) {
   const { t } = useI18n()
+  const helpId = useId()
   return (
     <div className="rounded-row bg-s1">
       <div className="flex min-h-[3.375rem] items-center gap-4 py-2 pr-3 pl-4">
-        <span className="min-w-0 flex-1 text-h3 text-ink">{t.sources.order}</span>
-        <span className="figures text-control text-ink-2">
+        <div className="min-w-0 flex-1">
+          <span className="text-h3 text-ink">{t.sources.order}</span>
+          <SettingHelp id={helpId}>
+            {scope === 'shared' ? t.sources.orderHelpShared : t.sources.orderHelpMine}
+          </SettingHelp>
+          {/* On its own line, never hidden behind More. */}
+          {scope === 'shared' && (
+            <p className="mt-1 text-small">
+              <Link
+                to={settingsPath('playback', 'version-source-order')}
+                className="focus-lit rounded-[0.375rem] font-medium text-link transition-colors duration-160 hover:text-link-hover"
+              >
+                {t.sources.versionOrderLink}
+              </Link>
+            </p>
+          )}
+        </div>
+        <span className="figures shrink-0 text-control text-ink-2">
           {t.sources.position(index + 1, count)}
         </span>
         <MoveButtons name={name} index={index} count={count} onMove={onMove} />

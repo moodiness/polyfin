@@ -15,6 +15,8 @@ const libraries: typeof en = {
     manyWarning:
       'Mais de 20 bibliotecas podem deixar a tela inicial dos aplicativos Jellyfin pesada.',
     noAddons: 'Adicione uma fonte primeiro: os catálogos dela serão listados aqui.',
+    noCatalogsYet:
+      'Nenhuma fonte tem catálogo ainda: os catálogos serão listados aqui quando as fontes os trouxerem.',
     shownEmpty: 'Nenhuma biblioteca: os aplicativos Jellyfin não exibem nada desses complementos.',
     name: 'Nome nos aplicativos',
     nameHelp: 'Deixe vazio para usar o nome do catálogo.',
