@@ -5,6 +5,16 @@ const account = {
     signedInAs: 'Signed in as ',
     roles: { administrator: 'Administrator', member: 'Member' },
     sectionsLabel: 'Account sections',
+    /** The link to Content › Sources, for an administrator told to change something there. */
+    openSources: 'Open Sources',
+    /** The words above each group of sections, in the list of sections. */
+    groups: {
+      account: 'Account',
+      watching: 'What I watch',
+      languageSound: 'Languages and sound',
+      services: 'Services',
+      import: 'Import',
+    },
     sections: {
       statistics: 'Statistics',
       tracking: 'Tracking',
@@ -16,8 +26,8 @@ const account = {
       taste: 'Taste profile',
       metadataLanguage: 'Metadata language',
       webTheme: 'Web player theme',
-      audioRegion: 'Audio region',
-      interfaceSize: 'Interface size',
+      appearance: 'Appearance',
+      languages: 'Languages',
       moonfin: 'Moonfin',
       sound: 'Sound',
       sharedLinks: 'Shared links',
@@ -37,6 +47,9 @@ const account = {
       server: 'The server’s',
       noLanguage:
         'No addon of the server has a language yet, so titles are described in the server’s. An administrator gives addons a language under Content › Sources.',
+      /** The same, to an administrator, who gives addons a language themselves. */
+      noLanguageAdministrator:
+        'No addon of the server has a language yet, so titles are described in the server’s. Give one a language on its page under Content › Sources.',
       saved: 'Metadata language saved.',
     },
     /** My account › Web player theme, and the choice of a user's on their page under Users. */
@@ -318,6 +331,9 @@ const account = {
         'The movies you watched are marked played, on the latest date your diary gives, as many times as it logs them. Each movie is searched by its name and year in the server’s metadata addons, and kept when they know exactly one movie of that name and year.',
       noSearch:
         'No metadata addon of this server searches movies: no movie of the export can be found. Ask an administrator to add one.',
+      /** The same, to an administrator, who adds addons themselves. */
+      noSearchAdministrator:
+        'No metadata addon of this server searches movies: no movie of the export can be found. Add one under Content › Sources.',
       file: 'Export file',
       fileHelp: 'The ZIP file Letterboxd gives, of 20 MB at most.',
       choose: 'Choose the file',
@@ -620,11 +636,14 @@ const account = {
         waitingSignIn: 'Waiting for you',
         reconnect: 'Needs connecting again',
         unreachable: 'Retrying',
-        unavailable: 'Not set up',
         appRefused: 'App refused',
       },
-      unavailable: (name: string) =>
-        `${name} is not set up on this server yet: an administrator has to add the ${name} app in the settings first.`,
+      /** To an administrator: the services the server has no app for, which members do not see. */
+      notSetUp: (names: string, count: number) =>
+        count === 1
+          ? `${names} is not set up on this server yet: add its app in the settings to connect it here.`
+          : `${names} are not set up on this server yet: add their apps in the settings to connect them here.`,
+      openSettings: 'Open Settings › Tracking',
       setUpApp: (name: string) => `Set up the ${name} app`,
       codeIntro: (name: string) =>
         `Connect your ${name} account: Polyfin gives you a code to enter on the ${name} site.`,

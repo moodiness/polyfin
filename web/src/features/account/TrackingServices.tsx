@@ -68,9 +68,15 @@ function codeExpired(code: TrackingService['code'], now: number): boolean {
   return code !== null && Date.parse(code.expiresAt) <= now
 }
 
-/** The signed-in user's tracking services: Polyfin tells the connected ones what the user watches. */
+/**
+ * The signed-in user's tracking services: Polyfin tells the connected ones what the user watches.
+ * The services the server has no app for are left out; an administrator is told which, with the
+ * way to their settings.
+ */
 export default function TrackingServices() {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
+  const text = t.account.tracking
+  const { isAdministrator } = useSessionUser()
   const tracking = useQuery({
     queryKey: queryKeys.tracking,
     queryFn: ({ signal }) => fetchTracking(signal),
@@ -86,7 +92,7 @@ export default function TrackingServices() {
           : false,
   })
 
-  if (tracking.isPending) return <SkeletonRows rows={6} label={t.account.tracking.loading} />
+  if (tracking.isPending) return <SkeletonRows rows={6} label={text.loading} />
   if (tracking.isError) {
     return (
       <InlineError onRetry={() => void tracking.refetch()} retrying={tracking.isFetching}>
@@ -94,16 +100,38 @@ export default function TrackingServices() {
       </InlineError>
     )
   }
+  const services = tracking.data.services.filter((service) => service.available)
+  const notSetUp = tracking.data.services
+    .filter((service) => !service.available)
+    .map((service) => serviceNames[service.service])
   return (
-    <ul className="flex flex-col gap-1.5">
-      {tracking.data.services.map((service) => (
-        <ServiceRow
-          key={service.service}
-          service={service}
-          importEveryMinutes={tracking.data.importEveryMinutes}
-        />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-1.5">
+      {services.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {services.map((service) => (
+            <ServiceRow
+              key={service.service}
+              service={service}
+              importEveryMinutes={tracking.data.importEveryMinutes}
+            />
+          ))}
+        </ul>
+      )}
+      {isAdministrator && notSetUp.length > 0 && (
+        <Notice
+          action={
+            <TextLink to="/settings/tracking" arrow>
+              {text.openSettings}
+            </TextLink>
+          }
+        >
+          {text.notSetUp(
+            new Intl.ListFormat(language, { type: 'conjunction' }).format(notSetUp),
+            notSetUp.length,
+          )}
+        </Notice>
+      )}
+    </div>
   )
 }
 
@@ -232,24 +260,21 @@ function ServiceRow({
   const pin = service.connection === 'pin'
   const paste = pin || service.connection === 'redirect'
   const waiting = code !== null && !expired
-  const status: { tone: StatusTone; label: string; icon?: typeof HourglassIcon } =
-    !service.available
-      ? { tone: 'muted', label: text.status.unavailable }
-      : waiting
-        ? {
-            tone: 'muted',
-            label: signIn ? text.status.waitingSignIn : text.status.waiting,
-            icon: HourglassIcon,
-          }
-        : service.problem === 'app_refused'
-          ? { tone: 'danger', label: text.status.appRefused }
-          : service.problem === 'reconnect'
-            ? { tone: 'danger', label: text.status.reconnect }
-            : service.problem === 'unreachable'
-              ? { tone: 'warn', label: text.status.unreachable }
-              : service.connected
-                ? { tone: 'ok', label: text.status.connected }
-                : { tone: 'muted', label: text.status.notConnected }
+  const status: { tone: StatusTone; label: string; icon?: typeof HourglassIcon } = waiting
+    ? {
+        tone: 'muted',
+        label: signIn ? text.status.waitingSignIn : text.status.waiting,
+        icon: HourglassIcon,
+      }
+    : service.problem === 'app_refused'
+      ? { tone: 'danger', label: text.status.appRefused }
+      : service.problem === 'reconnect'
+        ? { tone: 'danger', label: text.status.reconnect }
+        : service.problem === 'unreachable'
+          ? { tone: 'warn', label: text.status.unreachable }
+          : service.connected
+            ? { tone: 'ok', label: text.status.connected }
+            : { tone: 'muted', label: text.status.notConnected }
 
   // The administrator's page where the app is set up, for administrators.
   const setUpLink = user.isAdministrator && (
@@ -258,8 +283,9 @@ function ServiceRow({
     </TextLink>
   )
 
-  const codeConnect = (label: string, variant: 'primary' | 'secondary') => (
-    <Button variant={variant} loading={connect.isPending} onClick={() => connect.mutate(undefined)}>
+  // Connecting is one action of the page among others, so not its primary one.
+  const codeConnect = (label: string) => (
+    <Button loading={connect.isPending} onClick={() => connect.mutate(undefined)}>
       {connect.isPending ? text.connecting : label}
     </Button>
   )
@@ -312,11 +338,7 @@ function ServiceRow({
   let sub: ReactNode
   let actions: ReactNode = null
   let body: ReactNode = null
-  if (!service.available) {
-    sub = text.unavailable(name)
-    actions = <Button disabled>{text.connect}</Button>
-    body = setUpLink || null
-  } else if (waiting) {
+  if (waiting) {
     const host = new URL(code.verificationUrl).host
     sub = paste
       ? pin
@@ -330,10 +352,11 @@ function ServiceRow({
         {t.common.cancel}
       </Button>
     )
-    // MyAnimeList sends the browser back here: it opens in this tab.
+    // MyAnimeList sends the browser back here: it opens in this tab. Where the code is pasted
+    // back, the form's Connect is the step's primary action.
     const open = (
       <ExternalButtonLink
-        variant="primary"
+        variant={paste ? 'secondary' : 'primary'}
         href={code.verificationUrl}
         target={service.connection === 'redirect' ? undefined : '_blank'}
         rel="noopener noreferrer"
@@ -424,10 +447,7 @@ function ServiceRow({
     actions = (
       <>
         {reconnectByCode &&
-          codeConnect(
-            ended || service.problem === 'app_refused' ? startAgain : text.reconnect,
-            'secondary',
-          )}
+          codeConnect(ended || service.problem === 'app_refused' ? startAgain : text.reconnect)}
         <Button variant="ghost" onClick={() => setConfirming(true)}>
           {text.disconnect}
         </Button>
@@ -474,8 +494,7 @@ function ServiceRow({
             : service.music
               ? text.tokenIntro(name)
               : text.keyIntro(name)
-    if (service.connection !== 'key')
-      actions = codeConnect(ended ? startAgain : text.connect, 'primary')
+    if (service.connection !== 'key') actions = codeConnect(ended ? startAgain : text.connect)
     const notes = [refusedApp, ended, codeError, cancelError].some(Boolean)
     body =
       service.connection === 'key' || notes ? (
@@ -498,29 +517,12 @@ function ServiceRow({
         'max-sm:grid-cols-[2.25rem_minmax(0,1fr)] max-sm:px-3.5',
       )}
     >
-      {service.available ? (
-        <IconTile letters={monograms[service.service]} />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="inline-grid size-9 place-items-center rounded-[0.75rem] bg-s3 text-small font-semibold text-ink-3"
-        >
-          {monograms[service.service]}
-        </span>
-      )}
+      <IconTile letters={monograms[service.service]} />
       <div className="min-w-0">
-        <h3
-          id={headingId}
-          className={cx(
-            'flex h-9 items-center text-h3',
-            service.available ? 'text-ink' : 'text-ink-2',
-          )}
-        >
+        <h3 id={headingId} className="flex h-9 items-center text-h3 text-ink">
           {name}
         </h3>
-        <p className={cx('-mt-1 text-small', service.available ? 'text-ink-2' : 'text-ink-3')}>
-          {sub}
-        </p>
+        <p className="-mt-1 text-small text-ink-2">{sub}</p>
       </div>
       <div className="flex h-9 items-center justify-end gap-1.5 max-sm:col-span-full max-sm:mt-2 max-sm:h-auto max-sm:flex-wrap">
         <StatusPill tone={status.tone} icon={status.icon} className="max-sm:mr-auto">
@@ -593,12 +595,7 @@ function KeyForm({
         }}
         error={error}
         actions={
-          <Button
-            type="submit"
-            variant="primary"
-            loading={pending}
-            disabled={!pending && key.trim() === ''}
-          >
+          <Button type="submit" loading={pending} disabled={!pending && key.trim() === ''}>
             {pending ? text.checking : label}
           </Button>
         }

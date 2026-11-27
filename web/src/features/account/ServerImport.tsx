@@ -185,9 +185,9 @@ export default function ServerImport({ own }: { own: OwnImport }) {
                 )}
               </div>
               <PanelFooter>
+                {/* One section of My account among others: not the page's primary action. */}
                 <Button
                   type="submit"
-                  variant="primary"
                   icon={ArrowSquareInIcon}
                   loading={start.isPending}
                   disabled={address.trim() === '' || name.trim() === ''}

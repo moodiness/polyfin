@@ -7,6 +7,7 @@ import {
   type LetterboxdImportStatus,
   type LetterboxdUpload,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { TitlesNotFound } from '@/features/imports/TitlesNotFound'
 import { errorMessage, formatBytes } from '@/format'
 import { useI18n } from '@/i18n'
@@ -20,6 +21,7 @@ import {
   ProgressBar,
   RelativeTime,
   StatusPill,
+  TextLink,
   useField,
   useToast,
   type StatusTone,
@@ -38,9 +40,11 @@ const fileCodes = ['letterboxd_export_invalid', 'letterboxd_export_too_large']
  * The form that sends a Letterboxd export to import into a Polyfin account: the user's own, under
  * My account, or a user's, for an administrator. The file only lives in the form's state; the
  * server reads it in memory and never keeps it. `searchable` is false when no metadata addon of the
- * server searches movies, which the form says before anything is sent. `header` comes first in the
- * form, such as the choice of the kind of import. `own` is the user's own account, under My
- * account: the form speaks to them; else it speaks of the user.
+ * server searches movies, which the form says before anything is sent, with the way to Sources for
+ * an administrator. `header` comes first in the form, such as the choice of the kind of import.
+ * `own` is the user's own account, under My account: the form speaks to them, and its Import is
+ * one section's action among others; else it speaks of the user, and Import is the page's primary
+ * action.
  */
 export function LetterboxdForm({
   searchable,
@@ -58,6 +62,7 @@ export function LetterboxdForm({
   const { t } = useI18n()
   const text = t.account.letterboxd
   const person = own ? text : text.forUser
+  const { isAdministrator } = useSessionUser()
   const toast = useToast()
   const [file, setFile] = useState<File | null>(null)
   const [watchlist, setWatchlist] = useState(true)
@@ -92,7 +97,21 @@ export function LetterboxdForm({
       <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
         {header}
         <p className="text-small text-ink-2">{text.help}</p>
-        {!searchable && <Notice tone="warn">{text.noSearch}</Notice>}
+        {!searchable &&
+          (isAdministrator ? (
+            <Notice
+              tone="warn"
+              action={
+                <TextLink to="/sources" arrow>
+                  {t.account.openSources}
+                </TextLink>
+              }
+            >
+              {text.noSearchAdministrator}
+            </Notice>
+          ) : (
+            <Notice tone="warn">{text.noSearch}</Notice>
+          ))}
         <Field label={text.file} help={text.fileHelp} error={fileError}>
           <FilePicker
             file={file}
@@ -132,7 +151,7 @@ export function LetterboxdForm({
       <PanelFooter>
         <Button
           type="submit"
-          variant="primary"
+          variant={own ? 'secondary' : 'primary'}
           icon={ArrowSquareInIcon}
           loading={send.isPending}
           disabled={file === null || tooLarge}

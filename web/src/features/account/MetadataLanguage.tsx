@@ -6,9 +6,10 @@ import {
   saveOwnMetadataLanguage,
   type MetadataLanguage,
 } from '@/api'
+import { useSessionUser } from '@/app/session'
 import { errorMessage, languageOptions } from '@/format'
 import { useI18n, type Language, type Messages } from '@/i18n'
-import { InlineError, Notice, SettingRow, SkeletonRows, useToast } from '@/ui'
+import { InlineError, Notice, SettingRow, SkeletonRows, TextLink, useToast } from '@/ui'
 
 /**
  * The choices of metadata language: The server's, then the languages the server's addons were
@@ -29,12 +30,13 @@ function metadataLanguageOptions(
 
 /**
  * My account › Metadata language: the language the user's titles are described in, a setting row
- * saved as it changes. Without a language given to any server addon it says where an
- * administrator gives one.
+ * saved as it changes. Without a language given to any server addon it says so: to a member,
+ * that an administrator gives one; to an administrator, where, with the way there.
  */
 export function OwnMetadataLanguage() {
   const { language: uiLanguage, t } = useI18n()
   const text = t.account.metadataLanguage
+  const { isAdministrator } = useSessionUser()
   const toast = useToast()
   const current = useQuery({
     queryKey: queryKeys.ownMetadataLanguage,
@@ -68,7 +70,21 @@ export function OwnMetadataLanguage() {
       disabled={save.isPending}
       error={save.isError ? errorMessage(t, save.error) : undefined}
     >
-      {languages.length === 0 && language === '' ? <Notice>{text.noLanguage}</Notice> : undefined}
+      {languages.length === 0 && language === '' ? (
+        isAdministrator ? (
+          <Notice
+            action={
+              <TextLink to="/sources" arrow>
+                {t.account.openSources}
+              </TextLink>
+            }
+          >
+            {text.noLanguageAdministrator}
+          </Notice>
+        ) : (
+          <Notice>{text.noLanguage}</Notice>
+        )
+      ) : undefined}
     </SettingRow>
   )
 }

@@ -264,7 +264,8 @@ export default function TwoStep() {
             )}
           </>
         ) : (
-          <Button variant="primary" loading={start.isPending} onClick={() => start.mutate()}>
+          // Under the password's form, whose Change is the page's primary action.
+          <Button loading={start.isPending} onClick={() => start.mutate()}>
             {start.isPending ? text.starting : text.turnOn}
           </Button>
         )}

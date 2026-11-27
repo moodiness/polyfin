@@ -6,6 +6,16 @@ const account: typeof en = {
     signedInAs: 'Conectado como ',
     roles: { administrator: 'Administrador', member: 'Membro' },
     sectionsLabel: 'Seções da conta',
+    /** The link to Content › Sources, for an administrator told to change something there. */
+    openSources: 'Abrir Fontes',
+    /** The words above each group of sections, in the list of sections. */
+    groups: {
+      account: 'Conta',
+      watching: 'O que eu assisto',
+      languageSound: 'Idiomas e som',
+      services: 'Serviços',
+      import: 'Importar',
+    },
     sections: {
       statistics: 'Estatísticas',
       tracking: 'Acompanhamento',
@@ -17,8 +27,8 @@ const account: typeof en = {
       taste: 'Perfil de gosto',
       metadataLanguage: 'Idioma dos metadados',
       webTheme: 'Tema do player web',
-      audioRegion: 'Região do áudio',
-      interfaceSize: 'Tamanho da interface',
+      appearance: 'Aparência',
+      languages: 'Idiomas',
       moonfin: 'Moonfin',
       sound: 'Som',
       sharedLinks: 'Links compartilhados',
@@ -37,6 +47,9 @@ const account: typeof en = {
       server: 'O do servidor',
       noLanguage:
         'Nenhum complemento do servidor tem um idioma ainda, então os títulos são descritos no idioma do servidor. Um administrador define o idioma dos complementos em Conteúdo › Fontes.',
+      /** The same, to an administrator, who gives addons a language themselves. */
+      noLanguageAdministrator:
+        'Nenhum complemento do servidor tem um idioma ainda, então os títulos são descritos no idioma do servidor. Defina o idioma de um deles na página dele, em Conteúdo › Fontes.',
       saved: 'Idioma dos metadados salvo.',
     },
     webTheme: {
@@ -313,6 +326,9 @@ const account: typeof en = {
         'Os filmes que você assistiu são marcados como reproduzidos, na data mais recente do seu diário, tantas vezes quanto ele os registra. Cada filme é pesquisado pelo nome e ano nos complementos de metadados do servidor, e mantido quando eles conhecem exatamente um filme com esse nome e ano.',
       noSearch:
         'Nenhum complemento de metadados deste servidor pesquisa filmes: nenhum filme da exportação pode ser encontrado. Peça a um administrador para adicionar um.',
+      /** The same, to an administrator, who adds addons themselves. */
+      noSearchAdministrator:
+        'Nenhum complemento de metadados deste servidor pesquisa filmes: nenhum filme da exportação pode ser encontrado. Adicione um em Conteúdo › Fontes.',
       file: 'Arquivo de exportação',
       fileHelp: 'O arquivo ZIP gerado pelo Letterboxd, de no máximo 20 MB.',
       choose: 'Escolher o arquivo',
@@ -627,11 +643,14 @@ const account: typeof en = {
         waitingSignIn: 'Aguardando você',
         reconnect: 'Precisa conectar novamente',
         unreachable: 'Tentando novamente',
-        unavailable: 'Não configurado',
         appRefused: 'Aplicativo recusado',
       },
-      unavailable: (name: string) =>
-        `${name} ainda não está configurado neste servidor: um administrador precisa primeiro adicionar o aplicativo ${name} nas configurações.`,
+      /** To an administrator: the services the server has no app for, which members do not see. */
+      notSetUp: (names: string, count: number) =>
+        count === 1
+          ? `${names} ainda não está configurado neste servidor: adicione o aplicativo dele nas configurações para conectá-lo aqui.`
+          : `${names} ainda não estão configurados neste servidor: adicione os aplicativos deles nas configurações para conectá-los aqui.`,
+      openSettings: 'Abrir Configurações › Acompanhamento',
       setUpApp: (name: string) => `Configurar o aplicativo ${name}`,
       codeIntro: (name: string) =>
         `Conecte sua conta ${name}: o Polyfin fornece um código para você digitar no site do ${name}.`,

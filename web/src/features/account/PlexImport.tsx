@@ -261,8 +261,8 @@ export function PlexImportForm({
       </div>
       <PanelFooter>
         {account === null && link === null ? (
+          // One section of My account among others: not the page's primary action.
           <Button
-            variant="primary"
             icon={SignInIcon}
             loading={signIn.isPending}
             onClick={() => {
