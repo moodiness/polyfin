@@ -380,6 +380,31 @@ func TestTasksAreListedRunAndStopped(t *testing.T) {
 	}
 }
 
+// The task list tells what a run cannot take back, so that the admin app
+// asks before it starts one: an empty effect for the others.
+func TestTasksTellWhatARunCannotTakeBack(t *testing.T) {
+	t.Parallel()
+	registry := tasks.New(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for key, effect := range map[string]tasks.Effect{"Send": tasks.Sends, "Forget": tasks.Forgets, "Read": ""} {
+		registry.Register(tasks.Task{Key: key, Category: tasks.CategoryMaintenance, Effect: effect,
+			Text: map[string]tasks.Text{"en": {Name: key}}, Run: func(context.Context) error { return nil }})
+	}
+	api := newTestAPI(t, 10, func(o *Options, _ testDeps) { o.Tasks = registry })
+	admin := api.signedIn("root", true)
+
+	var listed []map[string]any
+	if status := admin.raw(http.MethodGet, "/tasks", "", &listed); status != http.StatusOK {
+		t.Fatalf("tasks: %d", status)
+	}
+	effects := map[any]any{}
+	for _, task := range listed {
+		effects[task["key"]] = task["effect"]
+	}
+	if want := map[any]any{"Send": "sends", "Forget": "forgets", "Read": ""}; fmt.Sprint(effects) != fmt.Sprint(want) {
+		t.Errorf("effects %v, want %v", effects, want)
+	}
+}
+
 // An administrator replaces a task's triggers within its limits and
 // resets them; a locked task keeps its own, and refused triggers change
 // nothing.

@@ -1533,6 +1533,7 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"pt-BR": {Name: "Enviar o resumo semanal", Description: "Envia agora o resumo dos últimos 7 dias para cada destino de notificação que o escolheu. Toda semana, ele é enviado sozinho no dia e na hora definidos em Configurações › Notificações."},
 		},
 		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Effect: tasks.Sends,
 		Run:    send(notifications.WeeklySummary),
 	})
 	registry.Register(tasks.Task{
@@ -1547,6 +1548,7 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"pt-BR": {Name: "Enviar a retrospectiva do mês", Description: "Envia agora a retrospectiva do último mês para cada destino de notificação que a escolheu. Todo mês, ela é enviada sozinha no dia 1º, na hora do resumo semanal."},
 		},
 		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Effect: tasks.Sends,
 		Run:    send(notifications.MonthlySummary),
 	})
 	registry.Register(tasks.Task{
@@ -1561,6 +1563,7 @@ func registerSummaryTasks(registry *tasks.Registry, notifier *notifications.Serv
 			"pt-BR": {Name: "Enviar a retrospectiva do ano", Description: "Envia agora a retrospectiva do último ano para cada destino de notificação que a escolheu. Todo ano, ela é enviada sozinha em 1º de janeiro, na hora do resumo semanal."},
 		},
 		Limits: tasks.Limits{Locked: tasks.LockedNotifications},
+		Effect: tasks.Sends,
 		Run:    send(notifications.YearlySummary),
 	})
 }
@@ -1581,6 +1584,7 @@ func forgetVersionListsTask(lib *library.Service, logger *slog.Logger) tasks.Tas
 			"pt-BR": {Name: "Esquecer as listas de versões", Description: "Esquece as versões e as legendas que os complementos listaram para cada título, inclusive as mantidas entre reinicializações, para que cada título consulte de novo seus complementos. As versões fixadas e os arquivos bloqueados permanecem. Depois, a primeira reprodução de cada título espera de novo pelos complementos, e os complementos recebem mais solicitações por um tempo."},
 		},
 		Limits: tasks.Limits{Locked: tasks.LockedByHand},
+		Effect: tasks.Forgets,
 		Run: func(ctx context.Context) error {
 			forgotten, err := lib.ForgetVersionLists(ctx)
 			logger.Info("Version lists forgotten", "lists", forgotten)
@@ -1643,6 +1647,7 @@ func emptySourceCacheTask(sources *source.Cache, logger *slog.Logger) tasks.Task
 			"pt-BR": {Name: "Esvaziar o cache de arquivos em leitura", Description: "Exclui as partes de arquivos mantidas no cache de arquivos em leitura, exceto as dos arquivos sendo lidos agora e as lidas nos últimos 30 segundos; os torrents em reprodução mantêm suas partes. O espaço em disco e os dias definidos em Configurações › Reprodução já limitam o cache, então esvaziá-lo raramente é necessário, e o que for reproduzido de novo depois é baixado de novo. Por padrão, não tem nenhum gatilho."},
 		},
 		Limits: tasks.Limits{MinInterval: 6 * time.Hour},
+		Effect: tasks.Forgets,
 		Run: func(context.Context) error {
 			logger.Info("The cache of files being read was emptied", "freed_bytes", sources.Empty())
 			return nil
@@ -1721,6 +1726,7 @@ func registerWatchlistTasks(registry *tasks.Registry, store *accounts.Store, lis
 		},
 		Triggers: []tasks.Trigger{tasks.Every(watchlist.CheckInterval)},
 		Limits:   tasks.Limits{Types: []tasks.TriggerType{tasks.DailyTrigger, tasks.WeeklyTrigger, tasks.IntervalTrigger}, MinInterval: time.Hour},
+		Effect:   tasks.Sends,
 		Run:      checker.Check,
 	})
 }
