@@ -117,9 +117,9 @@ Limits:
 
 **Collections**, under **Content › Libraries**, lists every collection of the server by name, with its number of entries, and the collections among them. Polyfin keeps no collection of a user's own: the list holds every collection users made, in the admin app or in their apps.
 
-- **New collection** asks for a name, then opens the new collection's page.
-- A collection's page renames it, sets its display order, orders, adds and removes its entries, and deletes it. Deleting it takes it out of the collections that held it; its titles stay in the library.
-- **Entries** lists its titles and the collections inside it together, in the collection's own order. Drag an entry by its handle to move it, or use its arrow buttons from the keyboard. A collection inside opens its own page. A title the library no longer has shows as no longer available, until it is removed.
+- **Add a collection** asks for a name, then opens the new collection's page.
+- A collection's page sets its **Name** and **Display order**, saved together with the unsaved dock. Its entries are added, removed and ordered at once, and **Delete** deletes it. Deleting it takes it out of the collections that held it; its titles stay in the library.
+- **Entries** lists its titles and the collections inside it together, in the collection's own order. Drag an entry by its handle to move it, or use its arrow buttons, which show on the entry under the mouse or holding the focus, and always on a touch screen. A collection inside opens its own page. A title the library no longer has shows as no longer available, until it is removed.
 - **Held by** lists the collections that hold this one, each opening its page.
 - **Add entries** finds what the web player's search finds by name: the movies, series and videos of every library, those of IPTV sources and local folders included, and the Live TV channels. It also lists the other collections. One already in the collection says so. A collection that cannot go in is greyed out with the reason: it holds this one, directly or through others, or the collections would nest more than four levels deep.
 

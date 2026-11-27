@@ -101,6 +101,8 @@ Actions:
 
 While addons are still asked, the page reads the versions again after 2, 4, 8, 16, then 30 seconds as long as nothing changes, then stops and says so, with **Check again**. A change, the tab or the window shown again, or an action starts over. An addon that failed shows **Failed lately**: for 3 minutes, the page and title pages do not ask it again (see [Title pages](#title-pages)).
 
+Under **Streams by source**, two or more addons that listed no stream, those still being asked aside, fold into one line, such as "10 sources listed no stream" with "10 failed lately". It opens on each addon's name and state.
+
 **Compared with Jellyfin**
 
 - Jellyfin 12.4 cannot explain, pin or block versions: they are the files in its folders, in its order. A pin only reorders `MediaSources`, which every Jellyfin app reads.

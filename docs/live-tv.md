@@ -257,7 +257,7 @@ API details: [Live TV in item search](jellyfin-api.md#live-tv-in-item-search).
 
 ## Channels of your titles
 
-Polyfin can air channels of its own, around the clock, from the movies and episodes Jellyfin apps list. Add one under **Content › Live TV**, in **Channels of your titles**, with **Add a channel**.
+Polyfin can air channels of its own, around the clock, from the movies and episodes Jellyfin apps list. Add one under **Content › Live TV**, in **Channels of your titles**, with **Add a channel**. A new channel shows the unsaved dock from the start: **Create the channel** in it makes the channel. A saved channel's changes are saved the same way.
 
 | **Built from** | What the channel airs |
 |---|---|
@@ -272,11 +272,11 @@ Polyfin can air channels of its own, around the clock, from the movies and episo
 | **Time blocks** | Times of the day that air titles of their own (see below). |
 | **Number** | The channel's number. Empty, the channel follows the other channels. |
 | **Shown in apps** | Off hides the channel from every user. |
-| **Read the titles again** | Reads the channel's titles anew when you save it. |
+| **Read the titles again** | A button on a saved channel's page, under **On air**: reads the channel's titles anew at once, from its saved settings. Save or discard your changes first. |
 
 The titles and the schedule:
 
-- **Titles read:** at most 5,000 movies and episodes, read when the channel is saved and kept as they were. Titles added to a collection later air only once you save the channel with **Read the titles again**.
+- **Titles read:** at most 5,000 movies and episodes, read when the channel is saved and kept as they were. Titles added to a collection later air only once you choose **Read the titles again**.
 - **Schedule:** a pure function of the channel's start, its seed and its titles. The start is the midnight of the day the channel was saved, in the server's time zone.
 - **Stability:** the schedule survives restarts, gives the same guide whenever it is computed, and is stored nowhere. Changing the sources or the shuffle starts it again today, shuffled anew.
 - **Runtime:** each title airs for its runtime, as its description gives it. Without one, a movie gets 90 minutes; an episode gets its series' runtime, else 30 minutes.
@@ -346,7 +346,7 @@ Addons that publish a guide fill the programme guide. Stremio calls it Native EP
 
 Some IPTV addons publish no Native EPG guide, while their provider publishes one as an XMLTV file. Attach such guides to any TV catalog once the libraries are saved: the server's, under **Content › Live TV**, or a user's own, under **My sources**.
 
-- **Where:** a Stremio addon's catalog opens its **Guides** page with **Guides and mapping**, on its row under **Content › Live TV**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
+- **Where:** a Stremio addon's catalog opens its **Guides** page with **Guides and mapping**, on its row under **Content › Live TV**. The page is titled by the catalog's name, its addon named under it, and leads back to **Live TV**. An IPTV source has the same views on [its source page](iptv.md#the-source-page).
 - **How many:** up to 10 guides per catalog, in order, saved with **Save and download**. The catalog's row shows the first one.
 - **Credentials:** a guide address may hold the provider's credentials. Like manifest addresses, it is never shown in full, and it is stored encrypted when `POLYFIN_SECRET_KEY` is set (see [Addon and source addresses](configuration.md#addon-and-source-addresses)).
 - **Local guides:** only administrators can use a guide on a local network address, or a file of the server by its path. They enter it in **Guide address or file** (see [Lists and guides that are files of the server](iptv.md#lists-and-guides-that-are-files-of-the-server)). A file's path is shown whole.
