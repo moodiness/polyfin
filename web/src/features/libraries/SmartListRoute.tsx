@@ -533,16 +533,22 @@ function Editor({
             {listUses(draft, 'state') && <Notice>{t.smartLists.stateHelp}</Notice>}
           </div>
         </Block>
+        {/* A new list shows the dock from the start: Create is how it comes to be. */}
         <SaveBar
-          dirty={changes > 0}
-          changes={changes}
+          dirty={saved === null || changes > 0}
+          changes={saved === null && changes === 0 ? undefined : changes}
           saving={save.isPending}
-          onDiscard={() => {
-            save.reset()
-            setDraft(base)
-          }}
+          onDiscard={
+            changes > 0
+              ? () => {
+                  save.reset()
+                  setDraft(base)
+                }
+              : undefined
+          }
           error={generalError}
           saveLabel={saved ? undefined : t.smartLists.create}
+          note={saved ? undefined : t.smartLists.notCreated}
         />
       </form>
       <Preview scope={scope} draft={draft} />
@@ -1093,6 +1099,13 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
     )
   else {
     const data = preview.data
+    // A column no title fills says nothing: it shows once one does.
+    const shows = {
+      year: data.titles.some((title) => title.year !== null),
+      rating: data.titles.some((title) => title.rating !== null),
+      genres: data.titles.some((title) => title.genres.length > 0),
+      languages: data.titles.some((title) => title.languages.length > 0),
+    }
     body = (
       <div className="flex flex-col gap-4">
         <p className="text-body text-ink-2" role="status">
@@ -1105,21 +1118,25 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
         {data.unknown > 0 && <Notice>{t.smartLists.unknown(number(data.unknown))}</Notice>}
         {!data.complete && <Notice tone="warn">{t.smartLists.incomplete}</Notice>}
         {data.titles.length === 0 ? (
-          <EmptyState icon={FunnelSimpleIcon} title={t.smartLists.previewEmpty} />
+          <p className="text-small text-ink-2">{t.smartLists.previewEmpty}</p>
         ) : (
           <Table compact label={t.smartLists.previewLabel} minWidth={720}>
             <thead>
               <tr>
                 <th scope="col">{t.smartLists.columns.title}</th>
                 <th scope="col">{t.smartLists.columns.type}</th>
-                <th scope="col" className="text-right">
-                  {t.smartLists.columns.year}
-                </th>
-                <th scope="col" className="text-right">
-                  {t.smartLists.columns.rating}
-                </th>
-                <th scope="col">{t.smartLists.columns.genres}</th>
-                <th scope="col">{t.smartLists.columns.languages}</th>
+                {shows.year && (
+                  <th scope="col" className="text-right">
+                    {t.smartLists.columns.year}
+                  </th>
+                )}
+                {shows.rating && (
+                  <th scope="col" className="text-right">
+                    {t.smartLists.columns.rating}
+                  </th>
+                )}
+                {shows.genres && <th scope="col">{t.smartLists.columns.genres}</th>}
+                {shows.languages && <th scope="col">{t.smartLists.columns.languages}</th>}
               </tr>
             </thead>
             <tbody>
@@ -1127,12 +1144,18 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
                 <tr key={title.id}>
                   <td>{title.name}</td>
                   <td>{t.smartLists.types[title.type]}</td>
-                  <td className="figures text-right">{title.year ?? '–'}</td>
-                  <td className="figures text-right">
-                    {title.rating?.toLocaleString(language) ?? '–'}
-                  </td>
-                  <td>{title.genres.join(', ') || '–'}</td>
-                  <td>{title.languages.map((code) => names.of(code) ?? code).join(', ') || '–'}</td>
+                  {shows.year && <td className="figures text-right">{title.year ?? '–'}</td>}
+                  {shows.rating && (
+                    <td className="figures text-right">
+                      {title.rating?.toLocaleString(language) ?? '–'}
+                    </td>
+                  )}
+                  {shows.genres && <td>{title.genres.join(', ') || '–'}</td>}
+                  {shows.languages && (
+                    <td>
+                      {title.languages.map((code) => names.of(code) ?? code).join(', ') || '–'}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

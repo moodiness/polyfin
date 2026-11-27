@@ -1,4 +1,5 @@
 import {
+  ArrowsClockwiseIcon,
   FilmSlateIcon,
   MagnifyingGlassIcon,
   PlusIcon,
@@ -36,7 +37,6 @@ import {
   ConfirmDialog,
   EmptyState,
   Field,
-  FieldError,
   IconButton,
   InlineError,
   Row,
@@ -183,7 +183,11 @@ export default function OwnChannelRoute() {
     return (
       <PageLayout title={t.ownChannels.title} back={back}>
         {missing ? (
-          <EmptyState icon={TelevisionSimpleIcon} title={t.ownChannels.notFound} />
+          <EmptyState
+            icon={TelevisionSimpleIcon}
+            title={t.ownChannels.notFound}
+            action={<ButtonLink to={back.to}>{back.label}</ButtonLink>}
+          />
         ) : (
           <InlineError onRetry={() => void channel.refetch()} retrying={channel.isFetching}>
             {errorMessage(t, channel.error)}
@@ -259,22 +263,30 @@ function Editor({
   const toast = useToast()
   const navigate = useNavigate()
   const [draft, setDraft] = useState<OwnChannelDraft>(() => draftOf(saved))
-  const [rebuild, setRebuild] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const change = (patch: Partial<OwnChannelDraft>) => setDraft((d) => ({ ...d, ...patch }))
   const was = saved ? draftOf(saved) : null
-  const changes = was ? countChanges(draft, was) + (rebuild ? 1 : 0) : 0
+  const changes = countChanges(draft, was ?? emptyDraft)
 
   const save = useMutation({
-    mutationFn: () =>
-      saved ? saveOwnChannel(saved.id, { ...draft, rebuild }) : createOwnChannel(draft),
+    mutationFn: () => (saved ? saveOwnChannel(saved.id, draft) : createOwnChannel(draft)),
     onSuccess: (channel) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ownChannels })
       queryClient.setQueryData(queryKeys.ownChannel(channel.id), channel)
-      setRebuild(false)
       toast(saved ? t.ownChannels.saved : t.ownChannels.created)
       if (!saved) void navigate(ownChannelPath(channel.id), { replace: true })
     },
+  })
+  // Reads the saved channel's sources again at once: one action, apart from the dock's edits.
+  const rebuild = useMutation({
+    mutationFn: (channel: OwnChannel) =>
+      saveOwnChannel(channel.id, { ...draftOf(channel), rebuild: true }),
+    onSuccess: (channel) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ownChannels })
+      queryClient.setQueryData(queryKeys.ownChannel(channel.id), channel)
+      toast(t.ownChannels.rebuilt)
+    },
+    onError: (error) => toast(errorMessage(t, error), { tone: 'danger' }),
   })
   const remove = useMutation({
     mutationFn: () => deleteOwnChannel(saved?.id ?? ''),
@@ -468,38 +480,42 @@ function Editor({
                 ))}
               </RowList>
             )}
-            <div className={rows}>
-              <SettingRow
-                kind="switch"
-                label={t.ownChannels.rebuild}
-                help={t.ownChannels.rebuildHelp}
-                checked={rebuild}
-                onChange={setRebuild}
-              />
+            {/* A one-time action, not a setting: it reads the saved channel's sources now. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2.5 rounded-row bg-s1 py-3 pr-3 pl-4 max-md:pl-3.5">
+              <div className="max-w-[66ch] min-w-0 flex-[1_1_20rem] text-small text-ink-2">
+                <p>{t.ownChannels.rebuildHelp}</p>
+                {changes > 0 && <p className="mt-1 text-ink-3">{t.ownChannels.rebuildSaveFirst}</p>}
+              </div>
+              <Button
+                icon={ArrowsClockwiseIcon}
+                loading={rebuild.isPending}
+                disabled={changes > 0 || save.isPending}
+                onClick={() => rebuild.mutate(saved)}
+                className="max-md:w-full"
+              >
+                {t.ownChannels.rebuild}
+              </Button>
             </div>
           </Block>
         )}
 
-        {saved ? (
-          <SaveBar
-            dirty={changes > 0}
-            saving={save.isPending}
-            changes={changes}
-            onDiscard={() => {
-              setDraft(draftOf(saved))
-              setRebuild(false)
-              save.reset()
-            }}
-            error={generalError}
-          />
-        ) : (
-          <div className="flex flex-col items-start gap-3">
-            {generalError && <FieldError>{generalError}</FieldError>}
-            <Button type="submit" variant="primary" loading={save.isPending}>
-              {t.ownChannels.create}
-            </Button>
-          </div>
-        )}
+        {/* A new channel shows the dock from the start: Create is how it comes to be. */}
+        <SaveBar
+          dirty={!saved || changes > 0}
+          saving={save.isPending}
+          changes={!saved && changes === 0 ? undefined : changes}
+          onDiscard={
+            changes > 0
+              ? () => {
+                  setDraft(was ?? emptyDraft)
+                  save.reset()
+                }
+              : undefined
+          }
+          error={generalError}
+          saveLabel={saved ? undefined : t.ownChannels.create}
+          note={saved ? undefined : t.ownChannels.notCreated}
+        />
       </form>
       <ConfirmDialog
         open={deleting}

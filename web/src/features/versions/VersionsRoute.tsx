@@ -18,7 +18,6 @@ import { useI18n } from '@/i18n'
 import {
   Block,
   Button,
-  EmptyState,
   Field,
   InlineError,
   RelativeTime,
@@ -133,6 +132,7 @@ function TitleFinder({ user, onPick }: { user: string; onPick: (title: AccountTi
             value={term}
             onValue={setTerm}
             icon={MagnifyingGlassIcon}
+            placeholder={text.searchPlaceholder}
             autoComplete="off"
             spellCheck={false}
             end={
@@ -210,7 +210,7 @@ function BlockedEverywhere() {
           {errorMessage(t, blocks.error)}
         </InlineError>
       ) : blocks.data.length === 0 ? (
-        <EmptyState title={text.noBlocks} />
+        <p className="text-small text-ink-2">{text.noBlocks}</p>
       ) : (
         <RowList compact aria-label={text.everywhere}>
           {blocks.data.map((block) => (

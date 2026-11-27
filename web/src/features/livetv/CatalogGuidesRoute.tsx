@@ -34,7 +34,7 @@ export default function CatalogGuidesRoute() {
   )
   const back = {
     to: scope === 'shared' ? '/live-tv' : '/me/sources',
-    label: scope === 'shared' ? t.lineup.catalog.back : t.lineup.backMine,
+    label: scope === 'shared' ? t.livetv.title : t.lineup.backMine,
   }
 
   if (scope === null || (section !== 'guides' && section !== 'mapping')) {
@@ -52,12 +52,8 @@ export default function CatalogGuidesRoute() {
   return (
     <PageLayout
       back={back}
-      title={
-        library
-          ? t.lineup.catalog.title(library.name ?? library.catalogName, library.addonName)
-          : t.lineup.catalog.titleLoading
-      }
-      lede={t.lineup.catalog.description}
+      title={library ? (library.name ?? library.catalogName) : t.lineup.catalog.titleLoading}
+      lede={library ? t.livetv.catalogGuidesLede(library.addonName) : undefined}
     >
       <Tabs
         variant="underline"

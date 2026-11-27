@@ -7,6 +7,8 @@ const livetv: typeof en = {
       'I cataloghi TV provengono dalle tue origini. Apri le guide di un catalogo per assegnare una programmazione ai suoi canali.',
     recordings: 'Impostazioni di registrazione',
     settings: 'Impostazioni Diretta TV',
+    catalogGuidesLede: (addon: string) =>
+      `Da ${addon}: le guide XMLTV di questo catalogo di Diretta TV e il canale della guida associato a ciascuno dei suoi canali.`,
     catalogsTitle: 'Cataloghi TV',
     catalogsHelp:
       'Un catalogo TV mostrato come libreria inserisce i suoi canali in Diretta TV nelle applicazioni Jellyfin. Le sue guide forniscono la programmazione ai canali.',
@@ -155,6 +157,9 @@ const livetv: typeof en = {
     rebuildHelp:
       'Rilegge le fonti per i titoli aggiunti o rimossi da allora. Il palinsesto ricomincia oggi.',
     create: 'Crea il canale',
+    notCreated: 'Non ancora creato.',
+    rebuilt: 'Titoli riletti',
+    rebuildSaveFirst: 'Prima salva o annulla le modifiche.',
     created: 'Canale creato',
     saved: 'Canale salvato',
     delete: 'Elimina',

@@ -13,6 +13,7 @@ const versions: typeof en = {
     search: 'Film oder Serie',
     searchHelp:
       'Sucht in den Bibliotheken, die dieser Benutzer sieht. Eine Serie listet ihre Folgen.',
+    searchPlaceholder: 'Ein Film oder eine Serie',
     searchButton: 'Suchen',
     searching: 'Suche läuft…',
     noTitles: 'Kein Film und keine Serie gefunden.',
@@ -62,6 +63,12 @@ const versions: typeof en = {
     embeddedSource: (source: string) => `${source}, in der Beschreibung des Titels`,
     repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'Hat keinen Stream aufgelistet.',
+    silentSources: (count: number, formatted: string) =>
+      count === 1
+        ? '1 Quelle hat keinen Stream aufgelistet'
+        : `${formatted} Quellen haben keinen Stream aufgelistet`,
+    silentFailed: (count: number, formatted: string) =>
+      count === 1 ? '1 kürzlich fehlgeschlagen' : `${formatted} kürzlich fehlgeschlagen`,
     noSources: 'Kein Add-on listet Streams für diesen Titel.',
     steps: {
       offered: (place: number) => `Version ${place}`,

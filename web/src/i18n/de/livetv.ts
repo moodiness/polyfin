@@ -7,6 +7,8 @@ const livetv: typeof en = {
       'TV-Kataloge stammen aus deinen Quellen. Öffne die Fernsehprogramme eines Katalogs, um seinen Kanälen ein Programm zu geben.',
     recordings: 'Aufnahmeeinstellungen',
     settings: 'Live-TV-Einstellungen',
+    catalogGuidesLede: (addon: string) =>
+      `Von ${addon}: die XMLTV-Fernsehprogramme dieses Live-TV-Katalogs und welchen Programmkanal jeder seiner Kanäle verwendet.`,
     catalogsTitle: 'TV-Kataloge',
     catalogsHelp:
       'Ein als Bibliothek angezeigter TV-Katalog bringt seine Kanäle in das Live-TV der Jellyfin-Apps. Seine Fernsehprogramme liefern den Kanälen ihr Programm.',
@@ -156,6 +158,9 @@ const livetv: typeof en = {
     rebuildHelp:
       'Liest die Quellen erneut für die seitdem hinzugefügten oder entfernten Titel. Das Programm beginnt heute neu.',
     create: 'Kanal erstellen',
+    notCreated: 'Noch nicht erstellt.',
+    rebuilt: 'Titel erneut gelesen',
+    rebuildSaveFirst: 'Speichere oder verwirf zuerst deine Änderungen.',
     created: 'Kanal erstellt',
     saved: 'Kanal gespeichert',
     delete: 'Löschen',

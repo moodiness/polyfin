@@ -416,6 +416,8 @@ const iptv = {
       },
       search: 'Search the channels',
       empty: 'No channel matches.',
+      emptyHow:
+        'The channels show here once they are listed, each with the guide channel it takes.',
       none: 'No guide',
       manualNone: 'Set by hand',
       manual: 'Set by hand',
@@ -443,11 +445,7 @@ const iptv = {
       noGuides: 'This catalog has no guide yet: add one under Guides.',
     },
     catalog: {
-      title: (name: string, addon: string) => `${name} (${addon}): guides`,
       titleLoading: 'Guides',
-      description:
-        'The XMLTV guides of this Live TV catalog, and which guide channel each of its channels takes.',
-      back: 'Back to Live TV',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 guide' : `${count} guides`),

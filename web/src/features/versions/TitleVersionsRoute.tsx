@@ -1,5 +1,6 @@
 import {
   ArrowsClockwiseIcon,
+  CaretRightIcon,
   ImagesSquareIcon,
   ProhibitIcon,
   PushPinIcon,
@@ -35,7 +36,6 @@ import {
   Badge,
   Block,
   Button,
-  EmptyState,
   Field,
   InlineError,
   Modal,
@@ -256,19 +256,9 @@ function Explained({
       <PinBlock id={id} explained={explained} />
       <Block title={text.sources}>
         {explained.sources.length === 0 ? (
-          <EmptyState title={text.noSources} />
+          <p className="text-small text-ink-2">{text.noSources}</p>
         ) : (
-          <div className="flex flex-col gap-5">
-            {sectionNames(explained.sources, text).map(([source, name]) => (
-              <SourceStreams
-                key={`${source.id}-${source.embedded}`}
-                id={id}
-                user={user}
-                source={source}
-                name={name}
-              />
-            ))}
-          </div>
+          <SourceSections id={id} user={user} sources={sectionNames(explained.sources, text)} />
         )}
       </Block>
       <TitleBlocks id={id} user={user} blocks={explained.blocks} />
@@ -445,6 +435,87 @@ function StreamStep({ stream }: { stream: VersionStream }) {
   )
 }
 
+/** How each state of a source reads, beside its name. */
+const sourceTones: Record<TitleVersionSource['state'], StatusTone> = {
+  known: 'ok',
+  stale: 'warn',
+  failed: 'warn',
+  asked: 'muted',
+}
+
+/**
+ * The sections of the sources, in their order. Those that listed no stream, being asked excepted,
+ * fold into one line once there are two or more: a title most addons lack would otherwise read as
+ * a column of warnings.
+ */
+function SourceSections({
+  id,
+  user,
+  sources,
+}: {
+  id: string
+  user: string
+  /** Each source with its section's name (sectionNames). */
+  sources: [TitleVersionSource, string][]
+}) {
+  const { t, language } = useI18n()
+  const text = t.versions
+  const silent = sources.filter(
+    ([source]) => source.streams.length === 0 && source.state !== 'asked',
+  )
+  const folded = silent.length > 1
+  const shown = folded ? sources.filter((entry) => !silent.includes(entry)) : sources
+  const failed = silent.filter(([source]) => source.state === 'failed').length
+  const silentLabel = text.silentSources(silent.length, silent.length.toLocaleString(language))
+  return (
+    <div className="flex flex-col gap-5">
+      {shown.map(([source, name]) => (
+        <SourceStreams
+          key={`${source.id}-${source.embedded}`}
+          id={id}
+          user={user}
+          source={source}
+          name={name}
+        />
+      ))}
+      {folded && (
+        <details className="group">
+          <summary className="focus-lit -mx-2 inline-flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1.5 rounded-control px-2 py-1.5 text-group text-ink transition-colors duration-300 ease-nuit hover:bg-s1 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2">
+              <CaretRightIcon
+                size="1.125rem"
+                aria-hidden="true"
+                className="shrink-0 text-ink-2 transition-transform duration-300 ease-nuit group-open:rotate-90"
+              />
+              {silentLabel}
+            </span>
+            {failed > 0 && (
+              <StatusPill tone="warn">
+                {text.silentFailed(failed, failed.toLocaleString(language))}
+              </StatusPill>
+            )}
+          </summary>
+          <div className="mt-2">
+            <RowList compact aria-label={silentLabel}>
+              {silent.map(([source, name]) => (
+                <Row
+                  key={`${source.id}-${source.embedded}`}
+                  title={<span className="break-words">{name}</span>}
+                  trailing={
+                    <StatusPill tone={sourceTones[source.state]}>
+                      {text.sourceStates[source.state]}
+                    </StatusPill>
+                  }
+                />
+              ))}
+            </RowList>
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
 /** A source's streams, each with what became of it and the actions on its version. */
 function SourceStreams({
   id,
@@ -519,18 +590,12 @@ function SourceStreams({
     },
     onError: failed,
   })
-  const state: Record<TitleVersionSource['state'], StatusTone> = {
-    known: 'ok',
-    stale: 'warn',
-    failed: 'warn',
-    asked: 'muted',
-  }
   return (
     <section aria-label={name} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 className="text-group text-ink">{source.name}</h3>
         {source.embedded && <Badge>{text.embedded}</Badge>}
-        <StatusPill tone={state[source.state]}>{text.sourceStates[source.state]}</StatusPill>
+        <StatusPill tone={sourceTones[source.state]}>{text.sourceStates[source.state]}</StatusPill>
       </div>
       {source.streams.length === 0 ? (
         <p className="text-small text-ink-3">{text.noStreams}</p>
@@ -852,7 +917,7 @@ function Decisions({ explained }: { explained: TitleVersions }) {
     <Block title={text.decisions} count={explained.decisions.length}>
       <p className="mb-3 max-w-[72ch] text-small text-ink-2">{text.decisionsHelp}</p>
       {explained.decisions.length === 0 ? (
-        <EmptyState title={text.noDecisions} />
+        <p className="text-small text-ink-2">{text.noDecisions}</p>
       ) : (
         <RowList compact aria-label={text.decisions}>
           {explained.decisions.map((decision, index) => (

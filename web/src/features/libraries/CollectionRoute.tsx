@@ -47,13 +47,14 @@ import {
   Notice,
   Row,
   RowList,
+  SaveBar,
   SettingRow,
   SkeletonRows,
   TextInput,
   useToast,
 } from '@/ui'
 import { collectionError, collectionPath } from './Collections'
-import { useRowDrag } from './useRowDrag'
+import { movesOnLit, useRowDrag } from './useRowDrag'
 
 const displayOrders = ['premiere', 'chosen'] as const
 
@@ -113,23 +114,25 @@ function CollectionPage({
   const c = t.collections
   const toast = useToast()
   const navigate = useNavigate()
-  const [name, setName] = useState(collection.name)
+  const saved = { name: collection.name, displayOrder: collection.displayOrder }
+  const [draft, setDraft] = useState(saved)
   const [deleting, setDeleting] = useState(false)
+  const changes =
+    Number(draft.name.trim() !== saved.name) + Number(draft.displayOrder !== saved.displayOrder)
 
-  const rename = useMutation({
-    mutationFn: () => updateCollection(collection.id, { name: name.trim() }),
-    onSuccess: (saved) => {
-      stored(saved)
-      setName(saved.name)
-      toast(c.renamed)
-    },
-  })
-  const order = useMutation({
-    mutationFn: (displayOrder: CollectionDisplayOrder) =>
-      updateCollection(collection.id, { displayOrder }),
-    onSuccess: (saved) => {
-      stored(saved)
-      toast(c.displayOrderSaved)
+  const save = useMutation({
+    mutationFn: (change: typeof draft) =>
+      updateCollection(collection.id, {
+        name: change.name.trim(),
+        displayOrder: change.displayOrder,
+      }),
+    onSuccess: (answered, change) => {
+      stored(answered)
+      // Keep edits made while saving; otherwise show the collection as saved.
+      setDraft((current) =>
+        current === change ? { name: answered.name, displayOrder: answered.displayOrder } : current,
+      )
+      toast(c.saved)
     },
   })
   const remove = useMutation({
@@ -141,11 +144,19 @@ function CollectionPage({
       void navigate(back.to)
     },
   })
-  const displayOrder = order.isPending ? order.variables : collection.displayOrder
+  const nameError =
+    save.error instanceof ApiError && save.error.code === 'invalid_name'
+      ? collectionError(t, save.error)
+      : undefined
 
-  function submitName(event: FormEvent<HTMLFormElement>) {
+  function edit(patch: Partial<typeof draft>) {
+    save.reset()
+    setDraft((current) => ({ ...current, ...patch }))
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (name.trim() !== '' && name.trim() !== collection.name) rename.mutate()
+    if (changes > 0) save.mutate(draft)
   }
 
   return (
@@ -158,42 +169,42 @@ function CollectionPage({
         </Button>
       }
     >
-      <Block title={c.settings}>
-        <form
-          onSubmit={submitName}
-          noValidate
-          className="mb-4 flex max-w-[40rem] flex-wrap items-end gap-2.5"
-        >
-          <Field
-            label={c.name}
-            className="min-w-0 flex-[1_1_15rem]"
-            error={rename.isError ? collectionError(t, rename.error) : undefined}
-          >
-            <TextInput value={name} maxLength={500} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Button
-            type="submit"
-            loading={rename.isPending}
-            disabled={name.trim() === '' || name.trim() === collection.name}
-          >
-            {t.common.save}
-          </Button>
-        </form>
+      <form onSubmit={submit} noValidate>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+          <SettingRow
+            kind="text"
+            label={c.name}
+            help={c.nameHelp}
+            error={nameError}
+            value={draft.name}
+            saved={saved.name}
+            maxLength={500}
+            onChange={(name) => edit({ name })}
+          />
           <SettingRow
             kind="choice"
             label={c.displayOrder}
-            help={c.displayOrderHelp[displayOrder]}
-            error={order.isError ? collectionError(t, order.error) : undefined}
-            value={displayOrder}
+            help={c.displayOrderHelp[draft.displayOrder]}
+            value={draft.displayOrder}
+            saved={saved.displayOrder}
             options={displayOrders.map((value) => ({ value, label: c.displayOrders[value] }))}
-            onChange={(value) => {
-              if (value !== collection.displayOrder) order.mutate(value)
-            }}
+            onChange={(displayOrder) => edit({ displayOrder })}
           />
         </div>
-      </Block>
-      <Entries collection={collection} displayOrder={displayOrder} />
+        <SaveBar
+          dirty={changes > 0}
+          changes={changes}
+          saving={save.isPending}
+          onDiscard={() => {
+            save.reset()
+            setDraft(saved)
+          }}
+          error={
+            save.isError && nameError === undefined ? collectionError(t, save.error) : undefined
+          }
+        />
+      </form>
+      <Entries collection={collection} displayOrder={collection.displayOrder} />
       {collection.holders.length > 0 && (
         <Block title={c.heldBy} count={collection.holders.length}>
           <p className="mb-3 max-w-[66ch] text-small text-ink-2">{c.heldByHelp}</p>
@@ -372,12 +383,14 @@ function Entries({
                     )}
                   </div>
                   <div className="flex items-center justify-end gap-1">
-                    <MoveButtons
-                      name={name}
-                      index={index}
-                      count={entries.length}
-                      onMove={(to) => move(index, to)}
-                    />
+                    <span className={movesOnLit}>
+                      <MoveButtons
+                        name={name}
+                        index={index}
+                        count={entries.length}
+                        onMove={(to) => move(index, to)}
+                      />
+                    </span>
                     <IconButton
                       size="sm"
                       icon={XIcon}

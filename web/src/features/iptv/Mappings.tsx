@@ -120,11 +120,15 @@ export default function Mappings({
           {errorMessage(t, mappings.error)}
         </InlineError>
       ) : mappings.data.items.length === 0 ? (
-        <EmptyState
-          className="mt-4"
-          icon={TelevisionSimpleIcon}
-          title={filtered ? text.empty : t.lineup.channelsEmpty}
-        />
+        filtered ? (
+          <p role="status" className="mt-4 text-small text-ink-2">
+            {text.empty}
+          </p>
+        ) : (
+          <EmptyState className="mt-4" icon={TelevisionSimpleIcon} title={t.lineup.channelsEmpty}>
+            {text.emptyHow}
+          </EmptyState>
+        )
       ) : (
         <ul
           aria-label={text.title}
