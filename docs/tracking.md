@@ -58,7 +58,7 @@ Each user connects their accounts in the admin app, under **My account › Track
 
 - Polyfin checks an API key or user token with the service before saving it.
 - A user's MDBList key serves only their tracking. Title ratings come from the server's own key (see [Ratings](collections-people-and-ratings.md#ratings)).
-- Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up (see [Setting up the services](#setting-up-the-services-administrators)).
+- Trakt, Simkl, Last.fm, AniList and MyAnimeList are offered only once an administrator has set them up (see [Setting up the services](#setting-up-the-services-administrators)). Until then, members do not see them, and a member on a server with no service to offer has no **Tracking** section. An administrator sees one note under the list naming those not set up, with **Open Settings › Tracking**.
 - AniList and MyAnimeList have more to know: see [AniList and MyAnimeList](#anilist-and-myanimelist).
 
 Trakt refuses some sign-ins without saying why:

@@ -59,7 +59,7 @@ After changing the server's theme or the **Custom** texts, reload the web player
 **Web player theme** gives a user a theme of their own, on every browser they sign in with.
 
 - **Administrators** set it in its own panel on the user's page under **Users**.
-- **Users** set their own under **My account › Web player theme**, while allowed.
+- **Users** set their own under **My account › Appearance**, while allowed.
 
 | Choice | What it does |
 |---|---|
@@ -72,7 +72,7 @@ A household can keep LumaaGlaass for most of its users. It can give jellyfin-web
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Let them change it** | The user's page under **Users**, beside **Web player theme** | On | Lets the user choose their own theme under **My account › Web player theme**. Off, the administrator's choice stays theirs. |
+| **Let them change it** | The user's page under **Users**, beside **Web player theme** | On | Lets the user choose their own theme under **My account › Appearance**. Off, the administrator's choice stays theirs. |
 
 - **Locked:** while **Let them change it** is off, the user's **My account** shows the theme read only, with "Your administrator chose your web player theme.", and refuses a change.
 - **Reset my preferences** puts the theme back to the server's, unless **Let them change it** is off (see [Your own preferences](users.md#your-own-preferences)).
