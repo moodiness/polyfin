@@ -179,7 +179,8 @@ export function IptvAddFlow({
         ...accountJSON,
         providerGuide: kind === 'xtream' && providerGuide,
         guideUrl: kind === 'xtream' && providerGuide ? '' : guideUrl.trim(),
-        options,
+        // Turned on for an Xtream account, then the kind changed: only Xtream accounts group.
+        options: { ...options, titleVersions: kind === 'xtream' && options.titleVersions },
       }),
     onSuccess: (added) => {
       queryClient.setQueryData<Addon[]>(queryKeys.addons(scope), (old) =>
@@ -302,6 +303,7 @@ export function IptvAddFlow({
         <div className="flex flex-col gap-4">
           <SourceOptions
             value={options}
+            xtream={kind === 'xtream'}
             onChange={(patch) => {
               mutation.reset()
               setOptions((current) => ({ ...current, ...patch }))

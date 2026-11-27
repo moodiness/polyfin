@@ -175,6 +175,9 @@ const iptv: typeof en = {
       enrichment: 'Décrire les titres avec les addons de métadonnées',
       enrichmentHelp:
         'Quand un film ou une série a un identifiant TMDB ou IMDb, l’ouvrir demande à l’addon de métadonnées du serveur sa description, ses images et sa classification\u202f: une requête par titre, la première fois qu’il est ouvert, puis gardée. Sinon, les titres n’affichent que ce que donne le fournisseur, sans classification\u202f: les utilisateurs qui bloquent les titres non classés ne les voient pas.',
+      titleVersions: 'Regrouper les copies d’un titre en versions',
+      titleVersionsHelp:
+        'Un film ou une série que le fournisseur liste plusieurs fois avec le même identifiant TMDB devient un seul titre, dont les versions sont le fichier de chaque copie, nommées par qualité et catégorie. Les épisodes d’une série sont associés par numéro de saison et d’épisode\u202f; un épisode qu’une seule copie a est gardé. Ouvrir un tel titre demande au fournisseur les détails de chaque copie, environ une requête par seconde. Ce que les utilisateurs ont fait de chaque copie (vu, point de reprise, favori, note) passe au titre. Sinon, les copies redeviennent des titres à part entière, chacun gardant ses données, et celles du groupe restent au titre de la première copie. Une copie associée par un mauvais identifiant TMDB peut être tenue à part dans Contenu › Versions.',
     },
     vodExclusions: {
       title: 'Catégories à importer',

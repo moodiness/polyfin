@@ -631,10 +631,10 @@ export async function seed(stage) {
 /**
  * What a real server has besides, in its shapes (counts and lengths of a real one), and the cases
  * others have: ten users in two groups, one with 23 devices; more sources, with logos, long names
- * and one that fails; six libraries hidden in menus; a folder source and a missing one; a failing
- * notification target and backup destination; tracking services connected; expired invites; a
- * long activity log; a smart list, an own channel, a member's own source, and two collections,
- * one holding the other.
+ * and one that fails; an Xtream account grouping the copies of a title as its versions; eight
+ * libraries hidden in menus; a folder source and a missing one; a failing notification target and
+ * backup destination; tracking services connected; expired invites; a long activity log; a smart
+ * list, an own channel, a member's own source, and two collections, one holding the other.
  *
  * Tracking connections, the backup destination's failure, the invites' expiry and the activity
  * log are written in the database: the services are not reached from the demo, no backup runs
@@ -716,11 +716,29 @@ async function enrich(stage, { addon, iptv, users, title }) {
   await rm(gone, { recursive: true, force: true })
   await api.post(`/admin/api/scopes/shared/folders/${missing.id}/scan`).catch(() => {})
 
-  // Six libraries, hidden in Jellyfin apps' menus but the live TV ones, which cannot be: the Demo
-  // Catalog's, Demo TV's, the folders' and Night Owl Picks' channels. Once the playbacks have
-  // found their titles.
-  const libraries = await api.get('/admin/api/scopes/shared/libraries')
-  const kept = new Set([addon, iptv, folder.id, missing.id])
+  // An Xtream account of movies and series that groups the copies of a title as its versions:
+  // Copper Lighthouse and Tidewater Station are each listed twice (see xtream in demo.mjs). Its
+  // libraries are listed once its lists are read.
+  const coastline = await api.post('/admin/api/scopes/shared/iptv', {
+    name: 'Coastline Plus',
+    kind: 'xtream',
+    ...demo.xtream,
+    providerGuide: false,
+    guideUrl: '',
+    options: { liveTv: false, movies: true, series: true, enrichment: false, titleVersions: true },
+  })
+  let libraries = []
+  for (let tries = 0; ; tries++) {
+    libraries = await api.get('/admin/api/scopes/shared/libraries')
+    if (libraries.filter((library) => library.addonId === coastline.id).length >= 2) break
+    if (tries === 60) throw new Error('Coastline Plus’s libraries are not listed')
+    await sleep(500)
+  }
+
+  // Eight libraries, hidden in Jellyfin apps' menus but the live TV ones, which cannot be: the
+  // Demo Catalog's, Demo TV's, the folders', Coastline Plus's and Night Owl Picks' channels. Once
+  // the playbacks have found their titles.
+  const kept = new Set([addon, iptv, folder.id, missing.id, coastline.id])
   const chosen = [
     ...libraries.filter((library) => kept.has(library.addonId)),
     ...libraries.filter(
@@ -736,6 +754,18 @@ async function enrich(stage, { addon, iptv, users, title }) {
       hideInMenus: library.catalogType !== 'tv',
     })),
   })
+
+  // Copper Lighthouse and Tidewater Station, each one title of two versions, and the series' first
+  // episode, whose versions pages the sweep is given.
+  const found = async (term, kind) => {
+    const titles = await api.get(`/admin/api/titles?${new URLSearchParams({ search: term })}`)
+    const title = titles.find((each) => each.kind === kind && each.name === term)
+    if (!title) throw new Error(`${term} is not among the titles`)
+    return title.id
+  }
+  const grouped = await found('Copper Lighthouse', 'movie')
+  const groupedSeries = await found('Tidewater Station', 'series')
+  const [episode] = await api.get(`/admin/api/titles/${groupedSeries}/episodes`)
 
   // A notification target that works, and one whose address is refused.
   const working = await api.post('/admin/api/notifications/targets', {
@@ -894,6 +924,8 @@ async function enrich(stage, { addon, iptv, users, title }) {
     own: own.id,
     ownSmartList: ownSmart.id,
     collections: [trains.id, evenings.id],
+    /** Copper Lighthouse's and Tidewater Station's first episode's, of two versions each. */
+    groupedTitles: [grouped, episode.id],
   }
 }
 

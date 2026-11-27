@@ -169,6 +169,9 @@ const iptv = {
       enrichment: 'Describe titles with the metadata addons',
       enrichmentHelp:
         'When a movie or series has a TMDB or IMDb id, opening it asks the server’s metadata addon for its description, artwork and rating: one request per title, the first time it is opened, then kept. Off, titles show only what the provider gives, with no rating, so users who block unrated titles do not see them.',
+      titleVersions: 'Group copies of a title as versions',
+      titleVersionsHelp:
+        'A movie or series the provider lists more than once with the same TMDB id becomes one title, whose versions are each copy’s file, labelled by quality and category. A series’ episodes are matched by season and episode number; an episode only one copy has is kept. Opening such a title asks the provider for each copy’s details, about one request a second. What users did with each copy (played, resume point, favorite, rating) moves to the title. Off, the copies are titles of their own again, each keeping its own data, and the group’s stays with the first copy’s title. A copy matched by a wrong TMDB id can be kept apart in Content › Versions.',
     },
     vodExclusions: {
       title: 'Categories to import',

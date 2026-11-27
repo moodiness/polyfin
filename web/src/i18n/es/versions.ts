@@ -176,6 +176,21 @@ const versions: typeof en = {
       notAnalyzed: 'no se analizó antes, así que no se intentó',
       passed: 'todavía se estaba leyendo cuando la reproducción siguió',
     },
+    entries: 'Entradas del proveedor',
+    entriesHelp:
+      'Las entradas del proveedor IPTV que comparten el id de TMDB de este título, sus versiones primero. El id de TMDB de un proveedor puede ser erróneo: una entrada mantenida aparte se convierte en un título propio, y lo que los usuarios hicieron con el grupo se queda con el grupo. Si la primera entrada se mantiene aparte, conserva este título y lo que los usuarios hicieron con él, y las demás pasan a ser un título nuevo.',
+    firstEntry: 'Primera entrada',
+    keptApart: 'Mantenida aparte',
+    notListed: 'Ya no listada',
+    keepApart: 'Mantener aparte',
+    groupAgain: 'Volver a agrupar',
+    keepApartTitle: (name: string) => `¿Mantener aparte «${name}»?`,
+    keepApartOther:
+      'Esta entrada pasa a ser un título propio, con sus propios identificadores. Lo que los usuarios hicieron con el grupo se queda con el grupo.',
+    keepApartFirst:
+      'Esta es la primera entrada: conserva este título, sus identificadores y lo que los usuarios hicieron con él. Las demás entradas pasan a ser un título nuevo, al que pasa lo que sus usuarios hicieron con ellas.',
+    keptApartDone: 'La entrada se mantiene aparte.',
+    groupedAgainDone: 'La entrada vuelve a estar agrupada.',
     notFound: 'Este título no se encuentra para este usuario.',
   },
 }

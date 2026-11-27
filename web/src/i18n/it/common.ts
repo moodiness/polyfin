@@ -61,6 +61,7 @@ const common: typeof en = {
     two_step_own: 'Disattiva il tuo accesso in due passaggi da Il mio account.',
     not_found: 'Questo elemento non esiste più. L’elenco è stato aggiornato.',
     not_local: 'Solo la versione di una cartella locale può avere le miniature create di nuovo.',
+    invalid_entry: 'Il provider non elenca più questa voce per il titolo. Ricarica la pagina.',
     thumbnails_off:
       'Le miniature e le immagini dei capitoli sono disattivate: attivane una in Impostazioni › Miniature (trickplay).',
     not_set:

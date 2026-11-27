@@ -170,6 +170,21 @@ const versions = {
       notAnalyzed: 'not analyzed before, so not tried',
       passed: 'still being read when the play went on',
     } as Record<string, string>,
+    entries: 'Provider entries',
+    entriesHelp:
+      'The entries of the IPTV provider that share this title’s TMDB id, its versions first. A provider’s TMDB id can be wrong: an entry kept apart becomes a title of its own, and what users did with the group stays with the group. When the first entry is kept apart, it keeps this title and what users did with it, and the others become a new title.',
+    firstEntry: 'First entry',
+    keptApart: 'Kept apart',
+    notListed: 'No longer listed',
+    keepApart: 'Keep apart',
+    groupAgain: 'Group again',
+    keepApartTitle: (name: string) => `Keep “${name}” apart?`,
+    keepApartOther:
+      'This entry becomes a title of its own, with its own identifiers. What users did with the group stays with the group.',
+    keepApartFirst:
+      'This entry is the first: it keeps this title, its identifiers and what users did with it. The other entries become a new title, to which what their users did moves.',
+    keptApartDone: 'The entry is kept apart.',
+    groupedAgainDone: 'The entry is grouped again.',
     notFound: 'This title cannot be found for this user.',
   },
 }

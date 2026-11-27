@@ -60,6 +60,7 @@ const common: typeof en = {
     two_step_own: 'Desative seu próprio login em duas etapas em Minha conta.',
     not_found: 'Este item não existe mais. A lista foi atualizada.',
     not_local: 'Só a versão de uma pasta local pode ter as miniaturas criadas de novo.',
+    invalid_entry: 'O provedor não lista mais esta entrada para o título. Recarregue a página.',
     thumbnails_off:
       'As miniaturas e as imagens de capítulos estão desativadas: ative uma em Configurações › Miniaturas (trickplay).',
     not_set:

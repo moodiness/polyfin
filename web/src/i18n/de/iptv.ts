@@ -175,6 +175,9 @@ const iptv: typeof en = {
       enrichment: 'Titel mit den Metadaten-Add-ons beschreiben',
       enrichmentHelp:
         'Hat ein Film oder eine Serie eine TMDB- oder IMDb-ID, fragt das Öffnen beim Metadaten-Add-on des Servers Beschreibung, Bildmaterial und Altersfreigabe ab: eine Anfrage pro Titel beim ersten Öffnen, danach gespeichert. Wenn aus, zeigen Titel nur, was der Anbieter liefert, ohne Altersfreigabe, sodass Benutzer, die Titel ohne Altersfreigabe sperren, sie nicht sehen.',
+      titleVersions: 'Kopien eines Titels als Versionen zusammenfassen',
+      titleVersionsHelp:
+        'Ein Film oder eine Serie, die der Anbieter mehrmals mit derselben TMDB-ID listet, wird ein Titel, dessen Versionen die Dateien der einzelnen Kopien sind, benannt nach Qualität und Kategorie. Die Folgen einer Serie werden nach Staffel- und Folgennummer zugeordnet; eine Folge, die nur eine Kopie hat, bleibt erhalten. Das Öffnen eines solchen Titels fragt beim Anbieter die Angaben jeder Kopie ab, etwa eine Anfrage pro Sekunde. Was Benutzer mit jeder Kopie getan haben (gesehen, Fortsetzungspunkt, Favorit, Bewertung), geht auf den Titel über. Wenn aus, sind die Kopien wieder eigene Titel, jede mit ihren eigenen Daten, und die der Gruppe bleiben beim Titel der ersten Kopie. Eine Kopie mit falscher TMDB-ID kann unter Inhalte › Versionen getrennt gehalten werden.',
     },
     vodExclusions: {
       title: 'Zu importierende Kategorien',

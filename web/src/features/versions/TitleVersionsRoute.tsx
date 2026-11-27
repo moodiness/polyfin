@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import {
   analyzeVersion,
   ApiError,
@@ -51,6 +51,7 @@ import {
   type StatusTone,
 } from '@/ui'
 import { HostErrorFile } from './HostErrorFile'
+import { TitleEntries } from './TitleEntries'
 import { userQuery, UserPicker, useVersionsUser } from './parts'
 
 /**
@@ -99,6 +100,14 @@ export default function TitleVersionsRoute() {
     queryKey: queryKeys.versionTitle(user, id),
     queryFn: ({ signal }) => fetchVersionTitle(user, id, signal),
   })
+  // An item gone as titles were grouped, or as a group ended, is answered as the item it became:
+  // the page follows it, in place of the address it had.
+  const navigate = useNavigate()
+  const answered = title.data?.id
+  useEffect(() => {
+    if (answered !== undefined && answered !== id)
+      void navigate(`/versions/${answered}${userQuery(user)}`, { replace: true })
+  }, [answered, id, user, navigate])
   // The same answer keeps the same data, React Query sharing what did not change.
   const seen = useRef<SameAnswers>({ data: undefined, at: 0, count: 0 })
   const versions = useQuery({
@@ -261,6 +270,7 @@ function Explained({
           <SourceSections id={id} user={user} sources={sectionNames(explained.sources, text)} />
         )}
       </Block>
+      <TitleEntries id={id} user={user} />
       <TitleBlocks id={id} user={user} blocks={explained.blocks} />
       <Decisions explained={explained} />
     </div>

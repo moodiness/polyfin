@@ -63,6 +63,7 @@ const common: typeof en = {
     two_step_own: 'Désactivez votre propre connexion en deux étapes depuis Mon compte.',
     not_found: 'Cet élément n’existe plus. La liste a été actualisée.',
     not_local: 'Seule la version d’un dossier local peut avoir ses vignettes refaites.',
+    invalid_entry: 'Le fournisseur ne liste plus cette entrée pour le titre. Rechargez la page.',
     thumbnails_off:
       'Les vignettes et images de chapitres sont désactivées\u202f: activez-en une dans Paramètres › Vignettes (trickplay).',
     not_set:

@@ -173,6 +173,21 @@ const versions: typeof en = {
       notAnalyzed: 'non analizzata prima, quindi non provata',
       passed: 'ancora in lettura quando la riproduzione è andata avanti',
     },
+    entries: 'Voci del provider',
+    entriesHelp:
+      'Le voci del provider IPTV che condividono l’ID TMDB di questo titolo, prima le sue versioni. L’ID TMDB di un provider può essere sbagliato: una voce tenuta separata diventa un titolo a sé, e ciò che gli utenti hanno fatto con il gruppo resta al gruppo. Quando la prima voce è tenuta separata, conserva questo titolo e ciò che gli utenti ne hanno fatto, e le altre diventano un nuovo titolo.',
+    firstEntry: 'Prima voce',
+    keptApart: 'Tenuta separata',
+    notListed: 'Non più elencata',
+    keepApart: 'Tieni separata',
+    groupAgain: 'Raggruppa di nuovo',
+    keepApartTitle: (name: string) => `Tenere separata «${name}»?`,
+    keepApartOther:
+      'Questa voce diventa un titolo a sé, con i propri identificativi. Ciò che gli utenti hanno fatto con il gruppo resta al gruppo.',
+    keepApartFirst:
+      'Questa è la prima voce: conserva questo titolo, i suoi identificativi e ciò che gli utenti ne hanno fatto. Le altre voci diventano un nuovo titolo, a cui passa ciò che i loro utenti ne hanno fatto.',
+    keptApartDone: 'La voce è tenuta separata.',
+    groupedAgainDone: 'La voce è di nuovo raggruppata.',
     notFound: 'Questo titolo non si trova per questo utente.',
   },
 }

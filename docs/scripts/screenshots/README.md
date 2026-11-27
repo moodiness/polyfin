@@ -5,7 +5,7 @@ Two tools run against the same demo Polyfin, with a fixed dataset:
 - **`take.mjs`** retakes the admin app's screenshots in `docs/images/` in one pass. Run it after a change to the admin app's look, then commit the WebP files that changed.
 - **`sweep.mjs`** visits every page of the admin app and fails on what overflows, logs an error or fails an accessibility check (see [The sweep](#the-sweep)). CI runs it on each pull request.
 
-Each starts the demo, works in a local Chrome, then stops everything and drops its database. `stage.mjs` starts and fills the demo for both; `demo.mjs` serves its addons, IPTV list and logos.
+Each starts the demo, works in a local Chrome, then stops everything and drops its database. `stage.mjs` starts and fills the demo for both; `demo.mjs` serves its addons, IPTV list, Xtream account and logos.
 
 ## What it needs
 
@@ -76,8 +76,9 @@ The plain demo is what the shots show. The rich demo, which the sweep runs and `
   - **Shapes:** Archive Shelf has 161 catalogs, a description of 318 characters and an address of 207, as the largest seen. One name is too long for a row, and Kinoklassikersammlungsarchiv has no space.
   - **Failures:** Harbor Classics' server fails once it is added, a Health problem. Night Owl Picks also has a Live TV catalog.
   - **Own source:** Morgan has Festival Reels as their own, configurable as Demo Catalog is. A member's own source may not be on the local network, as the demo's are.
-- **Libraries,** _rich:_ six, hidden in Jellyfin apps' menus but those of Live TV, which cannot be.
+- **Libraries,** _rich:_ eight, hidden in Jellyfin apps' menus but those of Live TV, which cannot be.
 - **IPTV:** "Demo TV" is an M3U list of five channels with logos and a programme guide: Summit, Deep Blue, Arena, Cinema One and Harbor.
+  - _Rich:_ "Coastline Plus" is an Xtream account of movies and series, with **Group copies of a title as versions** on. Its list has Copper Lighthouse twice with the same TMDB id, in 4K and in FHD, in two categories, and Tidewater Station twice, whose copies share episodes 1 to 3 and each have one of their own: each is one title of two versions, whose **Content › Versions** page lists the provider entries. Their files are the demo video.
 - **Folders,** _rich:_ "Home videos" has two files, and the folder of "Movies on the old disk" is gone since, a Health problem.
 - **Lists and channels,** _rich:_ a smart list, an own channel airing it, and a list of Alex's own.
 - **Home rows:** four rows show in **Settings › Web player › Home rows**.
@@ -115,7 +116,7 @@ Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings
 
 `sweep.mjs` reads the routes from `web/src/app/router.tsx`, so that a new page is swept without being listed. It visits each as the administrator, as a member (Alex) and signed out, 1440 and 390 pixels wide, in English and German.
 
-- **Addresses:** a route without a parameter is visited as is. Signed in at 1440 pixels in English, the sweep follows each page's links to the routes with parameters, 40 addresses of each at most, then visits those in every other case. Signed out, every address leads to the sign-in page, so one address of each route is enough. A title's versions, which a search opens, and an open invite, which no page links to, are given. An invite that does not exist is visited signed out only: each lookup counts against the address's sign-in attempts, which a dozen exhaust.
+- **Addresses:** a route without a parameter is visited as is. Signed in at 1440 pixels in English, the sweep follows each page's links to the routes with parameters, 40 addresses of each at most, then visits those in every other case. Signed out, every address leads to the sign-in page, so one address of each route is enough. Titles' versions, which a search opens, and an open invite, which no page links to, are given: the versions of the movie Sam plays, of Copper Lighthouse and of Tidewater Station's first episode. An invite that does not exist is visited signed out only: each lookup counts against the address's sign-in attempts, which a dozen exhaust.
 - **A route no page links to** fails the sweep: give the demo something that shows it.
 - **When it measures:** once no request has been under way for half a second, the fonts are loaded and the entrances and transitions under way have ended, so that boxes are measured where they rest. A rising block is a fraction of a pixel off, enough for a box left to screen readers to count as seen.
 - **States:** a visit sees each page as it loads. Then, as the administrator, in the six languages at 1440, 1024, 768 and 390 pixels, the sweep takes a few steps a visit never reaches and checks the state they lead to as it checks a page: a change in **Settings › Conversion**, so that the unsaved dock shows; a row's menu in **Users**; **Add source** in **Sources**; and the keyboard's focus on a section other than the current one. `steps` in `sweep.mjs` lists them; findings name the step after the address.

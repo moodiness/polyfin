@@ -1595,6 +1595,11 @@ export type IptvOptions = {
   vodLibraries: 'type' | 'category'
   /** Whether titles with a TMDB or IMDb id are described by the server's metadata addons. */
   enrichment: boolean
+  /**
+   * Xtream accounts only: whether the titles of one type listed more than once with the same TMDB
+   * id become one title, each copy a version of it.
+   */
+  titleVersions: boolean
   /** A tuner only: whether only the channels it marks favorite are kept. */
   favoritesOnly: boolean
 }
@@ -1624,6 +1629,7 @@ export const defaultIptvOptions: IptvOptions = {
   vodExcluded: [],
   vodLibraries: 'type',
   enrichment: true,
+  titleVersions: false,
   favoritesOnly: false,
 }
 
@@ -3729,6 +3735,42 @@ export const analyzeVersion = (id: string, version: string, user: string) =>
     'POST',
     `/titles/${seg(id)}/versions/${seg(version)}/analyze${asUser(user)}`,
   )
+
+/**
+ * An entry of an IPTV source's list that shares a title's TMDB id: a version of the title (`member`,
+ * the first one `leader`), or an entry left out of it, `apart` when an administrator kept it apart.
+ * A first entry is not `listed` when the provider no longer lists it or its category is left out;
+ * name, category and quality are empty, its key alone known, when the list no longer has it.
+ */
+export type TitleEntry = {
+  key: string
+  name: string
+  category: string
+  quality: string
+  leader: boolean
+  member: boolean
+  apart: boolean
+  listed: boolean
+}
+
+/**
+ * The entries of a movie's or series' IPTV source that share its TMDB id, the title's versions
+ * first; an episode's are its series'. None for another title, or a source that does not group them.
+ */
+export const fetchTitleEntries = (id: string, user: string, signal?: AbortSignal) =>
+  request<{ entries: TitleEntry[] }>(
+    'GET',
+    `/titles/${seg(id)}/entries${asUser(user)}`,
+    undefined,
+    signal,
+  )
+
+/** Keeps an entry apart from the others of its title, or groups it again; answers the entries. */
+export const keepEntryApart = (id: string, user: string, key: string, apart: boolean) =>
+  request<{ entries: TitleEntry[] }>('PUT', `/titles/${seg(id)}/entries/apart${asUser(user)}`, {
+    key,
+    apart,
+  })
 
 /**
  * Makes a local folder's version's thumbnails and chapter images again, dropping those it has;
@@ -6631,6 +6673,8 @@ export const queryKeys = {
     ['version-episodes', user, seriesId] as const,
   /** A title's versions explained for a user: invalidated after a pin, a block or an analysis. */
   titleVersions: (id: string, user: string) => ['title-versions', id, user] as const,
+  /** The IPTV entries sharing a title's TMDB id: invalidated with its versions after a change. */
+  titleEntries: (id: string, user: string) => ['title-entries', id, user] as const,
   versionBlocks: ['version-blocks'] as const,
   activity: (query: ActivityQuery) => ['activity', query] as const,
   /** Everything a source's line-up shows: invalidated after any change to it. */

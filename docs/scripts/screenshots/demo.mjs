@@ -1,7 +1,8 @@
 // The demo's fixtures: a fictional Stremio addon (catalogs, metadata and streams of the titles the
-// website shows), more addons with the shapes of a real server's, an IPTV list with its guide, the
-// sources' logos over TLS, and a webhook and a WebDAV server for the notification targets and
-// backup destinations, served on 127.0.0.1 for the demo server only.
+// website shows), more addons with the shapes of a real server's, an IPTV list with its guide, an
+// Xtream account of movies and series, the sources' logos over TLS, and a webhook and a WebDAV
+// server for the notification targets and backup destinations, served on 127.0.0.1 for the demo
+// server only.
 import { createServer } from 'node:http'
 import { createServer as createSecureServer } from 'node:https'
 import { open, readFile } from 'node:fs/promises'
@@ -146,6 +147,143 @@ export const channels = [
     shows: ['Harbor News', 'The Morning Desk', 'Weather Watch'],
   },
 ]
+
+/**
+ * The Xtream account's sign-in, its categories, its movies and its series (each with its
+ * episodes), as its player API lists them. Copper Lighthouse is listed twice with the same TMDB
+ * id, in 4K and in FHD, and so is Tidewater Station, whose two copies share episodes 1 to 3; the
+ * 4K one alone has episode 4, the other alone episode 5. Their files are the demo video.
+ */
+const xtream = {
+  username: 'demo',
+  password: 'demo-xtream',
+  movieCategories: [
+    { category_id: '1', category_name: '4K Movies' },
+    { category_id: '2', category_name: 'Movies' },
+  ],
+  seriesCategories: [
+    { category_id: '11', category_name: '4K Series' },
+    { category_id: '12', category_name: 'Series' },
+  ],
+  movies: [
+    { id: '101', name: 'Copper Lighthouse (2021) 4K', category: '1', tmdb: '900101' },
+    { id: '102', name: 'Copper Lighthouse (2021) FHD', category: '2', tmdb: '900101' },
+    { id: '103', name: 'Paper Moons (2019) FHD', category: '2', tmdb: '900103' },
+    { id: '104', name: 'Saltwater Hymn (2022) 4K', category: '1', tmdb: '900104' },
+  ],
+  series: [
+    {
+      id: '201',
+      name: 'Tidewater Station (2023) 4K',
+      category: '11',
+      tmdb: '900201',
+      episodes: [1, 2, 3, 4],
+    },
+    {
+      id: '202',
+      name: 'Tidewater Station (2023) FHD',
+      category: '12',
+      tmdb: '900201',
+      episodes: [1, 2, 3, 5],
+    },
+  ],
+  /** Tidewater Station's episodes, by number. */
+  episodeTitles: ['Low Tide', 'The Signal House', 'Fog Bell', 'Night Ferry', 'Spring Tide'],
+  descriptions: {
+    900101: 'A keeper restores a lighthouse no ship has needed for forty years.',
+    900103: 'Two sisters run a travelling puppet theatre along the coast.',
+    900104: 'A choir from a fishing town sings its way to the national final.',
+    900201: 'The staff of a tidal research station keep the sea’s records through one year.',
+  },
+}
+
+/** The Xtream account's answer to a call of its player API, for `query`'s action. */
+function xtreamAnswer(query) {
+  if (query.get('username') !== xtream.username || query.get('password') !== xtream.password) {
+    return { user_info: { auth: 0 } }
+  }
+  const added = '1767225600'
+  const year = (name) => name.match(/\((\d{4})\)/)[1]
+  const info = (tmdb, name) => ({
+    tmdb_id: tmdb,
+    plot: xtream.descriptions[tmdb],
+    genre: 'Drama',
+    releasedate: `${year(name)}-05-14`,
+    duration_secs: 5400,
+    rating: '7.2',
+  })
+  switch (query.get('action') ?? '') {
+    case '':
+      return {
+        user_info: {
+          auth: 1,
+          status: 'Active',
+          max_connections: '2',
+          allowed_output_formats: ['ts', 'm3u8'],
+        },
+        server_info: { timezone: 'UTC' },
+      }
+    case 'get_vod_categories':
+      return xtream.movieCategories
+    case 'get_series_categories':
+      return xtream.seriesCategories
+    case 'get_vod_streams':
+      return xtream.movies.map((each, index) => ({
+        num: index + 1,
+        name: each.name,
+        stream_type: 'movie',
+        stream_id: each.id,
+        stream_icon: '',
+        rating: '7.2',
+        added,
+        category_id: each.category,
+        container_extension: 'mp4',
+        tmdb: each.tmdb,
+      }))
+    case 'get_series':
+      return xtream.series.map((each, index) => ({
+        num: index + 1,
+        name: each.name,
+        series_id: each.id,
+        cover: '',
+        plot: xtream.descriptions[each.tmdb],
+        genre: 'Drama',
+        releaseDate: `${year(each.name)}-03-02`,
+        last_modified: added,
+        rating: '7.6',
+        category_id: each.category,
+        tmdb: each.tmdb,
+      }))
+    case 'get_vod_info': {
+      const each = xtream.movies.find((item) => item.id === query.get('vod_id'))
+      if (!each) return { info: [], movie_data: [] }
+      return {
+        info: info(each.tmdb, each.name),
+        movie_data: { stream_id: each.id, name: each.name, container_extension: 'mp4' },
+      }
+    }
+    case 'get_series_info': {
+      const each = xtream.series.find((item) => item.id === query.get('series_id'))
+      if (!each) return { info: [], seasons: [], episodes: [] }
+      return {
+        info: info(each.tmdb, each.name),
+        seasons: [],
+        episodes: {
+          1: each.episodes.map((number) => ({
+            id: `${each.id}${number}`,
+            episode_num: number,
+            title: `Tidewater Station - S01E0${number} - ${xtream.episodeTitles[number - 1]}`,
+            container_extension: 'mp4',
+            season: 1,
+            info: { plot: '', duration_secs: 2880 },
+          })),
+        },
+      }
+    }
+    default:
+      return []
+  }
+}
 
 /**
  * The demo's other sources, Stremio addons with the shapes of a real server's: logos over https
@@ -531,7 +669,11 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
       }
       if (path === '/list.m3u') return send(response, 'audio/x-mpegurl', Buffer.from(playlist()))
       if (path === '/guide.xml') return send(response, 'application/xml', Buffer.from(guide()))
-      if (path === '/video/demo.mp4' || path.startsWith('/live/')) {
+      if (path === '/player_api.php') {
+        return json(response, xtreamAnswer(new URL(request.url, 'http://x').searchParams))
+      }
+      // A channel's stream, or an Xtream movie's or episode's file.
+      if (path === '/video/demo.mp4' || /^\/(?:live|movie|series)\//.test(path)) {
         return await sendVideo(request, response, video)
       }
       response.writeHead(404)
@@ -554,6 +696,8 @@ export async function startDemo({ posterDir, images, video, certificate, rich })
     manifestUrl: `${base}/manifest.json`,
     playlistUrl: `${base}/list.m3u`,
     guideUrl: `${base}/guide.xml`,
+    /** The Xtream account's server and sign-in, as an administrator adds it. */
+    xtream: { server: base, username: xtream.username, password: xtream.password },
     sourceUrl,
     /** Makes a source's server fail from now on. */
     fail: (slug) => failing.add(slug),
