@@ -67,7 +67,7 @@ const home: typeof en = {
       description: 'O que está sendo reproduzido no servidor e o que aconteceu recentemente.',
       conversions: 'Conversões de vídeo',
       conversionsOf: (count: number, limit: number) =>
-        limit > 0 ? `${count} de ${limit}` : `${count}, sem limite`,
+        limit > 0 ? `${count} de ${limit}` : `${count} em andamento · sem limite`,
       bandwidth: 'Largura de banda',
       sentToApps: 'enviados aos apps',
       receivedFromSources: 'recebidos das fontes',
@@ -95,7 +95,7 @@ const home: typeof en = {
       graphics: 'Placa de vídeo',
       graphicsNone: 'Nenhuma',
       graphicsCpu: 'As conversões usam o processador',
-      toneMapping: 'mapeamento de tons',
+      hdrSupported: 'HDR compatível',
     },
     getStarted: {
       title: 'Primeiros passos',
@@ -167,6 +167,8 @@ const home: typeof en = {
         'Depois de configurar, ative “O Polyfin é iniciado de novo quando para” nas configurações gerais, e este aviso some.',
       restartConfirm: 'Reiniciar',
       restartAnyway: 'Reiniciar mesmo assim',
+      stopsPlaybacks: (count: number) =>
+        count === 1 ? 'Esta reprodução para:' : `Estas ${count} reproduções param:`,
       restarting: 'Reiniciando…',
       waitingTitle: 'O Polyfin está reiniciando',
       waiting: 'Aguardando o Polyfin responder de novo…',
@@ -354,6 +356,8 @@ const home: typeof en = {
         recordings: 'Gravações',
       },
       search: 'Pesquisar nos eventos exibidos',
+      more: 'Mais',
+      moreFilters: 'Mais filtros',
       listLabel: 'Eventos mais recentes',
       noMatch: 'Nenhum evento corresponde.',
       noMatchHelp: 'Escolha outro filtro ou limpe a pesquisa.',

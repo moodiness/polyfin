@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ArrowsClockwiseIcon,
   CalendarDotsIcon,
@@ -13,6 +13,7 @@ import {
 import {
   checkAddon,
   clearImageCache,
+  fetchStatus,
   goroutinesDownloadUrl,
   queryClient,
   queryKeys,
@@ -1313,6 +1314,12 @@ function Process({ health }: { health: Health }) {
   const { language, t } = useI18n()
   const text = t.system.health
   const process = health.process
+  // The ID apps know the server by, from the status every page reads already.
+  const status = useQuery({
+    queryKey: queryKeys.status,
+    queryFn: ({ signal }) => fetchStatus(signal),
+  })
+  const serverId = status.data?.serverId
   return (
     <div className="space-y-6">
       <Facts
@@ -1336,6 +1343,13 @@ function Process({ health }: { health: Health }) {
           },
         ]}
       />
+      {serverId !== undefined && (
+        // Below the two columns, as a fact of its own: 32 characters do not fit half the width.
+        <dl className="min-w-0">
+          <dt className="text-small text-ink-3">{t.status.serverId}</dt>
+          <dd className="mt-1 font-mono text-body break-all text-ink select-all">{serverId}</dd>
+        </dl>
+      )}
       {process.lastCrash !== null && (
         <div className="space-y-2">
           <Help>{text.lastCrashHelp}</Help>

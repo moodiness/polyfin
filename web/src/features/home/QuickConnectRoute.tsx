@@ -139,22 +139,20 @@ export default function QuickConnectRoute() {
                   className="h-15 max-sm:h-14 [&_input]:figures [&_input]:text-[1.75rem] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[1.5rem] max-sm:[&_input]:tracking-[0.24em]"
                 />
               </Field>
+              {/* Numbered words in a row, without boxes: the panel is the one fill. */}
               <ol
                 aria-label={text.stepsLabel}
-                className="mt-5 grid gap-2 md:grid-cols-3 max-md:mt-4"
+                className="mt-5 grid gap-x-6 gap-y-3 md:grid-cols-3 max-md:mt-4"
               >
                 {text.steps.map((step, index) => (
-                  <li
-                    key={step}
-                    className="rounded-row bg-s1 px-3.5 pt-3.5 pb-4 text-small text-ink-2"
-                  >
+                  <li key={step} className="flex items-start gap-3 text-small text-ink-2">
                     <span
                       aria-hidden="true"
-                      className="figures mb-2 grid size-7 place-items-center rounded-full bg-s3 text-small font-bold text-ink"
+                      className="figures grid size-7 shrink-0 place-items-center rounded-full bg-s3 text-small font-bold text-ink"
                     >
                       {index + 1}
                     </span>
-                    {step}
+                    <span className="min-w-0 pt-1">{step}</span>
                   </li>
                 ))}
               </ol>

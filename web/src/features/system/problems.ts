@@ -132,6 +132,20 @@ export function hostErrorFileText(
 /** The failures of a share's scan that met a limit of what one scan reads. */
 const shareLimits = ['too_deep', 'too_many_folders', 'too_many_files', 'listing_too_large']
 
+/** Where a problem's link leads, in words for its button; null for none. */
+export function problemLink(t: Messages, to: string): string | null {
+  const words = t.system.health.problemAction
+  const [path, anchor = ''] = to.split('#')
+  if (to === '' || (path === '/system/health' && anchor === '')) return null
+  if (path === '/system/health') return words.details
+  if (path.startsWith('/settings')) return words.settings
+  if (path === '/sources') return words.sources
+  if (path.startsWith('/sources/')) return words.source
+  if (path.startsWith('/users/')) return words.user
+  if (path === '/system/schedule') return words.schedule
+  return words.open
+}
+
 /** What a problem the server found says. */
 export function problemText(t: Messages, language: string, problem: HealthProblem): string {
   const health = t.system.health

@@ -10,6 +10,8 @@ import {
   queryKeys,
   replaceSigningSecret,
   restartServer,
+  unanswered,
+  userImageUrl,
   type DesktopUpdate,
   type ServerActions,
   type TwoStepConfirmation,
@@ -17,7 +19,18 @@ import {
 } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n, type Messages } from '@/i18n'
-import { Button, Field, Modal, Notice, ProgressBar, Segmented, Spinner, TextInput } from '@/ui'
+import {
+  Avatar,
+  Button,
+  Field,
+  Modal,
+  Notice,
+  ProgressBar,
+  Segmented,
+  Spinner,
+  TextInput,
+} from '@/ui'
+import { titleOf, useLiveSessions } from './liveSessions'
 
 /** How often Polyfin is asked whether it answers again, in milliseconds. */
 const pollEvery = 2000
@@ -57,14 +70,8 @@ export function ServerActionButtons({
           {text.updateNow}
         </Button>
       )}
-      {/* Red as its confirmation's button: it stops playbacks and recordings. */}
-      <Button
-        size="sm"
-        variant="danger"
-        className="bg-danger/14"
-        icon={PowerIcon}
-        onClick={() => onOpen('restart')}
-      >
+      {/* Quiet beside the server's state: its confirmation's button is the red one. */}
+      <Button size="sm" variant="ghost" icon={PowerIcon} onClick={() => onOpen('restart')}>
         {text.restart}
       </Button>
     </>
@@ -142,6 +149,9 @@ export function ActionDialog({
   // A new signing secret restarts Polyfin, with what a restart asks and warns of.
   const restarts = action === 'restart' || action === 'secret'
   const unknown = restarts && actions.restart === 'unknown'
+  // The playbacks a restart or an install stops, named in its confirmation.
+  const stopping = useLiveSessions().data ?? []
+  const stops = restarts || action === 'install'
   const mutation = useMutation({
     mutationFn: async (confirmation: TwoStepConfirmation): Promise<Phase> => {
       switch (action) {
@@ -161,7 +171,7 @@ export function ActionDialog({
             return { kind: 'answered', answer: await askUpdateTool(confirmation) }
           } catch (error) {
             // Polyfin stopped before the tool answered: the tool is replacing it.
-            if (stopped(error)) return { kind: 'waiting', since: actions.startedAt, gone: true }
+            if (unanswered(error)) return { kind: 'waiting', since: actions.startedAt, gone: true }
             throw error
           }
       }
@@ -252,6 +262,26 @@ export function ActionDialog({
               ? text.installText
               : text.updateText}
         </p>
+        {stops && stopping.length > 0 && (
+          <div>
+            <p className="text-control text-ink">{text.stopsPlaybacks(stopping.length)}</p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {stopping.map((session) => (
+                <li
+                  key={session.id}
+                  className="flex min-w-0 items-center gap-2.5 text-control text-ink-2"
+                >
+                  <Avatar name={session.user.name} image={userImageUrl(session.user)} size="sm" />
+                  <span className="min-w-0 break-words">
+                    <b className="font-semibold text-ink">{session.user.name}</b>
+                    {` · ${titleOf(session, t)}`}
+                    {session.device.name && ` · ${session.device.name}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {unknown && (
           <Notice tone="warn">
             <strong className="block font-semibold">{text.unknownTitle}</strong>
@@ -309,20 +339,6 @@ function actionError(t: Messages, error: unknown): string {
   if (error instanceof ApiError && error.code === 'too_soon') return t.dashboard.server.tooSoon
   const message = errorMessage(t, error)
   return error instanceof ApiError && error.detail ? `${message} ${error.detail}` : message
-}
-
-/**
- * Whether a request failed because Polyfin stopped: no answer, or a reverse proxy's 502, 503 or 504
- * without Polyfin's own error.
- */
-function stopped(error: unknown): boolean {
-  if (error instanceof TypeError) return true
-  return (
-    error instanceof ApiError &&
-    error.status >= 502 &&
-    error.status <= 504 &&
-    error.code === 'unknown'
-  )
 }
 
 /**

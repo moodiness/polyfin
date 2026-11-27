@@ -1,11 +1,10 @@
 import { useEffect, useState, type Ref } from 'react'
 import { ArrowSquareOutIcon, CaretRightIcon, CheckCircleIcon } from '@phosphor-icons/react'
-import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
-import { fetchStatus, queryKeys, type Health, type HealthProblem, type ServerActions } from '@/api'
+import { queryClient, type Health, type HealthProblem, type ServerActions } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
-import { problemText, useHealth, useHealthProblems } from '@/features/system/problems'
+import { problemLink, problemText, useHealth, useHealthProblems } from '@/features/system/problems'
 import { errorMessage, formatBytes, formatSpan } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -25,7 +24,8 @@ import {
 } from '@/ui'
 import { GetStarted } from './GetStarted'
 import { MemberHome } from './MemberHome'
-import { Bandwidth, PlayingNow, useLiveSessions } from './NowPlaying'
+import { useLiveSessions } from './liveSessions'
+import { Bandwidth, PlayingNow } from './NowPlaying'
 import { RecentActivity } from './RecentActivity'
 import { RoomLight } from './RoomLight'
 import {
@@ -48,7 +48,7 @@ export default function HomeRoute() {
  * The administrator's Home: the greeting and its summary, Playing now as art tiles whose lit one
  * tints the top of the page, then two columns: To look at and Recent activity on the left;
  * Bandwidth, Get started and Server state on the right. In one column below lg, Recent activity
- * comes last.
+ * comes last. When every load fails, one page error stands in their place.
  */
 function Overview({ name }: { name: string }) {
   const { t } = useI18n()
@@ -73,6 +73,13 @@ function Overview({ name }: { name: string }) {
       playing.flatMap((session) => (session.item?.posterId ? [session.item.posterId] : [])),
     ),
   ]
+  // When Polyfin does not answer, or fails every load, Home says so once, in place of its blocks:
+  // the two it always reads both failed before answering. Try again reads all it shows again.
+  const failed =
+    sessions.isError &&
+    sessions.data === undefined &&
+    problems.isError &&
+    problems.data === undefined
 
   return (
     <>
@@ -86,35 +93,48 @@ function Overview({ name }: { name: string }) {
             : text.description
         }
       >
-        <PlayingNow onLight={setLitId} />
-        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-8 max-lg:gap-10 max-md:mt-8 max-md:gap-8">
-          <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
-            <ToLookAt
-              health={health.data}
-              problems={problems.data ?? []}
-              loading={problems.isPending}
-              error={problems.error}
-              retrying={problems.isFetching}
-              onRetry={() => void problems.refetch()}
-              actions={actions.data}
-              onOpen={setOpen}
-            />
-            <div className="max-lg:order-last">
-              <RecentActivity />
+        {failed ? (
+          <InlineError
+            page
+            error={sessions.error}
+            onRetry={() => void queryClient.invalidateQueries()}
+            retrying={sessions.isFetching || problems.isFetching}
+          />
+        ) : (
+          <>
+            <PlayingNow onLight={setLitId} />
+            <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] max-xl:gap-8 max-lg:gap-10 max-md:mt-8 max-md:gap-8">
+              <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
+                <ToLookAt
+                  health={health.data}
+                  problems={problems.data ?? []}
+                  loading={problems.isPending}
+                  error={problems.error}
+                  retrying={problems.isFetching}
+                  onRetry={() => void problems.refetch()}
+                  actions={actions.data}
+                  onOpen={setOpen}
+                />
+                <div className="max-lg:order-last">
+                  <RecentActivity />
+                </div>
+              </div>
+              <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
+                <Bandwidth
+                  ref={bandwidthRef}
+                  playing={playing.length > 0}
+                  conversions={
+                    transcoder
+                      ? { count: transcoder.conversions, limit: transcoder.limit }
+                      : undefined
+                  }
+                />
+                <GetStarted />
+                <ServerState ref={serverRef} actions={actions.data} onOpen={setOpen} />
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col gap-10 max-lg:contents max-md:gap-8">
-            <Bandwidth
-              ref={bandwidthRef}
-              playing={playing.length > 0}
-              conversions={
-                transcoder ? { count: transcoder.conversions, limit: transcoder.limit } : undefined
-              }
-            />
-            <GetStarted />
-            <ServerState ref={serverRef} actions={actions.data} onOpen={setOpen} />
-          </div>
-        </div>
+          </>
+        )}
       </PageLayout>
       {open !== null && actions.data && (
         <ActionDialog action={open} actions={actions.data} onClose={() => setOpen(null)} />
@@ -174,7 +194,11 @@ function ToLookAt({
   const text = t.dashboard.overview
   const update = health?.update
   return (
-    <Block title={text.problems} count={loading ? undefined : problems.length}>
+    // No count while the problems failed to load: 0 would say there is nothing to look at.
+    <Block
+      title={text.problems}
+      count={loading || (error !== null && problems.length === 0) ? undefined : problems.length}
+    >
       {loading ? (
         <div role="status" aria-label={t.common.loading}>
           <SkeletonRows rows={1} />
@@ -215,19 +239,25 @@ function ToLookAt({
               />
             </li>
           )}
-          {problems.map((problem) => (
-            <li key={problem.key}>
-              <AlertTile
-                tone={problem.tone === 'error' ? 'danger' : 'warn'}
-                title={problemText(t, language, problem)}
-                actions={
-                  <ButtonLink to={problem.to} size="sm" iconEnd={CaretRightIcon}>
-                    {text.open}
-                  </ButtonLink>
-                }
-              />
-            </li>
-          ))}
+          {problems.map((problem) => {
+            // Its button names where it leads, as on Health: "Open the source"…
+            const opens = problem.to === '' ? null : (problemLink(t, problem.to) ?? text.openHealth)
+            return (
+              <li key={problem.key}>
+                <AlertTile
+                  tone={problem.tone === 'error' ? 'danger' : 'warn'}
+                  title={problemText(t, language, problem)}
+                  actions={
+                    opens !== null && (
+                      <ButtonLink to={problem.to} size="sm" iconEnd={CaretRightIcon}>
+                        {opens}
+                      </ButtonLink>
+                    )
+                  }
+                />
+              </li>
+            )
+          })}
         </ul>
       )}
     </Block>
@@ -236,7 +266,8 @@ function ToLookAt({
 
 /**
  * Server state: the graphics card, the cache and the database as rows that open Health, then how
- * long Polyfin has run, its version and ID, with Restart (and Update now) at its foot.
+ * long Polyfin has run and its version, with Restart (and Update now) at its foot. The details
+ * (encoders, the server's ID) are Health's.
  */
 function ServerState({
   actions,
@@ -251,13 +282,7 @@ function ServerState({
   const { language, t } = useI18n()
   const text = t.dashboard.overview
   const health = useHealth()
-  const status = useQuery({
-    queryKey: queryKeys.status,
-    queryFn: ({ signal }) => fetchStatus(signal),
-    refetchInterval: 10_000,
-  })
   const data = health.data
-  const timeFormat = new Intl.DateTimeFormat(language, { timeStyle: 'medium' })
 
   return (
     <Block
@@ -284,14 +309,9 @@ function ServerState({
                   <span className="text-ink">
                     {t.dashboard.live.gpuMethod(data.transcoder.hardware.method)}
                   </span>
-                  <span className="max-w-[15rem] text-micro break-words text-ink-3 max-md:max-w-full">
-                    {[
-                      data.transcoder.hardware.encoders.join(', '),
-                      data.transcoder.hardware.toneMapping ? text.toneMapping : '',
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </span>
+                  {data.transcoder.hardware.toneMapping && (
+                    <span className="text-micro text-ink-3">{text.hdrSupported}</span>
+                  )}
                 </>
               ) : (
                 <>
@@ -362,17 +382,6 @@ function ServerState({
               {' · '}
               {text.version}{' '}
               <strong className="font-semibold text-ink">{data.process.version}</strong>
-            </p>
-          )}
-          {status.data !== undefined && (
-            <p className="mt-1 text-micro">
-              {t.status.serverId}
-              {t.common.colon}{' '}
-              <code className="font-mono break-all text-ink-2 select-all">
-                {status.data.serverId}
-              </code>
-              {' · '}
-              {t.status.updatedAt(timeFormat.format(status.dataUpdatedAt))}
             </p>
           )}
         </div>

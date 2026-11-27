@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
   ArrowClockwiseIcon,
+  CaretDownIcon,
   CloudArrowDownIcon,
   GearIcon,
   InfoIcon,
@@ -23,12 +24,13 @@ import {
   WarningIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import {
   fetchActivity,
   fetchStatus,
   queryKeys,
   type ActivityEntry,
+  type ActivityPage,
   type ActivityQuery,
 } from '@/api'
 import { dateTime, errorMessage, relativeTime } from '@/format'
@@ -36,10 +38,13 @@ import { useI18n } from '@/i18n'
 import { webPlayerInPlace, webPlayerLink, webPlayerPath } from '@/jellyfinApps'
 import {
   Block,
+  Button,
   cx,
   EmptyState,
   IconTile,
   InlineError,
+  Menu,
+  MenuItem,
   Segmented,
   Skeleton,
   Spinner,
@@ -96,6 +101,14 @@ const filters = {
 } satisfies Record<string, Omit<ActivityQuery, 'limit' | 'language'>>
 
 type Filter = keyof typeof filters
+
+/** The filters always offered while they hold an entry, and those behind More. */
+const mainFilters = ['all', 'problems', 'playback', 'signIns'] satisfies Filter[]
+const moreFilters = ['users', 'server', 'recordings'] satisfies Filter[]
+const countedFilters = [...mainFilters.slice(1), ...moreFilters] as Filter[]
+
+/** How often the filters' counts, which hide a filter with no entry, are read again. */
+const countPoll = 60_000
 
 const typeIcons: Record<string, Icon> = {
   AuthenticationSucceeded: SignInIcon,
@@ -171,6 +184,23 @@ export function RecentActivity() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
   useScrollFade(filterRef)
+  // Whether each filter holds an entry: one with none is not offered, unless it is chosen.
+  const counts = useQueries({
+    queries: countedFilters.map((key) => {
+      const counting: ActivityQuery = { limit: 1, language, ...filters[key] }
+      return {
+        queryKey: queryKeys.activity(counting),
+        queryFn: ({ signal }: { signal: AbortSignal }) => fetchActivity(counting, signal),
+        select: (page: ActivityPage) => page.total,
+        refetchInterval: countPoll,
+      }
+    }),
+  })
+  const offered = (key: Filter) =>
+    key === 'all' || key === filter || counts[countedFilters.indexOf(key)]?.data !== 0
+  const more = moreFilters.filter((key) => key !== filter && offered(key))
+  // An empty log offers neither filters nor search: there is nothing to narrow.
+  const empty = filter === 'all' && activity.data !== undefined && total === 0
   const listed = !activity.isPending && !activity.isError && shown.length > 0
   const height = useListHeight(boxRef, listed)
   // The next page loads by itself once the end of the box comes near. Observing again after
@@ -195,33 +225,59 @@ export function RecentActivity() {
       aside={<TextLink to="/system/logs">{text.openLog}</TextLink>}
       className="scroll-mt-24"
     >
-      <div className="mb-3 flex flex-col gap-2">
-        <div
-          ref={filterRef}
-          className="-mx-5 scroll-fade overflow-x-auto px-5 scrollbar-none md:mx-0 md:px-0"
-        >
-          <Segmented
+      {!empty && (
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex items-start gap-1">
+            <div
+              ref={filterRef}
+              className={cx(
+                '-ml-5 min-w-0 scroll-fade overflow-x-auto pl-5 scrollbar-none md:ml-0 md:pl-0',
+                // More follows the chips; without it, the row runs to the page's edge on a phone.
+                more.length === 0 && 'flex-1 -mr-5 pr-5 md:mr-0 md:pr-0',
+              )}
+            >
+              <Segmented
+                size="sm"
+                className="[&>button]:shrink-0 [&>button]:whitespace-nowrap"
+                label={text.filter}
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  ...mainFilters.filter(offered),
+                  // A filter chosen from More shows chosen beside the others.
+                  ...moreFilters.filter((key) => key === filter),
+                ].map((key) => ({ value: key, label: text.filters[key] }))}
+              />
+            </div>
+            {more.length > 0 && (
+              <Menu
+                label={text.moreFilters}
+                align="end"
+                trigger={(props) => (
+                  <Button {...props} size="sm" variant="ghost" iconEnd={CaretDownIcon}>
+                    {text.more}
+                  </Button>
+                )}
+              >
+                {more.map((key) => (
+                  <MenuItem key={key} onSelect={() => setFilter(key)}>
+                    {text.filters[key]}
+                  </MenuItem>
+                ))}
+              </Menu>
+            )}
+          </div>
+          <TextInput
+            type="search"
             size="sm"
-            className="[&>button]:shrink-0 [&>button]:whitespace-nowrap"
-            label={text.filter}
-            value={filter}
-            onChange={setFilter}
-            options={(Object.keys(filters) as Filter[]).map((key) => ({
-              value: key,
-              label: text.filters[key],
-            }))}
+            icon={MagnifyingGlassIcon}
+            value={search}
+            onValue={setSearch}
+            aria-label={text.search}
+            placeholder={text.search}
           />
         </div>
-        <TextInput
-          type="search"
-          size="sm"
-          icon={MagnifyingGlassIcon}
-          value={search}
-          onValue={setSearch}
-          aria-label={text.search}
-          placeholder={text.search}
-        />
-      </div>
+      )}
       {activity.isPending ? (
         <div role="status" aria-label={t.common.loading} className="flex flex-col gap-0.5">
           {[0, 1, 2, 3].map((row) => (

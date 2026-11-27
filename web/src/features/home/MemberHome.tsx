@@ -27,7 +27,8 @@ import {
   TextLink,
   useToast,
 } from '@/ui'
-import { MyPlayback, titleOf, useLiveSessions } from './NowPlaying'
+import { titleOf, useLiveSessions } from './liveSessions'
+import { MyPlayback } from './NowPlaying'
 import { RoomLight } from './RoomLight'
 
 /** Jellyfin apps show 6 digits, Silo’s TV apps 8, as on the Quick Connect page. */
@@ -123,22 +124,20 @@ function QuickConnect() {
           />
         </Field>
       </form>
+      {/* Numbered words in a row, without boxes: the panel is the one fill. */}
       <ol
         aria-label={text.stepsLabel}
-        className="mt-5 grid grid-cols-3 gap-2 max-md:grid-cols-[minmax(0,1fr)]"
+        className="mt-5 grid grid-cols-3 gap-x-6 gap-y-3 max-md:grid-cols-[minmax(0,1fr)]"
       >
         {text.steps.map((step, index) => (
-          <li
-            key={step}
-            className="min-w-0 rounded-row bg-s1 px-3.5 pt-3.5 pb-4 text-small text-ink-2 max-md:flex max-md:items-start max-md:gap-3 max-md:py-3"
-          >
+          <li key={step} className="flex min-w-0 items-start gap-3 text-small text-ink-2">
             <span
               aria-hidden="true"
-              className="figures mb-2 grid size-7 shrink-0 place-items-center rounded-full bg-s2 text-small font-bold text-ink max-md:mb-0"
+              className="figures grid size-7 shrink-0 place-items-center rounded-full bg-s3 text-small font-bold text-ink"
             >
               {index + 1}
             </span>
-            {step}
+            <span className="min-w-0 pt-1">{step}</span>
           </li>
         ))}
       </ol>
