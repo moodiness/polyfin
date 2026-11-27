@@ -50,8 +50,18 @@ export default defineConfig({
     rolldownOptions: {
       // Everything the entry imports statically in one file, rather than a file per icon or
       // module the pages share with it: each is loaded at start anyway, and each file costs a
-      // request. The languages, pages and palette entries stay files of their own.
-      output: { codeSplitting: { groups: [{ name: 'shell', tags: ['$initial'] }] } },
+      // request. The languages, pages and palette entries stay files of their own. The icons that
+      // two files or more draw beyond the shell's are one file of a few kilobytes, rather than a
+      // file each of under one, of which a page's first load fetched a dozen; an icon one page
+      // alone draws stays in that page's file.
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'shell', tags: ['$initial'] },
+            { name: 'icons', test: /[\\/]@phosphor-icons[\\/]react[\\/]/, minShareCount: 2 },
+          ],
+        },
+      },
     },
   },
 })
