@@ -206,7 +206,7 @@ export function IconButton({
       className={cx(
         'inline-grid shrink-0 cursor-pointer place-items-center text-ink-2 focus-lit [--lift:1.06]',
         'hover:bg-s2 hover:text-ink aria-pressed:text-link disabled:cursor-not-allowed disabled:inactive disabled:hover:bg-transparent disabled:hover:text-ink-2',
-        size === 'md' ? 'size-9.5 rounded-control max-sm:size-11' : 'size-8 rounded-[0.5rem]',
+        size === 'md' ? 'size-9.5 rounded-control max-sm:size-11' : 'size-8 rounded-chip',
         danger && 'hover:bg-danger/14 hover:text-danger',
         className,
       )}

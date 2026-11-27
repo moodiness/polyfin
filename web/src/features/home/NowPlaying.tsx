@@ -213,9 +213,9 @@ export function PlayingNow({ onLight }: { onLight: (sessionId: string) => void }
               <div
                 key={grow}
                 style={{ flexGrow: grow }}
-                className="flex basis-0 gap-5 rounded-tile bg-s1 px-5 pt-4.5 pb-4 max-md:rounded-[1.125rem] max-md:p-3.5"
+                className="flex basis-0 gap-5 rounded-tile bg-s1 px-5 pt-4.5 pb-4 max-md:rounded-panel max-md:p-3.5"
               >
-                <Skeleton className="aspect-[400/560] w-[clamp(5rem,11.5vh,6.5rem)] rounded-[0.75rem] max-md:w-20" />
+                <Skeleton className="aspect-[400/560] w-[clamp(5rem,11.5vh,6.5rem)] rounded-art max-md:w-20" />
                 <span className="flex flex-1 flex-col gap-2 pt-1">
                   <Skeleton className="h-3.5 w-36" />
                   <Skeleton className="h-7 w-48 max-w-full" />

@@ -92,7 +92,7 @@ export default function VersionOrder({
         </ol>
       )}
       {sourceAt > 0 && (
-        <p className="mt-2 max-w-[60ch] text-small text-ink-2">
+        <p className="mt-2 max-w-measure text-small text-ink-2">
           {text.sourceTiesOnly(sourceAt + 1)}
         </p>
       )}

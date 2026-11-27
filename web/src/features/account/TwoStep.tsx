@@ -50,7 +50,7 @@ function QrCode({ rows, label }: { rows: string[]; label: string }) {
       aria-label={label}
       viewBox={`0 0 ${size} ${size}`}
       shapeRendering="crispEdges"
-      className="size-52 shrink-0 rounded-[1.125rem] max-sm:size-44"
+      className="size-52 shrink-0 rounded-panel max-sm:size-44"
     >
       <rect width={size} height={size} fill="white" />
       <path d={path} fill="black" />
@@ -69,7 +69,7 @@ export function SetupKey({ setup }: { setup: TwoStepSetup }) {
     <div className="flex flex-wrap items-start gap-6">
       <QrCode rows={setup.qr} label={text.qrLabel} />
       <div className="min-w-0 flex-1 basis-56 space-y-3">
-        <p className="max-w-[60ch] text-body text-ink-2">{text.scan}</p>
+        <p className="max-w-measure text-body text-ink-2">{text.scan}</p>
         <div className="rounded-field bg-s2 px-4 py-2.5">
           <p className="text-small text-ink-2">{text.key}</p>
           <code className="figures block font-mono text-lead tracking-wider break-all text-ink select-all">

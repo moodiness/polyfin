@@ -129,7 +129,7 @@ export function SaveBar({
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none translate-y-8 opacity-0',
         // A bar along the bottom of a phone.
-        'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[1.125rem] max-md:py-1.5 max-md:pr-1.5 max-md:pl-3.5',
+        'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-panel max-md:py-1.5 max-md:pr-1.5 max-md:pl-3.5',
         // A card at the end of the form: Discard and Save side by side. Docked under the section
         // list, the column is too narrow for both in most languages: one column, Save first and
         // full width, Discard under it.

@@ -152,7 +152,7 @@ export function AddonSettings({ scope, addon, music, className, name }: AddonSet
 
   return (
     <Group title={t.music.settingsTitle} className={className}>
-      <p className="mb-6 max-w-[66ch] text-small text-ink-2">{t.music.settingsHelp}</p>
+      <p className="mb-6 max-w-measure text-small text-ink-2">{t.music.settingsHelp}</p>
       {music.settings.length === 0 ? (
         <p className="text-lead text-ink-2">{t.music.noSettings}</p>
       ) : (

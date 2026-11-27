@@ -405,7 +405,7 @@ function ActivityRow({ entry, serverId }: { entry: ActivityEntry; serverId: stri
         ? WarningIcon
         : (typeIcons[entry.type] ?? InfoIcon)
   return (
-    <li className="grid min-h-12 grid-cols-[4.5rem_1.875rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[0.625rem] px-3 py-1.5 text-body max-sm:grid-cols-[1.875rem_minmax(0,1fr)] max-sm:items-start max-sm:gap-2.5 max-sm:px-0">
+    <li className="grid min-h-12 grid-cols-[4.5rem_1.875rem_minmax(0,1fr)_auto] items-center gap-3 rounded-control px-3 py-1.5 text-body max-sm:grid-cols-[1.875rem_minmax(0,1fr)] max-sm:items-start max-sm:gap-2.5 max-sm:px-0">
       <time
         dateTime={entry.date}
         title={dateTime(entry.date, language)}

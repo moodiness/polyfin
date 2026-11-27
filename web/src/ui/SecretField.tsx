@@ -171,7 +171,7 @@ export function SecretField({
       {help && (
         <p
           id={helpId}
-          className={cx('-mt-1 max-w-[66ch] text-small text-ink-2', hideLabel && 'sr-only')}
+          className={cx('-mt-1 max-w-measure text-small text-ink-2', hideLabel && 'sr-only')}
         >
           {help}
         </p>

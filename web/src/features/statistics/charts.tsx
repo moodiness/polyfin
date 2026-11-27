@@ -29,7 +29,7 @@ const methodIndex: Record<PlayMethod, number> = {
 }
 
 /** A chart's ground: a tile with no border. */
-const tile = 'rounded-panel bg-s1 px-5 py-4.5 max-md:rounded-[1.125rem] max-md:px-4 max-md:py-4'
+const tile = 'rounded-panel bg-s1 px-5 py-4.5 max-md:px-4 max-md:py-4'
 
 export type BarItem = { key: string; label: string; detail: string; value: number }
 
@@ -189,7 +189,7 @@ export function HourGrid({ hours, label }: { hours: readonly number[]; label: st
                     title={text}
                     aria-label={text}
                     role="img"
-                    className="h-5 rounded-[0.3125rem] bg-s3"
+                    className="h-5 rounded-check bg-s3"
                     style={
                       played > 0
                         ? {

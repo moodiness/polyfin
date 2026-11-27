@@ -202,7 +202,7 @@ function BlockedEverywhere() {
   })
   return (
     <Block title={text.everywhere} count={blocks.data?.length}>
-      <p className="mb-3 max-w-[72ch] text-small text-ink-2">{text.everywhereHelp}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{text.everywhereHelp}</p>
       {blocks.isPending ? (
         <SkeletonRows rows={2} />
       ) : blocks.isError ? (

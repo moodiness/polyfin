@@ -110,7 +110,7 @@ export function ChannelLogo({
   const [failed, setFailed] = useState<string | null>(null)
   const frame = cx(
     'shrink-0 overflow-hidden bg-s2',
-    large ? 'size-11 rounded-[0.75rem]' : 'size-7.5 rounded-[0.5rem]',
+    large ? 'size-11 rounded-art' : 'size-7.5 rounded-chip',
   )
   if (!logo || failed === logo) {
     return (
@@ -177,7 +177,7 @@ export function Figures({ items, label }: { items: readonly Figure[]; label?: st
           </dt>
           <dd
             className={cx(
-              'figures order-1 text-[2rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[1.75rem]',
+              'figures order-1 text-figure',
               item.tone === 'warn' && 'text-warn',
               item.tone === 'ok' && 'text-ok',
             )}

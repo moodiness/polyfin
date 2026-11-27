@@ -466,7 +466,7 @@ function Editor({
           />
         </div>
         <Block title={t.smartLists.catalogs} count={draft.catalogs.length}>
-          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.catalogsHelp}</p>
+          <p className="mb-3 max-w-measure text-small text-ink-2">{t.smartLists.catalogsHelp}</p>
           {saved !== null && saved.catalogs.length === 0 && (
             <Notice tone="warn" className="mb-3">
               {t.smartLists.catalogsGone}
@@ -487,7 +487,7 @@ function Editor({
           )}
         </Block>
         <Block title={t.smartLists.rules}>
-          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.rulesHelp}</p>
+          <p className="mb-3 max-w-measure text-small text-ink-2">{t.smartLists.rulesHelp}</p>
           <Panel as="div">
             <GroupEditor
               group={draft.rules}
@@ -506,7 +506,7 @@ function Editor({
           )}
         </Block>
         <Block title={t.smartLists.exclude}>
-          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.excludeHelp}</p>
+          <p className="mb-3 max-w-measure text-small text-ink-2">{t.smartLists.excludeHelp}</p>
           <Panel as="div">
             <GroupEditor
               group={draft.exclude}
@@ -1180,7 +1180,7 @@ function Preview({ scope, draft }: { scope: Scope; draft: SmartListDraft }) {
         )
       }
     >
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.smartLists.previewHelp}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{t.smartLists.previewHelp}</p>
       {body}
     </Block>
   )

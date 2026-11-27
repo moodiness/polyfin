@@ -72,8 +72,7 @@ export function AlertTile({
     <div
       className={cx(
         'grid grid-cols-[2.75rem_minmax(0,1fr)] gap-4 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-3',
-        !inPanel &&
-          'rounded-panel bg-s1 py-4.5 pr-5 pl-4.5 max-md:rounded-[1.125rem] max-md:px-4 max-md:py-4',
+        !inPanel && 'rounded-panel bg-s1 py-4.5 pr-5 pl-4.5 max-md:px-4 max-md:py-4',
         className,
       )}
     >
@@ -89,14 +88,14 @@ export function AlertTile({
         </p>
         <Title className="text-h3 text-ink">{title}</Title>
         {children !== undefined && (
-          <div className="mt-1.5 max-w-[66ch] text-small text-ink-2">{children}</div>
+          <div className="mt-1.5 max-w-measure text-small text-ink-2">{children}</div>
         )}
         {facts.length > 0 && (
           <dl className="mt-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-1 text-small max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5">
             {facts.map(([term, value], index) => (
               <div key={term} className="contents">
                 <dt className={cx('text-ink-3', index > 0 && 'max-md:mt-1.5')}>{term}</dt>
-                <dd className="max-w-[66ch] text-ink-2">{value}</dd>
+                <dd className="max-w-measure text-ink-2">{value}</dd>
               </div>
             ))}
           </dl>

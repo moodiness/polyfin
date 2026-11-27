@@ -382,7 +382,7 @@ function Backups({ tasks, act }: { tasks: Task[] | undefined; act: Act }) {
           </InlineError>
         ) : health.data.backup === null ? (
           <div className="space-y-3">
-            <p className="max-w-[66ch] text-small text-ink-2">{t.system.health.backupOff}</p>
+            <p className="max-w-measure text-small text-ink-2">{t.system.health.backupOff}</p>
             <TextLink to={settingsPath('backups')} className="-ml-3">
               {t.system.health.checks.openSettings}
             </TextLink>

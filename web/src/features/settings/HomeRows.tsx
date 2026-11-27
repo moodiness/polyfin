@@ -630,7 +630,7 @@ function HomeRowModal({
               <p id={`${formId}-notify`} className="text-control font-medium text-ink">
                 {text.notify}
               </p>
-              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.notifyHelp}</p>
+              <p className="mt-1 max-w-measure text-small text-ink-3">{text.notifyHelp}</p>
             </div>
             <Switch checked={notify} onChange={setNotify} labelledBy={`${formId}-notify`} />
           </div>
@@ -641,7 +641,7 @@ function HomeRowModal({
               <p id={`${formId}-played`} className="text-control font-medium text-ink">
                 {text.leavePlayed}
               </p>
-              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.leavePlayedHelp}</p>
+              <p className="mt-1 max-w-measure text-small text-ink-3">{text.leavePlayedHelp}</p>
             </div>
             <Switch
               checked={leavePlayed}
@@ -656,7 +656,7 @@ function HomeRowModal({
               <p id={`${formId}-library`} className="text-control font-medium text-ink">
                 {text.library}
               </p>
-              <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.libraryHelp}</p>
+              <p className="mt-1 max-w-measure text-small text-ink-3">{text.libraryHelp}</p>
             </div>
             <Switch checked={library} onChange={setLibrary} labelledBy={`${formId}-library`} />
           </div>
@@ -667,7 +667,7 @@ function HomeRowModal({
             <p className="text-control font-medium text-ink" aria-hidden="true">
               {text.schedule}
             </p>
-            <p className="mt-1 max-w-[60ch] text-small text-ink-3">{text.scheduleHelp}</p>
+            <p className="mt-1 max-w-measure text-small text-ink-3">{text.scheduleHelp}</p>
           </div>
           <div className="flex flex-wrap gap-4">
             <Field label={text.startDate}>

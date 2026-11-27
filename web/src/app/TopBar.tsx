@@ -156,7 +156,7 @@ function AreaWord({ section, current }: { section: NavSection; current: boolean 
       to={section.to}
       aria-current={current ? 'page' : undefined}
       className={cx(
-        'focus-lit group relative flex items-center rounded-[0.5rem] px-3 pt-1.5 pb-2 text-area whitespace-nowrap text-ink-3 hover:bg-s1 hover:text-ink [--lift:1.05]',
+        'focus-lit group relative flex items-center rounded-chip px-3 pt-1.5 pb-2 text-area whitespace-nowrap text-ink-3 hover:bg-s1 hover:text-ink [--lift:1.05]',
         'max-[1400px]:px-2.5 max-[1100px]:px-2 max-[1100px]:pt-1 max-[1100px]:pb-1.5',
         'aria-[current=page]:text-ink aria-[current=page]:after:absolute aria-[current=page]:after:bottom-0 aria-[current=page]:after:left-1/2 aria-[current=page]:after:h-0.5 aria-[current=page]:after:w-4 aria-[current=page]:after:-translate-x-1/2 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-current',
       )}

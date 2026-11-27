@@ -42,7 +42,7 @@ const tabStyles = {
 
 // The current word is ink with a bar under it; the others ink-3 until hovered. Focus lights it.
 const tabBase = cx(
-  'relative flex shrink-0 items-center gap-1.5 rounded-[0.5rem] whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
+  'relative flex shrink-0 items-center gap-1.5 rounded-chip whitespace-nowrap text-ink-3 focus-lit [--lift:1.04] hover:bg-s1 hover:text-ink',
   'after:absolute after:inset-x-2.5 after:bottom-0.5 after:h-0.5 after:scale-x-0 after:rounded-full after:bg-current after:transition-transform after:duration-300 after:ease-nuit max-md:after:inset-x-2',
   'aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 aria-selected:text-ink aria-selected:after:scale-x-100',
 )

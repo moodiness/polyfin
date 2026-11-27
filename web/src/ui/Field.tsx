@@ -66,7 +66,7 @@ export function Field({
   const helpId = help ? `${id}-help` : undefined
   const errorId = error ? `${id}-error` : undefined
   const helpText = help && (
-    <p id={helpId} className={cx('max-w-[66ch] text-small text-ink-2', helpFirst && '-mt-0.5')}>
+    <p id={helpId} className={cx('max-w-measure text-small text-ink-2', helpFirst && '-mt-0.5')}>
       {help}
     </p>
   )

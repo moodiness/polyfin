@@ -63,7 +63,7 @@ export function Skeleton({ className }: { className?: string }) {
     <span
       aria-hidden="true"
       className={cx(
-        'block animate-pulse rounded-[0.625rem] bg-s2 motion-reduce:animate-none',
+        'block animate-pulse rounded-control bg-s2 motion-reduce:animate-none',
         className,
       )}
     />
@@ -112,9 +112,7 @@ export function SkeletonRows({
           key={index}
           className={cx(
             'flex items-center',
-            compact
-              ? 'min-h-12 gap-2.5 rounded-[0.625rem] py-1.5'
-              : 'min-h-15 gap-3 rounded-row py-2',
+            compact ? 'min-h-12 gap-2.5 rounded-control py-1.5' : 'min-h-15 gap-3 rounded-row py-2',
             boxed ? (compact ? 'bg-s1 pr-3 pl-3.5' : 'bg-s1 pr-3 pl-4') : 'px-2',
           )}
         >
@@ -292,7 +290,7 @@ export function Notice({
         <Glyph size="1.125rem" />
       </span>
       <div className="min-w-0 flex-1 basis-48 self-center">
-        <div className="max-w-160">{children}</div>
+        <div className="max-w-measure">{children}</div>
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

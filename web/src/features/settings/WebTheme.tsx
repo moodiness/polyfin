@@ -145,8 +145,8 @@ export function ThemeCopyPanel({
   const busy = keep.isPending || remove.isPending
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-h3 text-ink max-md:text-[1.125rem]">{s.themeCopy}</p>
-      <p className="-mt-2.5 max-w-[66ch] text-small text-ink-2">
+      <p className="text-h3 text-ink max-md:text-group">{s.themeCopy}</p>
+      <p className="-mt-2.5 max-w-measure text-small text-ink-2">
         {s.themeCopyHelp(
           data.limits.depth,
           formatBytes(data.limits.fileBytes, language),

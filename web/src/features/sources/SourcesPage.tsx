@@ -514,7 +514,7 @@ export function SourcesPage({
             aria-pressed={filters.kind === value}
             onClick={() => setFilters({ kind: value })}
             className={cx(
-              'focus-lit inline-flex items-baseline gap-1.5 rounded-[0.5rem] px-2.5 py-1 text-control font-semibold transition-colors duration-300 ease-nuit',
+              'focus-lit inline-flex items-baseline gap-1.5 rounded-chip px-2.5 py-1 text-control font-semibold transition-colors duration-300 ease-nuit',
               filters.kind === value ? 'bg-s2 text-ink' : 'text-ink-3 hover:text-ink',
             )}
           >

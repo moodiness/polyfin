@@ -69,10 +69,10 @@ export default function CodeEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <label htmlFor={id} className="text-h3 text-ink max-md:text-[1.125rem]">
+      <label htmlFor={id} className="text-h3 text-ink max-md:text-group">
         {label}
       </label>
-      <p id={`${id}-help`} className="-mt-1.5 max-w-[66ch] text-small text-ink-2">
+      <p id={`${id}-help`} className="-mt-1.5 max-w-measure text-small text-ink-2">
         {help}
       </p>
       {children}

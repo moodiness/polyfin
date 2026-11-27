@@ -223,7 +223,7 @@ function Explained({
   return (
     <div className="flex flex-col gap-block">
       <Block title={text.order}>
-        <div className="flex max-w-[72ch] flex-col gap-1.5 text-body text-ink-2">
+        <div className="flex max-w-measure flex-col gap-1.5 text-body text-ink-2">
           <p>{criteria === '' ? text.orderNone : text.orderBy(criteria)}</p>
           {explained.qualityGroup > 0 && <p>{text.group(explained.qualityGroup)}</p>}
           {explained.keptAll && <Notice tone="info">{text.keptAll}</Notice>}
@@ -284,7 +284,7 @@ function PinBlock({ id, explained }: { id: string; explained: TitleVersions }) {
   return (
     <Block title={text.pin}>
       {pin === null ? (
-        <p className="max-w-[72ch] text-small text-ink-2">{text.noPin}</p>
+        <p className="max-w-measure text-small text-ink-2">{text.noPin}</p>
       ) : (
         <RowList compact aria-label={text.pin}>
           <Row
@@ -915,7 +915,7 @@ function Decisions({ explained }: { explained: TitleVersions }) {
   const text = t.versions
   return (
     <Block title={text.decisions} count={explained.decisions.length}>
-      <p className="mb-3 max-w-[72ch] text-small text-ink-2">{text.decisionsHelp}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{text.decisionsHelp}</p>
       {explained.decisions.length === 0 ? (
         <p className="text-small text-ink-2">{text.noDecisions}</p>
       ) : (

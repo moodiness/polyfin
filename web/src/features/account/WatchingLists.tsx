@@ -261,7 +261,7 @@ export function NextUpList() {
         <>
           <div>
             <p className="text-small font-medium text-ink-2">{text.nextUpDroppedList}</p>
-            <p className="mt-1 max-w-[72ch] text-small text-ink-2">{text.nextUpDroppedHelp}</p>
+            <p className="mt-1 max-w-measure text-small text-ink-2">{text.nextUpDroppedHelp}</p>
           </div>
           <RowList aria-label={text.nextUpDroppedList}>
             {nextUp.data.dropped.map((entry) => (

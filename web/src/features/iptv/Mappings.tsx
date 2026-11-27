@@ -71,7 +71,7 @@ export default function Mappings({
 
   return (
     <Block title={text.title} count={mappings.data?.total}>
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{text.help}</p>
       <div className="flex flex-wrap items-center gap-2.5">
         <Segmented
           label={text.show}
@@ -142,7 +142,7 @@ export default function Mappings({
           {mappings.data.items.map((item) => (
             <li
               key={item.channelId}
-              className="min-w-0 rounded-[0.625rem] bg-s1 py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:pl-3"
+              className="min-w-0 rounded-control bg-s1 py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:pl-3"
             >
               <div className="flex min-h-10 flex-wrap items-center gap-x-2.5 gap-y-1">
                 <span className="figures w-8 shrink-0 text-right text-small text-ink-3">

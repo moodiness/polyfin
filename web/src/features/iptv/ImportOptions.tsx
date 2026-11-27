@@ -124,7 +124,7 @@ function OptionsGroup({
       <h3 id={titleId} className="text-group text-ink">
         {title}
       </h3>
-      {help !== undefined && <p className="mt-1 max-w-[66ch] text-small text-ink-2">{help}</p>}
+      {help !== undefined && <p className="mt-1 max-w-measure text-small text-ink-2">{help}</p>}
       <div className="mt-3 space-y-6 max-md:space-y-5">{children}</div>
     </section>
   )
@@ -355,7 +355,7 @@ function ExclusionPicker({
   return (
     <fieldset className="min-w-0">
       <legend className="text-h3 text-ink">{text.title}</legend>
-      <p className="mt-1 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mt-1 max-w-measure text-small text-ink-2">{text.help}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         {views.length > 1 && (
           <Segmented label={text.by} value={by} options={views} onChange={setBy} size="compact" />

@@ -551,7 +551,7 @@ export default function UiGallery() {
       </Block>
 
       <Block title="Setting rows and the unsaved dock">
-        <p className="mb-6 max-w-[62ch] text-small text-ink-2">
+        <p className="mb-6 max-w-measure text-small text-ink-2">
           Tab or click a row to light it and read its help; Enter opens its picker, the arrows
           choose, Esc closes. ↑ ↓ move between rows. Changed rows keep a dot and “was …”; the dock
           under the section list counts them. Access below saves at once, with no mark.

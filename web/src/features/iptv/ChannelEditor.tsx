@@ -67,7 +67,7 @@ export default function ChannelEditor({
     return (
       <div role="status" aria-label={t.common.loading} className={cx(pad, 'space-y-5 pb-5')}>
         <div className="flex items-center gap-3">
-          <Skeleton className="size-11 rounded-[0.75rem]" />
+          <Skeleton className="size-11 rounded-art" />
           <SkeletonText className="flex-1" />
         </div>
         {Array.from({ length: 4 }, (_, index) => (
@@ -346,7 +346,7 @@ function Streams({
         {streams.map((stream, index) => (
           <li
             key={stream.id}
-            className="flex min-h-12 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-[0.625rem] bg-s1 py-1.5 pr-1.5 pl-3.5"
+            className="flex min-h-12 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-control bg-s1 py-1.5 pr-1.5 pl-3.5"
           >
             <span className="figures w-5 text-right text-small text-ink-3">{index + 1}</span>
             <div className="min-w-0 flex-1 basis-40">

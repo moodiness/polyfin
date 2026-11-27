@@ -727,7 +727,7 @@ function OrderRow({
             <p className="mt-1 text-small">
               <Link
                 to={settingsPath('versions', 'version-source-order')}
-                className="focus-lit rounded-[0.375rem] font-medium text-link transition-colors duration-160 hover:text-link-hover"
+                className="focus-lit rounded-inline font-medium text-link transition-colors duration-160 hover:text-link-hover"
               >
                 {t.sources.versionOrderLink}
               </Link>

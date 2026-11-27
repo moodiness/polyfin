@@ -109,7 +109,7 @@ export function IptvSource({
 
   return (
     <>
-      <p className="mt-3 max-w-[64ch] text-lead text-ink-2">{t.lineup.description}</p>
+      <p className="mt-3 max-w-measure text-lead text-ink-2">{t.lineup.description}</p>
       <Tabs
         variant="underline"
         label={t.lineup.sectionsLabel}
@@ -313,7 +313,7 @@ function Summary({
           </Fact>
           {network !== '' && <Fact label={t.sources.network}>{t.sources.networks[network]}</Fact>}
         </Facts>
-        <p className="mt-4 max-w-[66ch] px-2 text-small text-ink-3">{text.refreshHelp}</p>
+        <p className="mt-4 max-w-measure px-2 text-small text-ink-3">{text.refreshHelp}</p>
       </Group>
     </div>
   )
@@ -453,7 +453,7 @@ function TunerPart({
         </Button>
       }
     >
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{text.help}</p>
       {tuner.failure !== '' && (
         <AlertTile
           tone="warn"
@@ -486,7 +486,7 @@ function TunerPart({
           </p>
         </div>
       )}
-      <p className="mt-3 max-w-[66ch] px-2 text-small text-ink-3">{text.scanHelp}</p>
+      <p className="mt-3 max-w-measure px-2 text-small text-ink-3">{text.scanHelp}</p>
       <div className={cx('mt-3.5 grid grid-cols-[minmax(0,1fr)] gap-1.5')}>
         <SettingRow
           kind="switch"
@@ -539,7 +539,7 @@ function Options({ scope, id, source }: { scope: Scope; id: string; source: Sour
   }
   return (
     <form onSubmit={submit} noValidate>
-      <p className="mb-5 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-5 max-w-measure text-small text-ink-2">{text.help}</p>
       <SourceOptions
         value={draft}
         saved={source.options}

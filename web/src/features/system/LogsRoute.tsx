@@ -289,7 +289,7 @@ export default function LogsRoute() {
           </InlineError>
         )}
         {/* The tile, and inside it the lines scrolling, faded where they pass its edges. */}
-        <div className="rounded-panel bg-s1 p-1.5 max-md:rounded-[1.125rem]">
+        <div className="rounded-panel bg-s1 p-1.5">
           <div
             ref={view}
             role="log"
@@ -309,7 +309,7 @@ export default function LogsRoute() {
                 {[70, 55, 82, 64, 48, 76, 60].map((width, index) => (
                   <span
                     key={index}
-                    className="block h-3.5 animate-pulse rounded-[0.375rem] bg-s3 motion-reduce:animate-none"
+                    className="block h-3.5 animate-pulse rounded-inline bg-s3 motion-reduce:animate-none"
                     style={{ width: `${width}%` }}
                   />
                 ))}
@@ -358,7 +358,7 @@ export default function LogsRoute() {
  */
 const LogLine = memo(function LogLine({ line }: { line: Line }) {
   return (
-    <li className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-baseline gap-x-3 rounded-[0.5rem] px-3 py-1.5 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2">
+    <li className="grid min-h-9 grid-cols-[5.25rem_6.75rem_minmax(0,1fr)] items-baseline gap-x-3 rounded-chip px-3 py-1.5 hover:bg-s2 max-md:min-h-0 max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-y-1 max-md:px-2.5 max-md:py-2">
       <span className="text-micro text-ink-2 figures">{line.time}</span>
       <StatusPill tone={levelLooks[line.level].tone} icon={levelLooks[line.level].icon}>
         {line.level}

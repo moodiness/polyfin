@@ -188,7 +188,7 @@ export function Row({
   const rowClass = cx(
     'flex w-full items-center text-left',
     compact
-      ? 'min-h-12 gap-2.5 rounded-[0.625rem] py-1.5 pl-3.5'
+      ? 'min-h-12 gap-2.5 rounded-control py-1.5 pl-3.5'
       : 'min-h-15 gap-3 rounded-row py-2 pl-4',
     actions === undefined ? 'pr-3' : 'min-w-0 flex-1 pr-2',
     actions === undefined && lit,
@@ -198,7 +198,7 @@ export function Row({
         : 'cursor-pointer focus-visible:outline-none'),
     className,
   )
-  const radius = compact ? 'rounded-[0.625rem]' : 'rounded-row'
+  const radius = compact ? 'rounded-control' : 'rounded-row'
   const head =
     to !== undefined ? (
       <Link to={to} aria-current={selected || undefined} className={rowClass}>

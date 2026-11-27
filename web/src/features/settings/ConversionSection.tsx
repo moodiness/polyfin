@@ -195,7 +195,7 @@ export default function ConversionSection(api: SectionFormApi) {
             />
           )}
         <PlainRow anchor="detected-hardware">
-          <h4 className="text-h3 text-ink max-md:text-[1.125rem]">{c.detected}</h4>
+          <h4 className="text-h3 text-ink max-md:text-group">{c.detected}</h4>
           <dl className="mt-3.5 grid gap-1.5 text-small">
             {gpu === null ? (
               // A term and its value, as a list of details holds: the term left to screen
@@ -255,10 +255,8 @@ export default function ConversionSection(api: SectionFormApi) {
         </PlainRow>
         <PlainRow anchor="hardware-decoding">
           <fieldset aria-describedby="hardware-decoding-help">
-            <legend className="text-h3 text-ink max-md:text-[1.125rem]">
-              {c.hardwareDecoding}
-            </legend>
-            <p id="hardware-decoding-help" className="mt-1 max-w-[60ch] text-small text-ink-3">
+            <legend className="text-h3 text-ink max-md:text-group">{c.hardwareDecoding}</legend>
+            <p id="hardware-decoding-help" className="mt-1 max-w-measure text-small text-ink-3">
               {gpu === null ? c.hardwareDecodingNoGpu : c.hardwareDecodingHelp}
             </p>
             <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">

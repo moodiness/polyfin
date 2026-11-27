@@ -108,13 +108,13 @@ export default function DlnaSection({ form, saved, update, error, limits }: Sect
       </SettingsGroup>
       <SettingsGroup title={text.devices}>
         <PlainRow anchor="dlna-devices">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-2">{text.devicesHelp}</p>
+          <p className="mb-4 max-w-measure text-small text-ink-2">{text.devicesHelp}</p>
           <Devices />
         </PlainRow>
       </SettingsGroup>
       <SettingsGroup title={text.profiles}>
         <PlainRow anchor="dlna-profiles">
-          <p className="mb-4 max-w-[60ch] text-small text-ink-2">{text.profilesHelp}</p>
+          <p className="mb-4 max-w-measure text-small text-ink-2">{text.profilesHelp}</p>
           <Profiles />
         </PlainRow>
       </SettingsGroup>

@@ -512,7 +512,7 @@ function LibraryForm({
         <p className="sr-only" role="status">
           {announcement}
         </p>
-        <p className="mb-3 max-w-[66ch] text-small text-ink-2">
+        <p className="mb-3 max-w-measure text-small text-ink-2">
           {scope === 'shared' ? t.libraries.shownHelp : t.libraries.shownHelpMine}
         </p>
         {entries.length > recommendedLibraries && (
@@ -845,14 +845,14 @@ function LibraryForm({
             />
             {t.libraries.defaultTitle}
           </summary>
-          <p className="mt-1.5 max-w-[66ch] pl-8 text-small text-ink-2 max-md:pl-6">
+          <p className="mt-1.5 max-w-measure pl-8 text-small text-ink-2 max-md:pl-6">
             {t.libraries.defaultHelp}
           </p>
         </details>
       </Block>
 
       <Block title={t.libraries.availableTitle} count={notShown.length}>
-        <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
+        <p className="mb-3 max-w-measure text-small text-ink-2">{t.libraries.availableHelp}</p>
         {notShown.length === 0 ? (
           <p className="text-small text-ink-2">{t.libraries.availableEmpty}</p>
         ) : (

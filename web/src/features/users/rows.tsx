@@ -48,7 +48,7 @@ export function PageSection({
             {title}
           </h2>
           {description !== undefined && (
-            <p className="mt-1 max-w-[72ch] text-small text-ink-2">{description}</p>
+            <p className="mt-1 max-w-measure text-small text-ink-2">{description}</p>
           )}
         </div>
         {aside}
@@ -297,7 +297,7 @@ export function WatchingLink({
           alt=""
           loading="lazy"
           onError={onArtError}
-          className="h-11 w-8 shrink-0 rounded-[0.375rem] bg-s2 object-cover"
+          className="h-11 w-8 shrink-0 rounded-inline bg-s2 object-cover"
         />
       )}
       <span className="min-w-0">

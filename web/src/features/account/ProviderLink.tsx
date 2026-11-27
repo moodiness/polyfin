@@ -103,7 +103,7 @@ export default function ProviderLink({ provider }: { provider: NonNullable<Statu
             {text.link(provider.name)}
           </Button>
         ) : (
-          <p className="max-w-[72ch] text-body text-ink-2">
+          <p className="max-w-measure text-body text-ink-2">
             {text.otherAddress}{' '}
             <a
               href={`${publicAddress}/admin/me/account#provider`}
