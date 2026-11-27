@@ -202,7 +202,7 @@ The **Summary** shows the counts, movies and series included, and the last and n
 
 ### Import options on the source page
 
-The same choices as when adding the source, applied to the list already downloaded. They include **What to import**, the libraries choice and enrichment.
+The same choices as when adding the source, applied to the list already downloaded. They include **What to import**, the libraries choice, enrichment and, for an Xtream account, **Group copies of a title as versions** (see [Versions of the same title](iptv-movies-and-series.md#versions-of-the-same-title)).
 
 ### Categories
 

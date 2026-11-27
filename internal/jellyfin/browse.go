@@ -914,12 +914,13 @@ func (h *Handler) item(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err == nil && (item.Kind == library.KindMovie || item.Kind == library.KindSeries || item.Kind == library.KindSeason ||
-		item.Kind == library.KindEpisode) {
+		item.Kind == library.KindEpisode) || errors.Is(err, library.ErrNotFound) {
 		// So is a title a local folder's files were matched to before
-		// Identify relinked them, while the folder holds it no more (see
-		// library.RelinkedTitle).
-		if relinked, relinkErr := h.Library.RelinkedTitle(r.Context(), user, id); relinkErr == nil {
-			item, id = relinked, relinked.ID
+		// Identify relinked them, while the folder holds it no more, and
+		// an IPTV title that became a version of another, which its source
+		// describes no more (see library.RelinkedTitle).
+		if relinked, relinkErr := h.Library.RelinkedTitle(iptv.Opening(r.Context()), user, id); relinkErr == nil {
+			item, err, id = relinked, nil, relinked.ID
 		} else if !errors.Is(relinkErr, library.ErrNotFound) {
 			err = relinkErr
 		}

@@ -283,8 +283,9 @@ func (d *Data) ImportResume(p ImportedResume, thresholds Thresholds) int {
 // count; a resume point is kept when it is newer than the item's own (see
 // ImportResume), and one Polyfin kept without a runtime, which an import
 // would drop, is kept as it is: it is a position in the same file; a
-// favorite is set. Nothing the item records is taken back (see
-// Store.Follow for what from loses).
+// favorite is set; a rating is given to an item the user did not rate.
+// Nothing the item records is taken back (see Store.Follow for what from
+// loses).
 func (d *Data) Follow(from Data, thresholds Thresholds) {
 	switch {
 	case from.Played:
@@ -299,11 +300,14 @@ func (d *Data) Follow(from Data, thresholds Thresholds) {
 	if from.Favorite {
 		d.Favorite = true
 	}
+	if from.Rating != nil && d.Rating == nil {
+		d.Rating = new(*from.Rating)
+	}
 }
 
 // follows reports whether Follow takes anything from d.
 func (d Data) follows() bool {
-	return d.Played || d.givesResume() || d.Favorite
+	return d.Played || d.givesResume() || d.Favorite || d.Rating != nil
 }
 
 // givesResume reports whether Follow gives d's resume point: an item not

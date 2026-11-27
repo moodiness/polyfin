@@ -8,6 +8,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/addons"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/tmdb"
 )
@@ -247,10 +248,13 @@ func (s *Service) MatchedPlain(ctx context.Context, user accounts.User, id accou
 // local folder were relinked to by Identify (see Identify) from the title
 // item id is, or is a season or episode of, when the folder listed that
 // title last and none of its files is matched to it any more: jellyfin-web
-// reopens the item by its identifier right after Identify. It answers
+// reopens the item by its identifier right after Identify. So it does the
+// title an IPTV source's movie, series or episode is a version of now, as
+// the source groups the titles of a TMDB id (see iptv.Service.Grouped):
+// apps reopen the items they had by their identifiers. It answers
 // ErrNotFound for any other item.
 func (s *Service) RelinkedTitle(ctx context.Context, user accounts.User, id accounts.ID) (Item, error) {
-	if s.local == nil {
+	if s.local == nil && s.iptv == nil {
 		return Item{}, ErrNotFound
 	}
 	r, err := s.load(ctx, id)
@@ -266,7 +270,17 @@ func (s *Service) RelinkedTitle(ctx context.Context, user accounts.User, id acco
 	if !ok || r.Addon == nil {
 		return Item{}, ErrNotFound
 	}
-	stremioID, err := s.local.Relinked(ctx, *r.Addon, former)
+	var stremioID string
+	switch {
+	case strings.HasPrefix(former, iptv.IDPrefix) && s.iptv != nil:
+		asked := former
+		if r.Kind == KindEpisode && r.Video != nil {
+			asked = r.Video.ID
+		}
+		stremioID, err = s.iptv.Grouped(ctx, *r.Addon, asked)
+	case s.local != nil:
+		stremioID, err = s.local.Relinked(ctx, *r.Addon, former)
+	}
 	if err != nil {
 		return Item{}, err
 	}

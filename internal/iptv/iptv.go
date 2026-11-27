@@ -106,6 +106,9 @@ type Service struct {
 	// descriptions keeps titles' descriptions decoded (see
 	// descriptions.go).
 	descriptions descriptions
+	// groups keeps each source's groups of titles, under mu, while its
+	// version stays the same (see groupOf).
+	groups map[accounts.ID]*sourceGroups
 
 	// scans are the tuners' channel scans under way, followed every
 	// scanPoll (see Scan); tunerPort and tunerAddresses are where
@@ -220,6 +223,9 @@ type OptionsPatch struct {
 	VODExcluded  *[]string `json:"vodExcluded"`
 	VODLibraries *string   `json:"vodLibraries"`
 	Enrichment   *bool     `json:"enrichment"`
+	// TitleVersions groups an Xtream account's titles of the same TMDB id
+	// (see groups.go).
+	TitleVersions *bool `json:"titleVersions"`
 	// FavoritesOnly keeps only the channels marked favorite on a tuner.
 	FavoritesOnly *bool `json:"favoritesOnly"`
 }
@@ -252,6 +258,7 @@ func (o Options) apply(patch *OptionsPatch) (Options, error) {
 		turn(&o.Movies, patch.Movies)
 		turn(&o.Series, patch.Series)
 		turn(&o.Enrichment, patch.Enrichment)
+		turn(&o.TitleVersions, patch.TitleVersions)
 		turn(&o.FavoritesOnly, patch.FavoritesOnly)
 	}
 	if o.Excluded == nil {
@@ -357,7 +364,7 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+", user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+", user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
 				append(append([]any{addon.ID}, options.values()...), agent)...); err != nil {
 				return err
 			}
@@ -371,7 +378,7 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 			if err := s.stored(ctx, tx, addon.ID, list, at); err != nil {
 				return err
 			}
-			if err := reconcile(ctx, tx, addon.ID, at); err != nil || !source.UsedBy.Listed {
+			if err := s.reconcile(ctx, tx, addon.ID, at); err != nil || !source.UsedBy.Listed {
 				return err
 			}
 			stored, err := addons.WriteUsedBy(ctx, tx, addon.ID, source.UsedBy)
@@ -463,7 +470,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	at := s.now()
 	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, renamed(addon.Manifest, name), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+", user_agent) = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) WHERE addon_id = $1",
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+", user_agent) = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) WHERE addon_id = $1",
 			append(append([]any{id}, options.values()...), agent)...); err != nil {
 			return err
 		}
@@ -471,7 +478,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 			return err
 		}
 		if refetched || changes.Options != nil {
-			return reconcile(ctx, tx, id, at)
+			return s.reconcile(ctx, tx, id, at)
 		}
 		return nil
 	})
@@ -484,10 +491,11 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 }
 
 // checkKind checks options against the kind of source they are of: a tuner
-// has live channels only, and only a tuner keeps its favorites alone.
+// has live channels only, only a tuner keeps its favorites alone, and only
+// an Xtream account's titles give the TMDB ids versions are grouped by.
 func (o Options) checkKind(kind string) error {
 	tuner := kind == addons.KindHDHomeRun
-	if tuner && (o.Movies || o.Series || !o.LiveTv) || !tuner && o.FavoritesOnly {
+	if tuner && (o.Movies || o.Series || !o.LiveTv) || !tuner && o.FavoritesOnly || kind != addons.KindXtream && o.TitleVersions {
 		return ErrInvalidOptions
 	}
 	return nil
@@ -650,7 +658,7 @@ func (s *Service) refresh(ctx context.Context, addon addons.Addon, confined bool
 			if err := s.stored(ctx, tx, addon.ID, list, at); err != nil {
 				return err
 			}
-			return reconcile(ctx, tx, addon.ID, at)
+			return s.reconcile(ctx, tx, addon.ID, at)
 		})
 		if err == nil {
 			s.analyzeTitles(ctx)
@@ -773,7 +781,7 @@ func (s *Service) ensureLineup(ctx context.Context, source accounts.ID) error {
 		return err
 	}
 	_, err, _ = s.flight.Do("lineup "+source.String(), func() (any, error) {
-		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error { return reconcile(ctx, tx, source, s.now()) })
+		return nil, pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error { return s.reconcile(ctx, tx, source, s.now()) })
 	})
 	if err == nil {
 		s.lineupChanged(ctx, source)
@@ -1003,7 +1011,7 @@ const streamOrder = `(s.sort IS NULL), s.sort, s.rank, s.key`
 // ends (see hidden). A replay's stream is its programme's address in the
 // provider's archive (see ReplayID).
 func (s *Service) Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
-	if key, ok := strings.CutPrefix(id, prefix(source)); ok && (strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:")) {
+	if key, ok := strings.CutPrefix(id, prefix(source)); ok && playsAsVOD(key) {
 		return s.vodStreams(ctx, source, key)
 	} else if ok && strings.HasPrefix(key, replayKey) {
 		return s.replayStreams(ctx, source, key)

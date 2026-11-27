@@ -219,7 +219,7 @@ The show's row on the folder's page lists it with why, and with the episode it i
 
 The files are placed again at once. What users did with the episodes they were listed as follows them to their new episodes, by an import's rules, as when a folder's kind changes (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)):
 
-- played marks and favorites are given to the new episode, the former keeping its own;
+- played marks, favorites and ratings are given to the new episode, the former keeping its own;
 - a resume point moves.
 
 **Episodes only in the files** is updated at the same time. Choosing **As the catalog** again puts the files back where their names number them, and their played marks and resume points follow them back.

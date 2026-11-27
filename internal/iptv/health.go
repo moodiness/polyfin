@@ -97,7 +97,7 @@ func addressHash(address string) string {
 // System › Health until a stream of it plays.
 func (s *Service) ReportStream(ctx context.Context, source accounts.ID, channel, address, failure string) error {
 	key, ok := strings.CutPrefix(channel, prefix(source))
-	if !ok || strings.HasPrefix(key, "vod:") || strings.HasPrefix(key, "ep:") || strings.HasPrefix(key, "series:") {
+	if !ok || playsAsVOD(key) || strings.HasPrefix(key, "series:") {
 		return nil
 	}
 	if err := s.reportTuner(ctx, source, failure); err != nil {

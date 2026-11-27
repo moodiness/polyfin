@@ -181,9 +181,10 @@ type storedTitle struct {
 	address *string
 	// kind, manifestAddress and manifest are the source's kind, address
 	// (holding its credentials) and name; confined keeps its requests on
-	// public addresses; userAgent is the one its administrator set.
+	// public addresses; userAgent is the one its administrator set;
+	// titleVersions tells it groups its titles (see groups.go).
 	kind, manifestAddress, manifest, userAgent string
-	confined                                   bool
+	confined, titleVersions                    bool
 }
 
 // scanTitle reads a title of titleColumns, then extra columns.
@@ -253,7 +254,9 @@ func youTubeID(trailer string) string {
 // Catalog lists a page of one of a source's movie or series catalogs, from
 // list data only: from skip, the titles of the catalog's category, or of
 // genre (a category) in a catalog of a type, or those whose name holds
-// search, newest first, then in the provider's order.
+// search, newest first, then in the provider's order. A group of titles
+// is listed once, as its face, under its leader's identifier (see
+// groups.go).
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, catalog string, skip int, genre, search string) ([]stremio.Meta, error) {
 	metas, _, err := s.catalogWindow(ctx, source, catalogType, catalog, genre, search, skip, vodPage, false)
 	return metas, err
@@ -295,7 +298,8 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 	} else if catalog == searchCatalogID(catalogType) {
 		return nil, 0, nil
 	}
-	from := ` FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id WHERE t.addon_id = $1 AND t.type = $2 AND ` + shownTitle + filter
+	from := ` FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id WHERE t.addon_id = $1 AND t.type = $2 AND ` + shownTitle + ` AND ` +
+		notGroupedAway + filter
 	total := 0
 	if counted {
 		countArgs := args
@@ -306,14 +310,20 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 			return nil, 0, err
 		}
 	}
-	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+from+` ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", max(limit, 0), max(skip, 0)), args...)
+	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+`, `+groupLeader+from+` ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", max(limit, 0),
+		max(skip, 0)), args...)
 	if err != nil {
 		return nil, 0, err
 	}
 	metas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) {
 		var t storedTitle
-		err := scanTitle(row, &t)
-		return listingMeta(source, t.Title), err
+		var leader *string
+		err := scanTitle(row, &t, &leader)
+		meta := listingMeta(source, t.Title)
+		if leader != nil {
+			meta.ID = titleID(source, t.Type, *leader)
+		}
+		return meta, err
 	})
 	if metas == nil {
 		metas = []stremio.Meta{}
@@ -325,10 +335,10 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string) (storedTitle, error) {
 	var t storedTitle
 	err := scanTitle(s.db.QueryRow(ctx, `SELECT `+titleColumns+`, a.kind, a.manifest_url, a.manifest->>'name',
-		`+addons.ConfinedSQL("a")+`, i.user_agent
+		`+addons.ConfinedSQL("a")+`, i.user_agent, i.title_versions
 		FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id JOIN addons a ON a.id = t.addon_id
 		WHERE t.addon_id = $1 AND t.type = $2 AND t.key = $3 AND `+shownTitle, source, typ, key), &t, &t.kind, &t.manifestAddress, &t.manifest, &t.confined,
-		&t.userAgent)
+		&t.userAgent, &t.titleVersions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return storedTitle{}, stremio.ErrNotFound
 	}
@@ -340,9 +350,24 @@ func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string
 // its details when they are known or the request opens it (see Opening),
 // and, for a series, its episodes: the description kept (see
 // descriptions.go), unless opening the title asks its provider for its
-// details.
+// details. A group of titles is described under its leader's identifier
+// (see groupMeta); its other members' are not found.
 func (s *Service) titleMeta(ctx context.Context, source accounts.ID, typ, key string) (stremio.Meta, error) {
-	kept, err := s.description(ctx, source, typ, key)
+	state, err := s.sourceState(ctx, source)
+	if err != nil {
+		return stremio.Meta{}, err
+	}
+	group, err := s.groupOf(ctx, state, source, typ, key)
+	if err != nil {
+		return stremio.Meta{}, err
+	}
+	if group != nil {
+		if group.leader != key {
+			return stremio.Meta{}, stremio.ErrNotFound
+		}
+		return s.groupMeta(ctx, state, source, group)
+	}
+	kept, err := s.description(ctx, state, source, typ, key)
 	if err != nil {
 		return stremio.Meta{}, err
 	}
@@ -467,14 +492,19 @@ func (d *details) apply(source accounts.ID, t Title, meta *stremio.Meta) {
 	if t.Type == typeSeries {
 		meta.Videos = make([]stremio.Video, 0, len(d.Episodes))
 		for _, e := range d.Episodes {
-			video := stremio.Video{ID: episodeID(source, t.Key, e.Key), Title: e.Title, Season: stremio.Number(e.Season),
-				Episode: stremio.Number(e.Episode), Thumbnail: e.Thumbnail, Overview: e.Plot, Released: releaseDate(e.Released)}
-			if e.Runtime > 0 {
-				video.Runtime = stremio.Text(strconv.Itoa(e.Runtime) + " min")
-			}
-			meta.Videos = append(meta.Videos, video)
+			meta.Videos = append(meta.Videos, e.video(episodeID(source, t.Key, e.Key)))
 		}
 	}
+}
+
+// video describes an episode under the identifier id.
+func (e episodeDetails) video(id string) stremio.Video {
+	video := stremio.Video{ID: id, Title: e.Title, Season: stremio.Number(e.Season), Episode: stremio.Number(e.Episode), Thumbnail: e.Thumbnail,
+		Overview: e.Plot, Released: releaseDate(e.Released)}
+	if e.Runtime > 0 {
+		video.Runtime = stremio.Text(strconv.Itoa(e.Runtime) + " min")
+	}
+	return video
 }
 
 // details returns a title's details: those kept while fresh; else, when
@@ -717,26 +747,41 @@ func (t storedTitle) vodStream(quality, address string, headers map[string]strin
 
 // vodStreams lists the stream of a movie or an episode a source shows: an
 // Xtream account's file, whose episode needs its series' details (see
-// episodeDetails), or an M3U entry's address.
+// episodeDetails), or an M3U entry's address. A group's movie and episodes
+// list each listed member's file (see groupMovieStreams and
+// groupEpisodeStreams); its other members' identifiers, and the episodes
+// of theirs the group lists under its own (see numbered), list none.
 func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error) {
 	if key, ok := strings.CutPrefix(id, "vod:"); ok {
 		t, err := s.title(ctx, source, typeMovie, key)
-		if errors.Is(err, stremio.ErrNotFound) {
-			return nil, nil
-		}
-		if err != nil {
+		missing := errors.Is(err, stremio.ErrNotFound)
+		if err != nil && !missing {
 			return nil, err
 		}
-		if t.kind != addons.KindXtream {
-			return []stremio.Stream{t.vodStream(t.Quality, t.URL, t.Headers)}, nil
-		}
-		extension := t.Extension
-		if extension == "" {
-			if d, err := s.details(ctx, source, t, true); err == nil && d != nil {
-				extension = d.Extension
+		// A group's leader may be listed no more: the group lasts.
+		if missing || t.titleVersions {
+			group, err := s.titleGroup(ctx, source, typeMovie, key)
+			switch {
+			case err != nil:
+				return nil, err
+			case group != nil && group.leader == key:
+				return s.groupMovieStreams(ctx, source, group)
+			case group != nil || missing:
+				return nil, nil
 			}
 		}
-		return []stremio.Stream{t.vodStream(t.Quality, accountOf(t.kind, t.manifestAddress).vodURL("movie", key, extension), nil)}, nil
+		return []stremio.Stream{s.movieStream(ctx, source, t)}, nil
+	}
+	if rest, ok := strings.CutPrefix(id, "gep:"); ok {
+		leader, season, episode, ok := groupEpisodeParts(rest)
+		if !ok {
+			return nil, nil
+		}
+		group, err := s.titleGroup(ctx, source, typeSeries, leader)
+		if err != nil || group == nil || group.leader != leader {
+			return nil, err
+		}
+		return s.groupEpisodeStreams(ctx, source, group, season, episode)
 	}
 	rest, ok := strings.CutPrefix(id, "ep:")
 	series, key, found := strings.Cut(rest, ":")
@@ -772,7 +817,31 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 		return nil, nil
 	}
 	e := d.Episodes[index]
+	if t.titleVersions {
+		group, err := s.titleGroup(ctx, source, typeSeries, series)
+		if err != nil {
+			return nil, err
+		}
+		if group != nil && numbered(d)[episodeNumbers{e.Season, e.Episode}].Key == key {
+			return nil, nil
+		}
+	}
 	return []stremio.Stream{t.vodStream(e.Quality, accountOf(t.kind, t.manifestAddress).vodURL("series", key, e.Extension), nil)}, nil
+}
+
+// movieStream is the stream of movie t: an M3U entry's address, or an
+// Xtream account's file, whose container its details may tell.
+func (s *Service) movieStream(ctx context.Context, source accounts.ID, t storedTitle) stremio.Stream {
+	if t.kind != addons.KindXtream {
+		return t.vodStream(t.Quality, t.URL, t.Headers)
+	}
+	extension := t.Extension
+	if extension == "" {
+		if d, err := s.details(ctx, source, t, true); err == nil && d != nil {
+			extension = d.Extension
+		}
+	}
+	return t.vodStream(t.Quality, accountOf(t.kind, t.manifestAddress).vodURL("movie", t.Key, extension), nil)
 }
 
 // episodeDetails returns the details of series t, which hold the files of
@@ -784,8 +853,10 @@ func (s *Service) vodStreams(ctx context.Context, source accounts.ID, id string)
 // otherwise read and decode the series' details, every episode of them,
 // for each one.
 func (s *Service) episodeDetails(ctx context.Context, source accounts.ID, t storedTitle) (*details, error) {
-	if kept, err := s.description(ctx, source, typeSeries, t.Key); err == nil && kept.title.Version == t.Version && !kept.fetchDue(s.now()) {
-		return kept.details, nil
+	if state, err := s.sourceState(ctx, source); err == nil {
+		if kept, err := s.description(ctx, state, source, typeSeries, t.Key); err == nil && kept.title.Version == t.Version && !kept.fetchDue(s.now()) {
+			return kept.details, nil
+		}
 	}
 	return s.details(ctx, source, t, true)
 }
@@ -809,7 +880,8 @@ func (s *Service) vodCounts(ctx context.Context, source accounts.ID) (VODCounts,
 	var c VODCounts
 	err := s.db.QueryRow(ctx, `SELECT
 		count(*) FILTER (WHERE t.type = 'movie'), count(*) FILTER (WHERE t.type = 'series'),
-		count(*) FILTER (WHERE t.type = 'movie' AND `+shownTitle+`), count(*) FILTER (WHERE t.type = 'series' AND `+shownTitle+`),
+		count(*) FILTER (WHERE t.type = 'movie' AND `+shownTitle+` AND `+notGroupedAway+`),
+		count(*) FILTER (WHERE t.type = 'series' AND `+shownTitle+` AND `+notGroupedAway+`),
 		count(DISTINCT t.category) FILTER (WHERE t.type = 'movie'), count(DISTINCT t.category) FILTER (WHERE t.type = 'series'),
 		(SELECT count(*) FROM iptv_episodes WHERE addon_id = $1) +
 			(SELECT coalesce(sum(jsonb_array_length(coalesce(details->'episodes', '[]'))), 0) FROM iptv_details WHERE addon_id = $1 AND type = 'series')

@@ -205,7 +205,7 @@ func TestDescriptionsAreKeptWithinTheirBound(t *testing.T) {
 	var sizes []int
 	for i := range 2 {
 		_ = must(e.service.Meta(Opening(ctx), source, ids[i]))
-		sizes = append(sizes, descriptionSize(must(e.service.description(ctx, source, typeSeries, fmt.Sprint(server.data.series[i].ID)))))
+		sizes = append(sizes, descriptionSize(must(e.service.description(ctx, must(e.service.sourceState(ctx, source)), source, typeSeries, fmt.Sprint(server.data.series[i].ID)))))
 	}
 	bound := max(sizes[0], sizes[1]) + min(sizes[0], sizes[1])/2
 	bounded := newEnv(t)

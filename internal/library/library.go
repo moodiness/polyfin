@@ -327,8 +327,10 @@ type Service struct {
 }
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
-// stream requests addons answer over HTTP (see package iptv), and which
-// channels have an archive of past programmes (see replay.go).
+// stream requests addons answer over HTTP (see package iptv), which
+// channels have an archive of past programmes (see replay.go), and which
+// title a movie, series or episode is a version of now (Grouped, see
+// RelinkedTitle).
 type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, genre, search string) ([]stremio.Meta, error)
@@ -341,6 +343,7 @@ type IPTV interface {
 	ChannelSource(ctx context.Context, item accounts.ID) (accounts.ID, error)
 	Archives(ctx context.Context, source accounts.ID) (map[string]int, error)
 	GuideArchives(ctx context.Context, guide accounts.ID) (map[string]int, error)
+	Grouped(ctx context.Context, source accounts.ID, id string) (string, error)
 }
 
 // UseIPTV sets what answers for IPTV sources; it is called before the
@@ -2902,6 +2905,16 @@ func (s *Service) describedTitle(ctx context.Context, v view, r record) (Item, b
 	full, described := s.titleMeta(ctx, v, r)
 	if described {
 		meta = full
+	}
+	// An IPTV title that became a version of another is that title now:
+	// lists of what users did, such as favorites, show it once, under the
+	// other's item (see RelinkedTitle).
+	if !described && r.Addon != nil && s.iptv != nil && strings.HasPrefix(meta.ID, iptv.IDPrefix) {
+		if grouped, err := s.iptv.Grouped(ctx, *r.Addon, meta.ID); err != nil {
+			return Item{}, false, err
+		} else if grouped != "" {
+			return Item{}, false, ErrNotFound
+		}
 	}
 	// The preview of a title another user's own addon holds is that
 	// user's: a title none of this user's addons describes is then none

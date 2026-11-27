@@ -3,7 +3,6 @@ package iptv
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"slices"
@@ -17,12 +16,7 @@ import (
 
 // ChannelItemID is the Jellyfin item identifier of the channel with a
 // Stremio identifier, as the library derives it.
-func ChannelItemID(stremioID string) accounts.ID {
-	sum := sha256.Sum256([]byte("polyfin:item:channel|" + stremioID))
-	var id accounts.ID
-	copy(id[:], sum[:16])
-	return id
-}
+func ChannelItemID(stremioID string) accounts.ID { return libraryItemID("channel|" + stremioID) }
 
 func randomKey() string {
 	var b [12]byte
@@ -33,19 +27,19 @@ func randomKey() string {
 // optionColumns are the columns of iptv_sources that store Options, in the
 // order of Options.fields.
 const optionColumns = "category_mode, channel_mode, excluded, new_channels, numbering, live_tv, movies, series, vod_excluded, vod_libraries, enrichment, " +
-	"favorites_only"
+	"title_versions, favorites_only"
 
 // fields are pointers to the options' fields, in the order of
 // optionColumns.
 func (o *Options) fields() []any {
 	return []any{&o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering, &o.LiveTv, &o.Movies, &o.Series, &o.VODExcluded,
-		&o.VODLibraries, &o.Enrichment, &o.FavoritesOnly}
+		&o.VODLibraries, &o.Enrichment, &o.TitleVersions, &o.FavoritesOnly}
 }
 
 // values are the options' values, in the order of optionColumns.
 func (o Options) values() []any {
 	return []any{o.Categories, o.Channels, o.Excluded, o.NewChannels, o.Numbering, o.LiveTv, o.Movies, o.Series, o.VODExcluded, o.VODLibraries,
-		o.Enrichment, o.FavoritesOnly}
+		o.Enrichment, o.TitleVersions, o.FavoritesOnly}
 }
 
 // loadOptions reads a source's import options.
@@ -80,9 +74,10 @@ type existingChannel struct {
 }
 
 // reconcile makes a source follow its stored lists and options, in tx:
-// its line-up while it imports live channels, then its titles and its
-// catalogs.
-func reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time) error {
+// its line-up while it imports live channels, then its titles, the groups
+// of its titles (see groups.go) and its catalogs. Its row in iptv_sources
+// is always updated, which changes its version (see CatalogVersion).
+func (s *Service) reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time) error {
 	var kind, name string
 	if err := tx.QueryRow(ctx, "SELECT kind, manifest->>'name' FROM addons WHERE id = $1", source).Scan(&kind, &name); err != nil {
 		return err
@@ -101,6 +96,9 @@ func reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time)
 		return err
 	}
 	if err := reconcileVOD(ctx, tx, source, kind, options); err != nil {
+		return err
+	}
+	if err := s.reconcileGroups(ctx, tx, source, options); err != nil {
 		return err
 	}
 	return syncManifest(ctx, tx, source, kind, name, options)

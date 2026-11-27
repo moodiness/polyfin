@@ -46,8 +46,17 @@ func (v *thumbnailVersions) MakeThumbnailsAgain(_ context.Context, _ accounts.Us
 	return thumbnails.Result{State: thumbnails.StateWaiting}, nil
 }
 
-// noTitles finds no title: the Versions page's routes need one.
+// noTitles finds no title, nor one an item became: the Versions page's
+// routes need one.
 type noTitles struct{ Titles }
+
+func (noTitles) Item(context.Context, accounts.User, accounts.ID) (library.Item, error) {
+	return library.Item{}, library.ErrNotFound
+}
+
+func (noTitles) RelinkedTitle(context.Context, accounts.User, accounts.ID) (library.Item, error) {
+	return library.Item{}, library.ErrNotFound
+}
 
 // The Versions page tells where the thumbnails of a local folder's file
 // stand, and none for a link; Make again queues a local file, and refuses

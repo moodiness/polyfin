@@ -230,10 +230,10 @@ A scan under way stops. The folder is scanned again as the new kind, in the back
 What users did follows the videos as follows:
 
 - **Between movies, shows and home videos**, what users did with a video follows it, as an import adds it (see [How the data merges with Polyfin's](moving-to-polyfin.md#how-the-data-merges-with-polyfin-data)):
-  - a played mark is added, the newer resume point is kept, and a favorite is set;
-  - a home video that becomes a movie or an episode gives it its watch state, resume point and favorite, and the reverse;
+  - a played mark is added, the newer resume point is kept, a favorite is set, and a rating is given to a title the user did not rate;
+  - a home video that becomes a movie or an episode gives it its watch state, resume point, favorite and rating, and the reverse;
   - a file the new scan does not match gets them once it is matched, by hand or by a later scan.
-- **Played marks and favorites are given:** the former titles keep theirs.
+- **Played marks, favorites and ratings are given:** the former titles keep theirs.
 - **A resume point moves:** as it was recorded through the file, which the former title no longer plays. The former title loses it once the new one has it, or a newer one, so Continue Watching lists the file once. A new title played before the resume point was set takes none, as with an import, and the former title keeps it.
 - **Away from home videos:** the folder keeps its videos' identifiers for 30 days (see [Titles](#titles)). Meanwhile they leave Continue Watching. If the folder holds home videos again within that time, it lists them as the same titles, with what users did with them.
 - **Links made by hand** and the episodes given to shows' discs are dropped: each was made for one kind.

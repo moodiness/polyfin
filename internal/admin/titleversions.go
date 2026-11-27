@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/iptv"
 	"github.com/moodiness/polyfin/internal/jellyfin"
 	"github.com/moodiness/polyfin/internal/library"
+	"github.com/moodiness/polyfin/internal/stremio"
 	"github.com/moodiness/polyfin/internal/thumbnails"
 )
 
@@ -35,11 +38,14 @@ type Versions interface {
 	AskVersionsAgain(ctx context.Context, by, user accounts.User, item accounts.ID) (time.Duration, error)
 }
 
-// Titles finds the movies, series and episodes the Versions page explains.
+// Titles finds the movies, series and episodes the Versions page explains,
+// and those IPTV titles' former items became (see
+// library.Service.RelinkedTitle).
 type Titles interface {
 	Item(ctx context.Context, user accounts.User, id accounts.ID) (library.Item, error)
 	Search(ctx context.Context, user accounts.User, term string, kinds []library.Kind, limit int) ([]library.Item, error)
 	Episodes(ctx context.Context, user accounts.User, seriesID accounts.ID, seasonID *accounts.ID) ([]library.Item, error)
+	RelinkedTitle(ctx context.Context, user accounts.User, id accounts.ID) (library.Item, error)
 }
 
 // maxTitleResults bounds the titles a search of the Versions page lists.
@@ -80,6 +86,41 @@ func titleError(w http.ResponseWriter, err error) bool {
 	return false
 }
 
+// titleItem describes the item of id the user sees: when it is gone, the
+// item it became, such as an IPTV title that became a version of another,
+// or an episode of a group of titles that ended (see
+// library.Service.RelinkedTitle). The Versions page then shows that item.
+func (h *handler) titleItem(ctx context.Context, user accounts.User, id accounts.ID) (library.Item, error) {
+	item, err := h.Titles.Item(ctx, user, id)
+	if !errors.Is(err, library.ErrNotFound) {
+		return item, err
+	}
+	relinked, relinkErr := h.Titles.RelinkedTitle(iptv.Opening(ctx), user, id)
+	if errors.Is(relinkErr, library.ErrNotFound) {
+		return item, err
+	}
+	return relinked, relinkErr
+}
+
+// titleID reads the item of the request's path the Versions page acts on:
+// the item it became when it is gone (see titleItem). A gone item stays
+// for the route to answer as not found; another error is answered.
+func (h *handler) titleID(w http.ResponseWriter, r *http.Request, user accounts.User) (accounts.ID, bool) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return accounts.ID{}, false
+	}
+	item, err := h.titleItem(r.Context(), user, id)
+	switch {
+	case errors.Is(err, library.ErrNotFound):
+		return id, true
+	case err != nil:
+		h.internalError(w, r, err)
+		return accounts.ID{}, false
+	}
+	return item.ID, true
+}
+
 // versionTitles searches the movies and series the user sees, as the web
 // player's search finds them.
 func (h *handler) versionTitles(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +145,8 @@ func (h *handler) versionTitles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// versionTitle describes a title, as the user sees it.
+// versionTitle describes a title, as the user sees it, or the item it
+// became (see titleItem), whose identifier the answer carries.
 func (h *handler) versionTitle(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.versionsUser(w, r)
 	if !ok {
@@ -114,7 +156,7 @@ func (h *handler) versionTitle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, err := h.Titles.Item(r.Context(), user, id)
+	item, err := h.titleItem(r.Context(), user, id)
 	if titleError(w, err) {
 		return
 	}
@@ -131,7 +173,7 @@ func (h *handler) versionEpisodes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, r, "id")
+	id, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -354,7 +396,7 @@ func (h *handler) titleVersions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, r, "id")
+	id, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -434,7 +476,7 @@ func (h *handler) askVersionsAgain(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, ok := pathID(w, r, "id")
+	id, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -463,12 +505,11 @@ type versionChoiceRequest struct {
 	Reason     string `json:"reason"`
 }
 
-// versionChoice reads a pin's or a block's request: the title, the
-// version, and the user it is offered to, the administrator signed in
-// unless the request names another.
+// versionChoice reads a pin's or a block's request: the title (see
+// titleID), the version, and the user it is offered to, the administrator
+// signed in unless the request names another.
 func (h *handler) versionChoice(w http.ResponseWriter, r *http.Request) (versionChoiceRequest, accounts.User, accounts.ID, accounts.ID, bool) {
-	item, ok := pathID(w, r, "id")
-	if !ok {
+	if _, ok := pathID(w, r, "id"); !ok {
 		return versionChoiceRequest{}, accounts.User{}, accounts.ID{}, accounts.ID{}, false
 	}
 	var request versionChoiceRequest
@@ -486,6 +527,10 @@ func (h *handler) versionChoice(w http.ResponseWriter, r *http.Request) (version
 		r.URL.RawQuery = query.Encode()
 	}
 	user, ok := h.versionsUser(w, r)
+	if !ok {
+		return versionChoiceRequest{}, accounts.User{}, accounts.ID{}, accounts.ID{}, false
+	}
+	item, ok := h.titleID(w, r, user)
 	return request, user, item, version, ok
 }
 
@@ -508,7 +553,11 @@ func (h *handler) pinVersion(w http.ResponseWriter, r *http.Request) {
 
 // unpinVersion unpins the title's version, if any.
 func (h *handler) unpinVersion(w http.ResponseWriter, r *http.Request) {
-	item, ok := pathID(w, r, "id")
+	user, ok := h.versionsUser(w, r)
+	if !ok {
+		return
+	}
+	item, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -582,7 +631,7 @@ func (h *handler) analyzeVersion(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, ok := pathID(w, r, "id")
+	item, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -614,7 +663,7 @@ func (h *handler) makeThumbnailsAgain(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	item, ok := pathID(w, r, "id")
+	item, ok := h.titleID(w, r, user)
 	if !ok {
 		return
 	}
@@ -634,4 +683,119 @@ func (h *handler) makeThumbnailsAgain(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusAccepted, newThumbnailsJSON(result))
 	}
+}
+
+// titleEntriesJSON lists the entries of an IPTV source's list that share
+// a movie's or a series' TMDB id, as versions of it or kept apart (see
+// iptv.Service.TitleEntries); none for another title, or when the source
+// does not group its titles.
+type titleEntriesJSON struct {
+	Entries []titleEntryJSON `json:"entries"`
+}
+
+type titleEntryJSON struct {
+	Key      string `json:"key"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Quality  string `json:"quality"`
+	Leader   bool   `json:"leader"`
+	Member   bool   `json:"member"`
+	Apart    bool   `json:"apart"`
+	Listed   bool   `json:"listed"`
+}
+
+// iptvTitle is the IPTV movie or series of an entries request: its Stremio
+// identifier, its source, its type and its entries (see
+// iptv.Service.TitleEntries); none for another title.
+type iptvTitle struct {
+	stremioID string
+	source    accounts.ID
+	typ       string
+	entries   []iptv.TitleEntry
+}
+
+// iptvEntries returns the IPTV movie or series of item id the user sees,
+// or the series of the episode it is, of the item it became when it is
+// gone (see titleItem). It answers the error otherwise.
+func (h *handler) iptvEntries(w http.ResponseWriter, r *http.Request) (iptvTitle, bool) {
+	user, ok := h.versionsUser(w, r)
+	if !ok {
+		return iptvTitle{}, false
+	}
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return iptvTitle{}, false
+	}
+	item, err := h.titleItem(r.Context(), user, id)
+	if err == nil && item.Kind == library.KindEpisode {
+		item, err = h.Titles.Item(r.Context(), user, item.SeriesID)
+	}
+	if titleError(w, err) {
+		return iptvTitle{}, false
+	}
+	if err != nil {
+		h.internalError(w, r, err)
+		return iptvTitle{}, false
+	}
+	if h.IPTV == nil || item.Kind != library.KindMovie && item.Kind != library.KindSeries {
+		return iptvTitle{}, true
+	}
+	title := iptvTitle{stremioID: item.StremioID}
+	title.source, title.typ, title.entries, err = h.IPTV.TitleEntries(r.Context(), item.StremioID)
+	if err != nil && !errors.Is(err, stremio.ErrNotFound) {
+		h.internalError(w, r, err)
+		return iptvTitle{}, false
+	}
+	return title, true
+}
+
+func writeTitleEntries(w http.ResponseWriter, entries []iptv.TitleEntry) {
+	result := titleEntriesJSON{Entries: make([]titleEntryJSON, 0, len(entries))}
+	for _, e := range entries {
+		result.Entries = append(result.Entries, titleEntryJSON{Key: e.Key, Name: e.Name, Category: e.Category, Quality: e.Quality, Leader: e.Leader,
+			Member: e.Member, Apart: e.Apart, Listed: e.Listed})
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// titleEntries lists the entries of an IPTV source's list that are
+// versions of a movie or series, or of the series of an episode, or kept
+// apart from it (see titleEntriesJSON).
+func (h *handler) titleEntries(w http.ResponseWriter, r *http.Request) {
+	if title, ok := h.iptvEntries(w, r); ok {
+		writeTitleEntries(w, title.entries)
+	}
+}
+
+// keepApart keeps one of the entries titleEntries lists apart from the
+// others of its TMDB id, or groups it with them again, then answers the
+// entries of the same title, by its Stremio identifier: the item of the
+// page, an episode of the group, may be gone since. Another key is
+// refused as invalid_entry.
+func (h *handler) keepApart(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Key   string `json:"key"`
+		Apart bool   `json:"apart"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	title, ok := h.iptvEntries(w, r)
+	if !ok {
+		return
+	}
+	if !slices.ContainsFunc(title.entries, func(e iptv.TitleEntry) bool { return e.Key == body.Key && e.Listed }) {
+		writeError(w, http.StatusBadRequest, "invalid_entry")
+		return
+	}
+	if err := h.IPTV.KeepApart(r.Context(), title.source, title.typ, body.Key, body.Apart); err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	_, _, entries, err := h.IPTV.TitleEntries(r.Context(), title.stremioID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeTitleEntries(w, entries)
 }

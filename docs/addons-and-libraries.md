@@ -109,7 +109,7 @@ So a library of other videos shows its titles as movies and shows, when no one c
 - **When Polyfin decides:** once, from the first page it reads. That is when the library is saved. A library made earlier is decided when Polyfin reads the libraries' first pages, at start and then every hour.
 - **What it keeps:** the choice, which the row shows and an administrator may change.
 - **A first page it cannot read:** the library stays home videos until it can.
-- **Titles further in:** its movies and shows are the same items either way. A title of another type that the library listed as a home video, further in the catalog, becomes a show or a movie. Its users' played marks, resume points and favorites follow it, as when an administrator switches.
+- **Titles further in:** its movies and shows are the same items either way. A title of another type that the library listed as a home video, further in the catalog, becomes a show or a movie. Its users' played marks, resume points, favorites and ratings follow it, as when an administrator switches.
 
 Polyfin decides once, rather than at each listing, so that a library keeps its type. Apps keep the type a library had when they listed it, and a catalog whose first page changed would change it under them.
 
@@ -178,9 +178,9 @@ How they behave:
 What happens when the choice changes:
 
 - A title is one item whether it is a show or a movie. It stays the same when its details gain or lose videos.
-- Its items are not those of home videos. Switching between **Home videos** and **Movies and shows**, or turning the library off and on again, moves each user's played marks, favorites and resume points to the new items. A movie's file moves to the movie, and back. It works as when a local folder changes what it holds (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)).
+- Its items are not those of home videos. Switching between **Home videos** and **Movies and shows**, or turning the library off and on again, moves each user's played marks, favorites, ratings and resume points to the new items. A movie's file moves to the movie, and back. It works as when a local folder changes what it holds (see [Changing what a folder holds](local-folders.md#changing-what-a-folder-holds)).
 - The former items are no longer found. Apps that kept them, in a list open since, open nothing.
-- Ratings, administrators' edits and uploaded images, playlists and collections stay with the former items.
+- Administrators' edits and uploaded images, playlists and collections stay with the former items, which keep their ratings too.
 - A title the catalog types `movie` or `series` is not one of these. It stays the movie or series it is, the same item either way.
 
 **Compared with Jellyfin**
