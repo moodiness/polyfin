@@ -427,6 +427,8 @@ const iptv: typeof en = {
       },
       search: 'Kanäle durchsuchen',
       empty: 'Kein Kanal entspricht der Suche.',
+      emptyHow:
+        'Seine Kanäle erscheinen hier, sobald sie aufgelistet sind, jeder mit seinem Programmkanal.',
       none: 'Kein Fernsehprogramm',
       manualNone: 'Manuell festgelegt',
       manual: 'Manuell festgelegt',
@@ -455,11 +457,7 @@ const iptv: typeof en = {
         'Dieser Katalog hat noch kein Fernsehprogramm: Füge eines unter „Fernsehprogramme“ hinzu.',
     },
     catalog: {
-      title: (name: string, addon: string) => `${name} (${addon}): Fernsehprogramme`,
       titleLoading: 'Fernsehprogramme',
-      description:
-        'Die XMLTV-Fernsehprogramme dieses Live-TV-Katalogs und welchen Programmkanal jeder seiner Kanäle verwendet.',
-      back: 'Zurück zu Live-TV',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 Fernsehprogramm' : `${count} Fernsehprogramme`),

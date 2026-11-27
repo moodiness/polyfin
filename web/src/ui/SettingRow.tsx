@@ -59,7 +59,8 @@ type ChoiceSetting<T extends string | number> = {
   value: T
   /**
    * The choices in order: side by side in the row up to 4 short ones, else a list that opens in
-   * one click, with a search past 12.
+   * one click, with a search past 12. A disabled option holding the value is a placeholder
+   * ("Choose…"): it labels the list, and side by side the others show with none chosen.
    */
   options: readonly SelectOption<T>[]
   onChange: (value: T) => void
@@ -431,11 +432,15 @@ function Control<T extends string | number>({
           className="relative after:absolute after:-inset-3"
         />
       )
-    case 'choice':
-      return sideBySide(props.options) ? (
+    case 'choice': {
+      // A placeholder is never a chosen choice: side by side or not is decided without it.
+      const choices = props.options.filter(
+        (option) => !(option.disabled === true && option.value === props.value),
+      )
+      return sideBySide(choices) ? (
         <Choices
           value={props.value}
-          options={props.options}
+          options={choices}
           onChange={props.onChange}
           labelId={labelId}
           describedById={describedById}
@@ -454,6 +459,7 @@ function Control<T extends string | number>({
           className="w-[16.5rem] max-w-full"
         />
       )
+    }
     case 'number':
       return (
         <NumberInput

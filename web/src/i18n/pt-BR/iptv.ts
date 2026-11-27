@@ -429,6 +429,8 @@ const iptv: typeof en = {
       },
       search: 'Pesquisar canais',
       empty: 'Nenhum canal corresponde.',
+      emptyHow:
+        'Os canais aparecerão aqui quando forem listados, cada um com o canal do guia que usa.',
       none: 'Sem guia',
       manualNone: 'Definido manualmente',
       manual: 'Definido manualmente',
@@ -456,11 +458,7 @@ const iptv: typeof en = {
       noGuides: 'Este catálogo ainda não tem guia: adicione um em Guias.',
     },
     catalog: {
-      title: (name: string, addon: string) => `${name} (${addon}): guias`,
       titleLoading: 'Guias',
-      description:
-        'Os guias XMLTV deste catálogo de TV ao Vivo e qual canal do guia cada um de seus canais usa.',
-      back: 'Voltar para TV ao Vivo',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 guia' : `${count} guias`),

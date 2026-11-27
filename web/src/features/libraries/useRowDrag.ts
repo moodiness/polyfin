@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react'
 
+/**
+ * The ↑ ↓ of a row that its grip drags and its number places: shown on the lit row only (under the
+ * mouse, or holding the focus, which they take while hidden), and always on a touch screen.
+ */
+export const movesOnLit =
+  'flex opacity-0 transition-opacity duration-300 ease-nuit pointer-coarse:opacity-100 [li:focus-within_&]:opacity-100 [li:hover_&]:opacity-100'
+
 /** How close to an edge, in px, the pointer scrolls the list or the page while dragging. */
 const scrollZone = 48
 /** The most a frame scrolls, in px, with the pointer at the edge itself. */

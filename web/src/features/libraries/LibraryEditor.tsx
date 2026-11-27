@@ -9,7 +9,6 @@ import {
   MagnifyingGlassIcon,
   MusicNoteIcon,
   PlusIcon,
-  SquaresFourIcon,
   StopIcon,
   WarningIcon,
   XIcon,
@@ -49,6 +48,7 @@ import {
   Block,
   Button,
   ButtonLink,
+  Count,
   cx,
   EmptyState,
   Field,
@@ -70,7 +70,7 @@ import {
   ProgressBar,
 } from '@/ui'
 import { LibraryImageEditor, LibraryThumb, LiveTvThumb } from './LibraryImage'
-import { useRowDrag } from './useRowDrag'
+import { movesOnLit, useRowDrag } from './useRowDrag'
 import UserLibraryOrders from './UserLibraryOrders'
 
 /** Above this many libraries the home screen of Jellyfin apps gets heavy; the server default. */
@@ -144,14 +144,10 @@ function countChanges(entries: Entry[], saved: Entry[]): number {
 const blockSpacing = '[&>*+*]:mt-block'
 
 /**
- * A list too long for the page scrolls in its own box, with a thin scrollbar, so the blocks below
- * and the dock stay close.
+ * Above this many catalogs available, each addon's catalogs show under its name on demand, so that
+ * a large addon does not push the blocks below out of sight. A filter shows every match.
  */
-const scrollBox =
-  'max-h-[40rem] overflow-y-auto overscroll-contain [scrollbar-color:var(--color-line-3)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2'
-
-/** Above this many catalogs available, their list scrolls in its box. */
-const boxedCatalogs = 12
+const collapseAbove = 12
 
 /**
  * Chooses which catalogs of a scope's addons are libraries in Jellyfin apps, in which order and
@@ -263,14 +259,18 @@ function LibraryForm({
   const focusAfterRender = useRef<string[]>([])
   // The row to bring into view once the next render is committed, after a move.
   const scrollAfterRender = useRef<string | null>(null)
-  // The box of available catalogs, back at its top when the filter changes.
-  const availableBox = useRef<HTMLDivElement>(null)
+  // The addons whose available catalogs are shown, while they show on demand.
+  const [openAddons, setOpenAddons] = useState<ReadonlySet<string>>(() => new Set())
   // The list of libraries shown, whose rows are dragged by their grip.
   const shownList = useRef<HTMLOListElement>(null)
   const rowDrag = useRowDrag({ list: shownList, onDrop: move })
-  function filterBy(change: () => void) {
-    change()
-    availableBox.current?.scrollTo({ top: 0 })
+
+  function toggleAddon(addonId: string) {
+    setOpenAddons((open) => {
+      const next = new Set(open)
+      if (!next.delete(addonId)) next.add(addonId)
+      return next
+    })
   }
 
   useEffect(() => {
@@ -379,6 +379,8 @@ function LibraryForm({
     if (group === undefined) groups.set(library.addonId, [library])
     else group.push(library)
   }
+  // A filter shows every match; otherwise a long list opens each addon on demand.
+  const onDemand = notShown.length > collapseAbove && needle === '' && type === ''
 
   const ids = {
     remove: (key: string) => `${baseId}-remove-${key}`,
@@ -665,12 +667,14 @@ function LibraryForm({
                           {t.libraries.options}
                         </Button>
                       )}
-                      <MoveButtons
-                        name={name}
-                        index={index}
-                        count={entries.length}
-                        onMove={(to) => move(index, to)}
-                      />
+                      <span className={movesOnLit}>
+                        <MoveButtons
+                          name={name}
+                          index={index}
+                          count={entries.length}
+                          onMove={(to) => move(index, to)}
+                        />
+                      </span>
                       {library.refreshable && (
                         <Menu
                           label={t.libraries.moreActions(name)}
@@ -702,6 +706,8 @@ function LibraryForm({
                           )}
                         </Menu>
                       )}
+                      {/* The slot of More stays, so that every row's buttons line up. */}
+                      {!library.refreshable && <span aria-hidden="true" className="size-8" />}
                       <IconButton
                         id={ids.remove(entry.key)}
                         size="sm"
@@ -848,7 +854,7 @@ function LibraryForm({
       <Block title={t.libraries.availableTitle} count={notShown.length}>
         <p className="mb-3 max-w-[66ch] text-small text-ink-2">{t.libraries.availableHelp}</p>
         {notShown.length === 0 ? (
-          <EmptyState icon={SquaresFourIcon} title={t.libraries.availableEmpty} />
+          <p className="text-small text-ink-2">{t.libraries.availableEmpty}</p>
         ) : (
           <>
             <div className="mb-4 flex flex-wrap items-end gap-2.5">
@@ -859,7 +865,7 @@ function LibraryForm({
                     size="sm"
                     icon={MagnifyingGlassIcon}
                     value={query}
-                    onValue={(value) => filterBy(() => setQuery(value))}
+                    onValue={setQuery}
                     placeholder={t.libraries.filterPlaceholder}
                     autoComplete="off"
                   />
@@ -872,7 +878,7 @@ function LibraryForm({
                 <Select
                   size="sm"
                   value={type}
-                  onValue={(value) => filterBy(() => setType(value))}
+                  onValue={setType}
                   options={[
                     { value: '', label: t.libraries.allTypes },
                     ...types.map((value) => ({
@@ -888,37 +894,59 @@ function LibraryForm({
                 {t.libraries.noMatch}
               </p>
             ) : (
-              <div
-                ref={availableBox}
-                className={cx(
-                  'grid grid-cols-[minmax(0,1fr)] gap-4',
-                  notShown.length > boxedCatalogs && cx(scrollBox, 'pr-1'),
-                )}
-              >
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
                 {[...groups].map(([addonId, items]) => {
                   const headingId = `${baseId}-addon-${addonId}`
+                  const listId = `${baseId}-addon-list-${addonId}`
+                  const open = !onDemand || openAddons.has(addonId)
+                  const addonName = items[0].addonName
                   return (
                     <section key={addonId} aria-labelledby={headingId} className="min-w-0">
                       <h3
                         id={headingId}
-                        className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-group text-ink"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-group text-ink"
                       >
-                        <span className="min-w-0 break-words">{items[0].addonName}</span>
+                        {onDemand ? (
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            aria-controls={open ? listId : undefined}
+                            onClick={() => toggleAddon(addonId)}
+                            className="focus-lit -ml-2 inline-flex min-w-0 cursor-pointer items-center gap-2 rounded-control px-2 py-1 text-left transition-colors duration-300 ease-nuit hover:bg-s1"
+                          >
+                            <CaretRightIcon
+                              size="1.125rem"
+                              aria-hidden="true"
+                              className={cx(
+                                'shrink-0 text-ink-2 transition-transform duration-300 ease-nuit',
+                                open && 'rotate-90',
+                              )}
+                            />
+                            <span className="min-w-0 break-words">{addonName}</span>
+                            <Count>{items.length.toLocaleString(language)}</Count>
+                          </button>
+                        ) : (
+                          <span className="min-w-0 break-words">{addonName}</span>
+                        )}
                         {offAddons.has(addonId) && (
                           <StatusPill tone="danger">{t.libraries.addonOff}</StatusPill>
                         )}
                       </h3>
-                      <RowList compact aria-label={t.libraries.availableLabel(items[0].addonName)}>
-                        {items.map((library) => (
-                          <AvailableRow
-                            key={catalogKey(library)}
-                            library={library}
-                            addId={ids.add(catalogKey(library))}
-                            content={musicContent.get(library.addonId)}
-                            onAdd={() => add(library)}
-                          />
-                        ))}
-                      </RowList>
+                      {open && (
+                        <div id={listId} className="mt-1.5">
+                          <RowList compact aria-label={t.libraries.availableLabel(addonName)}>
+                            {items.map((library) => (
+                              <AvailableRow
+                                key={catalogKey(library)}
+                                library={library}
+                                addId={ids.add(catalogKey(library))}
+                                content={musicContent.get(library.addonId)}
+                                onAdd={() => add(library)}
+                              />
+                            ))}
+                          </RowList>
+                        </div>
+                      )}
                     </section>
                   )
                 })}

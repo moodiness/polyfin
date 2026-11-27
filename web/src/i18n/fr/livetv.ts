@@ -7,6 +7,8 @@ const livetv: typeof en = {
       'Les catalogues TV viennent de vos sources. Ouvrez les guides d’un catalogue pour donner un programme à ses chaînes.',
     recordings: 'Réglages des enregistrements',
     settings: 'Réglages de la TV en direct',
+    catalogGuidesLede: (addon: string) =>
+      `De ${addon}\u202f: les guides XMLTV de ce catalogue de TV en direct, et la chaîne de guide de chacune de ses chaînes.`,
     catalogsTitle: 'Catalogues TV',
     catalogsHelp:
       'Un catalogue TV affiché comme bibliothèque met ses chaînes dans la TV en direct des applications Jellyfin. Ses guides donnent leurs programmes aux chaînes.',
@@ -155,6 +157,9 @@ const livetv: typeof en = {
     rebuildHelp:
       'Relit les sources pour les titres ajoutés ou retirés depuis. La grille recommence aujourd’hui.',
     create: 'Créer la chaîne',
+    notCreated: 'Pas encore créée.',
+    rebuilt: 'Titres relus',
+    rebuildSaveFirst: 'Enregistrez ou annulez d’abord vos modifications.',
     created: 'Chaîne créée',
     saved: 'Chaîne enregistrée',
     delete: 'Supprimer',

@@ -11,6 +11,7 @@ const versions = {
     find: 'Find a title',
     search: 'Movie or series',
     searchHelp: 'Searches the libraries this user sees. A series lists its episodes.',
+    searchPlaceholder: 'A movie or a series',
     searchButton: 'Search',
     searching: 'Searching…',
     noTitles: 'No movie or series found.',
@@ -64,6 +65,11 @@ const versions = {
     /** The name of a section whose name another one has, by its place among them: 2, 3… */
     repeatedSource: (name: string, place: number) => `${name} (${place})`,
     noStreams: 'Listed no stream.',
+    /** The line that gathers the sources that listed no stream, open on their names. */
+    silentSources: (count: number, formatted: string) =>
+      count === 1 ? '1 source listed no stream' : `${formatted} sources listed no stream`,
+    silentFailed: (count: number, formatted: string) =>
+      count === 1 ? '1 failed lately' : `${formatted} failed lately`,
     noSources: 'No addon lists streams for this title.',
     steps: {
       offered: (place: number) => `Version ${place}`,

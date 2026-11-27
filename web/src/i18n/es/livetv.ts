@@ -7,6 +7,8 @@ const livetv: typeof en = {
       'Los catálogos de TV proceden de sus fuentes. Abra las guías de un catálogo para dar programación a sus canales.',
     recordings: 'Ajustes de grabación',
     settings: 'Ajustes de Televisión en vivo',
+    catalogGuidesLede: (addon: string) =>
+      `De ${addon}: las guías XMLTV de este catálogo de Televisión en vivo y el canal de la guía que usa cada uno de sus canales.`,
     catalogsTitle: 'Catálogos de TV',
     catalogsHelp:
       'Un catálogo de TV mostrado como biblioteca coloca sus canales en Televisión en vivo en las aplicaciones de Jellyfin. Sus guías dan la programación a los canales.',
@@ -155,6 +157,9 @@ const livetv: typeof en = {
     rebuildHelp:
       'Lee de nuevo las fuentes para los títulos añadidos o quitados desde entonces. La programación empieza de nuevo hoy.',
     create: 'Crear el canal',
+    notCreated: 'Aún no está creado.',
+    rebuilt: 'Títulos leídos de nuevo',
+    rebuildSaveFirst: 'Guarde o descarte primero sus cambios.',
     created: 'Canal creado',
     saved: 'Canal guardado',
     delete: 'Borrar',

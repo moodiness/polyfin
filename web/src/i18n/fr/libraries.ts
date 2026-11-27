@@ -362,6 +362,7 @@ const libraries: typeof en = {
     maxItems: 'Nombre maximum de titres',
     maxHelp: (max: string) => `De 1 à ${max}. Vide\u202f: pas de maximum.`,
     create: 'Créer la liste',
+    notCreated: 'Pas encore créée.',
     created: 'Liste intelligente créée.',
     saved: 'Liste intelligente enregistrée.',
     delete: 'Supprimer',
@@ -448,17 +449,17 @@ const libraries: typeof en = {
     emptyTitle: 'Aucune collection',
     emptyHow:
       'Une collection réunit des films, des séries et d’autres collections sous un même nom.',
-    add: 'Nouvelle collection',
+    add: 'Ajouter une collection',
     newTitle: 'Nouvelle collection',
     name: 'Nom',
+    nameHelp: 'Le nom que montrent les applications Jellyfin.',
     create: 'Créer',
     created: (name: string) => `Collection «\u202f${name}\u202f» créée.`,
     entryCount: (n: number) => (n <= 1 ? `${n} élément` : `${n} éléments`),
     collectionCount: (n: number) => (n <= 1 ? `${n} collection` : `${n} collections`),
     back: 'Bibliothèques',
     notFound: 'Cette collection n’existe plus.',
-    settings: 'Collection',
-    renamed: 'Collection renommée.',
+    saved: 'Collection enregistrée.',
     displayOrder: 'Ordre d’affichage',
     displayOrders: { premiere: 'Date de sortie', chosen: 'Ordre choisi' },
     displayOrderHelp: {
@@ -467,7 +468,6 @@ const libraries: typeof en = {
       chosen:
         'Les applications Jellyfin, les rangées d’accueil et les chaînes listent les éléments dans l’ordre ci-dessous.',
     },
-    displayOrderSaved: 'Ordre d’affichage enregistré.',
     delete: 'Supprimer',
     deleteTitle: (name: string) => `Supprimer «\u202f${name}\u202f»\u202f?`,
     deleteBody:

@@ -6,6 +6,8 @@ const livetv = {
       'TV catalogs come from your sources. Open a catalog’s guides to give its channels a programme.',
     recordings: 'Recording settings',
     settings: 'Live TV settings',
+    catalogGuidesLede: (addon: string) =>
+      `From ${addon}: the XMLTV guides of this Live TV catalog, and which guide channel each of its channels takes.`,
     catalogsTitle: 'TV catalogs',
     catalogsHelp:
       'A TV catalog shown as a library puts its channels in Live TV in Jellyfin apps. Its guides give the channels their programmes.',
@@ -152,6 +154,9 @@ const livetv = {
     rebuildHelp:
       'Reads the sources again for the titles added or removed since. The schedule starts again today.',
     create: 'Create the channel',
+    notCreated: 'Not created yet.',
+    rebuilt: 'Titles read again',
+    rebuildSaveFirst: 'Save or discard your changes first.',
     created: 'Channel created',
     saved: 'Channel saved',
     delete: 'Delete',

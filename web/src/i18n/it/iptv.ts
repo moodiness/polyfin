@@ -428,6 +428,8 @@ const iptv: typeof en = {
       },
       search: 'Cerca nei canali',
       empty: 'Nessun canale corrispondente.',
+      emptyHow:
+        'I suoi canali compariranno qui una volta elencati, ciascuno con il canale della guida associato.',
       none: 'Nessuna guida',
       manualNone: 'Impostato manualmente',
       manual: 'Impostato manualmente',
@@ -455,11 +457,7 @@ const iptv: typeof en = {
       noGuides: 'Questo catalogo non ha ancora una guida: aggiungine una in Guide.',
     },
     catalog: {
-      title: (name: string, addon: string) => `${name} (${addon}): guide`,
       titleLoading: 'Guide',
-      description:
-        'Le guide XMLTV di questo catalogo di Diretta TV e il canale della guida associato a ciascuno dei suoi canali.',
-      back: 'Torna a Diretta TV',
     },
     library: {
       guides: (count: number) => (count === 1 ? '1 guida' : `${count} guide`),
