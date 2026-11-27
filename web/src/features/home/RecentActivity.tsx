@@ -93,7 +93,7 @@ const filters = {
     ],
   },
   recordings: { types: ['RecordingScheduled', 'RecordingDeleted'] },
-} satisfies Record<string, Omit<ActivityQuery, 'limit'>>
+} satisfies Record<string, Omit<ActivityQuery, 'limit' | 'language'>>
 
 type Filter = keyof typeof filters
 
@@ -139,7 +139,7 @@ export function RecentActivity() {
   const text = t.dashboard.activity
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
-  const query: ActivityQuery = { limit: pageSize, ...filters[filter] }
+  const query: ActivityQuery = { limit: pageSize, language, ...filters[filter] }
   const activity = useInfiniteQuery({
     queryKey: queryKeys.activity(query),
     queryFn: ({ pageParam, signal }) => fetchActivity({ ...query, start: pageParam }, signal),

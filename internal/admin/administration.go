@@ -12,6 +12,7 @@ import (
 
 	"github.com/moodiness/polyfin/internal/accounts"
 	"github.com/moodiness/polyfin/internal/activity"
+	"github.com/moodiness/polyfin/internal/i18n"
 	"github.com/moodiness/polyfin/internal/library"
 )
 
@@ -119,7 +120,9 @@ const (
 )
 
 // recentActivity lists the latest entries of the activity log: from start
-// on, of the types and severities listed, comma-separated, when given.
+// on, of the types and severities listed, comma-separated, when given,
+// named in the language asked (one of i18n.Languages), the server's by
+// default.
 func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	limit := defaultActivityLimit
@@ -141,7 +144,7 @@ func (h *handler) recentActivity(w http.ResponseWriter, r *http.Request) {
 		start = value
 	}
 	page, err := h.Activity.Entries(r.Context(), activity.Query{Start: start, Limit: limit, Types: commaList(query.Get("type")),
-		Severities: commaList(query.Get("severity"))})
+		Severities: commaList(query.Get("severity")), Language: i18n.Match(query.Get("language"))})
 	if err != nil {
 		h.internalError(w, r, err)
 		return

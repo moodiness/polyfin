@@ -12,8 +12,9 @@ import (
 )
 
 // An entry about a title tells where its name holds the title, in
-// characters, in each language and wherever its template puts the title;
-// the other entries, and a name clipped, tell none.
+// characters, in each language and wherever its template puts the title,
+// whichever language it was written in; the other entries, and a name
+// clipped, tell none.
 func TestEntriesTellWhereTheirTitleIs(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
@@ -36,27 +37,29 @@ func TestEntriesTellWhereTheirTitleIs(t *testing.T) {
 	store.SignedIn(ctx, user, "192.0.2.1")
 	store.PlaybackStarted(ctx, user, strings.Repeat("Long ", 300), item.String(), "TV")
 
-	page, err := store.Entries(ctx, Query{})
-	if err != nil {
-		t.Fatal(err)
-	}
 	want := []string{"", "", "", "Amélie (2001)", "Amélie (2001)", "Amélie", "Glass Garden, season 1, episode 4, In Bloom"}
-	if len(page.Entries) != len(want) {
-		t.Fatalf("%d entries", len(page.Entries))
-	}
-	for i, e := range page.Entries {
-		if (e.TitleStart == nil) != (e.TitleEnd == nil) {
-			t.Fatalf("%q: half a title", e.Name)
+	for _, language := range []string{"en", "fr", "de"} {
+		page, err := store.Entries(ctx, Query{Language: language})
+		if err != nil {
+			t.Fatal(err)
 		}
-		got := ""
-		if e.TitleStart != nil {
-			got = string([]rune(e.Name)[*e.TitleStart:*e.TitleEnd])
+		if len(page.Entries) != len(want) {
+			t.Fatalf("%s: %d entries", language, len(page.Entries))
 		}
-		if got != want[i] {
-			t.Errorf("%q: title %q, want %q", e.Name, got, want[i])
+		for i, e := range page.Entries {
+			if (e.TitleStart == nil) != (e.TitleEnd == nil) {
+				t.Fatalf("%q: half a title", e.Name)
+			}
+			got := ""
+			if e.TitleStart != nil {
+				got = string([]rune(e.Name)[*e.TitleStart:*e.TitleEnd])
+			}
+			if got != want[i] {
+				t.Errorf("%q: title %q, want %q", e.Name, got, want[i])
+			}
 		}
-	}
-	if name := page.Entries[4].Name; !strings.HasPrefix(name, "Ein Gast hat Amélie (2001) über") {
-		t.Errorf("shared playback: %q", name)
+		if name := page.Entries[4].Name; language == "de" && !strings.HasPrefix(name, "Ein Gast hat Amélie (2001) über") {
+			t.Errorf("shared playback: %q", name)
+		}
 	}
 }
