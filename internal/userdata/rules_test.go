@@ -229,3 +229,27 @@ func TestRatingsReadAsLikes(t *testing.T) {
 		}
 	}
 }
+
+// Following another item gives its rating to an item the user did not
+// rate, and leaves a rating the item has; a rating alone is followed.
+func TestFollowGivesARatingToAnItemNotRated(t *testing.T) {
+	t.Parallel()
+	from := Data{Rating: new(9.0)}
+	if !from.follows() || (Data{}).follows() {
+		t.Errorf("a rating alone follows: %v; nothing: %v", from.follows(), (Data{}).follows())
+	}
+	rated := Data{Rating: new(3.0)}
+	rated.Follow(from, Thresholds{Resume: 5, Played: 90})
+	if rated.Rating == nil || *rated.Rating != 3 {
+		t.Errorf("a rating replaced: %v", rated.Rating)
+	}
+	var unrated Data
+	unrated.Follow(from, Thresholds{Resume: 5, Played: 90})
+	if unrated.Rating == nil || *unrated.Rating != 9 || unrated.Played || unrated.Favorite {
+		t.Errorf("a rating given: %+v", unrated)
+	}
+	*from.Rating = 1
+	if *unrated.Rating != 9 {
+		t.Error("the rating given is shared with the item it came from")
+	}
+}

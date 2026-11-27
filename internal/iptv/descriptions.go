@@ -129,12 +129,9 @@ func describedTitle(source accounts.ID, t Title, kind string, d *details, videos
 }
 
 // description returns the description of a title a source shows, the one
-// kept while its source's version stays the same, else read and kept.
-func (s *Service) description(ctx context.Context, source accounts.ID, typ, key string) (*description, error) {
-	state, err := s.sourceState(ctx, source)
-	if err != nil {
-		return nil, err
-	}
+// kept while its source's version, read as state, stays the same, else
+// read and kept.
+func (s *Service) description(ctx context.Context, state sourceState, source accounts.ID, typ, key string) (*description, error) {
 	k, kept := descriptionKey{source, typ, key}, s.descriptions.cache()
 	if d, ok := kept.Get(k); ok && d.version == state.version {
 		return d, nil
@@ -175,10 +172,12 @@ func (s *Service) readDescription(ctx context.Context, source accounts.ID, typ, 
 }
 
 // sourceState is what a description reads of its source: its version
-// (see CatalogVersion) and whether it is enriched (see Enrichment).
+// (see CatalogVersion), whether it is enriched (see Enrichment) and
+// whether it groups its titles (see groups.go).
 type sourceState struct {
-	version    string
-	enrichment bool
+	version       string
+	enrichment    bool
+	titleVersions bool
 }
 
 // sourceState reads a source's state, once for the request when ctx is
@@ -192,8 +191,8 @@ func (s *Service) sourceState(ctx context.Context, source accounts.ID) (sourceSt
 
 func (s *Service) readSourceState(ctx context.Context, source accounts.ID) (sourceState, error) {
 	var state sourceState
-	err := s.db.QueryRow(ctx, `SELECT xmin::text || ' ' || coalesce(fetched_at::text, ''), enrichment FROM iptv_sources WHERE addon_id = $1`,
-		source).Scan(&state.version, &state.enrichment)
+	err := s.db.QueryRow(ctx, `SELECT xmin::text || ' ' || coalesce(fetched_at::text, ''), enrichment, title_versions FROM iptv_sources
+		WHERE addon_id = $1`, source).Scan(&state.version, &state.enrichment, &state.titleVersions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return sourceState{}, stremio.ErrNotFound
 	}

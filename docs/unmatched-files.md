@@ -83,7 +83,7 @@ Choosing a title and **OK** links the file, or the whole show folder, as **Find 
 - A title the files were matched to has all of them linked: every file or disc of the movie, every folder of the show, in every movies or shows folder, since they all hold that one title.
 - The page then shows the title chosen, with its description, artwork and versions. A show shows its seasons and episodes, the folder's files among them.
 - The web player opens the item again by its identifier. A former title, last listed by the folder, answers the title chosen, or its season or episode of the same numbers, under their own identifiers. That lasts as long as none of the folder's files is matched to it again.
-- The played marks, resume points and favorites of the former title's items follow the files, as for a plain video (see [Once matched](#once-matched)).
+- The played marks, resume points, favorites and ratings of the former title's items follow the files, as for a plain video (see [Once matched](#once-matched)).
 
 **Limits:**
 
@@ -207,7 +207,7 @@ What users did with it goes to that title, as when what a folder holds changes, 
 
 - a played mark is added to the title's;
 - the newer resume point is kept, and moves, so Continue Watching lists the file once, under its title;
-- a favorite is set;
+- a favorite is set, and a rating is given to a title the user did not rate;
 - a plain episode's go to the matched show's episode of the same season and number.
 
 A link made by hand moves them at once, a scan at its end.

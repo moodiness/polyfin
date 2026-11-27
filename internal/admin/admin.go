@@ -470,6 +470,8 @@ func New(options Options) http.Handler {
 		mux.Handle("POST /admin/api/titles/{id}/versions/blocks", h.administrator(h.blockVersion))
 		mux.Handle("POST /admin/api/titles/{id}/versions/{versionId}/analyze", h.administrator(h.analyzeVersion))
 		mux.Handle("POST /admin/api/titles/{id}/versions/{versionId}/thumbnails", h.administrator(h.makeThumbnailsAgain))
+		mux.Handle("GET /admin/api/titles/{id}/entries", h.administrator(h.titleEntries))
+		mux.Handle("PUT /admin/api/titles/{id}/entries/apart", h.administrator(h.keepApart))
 		mux.Handle("GET /admin/api/version-blocks", h.administrator(h.versionBlocks))
 		mux.Handle("DELETE /admin/api/version-blocks/{id}", h.administrator(h.unblockVersion))
 	}

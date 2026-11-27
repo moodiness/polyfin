@@ -89,8 +89,8 @@ type Store struct {
 	db db
 }
 
-// db is a pool, or a transaction in tests that count the rows a change
-// writes.
+// db is a pool, or a transaction: another package's (see InTx), or a
+// test's that counts the rows a change writes.
 type db interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
@@ -100,6 +100,12 @@ type db interface {
 // New returns a store backed by db.
 func New(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
+}
+
+// InTx returns a store whose changes are part of tx, as those of another
+// package that moves items in the same transaction (see Store.Follow).
+func InTx(tx pgx.Tx) *Store {
+	return &Store{db: tx}
 }
 
 const columns = `item_id, coalesce(series_id, '00000000-0000-0000-0000-000000000000'),
@@ -501,7 +507,8 @@ func (s *Store) follow(ctx context.Context, users []accounts.ID, moves []Move, t
 		// new titles records the file as recently: by that resume point or
 		// a newer one, or by a later played mark. A new title played before
 		// it, which an import's rules give no resume point, leaves it where
-		// it is rather than lost. Played marks and favorites are only given.
+		// it is rather than lost. Played marks, favorites and ratings are
+		// only given.
 		var losing []Item
 		for _, id := range resumed {
 			at := *kept[id].LastPlayed

@@ -35,8 +35,11 @@ var ErrInvalidOptions = errors.New("invalid import options")
 // import the provider's movies and series, but for the categories
 // VODExcluded lists (movie:<name>, series:<name>), in libraries by type or
 // by category (VODLibraries); Enrichment describes titles with a provider
-// TMDB or IMDb id through the server's metadata addons. FavoritesOnly
-// keeps only the channels a tuner marks favorite, off by default.
+// TMDB or IMDb id through the server's metadata addons; TitleVersions
+// makes an Xtream account's titles of a type that share a TMDB id one
+// title, whose versions are each one's file (see groups.go), off by
+// default. FavoritesOnly keeps only the channels a tuner marks favorite,
+// off by default.
 type Options struct {
 	Categories    string
 	Channels      string
@@ -49,6 +52,7 @@ type Options struct {
 	VODExcluded   []string
 	VODLibraries  string
 	Enrichment    bool
+	TitleVersions bool
 	FavoritesOnly bool
 }
 
