@@ -30,7 +30,10 @@ export type SwitchProps = {
   'data-setting-head'?: boolean
 }
 
-/** The 42 × 24 toggle (36 × 20 in Compact), hidden from screen readers. Periwinkle when on. */
+/**
+ * The 42 × 24 toggle (36 × 20 in Compact), hidden from screen readers. Periwinkle when on; a
+ * disabled switch's fills fade as the inactive inks do.
+ */
 function SwitchTrack({ checked }: { checked: boolean }) {
   return (
     <span
@@ -38,13 +41,15 @@ function SwitchTrack({ checked }: { checked: boolean }) {
       className={cx(
         'relative inline-block h-6 w-10.5 shrink-0 rounded-full transition-[background-color] duration-350 ease-nuit',
         'max-sm:h-7 max-sm:w-12',
-        checked ? 'bg-accent' : 'bg-s4',
+        checked ? 'bg-accent group-disabled:bg-accent/45' : 'bg-s4 group-disabled:bg-s4/60',
       )}
     >
       <span
         className={cx(
           'absolute top-0.75 left-0.75 size-4.5 rounded-full shadow-[0_3px_8px_-2px_rgb(0_0_0/0.4)] transition-[translate,background-color] duration-500 ease-nuit max-sm:size-5.5',
-          checked ? 'translate-x-4.5 bg-white max-sm:translate-x-5' : 'bg-ink',
+          checked
+            ? 'translate-x-4.5 bg-white group-disabled:bg-white/60 max-sm:translate-x-5'
+            : 'bg-ink',
         )}
       />
     </span>
@@ -86,9 +91,11 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cx(
-        'inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full text-control text-ink-2 focus-lit [--lift:1.04]',
+        // At least 24 px tall, the least target, in Compact too (its track is 20 px there).
+        'group inline-flex min-h-[24px] shrink-0 cursor-pointer items-center gap-2 rounded-full text-control text-ink-2 focus-lit [--lift:1.04]',
         words ? 'py-0.5 pr-0.5 pl-3' : 'p-0.5',
-        'hover:text-ink disabled:cursor-not-allowed disabled:opacity-45',
+        // Disabled, the word and the knob take the inactive inks.
+        'hover:text-ink disabled:cursor-not-allowed disabled:inactive disabled:hover:text-ink-2',
         className,
       )}
     >

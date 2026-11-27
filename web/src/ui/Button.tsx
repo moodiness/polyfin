@@ -17,11 +17,16 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
  * and docks. Both grow when a label wraps on a phone. */
 type ButtonSize = 'md' | 'sm'
 
+// A disabled button keeps its drawing with faded fills, its words in the inactive inks, and no
+// hover: inks rather than opacity, as an inactive setting row's.
 const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-press',
-  secondary: 'bg-s3 text-ink hover:bg-s4',
-  ghost: 'text-ink-2 hover:bg-s1 hover:text-ink',
-  danger: 'text-danger hover:bg-danger/14',
+  primary:
+    'bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-press disabled:bg-accent/45 disabled:text-on-accent/60 disabled:hover:bg-accent/45',
+  secondary:
+    'bg-s3 text-ink hover:bg-s4 disabled:inactive disabled:bg-s3/60 disabled:hover:bg-s3/60',
+  ghost:
+    'text-ink-2 hover:bg-s1 hover:text-ink disabled:inactive disabled:hover:bg-transparent disabled:hover:text-ink-2',
+  danger: 'text-danger hover:bg-danger/14 disabled:text-danger/60 disabled:hover:bg-transparent',
 }
 
 const sizes: Record<ButtonSize, string> = {
@@ -35,7 +40,7 @@ function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSize = 'm
     // A label too long for a phone wraps inside the button rather than push the page sideways.
     'inline-flex max-w-full shrink-0 cursor-pointer items-center justify-center rounded-control text-center leading-tight font-[620] whitespace-nowrap select-none max-sm:whitespace-normal',
     'focus-lit [--lift:1.05] active:scale-[0.97] [&>svg]:shrink-0',
-    'disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-none',
+    'disabled:cursor-not-allowed disabled:active:scale-none',
     'aria-busy:cursor-progress',
     variants[variant],
     sizes[size],
@@ -200,7 +205,7 @@ export function IconButton({
       }}
       className={cx(
         'inline-grid shrink-0 cursor-pointer place-items-center text-ink-2 focus-lit [--lift:1.06]',
-        'hover:bg-s2 hover:text-ink aria-pressed:text-link disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-ink-2',
+        'hover:bg-s2 hover:text-ink aria-pressed:text-link disabled:cursor-not-allowed disabled:inactive disabled:hover:bg-transparent disabled:hover:text-ink-2',
         size === 'md' ? 'size-9.5 rounded-control max-sm:size-11' : 'size-8 rounded-[0.5rem]',
         danger && 'hover:bg-danger/14 hover:text-danger',
         className,
