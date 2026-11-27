@@ -81,6 +81,10 @@ const nav: typeof en = {
       local: 'Dossier local',
     },
     ownedBy: (kind: string, owner: string) => `${kind} de ${owner}`,
+    verbs: {
+      addSource: ['ajouter', 'installer', 'nouvelle source', 'addon'],
+      invite: ['inviter', 'invitation'],
+    },
   },
 }
 

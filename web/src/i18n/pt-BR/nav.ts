@@ -81,6 +81,10 @@ const nav: typeof en = {
       local: 'Pasta local',
     },
     ownedBy: (kind: string, owner: string) => `${kind} de ${owner}`,
+    verbs: {
+      addSource: ['adicionar', 'instalar', 'nova fonte', 'addon'],
+      invite: ['convidar', 'convite'],
+    },
   },
 }
 

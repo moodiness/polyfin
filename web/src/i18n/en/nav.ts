@@ -83,6 +83,14 @@ const nav = {
     },
     /** A user's own source, as the palette describes it: "IPTV source of sam". */
     ownedBy: (kind: string, owner: string) => `${kind} of ${owner}`,
+    /**
+     * More words, never shown, that find the palette's actions by their verb, whatever their
+     * label says: "invite" finds "Create an invite link".
+     */
+    verbs: {
+      addSource: ['add', 'install', 'new source', 'addon'],
+      invite: ['invite', 'invitation'],
+    },
   },
 }
 

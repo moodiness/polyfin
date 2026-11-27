@@ -80,6 +80,10 @@ const nav: typeof en = {
       local: 'Lokaler Ordner',
     },
     ownedBy: (kind: string, owner: string) => `${kind} von ${owner}`,
+    verbs: {
+      addSource: ['hinzufügen', 'installieren', 'neue Quelle', 'Addon'],
+      invite: ['einladen', 'Einladung'],
+    },
   },
 }
 
