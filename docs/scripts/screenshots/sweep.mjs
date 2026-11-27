@@ -1,8 +1,10 @@
 // Sweeps the admin app on the demo server of stage.mjs: every route of web/src/app/router.tsx, as
-// the administrator, as a member and signed out, 1440 and 390 pixels wide, in English and German.
-// It fails with a list of what it found: a page that scrolls sideways or an element past its
-// edge, text running out of its box, a console error but those expected, and a serious or
-// critical axe-core violation but those of axeAllowed. See README.md.
+// the administrator, as a member and signed out, 1440 and 390 pixels wide, in English and German;
+// then, as the administrator in every language and at four widths, a few states a visit never
+// reaches (see `steps`). It fails with a list of what it found: a page that scrolls sideways or an
+// element past its edge, text running out of its box, a console error but those expected, a
+// serious or critical axe-core violation but those of axeAllowed, and a step's own check. See
+// README.md.
 import { mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
@@ -37,6 +39,62 @@ if (options.help || !options['database-url']) {
 
 const widths = [1440, 390]
 const languages = ['en', 'de']
+/** The languages and widths of the steps: every language, from the desktop to the phone. */
+const stepLanguages = ['en', 'de', 'fr', 'es', 'it', 'pt-BR']
+const stepWidths = [1440, 1024, 768, 390]
+/**
+ * The states a visit never reaches, each a page and what to do on it once it has settled. `act`
+ * returns findings when it cannot reach the state; `check`, run in the page once it has settled
+ * again, findings of its own. The page's usual checks follow, on the state.
+ */
+const steps = [
+  {
+    name: 'unsaved',
+    url: '/settings/conversion',
+    async act(page) {
+      const input = await page.$(
+        'main input[inputmode="numeric"]:not(:disabled), main input[type="number"]:not(:disabled)',
+      )
+      if (!input) return [{ kind: 'step', detail: 'no number field to change' }]
+      const value = await input.evaluate((element) => element.value)
+      await input.click({ count: 3 })
+      await input.type(value === '2' ? '3' : '2')
+    },
+    check: saveReach,
+  },
+  {
+    name: 'row menu',
+    url: '/users',
+    async act(page) {
+      const more = await page.$('main button[aria-haspopup="menu"]')
+      if (!more) return [{ kind: 'step', detail: 'no row menu to open' }]
+      await more.click()
+      await page.waitForSelector('[role="menu"]', { timeout: 3000 })
+    },
+  },
+  {
+    name: 'Add source',
+    url: '/sources',
+    async act(page) {
+      // The one action of the page's head.
+      const add = await page.$('main header button:not([aria-haspopup])')
+      if (!add) return [{ kind: 'step', detail: 'no Add source button' }]
+      await add.click()
+      await page.waitForSelector('dialog[open]', { timeout: 3000 })
+    },
+  },
+  {
+    name: 'focus on another section',
+    url: '/settings/conversion',
+    async act(page) {
+      // A key first, so that the focus shows as it does from the keyboard.
+      await page.keyboard.press('Shift')
+      const other = await page.$('main nav a[href]:not([aria-current])')
+      if (!other) return [{ kind: 'step', detail: 'no section link besides the current one' }]
+      await other.focus()
+    },
+  },
+]
 /**
  * The GETs of the admin API a page may send more than once while it loads, each with its reason:
  * `path` matches the address, without the server, query included. Keep it short: a page asks
@@ -142,7 +200,14 @@ async function main() {
       }
     }
   }
-  await pool(cases, Number(options.jobs))
+  // Then the states, as the administrator, each step on its page anew.
+  const stepCases = []
+  for (const width of stepWidths) {
+    for (const language of stepLanguages) {
+      stepCases.push(() => sweep.visitSteps(roles[0], width, language))
+    }
+  }
+  await pool([...cases, ...stepCases], Number(options.jobs))
 
   const minutes = ((Date.now() - started) / 60000).toFixed(1)
   log(`${sweep.visits} pages in ${minutes} minutes`)
@@ -245,22 +310,7 @@ class Sweep {
   async visitAll(role, width, language, urls, follow) {
     const context = await this.stage.browser.createBrowserContext()
     try {
-      const page = await context.newPage()
-      await page.setViewport({ width, height: width > 600 ? 900 : 844, deviceScaleFactor: 1 })
-      await page.evaluateOnNewDocument((language) => {
-        localStorage.setItem('polyfin.language', language)
-        localStorage.setItem('polyfin.getStarted.dismissed', '1')
-      }, language)
-      if (role.session) {
-        await page.setCookie({
-          name: 'polyfin_session',
-          value: role.session,
-          domain: '127.0.0.1',
-          path: '/admin',
-          httpOnly: true,
-          sameSite: 'Strict',
-        })
-      }
+      const page = await this.newPage(context, role, width, language)
       const queue = [...urls]
       const seen = new Set(queue)
       const count = new Map()
@@ -282,8 +332,47 @@ class Sweep {
     }
   }
 
-  /** Visits one address, adds what it finds, and returns the addresses of the app it links to. */
-  async visit(page, where, url) {
+  /** Takes each of `steps` as the role, at the width and in the language. */
+  async visitSteps(role, width, language) {
+    const context = await this.stage.browser.createBrowserContext()
+    try {
+      const page = await this.newPage(context, role, width, language)
+      // Leaving a page with unsaved changes asks first.
+      page.on('dialog', (dialog) => dialog.accept())
+      for (const step of steps) {
+        await this.visit(page, { role: role.name, width, language }, step.url, step)
+      }
+    } finally {
+      await context.close()
+    }
+  }
+
+  /** A page of the context as the role, at the width and in the language. */
+  async newPage(context, role, width, language) {
+    const page = await context.newPage()
+    await page.setViewport({ width, height: width > 600 ? 900 : 844, deviceScaleFactor: 1 })
+    await page.evaluateOnNewDocument((language) => {
+      localStorage.setItem('polyfin.language', language)
+      localStorage.setItem('polyfin.getStarted.dismissed', '1')
+    }, language)
+    if (role.session) {
+      await page.setCookie({
+        name: 'polyfin_session',
+        value: role.session,
+        domain: '127.0.0.1',
+        path: '/admin',
+        httpOnly: true,
+        sameSite: 'Strict',
+      })
+    }
+    return page
+  }
+
+  /**
+   * Visits one address, adds what it finds, and returns the addresses of the app it links to.
+   * With a step of `steps`, takes it once the page has settled, then measures the state.
+   */
+  async visit(page, where, url, step) {
     this.visits++
     const errors = []
     const onConsole = (message) => {
@@ -330,28 +419,23 @@ class Sweep {
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
       counting = false
-      await page.evaluate(() => document.fonts.ready.then(() => undefined))
-      // Still: the entrances and transitions under way end first (5 seconds at most), so boxes
-      // are measured where they rest. Mid-rise, a 1 px box reads 1.00003 px tall, and its text,
-      // left to screen readers, would count as seen. Endless ones (a spinner) are not waited for.
-      await page.evaluate(() =>
-        Promise.race([
-          Promise.all(
-            document
-              .getAnimations()
-              .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
-              .map((animation) => animation.finished.catch(() => undefined)),
-          ),
-          new Promise((resolve) => setTimeout(resolve, 5000)),
-        ]).then(() => undefined),
-      )
-      await page.evaluate(
-        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
-      )
-      ;({ found, links } = await page.evaluate(inspect, where.language))
+      await rest(page)
+      if (step) {
+        const failed = await step.act(page)
+        if (failed) found.push(...failed)
+        // A moment for the change to start its transitions, which rest then waits for.
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        await rest(page)
+        if (step.check && !failed) found.push(...(await page.evaluate(step.check)))
+      }
+      const inspected = await page.evaluate(inspect, where.language)
+      found.push(...inspected.found)
+      links = inspected.links
       found.push(...(await this.axe(page)))
     } catch (error) {
-      found = [{ kind: 'page', detail: `did not load: ${error.message}` }]
+      found = [
+        { kind: 'page', detail: `${step ? 'step failed' : 'did not load'}: ${error.message}` },
+      ]
     } finally {
       page.off('framenavigated', onNavigated)
       page.off('console', onConsole)
@@ -371,8 +455,10 @@ class Sweep {
       if (times < 2 || repeatsAllowed.some((allowed) => allowed.path.test(address))) continue
       found.push({ kind: 'requests', detail: `GET ${address} sent ${times} times while loading` })
     }
-    for (const finding of found) this.add({ ...where, url, ...finding })
-    if (found.length > 0 && options.shots) await this.shoot(page, where, url, found)
+    // A step's findings are those of its state, named after it.
+    const at = step ? `${url} (${step.name})` : url
+    for (const finding of found) this.add({ ...where, url: at, ...finding })
+    if (found.length > 0 && options.shots) await this.shoot(page, where, at, found)
     return links
   }
 
@@ -466,6 +552,65 @@ class Sweep {
       )
       .join('\n')
   }
+}
+
+/**
+ * Waits for the page to be still: the fonts loaded, the entrances and transitions under way ended
+ * (5 seconds at most), so boxes are measured where they rest. Mid-rise, a 1 px box reads 1.00003
+ * px tall, and its text, left to screen readers, would count as seen. Endless ones (a spinner) are
+ * not waited for.
+ */
+async function rest(page) {
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+          .map((animation) => animation.finished.catch(() => undefined)),
+      ),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]).then(() => undefined),
+  )
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+}
+
+/**
+ * Runs in the page with unsaved changes: the Save button shows, lies inside its card, and takes a
+ * click at its centre, rather than what paints over it.
+ */
+function saveReach() {
+  const saves = [...document.querySelectorAll('button[type="submit"]')].filter(
+    (button) => button.checkVisibility({ opacityProperty: true }) && !button.closest('[inert]'),
+  )
+  if (saves.length === 0) return [{ kind: 'step', detail: 'no Save button shows after a change' }]
+  const found = []
+  for (const button of saves) {
+    button.scrollIntoView({ block: 'nearest' })
+    const name = `"${button.innerText.trim()}"`
+    const box = button.getBoundingClientRect()
+    const card = button.parentElement.getBoundingClientRect()
+    if (box.left < card.left - 1 || box.right > card.right + 1) {
+      found.push({
+        kind: 'step',
+        detail: `${name} goes past its card: ${Math.round(box.left)} to ${Math.round(box.right)} px in ${Math.round(card.left)} to ${Math.round(card.right)}`,
+      })
+    }
+    const x = box.left + box.width / 2
+    const y = box.top + box.height / 2
+    const hit = document.elementFromPoint(x, y)
+    if (!button.contains(hit)) {
+      const text = (hit?.innerText ?? '').trim().replace(/\s+/g, ' ').slice(0, 40)
+      found.push({
+        kind: 'step',
+        detail: `${name} cannot be clicked: its centre (${Math.round(x)}, ${Math.round(y)}) lands on <${hit?.tagName.toLowerCase() ?? 'nothing'}>${text ? ` "${text}"` : ''}`,
+      })
+    }
+  }
+  return found
 }
 
 /**
