@@ -67,7 +67,7 @@ const home = {
       description: 'What is playing on the server, and what happened lately.',
       conversions: 'Video conversions',
       conversionsOf: (count: number, limit: number) =>
-        limit > 0 ? `${count} of ${limit}` : `${count}, no limit`,
+        limit > 0 ? `${count} of ${limit}` : `${count} under way · no limit`,
       /** The Bandwidth panel: what every play moves now, and the video conversions. */
       bandwidth: 'Bandwidth',
       sentToApps: 'sent to apps',
@@ -96,7 +96,8 @@ const home = {
       graphics: 'Graphics card',
       graphicsNone: 'None',
       graphicsCpu: 'Conversions use the processor',
-      toneMapping: 'tone mapping',
+      /** Under the graphics card's name, when it converts HDR. */
+      hdrSupported: 'HDR supported',
     },
     /** Home's Get started card: the steps of a good setup, each done or not. */
     getStarted: {
@@ -170,6 +171,9 @@ const home = {
         'Once it is set, turn on “Polyfin is started again when it stops” under Settings › General, and this warning goes.',
       restartConfirm: 'Restart',
       restartAnyway: 'Restart anyway',
+      /** Above the playbacks a restart or an install stops, in its confirmation. */
+      stopsPlaybacks: (count: number) =>
+        count === 1 ? 'This playback stops:' : `These ${count} playbacks stop:`,
       restarting: 'Restarting…',
       waitingTitle: 'Polyfin is restarting',
       waiting: 'Waiting for Polyfin to answer again…',
@@ -360,6 +364,9 @@ const home = {
         recordings: 'Recordings',
       },
       search: 'Search the events shown',
+      /** The button that opens the filters past the first four, and its menu's name. */
+      more: 'More',
+      moreFilters: 'More filters',
       listLabel: 'Latest events',
       noMatch: 'No event matches.',
       noMatchHelp: 'Choose another filter or clear the search.',

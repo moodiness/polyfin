@@ -110,10 +110,12 @@ Addresses from before this layout, such as `/admin/health` or `/admin/settings#s
 
 **Home** greets you by name, with how many playbacks are under way and how many things need a look. Below, it shows:
 
-- **Now playing**, updated every 3 seconds while something plays, every 15 seconds otherwise (see [Now playing](#now-playing)). The playback under the keyboard or the mouse tints the top of the page with the colour of its poster.
+- **Now playing**, updated every 3 seconds while something plays, every 15 seconds otherwise (see [Now playing](#now-playing)). The playback under the keyboard or the mouse tints the top of the page with a little of its poster's colour, held toward the room's indigo.
 - Then two columns:
-  - on the left, **To look at**: a new version, when one is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](updates-and-restarts.md#new-versions)), then each problem [Health](health.md) found, with a link to the page that fixes it. Under it, **Recent activity**: the [activity log](#activity-log), which you can filter by kind and search. Its list scrolls in its own box, and loads older events as you reach its end.
-  - on the right, **Bandwidth**: what every playback sends to apps and receives from sources, then the video conversions under way. Then **Get started**, until each step of a good setup is done or you dismiss it (see [The Get started card](getting-started.md#the-get-started-card)). Then **Server state**: the graphics card, the cache and the database, each opening Health, how long Polyfin has run and its version, with **Restart**, and **Update now** while an update tool is set (see [Restart and updates](updates-and-restarts.md#restart-and-updates)).
+  - on the left, **To look at**: a new version, when one is out, with **Release notes**, and **Update now** while an update tool is set (see [New versions](updates-and-restarts.md#new-versions)), then each problem [Health](health.md) found, with a button named after the page that fixes it, as on Health: **Open the source**, **Open the settings**, **Show the details**. Under it, **Recent activity**: the [activity log](#activity-log), which you can filter by kind and search. **All**, **Problems**, **Playback** and **Sign-ins** show as filters, the other kinds under **More**; a kind with no entry is not offered, and an empty log shows neither filters nor search. Its list scrolls in its own box, and loads older events as you reach its end.
+  - on the right, **Bandwidth**: what every playback sends to apps and receives from sources, then the video conversions under way, such as "0 under way · no limit". Then **Get started**, until each step of a good setup is done or you dismiss it (see [The Get started card](getting-started.md#the-get-started-card)). Then **Server state**: the graphics card, with **HDR supported** when it converts HDR, the cache and the database, each opening Health, how long Polyfin has run and its version, with **Restart** as a quiet button, and **Update now** while an update tool is set (see [Restart and updates](updates-and-restarts.md#restart-and-updates)). The graphics card's encoders and the server's ID are in Health's details (see [Health](health.md)).
+
+When none of Home's loads answers, as when Polyfin does not answer, one message takes the place of its blocks and says why, with one **Try again** for all of them.
 
 Home reads the server's state, which the conversions under **Bandwidth** and **Server state** show, every 30 seconds while either is on screen: Polyfin looks through the whole library for it. A tab in the background reads nothing until shown again.
 
@@ -133,7 +135,7 @@ A member's **Home** greets them too, then shows what they play now, as a wide ti
 - **How it plays**: **Direct play**, **Remux** (repackaged without conversion) or **Conversion**;
 - what the play moves now, and since when it plays.
 
-The tile under the keyboard or the mouse opens wide and shows its buttons; the arrow keys move between tiles:
+Each tile shows its buttons at its top right, dimmed until the tile is under the keyboard or the mouse, which also opens it wide; the arrow keys move between tiles:
 
 - **Details**: Jellyfin's reasons, the user's quality group, the resolution and bitrate sent, and whether the GPU or the CPU encodes, inside the tile;
 - **Send a message**, shown on the device for 10 seconds;

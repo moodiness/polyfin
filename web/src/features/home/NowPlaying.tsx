@@ -19,7 +19,6 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   fetchBandwidth,
-  fetchLiveSessions,
   fetchStatus,
   messageLiveSession,
   queryClient,
@@ -62,6 +61,7 @@ import {
   Textarea,
   useToast,
 } from '@/ui'
+import { idlePoll, playingPoll, titleOf, useLiveSessions } from './liveSessions'
 
 /** How long a message shows on the device, in seconds. */
 const messageSeconds = 10
@@ -87,22 +87,6 @@ const deliveryIcons: Record<string, Icon> = {
   remux: PackageIcon,
   conversion: CpuIcon,
   stream: WavesIcon,
-}
-
-/** How often the playbacks and the bandwidth are read again, while some play and while none do. */
-const playingPoll = 3_000
-const idlePoll = 15_000
-
-/**
- * The playbacks under way, refreshed every 3 seconds while some play, every 15 otherwise; shared
- * with the page's summary.
- */
-export function useLiveSessions() {
-  return useQuery({
-    queryKey: queryKeys.liveSessions,
-    queryFn: ({ signal }) => fetchLiveSessions(signal),
-    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? playingPoll : idlePoll),
-  })
 }
 
 /** A rate in bytes per second as a bitrate, as the dashboard shows bitrates: "8.2 Mbps". */
@@ -266,12 +250,6 @@ export function PlayingNow({ onLight }: { onLight: (sessionId: string) => void }
   )
 }
 
-export function titleOf(session: LiveSession, t: Messages): string {
-  const item = session.item
-  if (item === null) return t.dashboard.live.unknownTitle
-  return item.kind === 'episode' && item.seriesName ? item.seriesName : item.name
-}
-
 /** A title's poster, `height` pixels high at most. */
 export function posterUrl(posterId: string, height: number): string {
   return `/Items/${encodeURIComponent(posterId)}/Images/Primary?maxHeight=${height}&quality=85`
@@ -424,15 +402,15 @@ function SessionTile({
       }
       detail={
         mine ? (
-          <dl className="figures mt-1 grid max-w-[24rem] grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-row bg-s1 px-3.5 py-2.5 max-md:grid-cols-[minmax(0,1fr)] max-md:gap-y-0.5 max-md:px-3 max-md:[&_dd]:mb-1 max-md:[&_dd]:text-left">
+          <dl className="figures mt-1 grid max-w-[28rem] gap-x-4 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)]">
             {origin && (
               <>
                 <dt className="text-ink-3">{live.source}</dt>
-                <dd className="min-w-0 text-right break-words text-ink">{origin}</dd>
+                <dd className="min-w-0 break-words text-ink max-sm:mb-1">{origin}</dd>
               </>
             )}
             <dt className="text-ink-3">{live.qualityGroup}</dt>
-            <dd className="text-right text-ink">
+            <dd className="text-ink">
               {session.user.qualityGroup > 0 ? `${session.user.qualityGroup}p` : live.original}
             </dd>
           </dl>
@@ -685,7 +663,8 @@ function HowItPlays({ session }: { session: LiveSession }) {
   ]
 
   return (
-    <div className="rounded-row bg-bg/55 px-3.5 py-3 text-small max-md:px-3 max-md:text-micro">
+    // Under the tile's rates, past a soft line: no box inside the tile.
+    <div className="pt-3.5 text-small shadow-[inset_0_1px_0] shadow-line-2 max-md:pt-3 max-md:text-micro">
       {/* The tile tells this help already when it shows no streams in its place. */}
       {session.delivery !== 'directPlay' && session.sent !== null && (
         <p className="mb-2 text-ink-2">{live.deliveryHelp[session.delivery]}</p>
@@ -743,7 +722,10 @@ function MessageForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3 rounded-row bg-bg/55 p-3.5 max-md:p-3">
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-3 pt-3.5 shadow-[inset_0_1px_0] shadow-line-2 max-md:pt-3"
+    >
       <Field
         label={live.messageLabel(session.device.name)}
         help={live.messageHint}

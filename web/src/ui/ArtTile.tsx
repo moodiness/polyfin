@@ -58,8 +58,9 @@ const hoverLights = '(min-width: 48rem) and (hover: hover)'
 /**
  * A poster tile for what is playing: the poster on a blurred, darkened backdrop of itself under a
  * scrim, then who watches, the title, how it plays, and a foot with progress and rates. In an
- * ArtShelf the lit tile opens wide and wears the accent edge of a lit tile; its `tools` (icon
- * buttons) and its `detail` show only then. Images load lazily.
+ * ArtShelf the lit tile opens wide and wears the accent edge of a lit tile; its `detail` shows
+ * only then. Its `tools` (icon buttons) show at rest in the third ink, and in their own once lit.
+ * Images load lazily.
  *
  *   <ArtShelf label={t.home.playingNow}>
  *     <ArtTile poster={url} title="Amber Road" top={…} meta="Movie · 2023"
@@ -111,7 +112,7 @@ export function ArtTile({
   detail?: ReactNode
   /** Across the bottom: progress, times, rates. */
   footer?: ReactNode
-  /** Icon buttons at the top right (Details, message, stop), shown while the tile is lit. */
+  /** Icon buttons at the top right (Details, message, stop): quiet at rest, full while lit. */
   tools?: ReactNode
   /**
    * Where the title and the poster lead, as a link's attributes (`href`, `target`…). The title is
@@ -243,7 +244,7 @@ export function ArtTile({
             <div
               className={cx(
                 'flex min-w-0 items-center gap-2 text-small text-ink-2 max-md:text-micro',
-                tools !== undefined && wide && 'md:pr-32',
+                tools !== undefined && 'md:pr-32',
               )}
             >
               {top}
@@ -284,8 +285,9 @@ export function ArtTile({
         {tools !== undefined && (
           <div
             className={cx(
-              'flex gap-1.5 transition-opacity duration-300 ease-nuit md:absolute md:top-3.5 md:right-3.5 max-md:col-span-full max-md:opacity-100',
-              lit ? 'opacity-100' : 'opacity-0 group-focus-within/art:opacity-100',
+              'flex gap-1.5 md:absolute md:top-3.5 md:right-3.5 max-md:col-span-full',
+              // Their icons in ink-3 at rest; focus inside the tile lights it, so they are full then.
+              !lit && '[--color-ink-2:var(--color-ink-3)]',
             )}
           >
             {tools}

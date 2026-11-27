@@ -69,7 +69,7 @@ const home: typeof en = {
       description: 'Ce qui est en lecture sur le serveur, et ce qui s’est passé récemment.',
       conversions: 'Conversions vidéo',
       conversionsOf: (count: number, limit: number) =>
-        limit > 0 ? `${count} sur ${limit}` : `${count}, sans limite`,
+        limit > 0 ? `${count} sur ${limit}` : `${count} en cours · sans limite`,
       bandwidth: 'Bande passante',
       sentToApps: 'envoyés aux applis',
       receivedFromSources: 'reçus des sources',
@@ -97,7 +97,7 @@ const home: typeof en = {
       graphics: 'Carte graphique',
       graphicsNone: 'Aucune',
       graphicsCpu: 'Les conversions passent par le processeur',
-      toneMapping: 'tone mapping',
+      hdrSupported: 'HDR pris en charge',
     },
     getStarted: {
       title: 'Bien démarrer',
@@ -170,6 +170,8 @@ const home: typeof en = {
         'Une fois que c’est en place, activez «\u202fPolyfin est redémarré quand il s’arrête\u202f» dans Paramètres › Général, et cet avertissement disparaît.',
       restartConfirm: 'Redémarrer',
       restartAnyway: 'Redémarrer quand même',
+      stopsPlaybacks: (count: number) =>
+        count === 1 ? 'Cette lecture s’arrête\u202f:' : `Ces ${count} lectures s’arrêtent\u202f:`,
       restarting: 'Redémarrage…',
       waitingTitle: 'Polyfin redémarre',
       waiting: 'En attente de la réponse de Polyfin…',
@@ -359,6 +361,8 @@ const home: typeof en = {
         recordings: 'Enregistrements',
       },
       search: 'Chercher dans les événements affichés',
+      more: 'Plus',
+      moreFilters: 'Plus de filtres',
       listLabel: 'Derniers événements',
       noMatch: 'Aucun événement ne correspond.',
       noMatchHelp: 'Choisissez un autre filtre ou videz la recherche.',

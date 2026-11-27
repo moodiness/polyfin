@@ -4,7 +4,8 @@ import { PageLayout } from './PageLayout'
 
 /**
  * A page that leads nowhere (Not allowed, Page not found): the room, the 48 px title, what
- * happened, and one lit button back to Home.
+ * happened, and one large button back to Home. It lights up under the pointer or the keyboard
+ * only, as every control does: on arrival, nothing is lit yet.
  */
 export function DeadEnd({
   title,
@@ -21,7 +22,7 @@ export function DeadEnd({
       <div>
         <Link
           to="/"
-          className="lit focus-lit inline-flex h-13 items-center gap-2.5 rounded-control px-5.5 text-control font-[620] whitespace-nowrap [--lift:1.05] hover:lift"
+          className="focus-lit inline-flex h-13 items-center gap-2.5 rounded-control bg-s3 px-5.5 text-control font-[620] whitespace-nowrap text-ink [--lift:1.05] hover:lit hover:lift"
         >
           <HouseIcon size="1.3125rem" aria-hidden="true" />
           {home}

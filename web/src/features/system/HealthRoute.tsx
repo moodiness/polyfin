@@ -53,6 +53,7 @@ import { destinationStatus } from './BackupStatus'
 import {
   collationCommands,
   ocrLanguageName,
+  problemLink,
   problemText,
   useHealth,
   useHealthProblems,
@@ -166,20 +167,6 @@ function HealthSkeleton() {
       </div>
     </>
   )
-}
-
-/** Where a problem's link leads, in words for its button; null for none. */
-function problemLink(t: Messages, to: string): string | null {
-  const words = t.system.health.problemAction
-  const [path, anchor = ''] = to.split('#')
-  if (to === '' || (path === '/system/health' && anchor === '')) return null
-  if (path === '/system/health') return words.details
-  if (path.startsWith('/settings')) return words.settings
-  if (path === '/sources') return words.sources
-  if (path.startsWith('/sources/')) return words.source
-  if (path.startsWith('/users/')) return words.user
-  if (path === '/system/schedule') return words.schedule
-  return words.open
 }
 
 /** The first sentence of a problem, as its title, and the rest. */

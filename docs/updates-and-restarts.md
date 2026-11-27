@@ -86,6 +86,8 @@ A new version may change the database's tables. Polyfin makes these changes, its
 
 Administrators restart Polyfin, and start its update, from the foot of **Server state** on **Home**, without opening the host or Docker. **Search** finds both, as "Restart Polyfin" and "Update now". Each opens **Home** with the action's confirmation.
 
+The confirmation of **Restart**, of **Make a new signing secret** and of **Install Polyfin `<version>`** lists the playbacks under way, which it stops: who watches, what and on which device.
+
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Polyfin is started again when it stops** | **Settings › General** | Off | Confirms that a restart policy or a service manager starts Polyfin again: **Restart** then warns no more. Not shown in Polyfin Desktop, which always does. |
@@ -168,7 +170,7 @@ The token is stored encrypted, as the other secrets. It is never sent back to th
 
 - Jellyfin's dashboard has "Restart" and "Shut down" buttons, through `POST /System/Restart`, allowed to administrators and to any user on the local network ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L114-L122)), and `POST /System/Shutdown`, to administrators ([SystemController.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Api/Controllers/SystemController.cs#L130-L138)).
 - Jellyfin restarts within its own process: it stops its host and starts a new one in a loop ([SystemManager.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Emby.Server.Implementations/SystemManager.cs#L126-L139), [Program.cs](https://github.com/jellyfin/jellyfin/blob/v12.4/Jellyfin.Server/Program.cs#L145-L163)).
-- Jellyfin's dashboard puts **Restart**, in red, with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)). **Home** puts **Restart** with the version, at the foot of **Server state**.
+- Jellyfin's dashboard puts **Restart**, in red, with the server's version at the top of its first widget ([ServerInfoWidget.tsx](https://github.com/jellyfin/jellyfin-web/blob/v12.4/src/apps/dashboard/components/widgets/ServerInfoWidget.tsx#L87-L96)). **Home** puts **Restart** with the version, at the foot of **Server state**, as a quiet button; only its confirmation's button is red.
 - Polyfin differs on purpose:
   - it exits and lets what runs it start it again, which also recovers a server stuck in a way a restart within the process would not;
   - it has no shutdown;
