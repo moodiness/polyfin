@@ -8,13 +8,13 @@ import libraries from './libraries'
 import livetv from './livetv'
 import users from './users'
 import system from './system'
-import settings from './settings'
 import account from './account'
 import notifications from './notifications'
 import statistics from './statistics'
 import backups from './backups'
 import versions from './versions'
 
+// Every area but Settings, whose messages download with the pages that read them (see ../index.tsx).
 const messages = {
   ...common,
   ...nav,
@@ -26,7 +26,6 @@ const messages = {
   ...livetv,
   ...users,
   ...system,
-  ...settings,
   ...account,
   ...notifications,
   ...statistics,
@@ -48,7 +47,6 @@ if (import.meta.env.DEV) {
     livetv,
     users,
     system,
-    settings,
     account,
     notifications,
     statistics,

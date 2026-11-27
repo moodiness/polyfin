@@ -7,6 +7,7 @@ import {
   type RouteObject,
 } from 'react-router'
 import InviteRoute from '@/features/auth/InviteRoute'
+import { loadSettingsMessages } from '@/i18n'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
 import { AdminOnly, SessionGate } from './SessionGate'
@@ -24,6 +25,14 @@ function page<P extends object>(
     const { default: Page } = await load()
     return { element: <Page {...(props as P)} /> }
   }
+}
+
+/**
+ * A page reading Settings' messages (`t.settings`, `t.settingsPage`), which are not in the
+ * language's first file: they download with the page (see `loadSettingsMessages`).
+ */
+function withSettingsMessages<M>(load: () => Promise<M>): () => Promise<M> {
+  return async () => (await Promise.all([load(), loadSettingsMessages()]))[0]
 }
 
 /** Sends an address of the app before « Nuit » to its new place, keeping its query and anchor. */
@@ -109,7 +118,10 @@ export const router = createBrowserRouter(
         { path: 'login', element: <Navigate to="/" replace /> },
 
         // Every user's own pages.
-        { path: 'me/account', lazy: page(() => import('@/features/account/AccountRoute')) },
+        {
+          path: 'me/account',
+          lazy: page(withSettingsMessages(() => import('@/features/account/AccountRoute'))),
+        },
         // Where MyAnimeList sends the browser back once the user allowed Polyfin.
         {
           path: 'me/account/myanimelist',
@@ -167,7 +179,9 @@ export const router = createBrowserRouter(
                 { path: 'versions', lazy: page(() => import('@/features/versions/VersionsRoute')) },
                 {
                   path: 'versions/:id',
-                  lazy: page(() => import('@/features/versions/TitleVersionsRoute')),
+                  lazy: page(
+                    withSettingsMessages(() => import('@/features/versions/TitleVersionsRoute')),
+                  ),
                 },
               ],
             },
@@ -196,7 +210,10 @@ export const router = createBrowserRouter(
               element: <SectionTabs section="system" />,
               children: [
                 { index: true, element: <Navigate to="/system/health" replace /> },
-                { path: 'health', lazy: page(() => import('@/features/system/HealthRoute')) },
+                {
+                  path: 'health',
+                  lazy: page(withSettingsMessages(() => import('@/features/system/HealthRoute'))),
+                },
                 {
                   path: 'statistics',
                   lazy: page(() => import('@/features/statistics/StatisticsRoute')),
@@ -209,7 +226,7 @@ export const router = createBrowserRouter(
             { path: 'settings', element: <SettingsIndex /> },
             {
               path: 'settings/:section',
-              lazy: page(() => import('@/features/settings/SettingsRoute')),
+              lazy: page(withSettingsMessages(() => import('@/features/settings/SettingsRoute'))),
             },
           ],
         },

@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { useNavigate } from 'react-router'
 import { useSessionUser } from '@/app/session'
-import { useI18n } from '@/i18n'
+import { loadSettingsMessages, useI18n } from '@/i18n'
 import { cx, Kbd, searchable } from '@/ui'
 import './navigationEntries'
 import { paletteGroups, paletteSources, type PaletteEntry } from './registry'
@@ -19,10 +19,12 @@ import { paletteGroups, paletteSources, type PaletteEntry } from './registry'
 // Each area registers its entries in `src/features/<area>/palette.ts`; loading them here is all
 // it takes for the palette to offer them. They load on the palette's first opening, not with the
 // app, as do the actions: the settings' entries bring the settings catalog and two languages'
-// words for it, the actions the English verbs.
+// words for it, and read the settings' names in the language shown, which Settings' messages
+// hold; the actions bring the English verbs.
 const areaEntries = [
   ...Object.values(import.meta.glob('/src/features/*/palette.ts')),
   () => import('./actionEntries'),
+  loadSettingsMessages,
 ]
 let areaEntriesLoaded: Promise<unknown> | undefined
 
