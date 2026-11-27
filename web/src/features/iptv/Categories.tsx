@@ -102,7 +102,7 @@ export default function Categories({ scope, id }: { scope: Scope; id: string }) 
     <div className="space-y-8 max-md:space-y-7">
       <CreateForm scope={scope} id={id} />
       <Block title={text.title} count={categories.data ? items.length : undefined}>
-        <p className="mb-3 max-w-[66ch] text-small text-ink-2">
+        <p className="mb-3 max-w-measure text-small text-ink-2">
           {filtering ? text.reorderOff : text.help}
         </p>
         <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -345,7 +345,7 @@ function CategoryRow({
         onDrop()
       }}
       className={cx(
-        'relative min-w-0 rounded-[0.625rem] bg-s1 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3rem] [content-visibility:auto]',
+        'relative min-w-0 rounded-control bg-s1 transition-colors duration-300 ease-nuit hover:bg-s2 [contain-intrinsic-size:auto_3rem] [content-visibility:auto]',
         dragging && 'opacity-40',
       )}
     >

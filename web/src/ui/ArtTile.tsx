@@ -141,7 +141,7 @@ export function ArtTile({
   const art = backdropSrc !== undefined && !failed.has(backdropSrc) ? backdropSrc : undefined
   const frame = poster !== undefined || fallback !== undefined
   const frameClass = cx(
-    'aspect-[400/560] rounded-[0.75rem] shadow-[0_18px_36px_-12px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-20 max-md:rounded-[0.625rem]',
+    'aspect-[400/560] rounded-art shadow-[0_18px_36px_-12px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.08)] transition-[width] duration-700 ease-nuit motion-reduce:transition-none max-md:w-20 max-md:rounded-control',
     wide ? 'w-[clamp(6.75rem,16vh,9.25rem)]' : 'w-[clamp(5rem,11.5vh,6.5rem)]',
   )
   const posterFrame =
@@ -157,10 +157,7 @@ export function ArtTile({
     ) : frame ? (
       <div
         aria-hidden="true"
-        className={cx(
-          frameClass,
-          'grid place-items-center bg-s2 text-[2rem] font-bold text-ink-2 max-md:text-[1.75rem]',
-        )}
+        className={cx(frameClass, 'grid place-items-center bg-s2 text-figure font-bold text-ink-2')}
       >
         {fallback ?? <FilmStripIcon size="1em" />}
       </div>
@@ -207,7 +204,7 @@ export function ArtTile({
           'outline-2 outline-offset-[3px] outline-solid',
           'transition-[box-shadow,outline-color] duration-500 ease-nuit',
           'after:absolute after:inset-0 after:-z-1 after:bg-[linear-gradient(100deg,rgb(22_20_27/0.35)_0%,rgb(22_20_27/0.72)_42%,rgb(22_20_27/0.82)_100%)]',
-          'max-md:gap-x-3.5 max-md:gap-y-3 max-md:rounded-[1.125rem] max-md:p-3.5',
+          'max-md:gap-x-3.5 max-md:gap-y-3 max-md:rounded-panel max-md:p-3.5',
           frame ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]',
           lit
             ? 'shadow-[0_46px_90px_-36px_rgb(0_0_0/0.75)] outline-lit-edge'

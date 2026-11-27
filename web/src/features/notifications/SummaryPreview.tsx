@@ -20,7 +20,7 @@ export default function SummaryPreview() {
   const users = useQuery({ queryKey: ['users'], queryFn: ({ signal }) => fetchUsers(signal) })
   return (
     <div className="flex flex-col gap-5">
-      <p className="max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="max-w-measure text-small text-ink-2">{text.help}</p>
       <div className="flex flex-wrap items-end gap-4">
         <Field label={text.summary}>
           <Select

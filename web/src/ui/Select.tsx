@@ -196,7 +196,7 @@ function ListOption({
       className={cx(
         'flex cursor-pointer items-center gap-3 text-ink transition-[background-color,color] duration-300 ease-nuit select-none',
         compact
-          ? 'min-h-8 rounded-[0.5rem] px-2.5 py-1 text-small'
+          ? 'min-h-8 rounded-chip px-2.5 py-1 text-small'
           : 'min-h-9 rounded-choice px-3 py-1.5 text-control',
         'data-active:lit',
         checked && 'font-semibold',

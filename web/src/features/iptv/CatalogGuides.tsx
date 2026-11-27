@@ -201,7 +201,7 @@ function GuideList({
     >
       <Block title={text.title} count={entries.length}>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-x-5 gap-y-2">
-          <p className="max-w-[66ch] text-small text-ink-2">{text.help}</p>
+          <p className="max-w-measure text-small text-ink-2">{text.help}</p>
           {guides.guides.length > 0 && (
             <Button
               size="sm"
@@ -229,7 +229,7 @@ function GuideList({
               return (
                 <li
                   key={entry.kind === 'kept' ? entry.guide.id : entry.key}
-                  className="flex min-h-12 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-[0.625rem] bg-s1 py-1.5 pr-1.5 pl-3.5 max-sm:pl-3"
+                  className="flex min-h-12 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-control bg-s1 py-1.5 pr-1.5 pl-3.5 max-sm:pl-3"
                 >
                   <span className="figures w-5 shrink-0 text-right text-small text-ink-3">
                     {index + 1}
@@ -382,7 +382,7 @@ function Automap({
   })
   return (
     <Block title={text.title}>
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{text.help}</p>
       <div className="flex flex-wrap gap-2.5">
         <Button
           variant="primary"

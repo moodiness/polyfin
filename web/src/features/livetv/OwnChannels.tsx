@@ -482,7 +482,7 @@ function Editor({
             )}
             {/* A one-time action, not a setting: it reads the saved channel's sources now. */}
             <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2.5 rounded-row bg-s1 py-3 pr-3 pl-4 max-md:pl-3.5">
-              <div className="max-w-[66ch] min-w-0 flex-[1_1_20rem] text-small text-ink-2">
+              <div className="max-w-measure min-w-0 flex-[1_1_20rem] text-small text-ink-2">
                 <p>{t.ownChannels.rebuildHelp}</p>
                 {changes > 0 && <p className="mt-1 text-ink-3">{t.ownChannels.rebuildSaveFirst}</p>}
               </div>
@@ -538,7 +538,7 @@ const airingTime = 'figures w-[6.5rem] shrink-0 text-micro text-ink-3 max-md:w-[
 /** Settings rows, 6 px apart. */
 const rows = 'grid grid-cols-[minmax(0,1fr)] gap-1.5'
 /** The help under a block's title. */
-const blockHelp = 'mb-3 max-w-[72ch] text-small text-ink-2'
+const blockHelp = 'mb-3 max-w-measure text-small text-ink-2'
 
 /** Chooses what a channel or a block is built from, as settings rows. */
 function SourcePicker({

@@ -283,29 +283,42 @@ export function SettingRow<T extends string | number = string>(props: SettingRow
  * A setting's help under its name (a SettingRow's, an OpenRow's): a muted caption, two lines at
  * most, with More at the end of a longer one to read the rest. Screen readers read it whole. A
  * list row's caption (a scheduled task's description) takes `lines={1}`. `dimmed`, in an
- * inactive row, dims the caption but never More.
+ * inactive row, dims the caption but never More. A page's lede wears it too, with `lines="lede"`
+ * (three lines from 768 px up, two below) and its own `className` (place, measure and type) in
+ * place of the caption's.
  */
 export function SettingHelp({
   id,
   lines = 2,
   dimmed = false,
+  className = 'mt-0.5 max-w-[72ch] text-small text-ink-3',
   children,
 }: {
   id: string | undefined
-  lines?: 1 | 2
+  lines?: 1 | 2 | 'lede'
   dimmed?: boolean
+  className?: string
   children: ReactNode
 }) {
   const { t } = useI18n()
   const text = useRef<HTMLParagraphElement>(null)
+  const more = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [long, setLong] = useState(false)
 
-  // More shows only while the clamp cuts the caption, which a narrower window may do.
+  // More shows only while the clamp cuts the caption, which a narrower window, or the lede's
+  // clamp changing at 768 px, may do: the observer measures again at each change of size. It
+  // measures without More beside the words, which narrows them, so that a caption that fits
+  // the whole width never keeps a More it once needed.
   useLayoutEffect(() => {
     const node = text.current
     if (!node || open) return
-    const measure = () => setLong(node.scrollHeight > node.clientHeight + 1)
+    const measure = () => {
+      const button = more.current
+      if (button) button.style.display = 'none'
+      setLong(node.scrollHeight > node.clientHeight + 1)
+      if (button) button.style.display = ''
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(node)
@@ -313,28 +326,20 @@ export function SettingHelp({
   }, [open])
 
   return (
-    <div
-      className={cx(
-        'mt-0.5 flex max-w-[72ch] items-end gap-2 text-small text-ink-3',
-        dimmed && 'inactive',
-      )}
-    >
-      <p
-        id={id}
-        ref={text}
-        className={cx('min-w-0', !open && (lines === 1 ? 'line-clamp-1' : 'line-clamp-2'))}
-      >
+    <div className={cx('flex items-end gap-2', className, dimmed && 'inactive')}>
+      <p id={id} ref={text} className={cx('min-w-0', !open && clamps[lines])}>
         {children}
       </p>
       {(long || open) && (
         <button
+          ref={more}
           type="button"
           aria-expanded={open}
           aria-controls={id}
           onClick={() => setOpen(!open)}
           // 3 px more above and below than the caption's line, taken back by the margins: a target
           // at least 24 px tall, in Compact too, that does not move the words.
-          className="-mx-1 -my-[3px] shrink-0 cursor-pointer rounded-[0.375rem] px-1 py-[3px] font-semibold whitespace-nowrap text-ink-2 focus-lit hover:text-ink"
+          className="-mx-1 -my-[3px] shrink-0 cursor-pointer rounded-inline px-1 py-[3px] font-semibold whitespace-nowrap text-ink-2 focus-lit hover:text-ink"
         >
           {open ? t.ui.lessHelp : t.ui.moreHelp}
         </button>
@@ -342,6 +347,8 @@ export function SettingHelp({
     </div>
   )
 }
+
+const clamps = { 1: 'line-clamp-1', 2: 'line-clamp-2', lede: 'line-clamp-2 md:line-clamp-3' }
 
 /** The saved value for "was …", and whether the value differs from it. */
 function describe<T extends string | number>(

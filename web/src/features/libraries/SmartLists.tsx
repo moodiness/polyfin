@@ -141,7 +141,7 @@ export default function SmartLists({ scope, kept = false }: { scope: Scope; kept
       count={lists.data?.length}
       aside={lists.data && lists.data.length > 0 ? add : undefined}
     >
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{help}</p>
       {body}
       {kept && (
         <ConfirmDialog

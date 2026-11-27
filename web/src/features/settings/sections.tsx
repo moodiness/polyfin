@@ -667,7 +667,7 @@ function CheckboxRow<T extends string>({
   return (
     <PlainRow anchor={anchor}>
       <fieldset aria-describedby={`${anchor}-help`}>
-        <legend className="text-h3 text-ink max-md:text-[1.125rem]">{label}</legend>
+        <legend className="text-h3 text-ink max-md:text-group">{label}</legend>
         <SettingHelp id={`${anchor}-help`}>{help}</SettingHelp>
         <div className={cx('mt-3.5 grid gap-3', columns)}>
           {choices.map((choice) => (
@@ -864,8 +864,8 @@ function Content({ form, update, error, number, range, limits, saved, minMax }: 
           saved={saved.posterBadgeSize}
         />
         <PlainRow anchor="poster-preview">
-          <p className="text-h3 text-ink max-md:text-[1.125rem]">{s.posterPreview.title}</p>
-          <p className="mt-2 mb-5 max-w-[66ch] text-small text-ink-2">{s.posterPreview.help}</p>
+          <p className="text-h3 text-ink max-md:text-group">{s.posterPreview.title}</p>
+          <p className="mt-2 mb-5 max-w-measure text-small text-ink-2">{s.posterPreview.help}</p>
           <PosterPreviewPanel size={form.posterBadgeSize} />
         </PlainRow>
         <SettingRow
@@ -1228,9 +1228,9 @@ function IdentityProvider({ form, update, error, limits, saved }: SectionFormApi
     <SettingsGroup title={s.title}>
       <TextRow anchor="provider-setup" text={s.intro}>
         {form.providerRedirectUri === '' ? (
-          <div className="mt-3 max-w-[60ch]">
-            <Notice tone="warn">{s.noPublicAddress}</Notice>
-          </div>
+          <Notice tone="warn" className="mt-3">
+            {s.noPublicAddress}
+          </Notice>
         ) : (
           <>
             <Address label={s.redirectUri} value={form.providerRedirectUri} />
@@ -1873,12 +1873,10 @@ function Backups({ form, update, error, number, range, limits, saved, minMax }: 
           onValue={(backupPassphrase) => update({ backupPassphrase })}
         >
           {form.backupPassphrase !== undefined && form.backupPassphrase !== '' && (
-            <Notice tone="warn" className="max-w-[60ch]">
-              {s.backupPassphraseNew}
-            </Notice>
+            <Notice tone="warn">{s.backupPassphraseNew}</Notice>
           )}
           {form.backupPassphraseSet && form.backupPassphrase === '' && (
-            <Notice className="max-w-[60ch]">{s.backupPassphraseRemoved}</Notice>
+            <Notice>{s.backupPassphraseRemoved}</Notice>
           )}
         </SettingRow>
         {form.backups && <LastBackup />}
@@ -1931,7 +1929,7 @@ function WebPlayer({ form, update, error, limits, dirty, adopt, saved }: Section
           onChange={(webTheme: WebTheme) => update({ webTheme })}
           saved={saved.webTheme}
         >
-          <p className="max-w-[60ch]">{s.webThemeReload}</p>
+          <p className="max-w-measure">{s.webThemeReload}</p>
           {form.webTheme === 'lumaaglaass' && (
             <div className="mt-3">
               <EditAsCustom form={form} update={update} />
@@ -2110,7 +2108,7 @@ function Notifications({ form, update, error, number, limits, saved, minMax }: S
           saved={saved.weeklySummaryHour}
         />
         <PlainRow anchor="summary-preview">
-          <h3 className="mb-3 text-h3 text-ink max-md:text-[1.125rem]">{text.preview.title}</h3>
+          <h3 className="mb-3 text-h3 text-ink max-md:text-group">{text.preview.title}</h3>
           <SummaryPreview />
         </PlainRow>
       </SettingsGroup>

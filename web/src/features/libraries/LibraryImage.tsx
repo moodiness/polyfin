@@ -69,7 +69,7 @@ function Picture({
     return (
       <span
         className={cx(
-          'grid aspect-video place-items-center rounded-[0.5rem] bg-s3 text-ink-3',
+          'grid aspect-video place-items-center rounded-chip bg-s3 text-ink-3',
           className,
         )}
       >
@@ -83,7 +83,7 @@ function Picture({
       alt=""
       loading="lazy"
       onError={() => setFailed(url)}
-      className={cx('aspect-video rounded-[0.5rem] bg-s3 object-cover', className)}
+      className={cx('aspect-video rounded-chip bg-s3 object-cover', className)}
     />
   )
 }
@@ -128,7 +128,7 @@ export function LibraryThumb({
       title={text.edit(name, state)}
       onClick={onToggle}
       className={cx(
-        'group focus-lit relative shrink-0 cursor-pointer rounded-[0.5rem] transition-[box-shadow,scale] duration-300 ease-nuit',
+        'group focus-lit relative shrink-0 cursor-pointer rounded-chip transition-[box-shadow,scale] duration-300 ease-nuit',
         open && 'shadow-[0_0_0_3px] shadow-ink',
         thumbSize,
       )}
@@ -136,7 +136,7 @@ export function LibraryThumb({
       <Picture library={library} width={160} className="w-full" />
       <span
         aria-hidden="true"
-        className="absolute inset-0 grid place-items-center rounded-[0.5rem] bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
+        className="absolute inset-0 grid place-items-center rounded-chip bg-bg/60 text-ink opacity-0 transition-opacity duration-300 ease-nuit group-hover:opacity-100 group-focus-visible:opacity-100"
       >
         <PencilSimpleIcon size="1rem" />
       </span>
@@ -150,7 +150,7 @@ export function LiveTvThumb() {
     <span
       aria-hidden="true"
       className={cx(
-        'grid aspect-video shrink-0 place-items-center rounded-[0.5rem] bg-s3 text-ink-3',
+        'grid aspect-video shrink-0 place-items-center rounded-chip bg-s3 text-ink-3',
         thumbSize,
       )}
     >
@@ -323,11 +323,11 @@ export function LibraryImageEditor({
                     label: text.choices[value],
                   }))}
                 />
-                <p className="mt-3 max-w-[64ch] text-small text-ink-2">{help}</p>
+                <p className="mt-3 max-w-measure text-small text-ink-2">{help}</p>
                 {(choice === 'automatic' || choice === 'generated') &&
                   library.image === choice &&
                   library.imageTag === null && (
-                    <p className="mt-2 max-w-[64ch] text-small text-warn">
+                    <p className="mt-2 max-w-measure text-small text-warn">
                       {text.notFound[choice]}
                     </p>
                   )}

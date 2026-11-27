@@ -90,7 +90,7 @@ export default function WebPlayerDefaults({
           {text.button}
         </Button>
       </div>
-      <p className="mt-2 max-w-[60ch] text-small text-ink-2">
+      <p className="mt-2 max-w-measure text-small text-ink-2">
         {changes.length === 0 ? text.none : text.help}
       </p>
       <ConfirmDialog

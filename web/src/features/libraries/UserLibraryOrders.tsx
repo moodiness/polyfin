@@ -34,7 +34,7 @@ export default function UserLibraryOrders({ dirty }: { dirty: boolean }) {
   const users = count.data?.users
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-2.5 rounded-row bg-s1 py-3 pr-3 pl-4 max-md:pr-3 max-md:pl-3.5">
-      <div className="max-w-[66ch] min-w-0 flex-[1_1_20rem] text-small text-ink-2">
+      <div className="max-w-measure min-w-0 flex-[1_1_20rem] text-small text-ink-2">
         <p>{u.help}</p>
         {dirty && <p className="mt-1 text-ink-3">{u.saveFirst}</p>}
       </div>

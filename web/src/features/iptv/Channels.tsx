@@ -159,7 +159,7 @@ export default function Channels({ scope, id }: { scope: Scope; id: string }) {
       )}
       <Block title={text.title} count={channels.data?.total}>
         <div className="mb-3 flex flex-wrap items-start justify-between gap-x-5 gap-y-2">
-          <p className="max-w-[66ch] text-small text-ink-2">
+          <p className="max-w-measure text-small text-ink-2">
             {reorder ? text.reorderHelp : text.help}
           </p>
           <Button
@@ -440,7 +440,7 @@ function ChannelRow({
         onDrop()
       }}
       className={cx(
-        'flex min-h-11 min-w-0 items-center gap-2.5 rounded-[0.625rem] py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-1.5',
+        'flex min-h-11 min-w-0 items-center gap-2.5 rounded-control py-1 pr-2 pl-3.5 transition-colors duration-300 ease-nuit [contain-intrinsic-size:auto_3rem] [content-visibility:auto] max-sm:gap-2 max-sm:pr-1.5',
         dragging && 'opacity-40',
         selected ? 'bg-accent/14' : 'bg-s1 hover:bg-s2',
       )}

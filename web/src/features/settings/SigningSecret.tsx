@@ -27,7 +27,7 @@ export default function SigningSecret() {
         aria-labelledby="signing-secret-title"
         aria-describedby="signing-secret-help"
       >
-        <p id="signing-secret-title" className="text-h3 text-ink max-md:text-[1.125rem]">
+        <p id="signing-secret-title" className="text-h3 text-ink max-md:text-group">
           {s.signingSecret}
         </p>
         <SettingHelp id="signing-secret-help">{s.signingSecretHelp}</SettingHelp>

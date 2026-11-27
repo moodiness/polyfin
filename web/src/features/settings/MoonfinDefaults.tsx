@@ -137,8 +137,8 @@ export default function MoonfinDefaults({ side }: { side: (edits: SideEdits | nu
   return (
     <div className="flex flex-col gap-4" data-testid="moonfin-defaults">
       <div>
-        <h3 className="text-h3 text-ink max-md:text-[1.125rem]">{text.title}</h3>
-        <p className="mt-1 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+        <h3 className="text-h3 text-ink max-md:text-group">{text.title}</h3>
+        <p className="mt-1 max-w-measure text-small text-ink-2">{text.help}</p>
       </div>
       <Tabs
         variant="underline"
@@ -182,7 +182,7 @@ export default function MoonfinDefaults({ side }: { side: (edits: SideEdits | nu
         <Button icon={ArrowsClockwiseIcon} disabled={anyDirty} onClick={() => setApplying(true)}>
           {text.apply}
         </Button>
-        <p className="max-w-[60ch] text-small text-ink-2">
+        <p className="max-w-measure text-small text-ink-2">
           {anyDirty ? text.saveFirst : text.applyHelp}
         </p>
       </div>

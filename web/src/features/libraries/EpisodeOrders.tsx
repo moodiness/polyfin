@@ -102,7 +102,7 @@ export default function EpisodeOrders() {
 
   return (
     <Block title={e.title} count={orders.data?.length}>
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{e.help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{e.help}</p>
       {list}
       <form
         onSubmit={submit}

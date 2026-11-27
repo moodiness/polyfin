@@ -451,7 +451,7 @@ function AccountSection({
       <h2 id={headingId} className="text-h2 text-ink">
         {title}
       </h2>
-      {help !== undefined && <p className="mt-1 max-w-[72ch] text-small text-ink-2">{help}</p>}
+      {help !== undefined && <p className="mt-1 max-w-measure text-small text-ink-2">{help}</p>}
       <div className="mt-3">{children}</div>
     </section>
   )

@@ -13,7 +13,7 @@ function SkipLink() {
   return (
     <a
       href="#main"
-      className="lit fixed top-[-5rem] left-4 z-[70] rounded-[0.875rem] px-[1.125rem] py-3 font-[650] transition-[top] duration-160 focus:top-4 focus-visible:outline-none"
+      className="lit fixed top-[-5rem] left-4 z-[70] rounded-bubble px-[1.125rem] py-3 font-[650] transition-[top] duration-160 focus:top-4 focus-visible:outline-none"
     >
       {t.nav.skipToContent}
     </a>

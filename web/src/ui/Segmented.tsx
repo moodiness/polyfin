@@ -32,7 +32,7 @@ export type SegmentSize = 'md' | 'sm' | 'compact'
 const sizes: Record<SegmentSize, string> = {
   md: 'h-9.5 min-w-9.5 rounded-choice px-3 text-control max-sm:h-11 max-sm:min-w-11',
   sm: 'h-8.5 min-w-8.5 rounded-[0.5625rem] px-2.5 text-control',
-  compact: 'h-8 min-w-8 rounded-[0.5rem] px-2.5 text-small',
+  compact: 'h-8 min-w-8 rounded-chip px-2.5 text-small',
 }
 
 const iconSizes = { md: 18, sm: 17, compact: 16 }

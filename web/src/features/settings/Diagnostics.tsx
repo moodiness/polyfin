@@ -48,7 +48,7 @@ export function Variables() {
   return (
     <SettingsGroup title={text.sections.variables}>
       <PlainRow anchor="environment-variables">
-        <p className="max-w-[60ch] text-small text-ink-2">{text.variablesHelp}</p>
+        <p className="max-w-measure text-small text-ink-2">{text.variablesHelp}</p>
         <div className="mt-4">
           {variables.isPending ? (
             <SkeletonRows rows={5} label={t.common.loading} boxed />

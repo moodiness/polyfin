@@ -243,7 +243,7 @@ function Figures({ scope, statistics }: { scope: StatisticsScope; statistics: St
         <MethodShare methods={statistics.methods} />
       </Block>
       <Block title={text.hours}>
-        <p className="mb-4 max-w-[66ch] text-small text-ink-2">{text.hoursHelp}</p>
+        <p className="mb-4 max-w-measure text-small text-ink-2">{text.hoursHelp}</p>
         <HourGrid label={text.hours} hours={statistics.hours} />
       </Block>
     </>

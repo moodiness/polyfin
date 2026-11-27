@@ -3,11 +3,13 @@ import { useId, type ReactNode, type Ref } from 'react'
 import { Link } from 'react-router'
 import { Count } from './Badge'
 import { cx } from './cx'
+import { SettingHelp } from './SettingRow'
 
 /**
  * The top of a page: the title (34 px, 29 in Compact, 28 on a phone; 40 for a greeting), a lede
- * of one or two sentences, the page's main actions on the right, and the sub-area words under it
- * all (`nav`, a Tabs). `back` adds a link above the title for detail pages.
+ * of one or two sentences (three lines at most, two on a phone, with More for the rest), the
+ * page's main actions on the right, and the sub-area words under it all (`nav`, a Tabs). `back`
+ * adds a link above the title for detail pages.
  */
 export function PageHeader({
   title,
@@ -35,6 +37,7 @@ export function PageHeader({
   greeting?: boolean
   className?: string
 }) {
+  const ledeId = useId()
   const titleClass = cx('min-w-0 hyphenate text-ink', greeting ? 'text-display' : 'text-h1')
   return (
     <header className={cx('mb-7 max-md:mb-6', className)}>
@@ -61,16 +64,22 @@ export function PageHeader({
           ) : (
             <h1 className={titleClass}>{title}</h1>
           )}
-          {lede !== undefined && (
-            <p
-              className={cx(
-                'max-w-[62ch] text-ink-2',
-                greeting ? 'mt-1.5 text-[1.1875rem] max-md:text-[1.0625rem]' : 'mt-1.5 text-lead',
-              )}
-            >
-              {lede}
-            </p>
-          )}
+          {lede !== undefined &&
+            (greeting ? (
+              <p className="mt-1.5 max-w-measure text-[1.1875rem] text-ink-2 max-md:text-[1.0625rem]">
+                {lede}
+              </p>
+            ) : (
+              // Three lines at most, two on a phone, with More: a long lede never pushes the page
+              // down.
+              <SettingHelp
+                id={ledeId}
+                lines="lede"
+                className="mt-1.5 max-w-measure text-lead text-ink-2"
+              >
+                {lede}
+              </SettingHelp>
+            ))}
         </div>
         {/* No wider than the page, so that a long row of actions wraps on a phone. */}
         {actions && (
@@ -143,7 +152,7 @@ export function TextLink({
     <Link
       to={to}
       className={cx(
-        'group focus-lit inline-flex items-center gap-1 rounded-[0.5rem] px-2.5 py-1 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
+        'group focus-lit inline-flex items-center gap-1 rounded-chip px-2.5 py-1 text-control font-medium text-ink-2 hover:bg-s1 hover:text-ink',
         // Ending a Block's aside, its chevron lines up with the page's right edge, past its padding.
         arrow && '[[data-block-aside]>&:last-child]:-mr-3',
         className,

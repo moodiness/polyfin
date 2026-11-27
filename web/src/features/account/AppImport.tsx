@@ -632,7 +632,7 @@ function StremioLinkForm({
             <div className="flex flex-wrap items-center gap-3">
               <p
                 aria-label={text.codeLabel}
-                className="rounded-field bg-s3 px-4 py-1.5 font-mono text-[1.375rem] font-semibold tracking-[0.2em] text-ink select-all"
+                className="rounded-field bg-s3 px-4 py-1.5 font-mono text-code font-semibold tracking-[0.2em] text-ink select-all"
               >
                 {link.code}
               </p>

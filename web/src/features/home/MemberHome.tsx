@@ -120,7 +120,7 @@ function QuickConnect() {
             maxLength={longLength}
             placeholder="000000"
             mono
-            className="[&_input]:text-[1.375rem] [&_input]:tracking-[0.32em] max-md:[&_input]:text-[1.25rem]"
+            className="[&_input]:text-code [&_input]:tracking-[0.32em]"
           />
         </Field>
       </form>

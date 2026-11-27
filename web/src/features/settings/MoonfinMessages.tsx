@@ -105,8 +105,8 @@ export default function MoonfinMessages() {
 
   const head = (
     <div>
-      <h3 className="text-h3 text-ink max-md:text-[1.125rem]">{text.title}</h3>
-      <p className="mt-1 max-w-[66ch] text-small text-ink-2">{text.help}</p>
+      <h3 className="text-h3 text-ink max-md:text-group">{text.title}</h3>
+      <p className="mt-1 max-w-measure text-small text-ink-2">{text.help}</p>
     </div>
   )
   if (messages.isPending) {
@@ -459,7 +459,7 @@ function MessageModal({
         {audience === 'users' && <UserPicker users={users} chosen={chosen} onChosen={setChosen} />}
         <fieldset className="space-y-3">
           <legend className="text-control font-medium text-ink">{text.dates}</legend>
-          <p className="max-w-[60ch] text-small text-ink-3">{text.datesHelp}</p>
+          <p className="max-w-measure text-small text-ink-3">{text.datesHelp}</p>
           <div className="flex flex-wrap gap-4">
             <Field label={text.start} className="w-60">
               <TextInput
@@ -489,7 +489,7 @@ function MessageModal({
         </fieldset>
         <fieldset className="space-y-3">
           <legend className="text-control font-medium text-ink">{text.link}</legend>
-          <p className="max-w-[60ch] text-small text-ink-3">{text.linkHelp}</p>
+          <p className="max-w-measure text-small text-ink-3">{text.linkHelp}</p>
           <div className="flex flex-wrap gap-4">
             <Field
               label={text.linkLabel}

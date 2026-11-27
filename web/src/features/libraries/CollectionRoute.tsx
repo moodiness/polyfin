@@ -207,7 +207,7 @@ function CollectionPage({
       <Entries collection={collection} displayOrder={collection.displayOrder} />
       {collection.holders.length > 0 && (
         <Block title={c.heldBy} count={collection.holders.length}>
-          <p className="mb-3 max-w-[66ch] text-small text-ink-2">{c.heldByHelp}</p>
+          <p className="mb-3 max-w-measure text-small text-ink-2">{c.heldByHelp}</p>
           <RowList variant="boxed" aria-label={c.heldBy}>
             {collection.holders.map((holder) => (
               <Row

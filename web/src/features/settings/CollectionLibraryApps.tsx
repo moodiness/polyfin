@@ -46,10 +46,8 @@ export default function CollectionLibraryApps({
   return (
     <PlainRow anchor="collection-library-apps">
       <fieldset aria-describedby={`${id}-help`}>
-        <legend className="text-h3 text-ink max-md:text-[1.125rem]">
-          {s.collectionLibraryApps}
-        </legend>
-        <p id={`${id}-help`} className="mt-1 max-w-[60ch] text-small text-ink-2">
+        <legend className="text-h3 text-ink max-md:text-group">{s.collectionLibraryApps}</legend>
+        <p id={`${id}-help`} className="mt-1 max-w-measure text-small text-ink-2">
           {s.collectionLibraryAppsHelp}
         </p>
         {apps.length > 0 ? (

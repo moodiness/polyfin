@@ -21,6 +21,7 @@ import {
   RowList,
   searchable,
   SectionNav,
+  SettingHelp,
   Skeleton,
   SkeletonText,
 } from '@/ui'
@@ -123,7 +124,16 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
       <div hidden={searching}>
         <header className="max-md:pt-4">
           <h2 className="text-h2 text-ink">{t.nav.settingsSections[current.key]}</h2>
-          {lede !== undefined && <p className="mt-1 max-w-[72ch] text-lead text-ink-2">{lede}</p>}
+          {lede !== undefined && (
+            <SettingHelp
+              key={current.key}
+              id={`${current.key}-lede`}
+              lines="lede"
+              className="mt-1 max-w-measure text-lead text-ink-2"
+            >
+              {lede}
+            </SettingHelp>
+          )}
         </header>
         {settings.isPending ? (
           <div aria-busy="true" aria-label={t.common.loading} className="mt-5 space-y-1.5">

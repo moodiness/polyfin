@@ -86,7 +86,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 aria-label={t.ui.dismiss}
                 title={t.ui.dismiss}
                 onClick={() => dismiss(toast.id)}
-                className="inline-grid size-11 shrink-0 cursor-pointer place-items-center rounded-[0.875rem] text-ink-2 focus-lit hover:bg-s2 hover:text-ink"
+                className="inline-grid size-11 shrink-0 cursor-pointer place-items-center rounded-bubble text-ink-2 focus-lit hover:bg-s2 hover:text-ink"
               >
                 <XIcon size="1.25rem" aria-hidden="true" />
               </button>

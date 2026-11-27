@@ -159,7 +159,7 @@ export function DetailBody({
 
 /** What a part shows, under its title. */
 function Help({ children }: { children: ReactNode }) {
-  return <p className="max-w-[66ch] text-small text-ink-2">{children}</p>
+  return <p className="max-w-measure text-small text-ink-2">{children}</p>
 }
 
 /** A heading inside a part: "Paused sources", "Servers waited for". */

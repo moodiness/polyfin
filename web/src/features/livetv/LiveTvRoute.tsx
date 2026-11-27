@@ -79,7 +79,7 @@ export default function LiveTvRoute() {
       }
     >
       <Block title={t.livetv.catalogsTitle} count={libraries.data?.filter(isTvCatalog).length}>
-        <p className="mb-3 max-w-[72ch] text-small text-ink-2">{t.livetv.catalogsHelp}</p>
+        <p className="mb-3 max-w-measure text-small text-ink-2">{t.livetv.catalogsHelp}</p>
         {libraries.isPending ? (
           <SkeletonRows rows={2} label={t.livetv.catalogsLoading} />
         ) : libraries.isError ? (
@@ -92,7 +92,7 @@ export default function LiveTvRoute() {
       </Block>
 
       <Block title={t.livetv.iptvTitle} count={addons.data?.filter(isIptv).length}>
-        <p className="mb-3 max-w-[72ch] text-small text-ink-2">{t.livetv.iptvHelp}</p>
+        <p className="mb-3 max-w-measure text-small text-ink-2">{t.livetv.iptvHelp}</p>
         {addons.isPending ? (
           <div role="status" aria-label={t.livetv.iptvLoading} className="space-y-1.5">
             <SkeletonRows rows={1} />

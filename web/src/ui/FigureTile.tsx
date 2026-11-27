@@ -41,7 +41,7 @@ export function FigureTile({
     >
       <p
         className={cx(
-          'figures text-[2rem] leading-none font-[650] tracking-[-0.02em] max-md:text-[1.75rem]',
+          'figures text-figure',
           tone === 'ok' && 'text-ok',
           tone === 'warn' && 'text-warn',
           tone === 'danger' && 'text-danger',

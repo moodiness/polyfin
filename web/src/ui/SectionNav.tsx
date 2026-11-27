@@ -51,7 +51,7 @@ export type SectionNavProps = {
 // bold, with a bar on its leading edge (an underline on the strip) and a chevron; the one under
 // the keyboard is lit as a row, its edge.
 const linkClass = cx(
-  'group flex min-h-9 shrink-0 items-center justify-between gap-2 rounded-[0.5rem] px-3 py-1 text-control leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
+  'group flex min-h-9 shrink-0 items-center justify-between gap-2 rounded-chip px-3 py-1 text-control leading-snug font-medium text-ink-2 focus-lit-row hover:bg-s1 hover:text-ink focus-visible:text-ink',
   'aria-[current]:font-semibold aria-[current]:text-ink aria-[current]:current-row',
   'max-md:min-h-10 max-md:bg-s1 max-md:px-3 max-md:py-0 max-md:whitespace-nowrap max-md:aria-[current]:current-under',
 )

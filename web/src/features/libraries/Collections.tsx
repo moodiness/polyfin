@@ -103,7 +103,7 @@ export default function Collections() {
       count={collections.data?.length}
       aside={collections.data && collections.data.length > 0 ? add : undefined}
     >
-      <p className="mb-3 max-w-[66ch] text-small text-ink-2">{c.help}</p>
+      <p className="mb-3 max-w-measure text-small text-ink-2">{c.help}</p>
       {body}
       {creating && <CreateDialog onClose={() => setCreating(false)} />}
     </Block>

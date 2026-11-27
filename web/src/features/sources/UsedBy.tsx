@@ -138,7 +138,7 @@ export function UsedByPicker({
             me !== undefined &&
             !usesSource(value, me) && <Notice tone="warn">{text.selfLeftOut}</Notice>
           )}
-          <p className="max-w-[66ch] text-small text-ink-3">{text.ownAddons}</p>
+          <p className="max-w-measure text-small text-ink-3">{text.ownAddons}</p>
         </div>
       )}
       {footer}
