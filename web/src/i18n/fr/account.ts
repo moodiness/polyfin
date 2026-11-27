@@ -6,6 +6,16 @@ const account: typeof en = {
     signedInAs: 'Connecté avec le compte ',
     roles: { administrator: 'Administrateur', member: 'Membre' },
     sectionsLabel: 'Sections du compte',
+    /** The link to Content › Sources, for an administrator told to change something there. */
+    openSources: 'Ouvrir Sources',
+    /** The words above each group of sections, in the list of sections. */
+    groups: {
+      account: 'Compte',
+      watching: 'Ce que je regarde',
+      languageSound: 'Langues et son',
+      services: 'Services',
+      import: 'Importer',
+    },
     sections: {
       statistics: 'Statistiques',
       tracking: 'Suivi',
@@ -17,8 +27,8 @@ const account: typeof en = {
       taste: 'Profil de goûts',
       metadataLanguage: 'Langue des métadonnées',
       webTheme: 'Thème du lecteur web',
-      audioRegion: 'Région audio',
-      interfaceSize: 'Taille de l’interface',
+      appearance: 'Apparence',
+      languages: 'Langues',
       moonfin: 'Moonfin',
       sound: 'Son',
       sharedLinks: 'Liens partagés',
@@ -37,6 +47,9 @@ const account: typeof en = {
       server: 'Celle du serveur',
       noLanguage:
         'Aucun addon du serveur n’a encore de langue\u202f: les titres sont décrits dans celle du serveur. Un administrateur donne une langue aux addons dans Contenu › Sources.',
+      /** The same, to an administrator, who gives addons a language themselves. */
+      noLanguageAdministrator:
+        'Aucun addon du serveur n’a encore de langue\u202f: les titres sont décrits dans celle du serveur. Donnez une langue à l’un d’eux sur sa page, dans Contenu › Sources.',
       saved: 'Langue des métadonnées enregistrée.',
     },
     webTheme: {
@@ -321,6 +334,9 @@ const account: typeof en = {
         'Les films que vous avez vus sont marqués vus, à la dernière date que donne votre journal, autant de fois qu’il les note. Chaque film est cherché par son nom et son année dans les addons de métadonnées du serveur, et retenu quand ils connaissent exactement un film de ce nom et de cette année.',
       noSearch:
         'Aucun addon de métadonnées de ce serveur ne cherche de films\u202f: aucun film de l’export ne peut être trouvé. Demandez à un administrateur d’en ajouter un.',
+      /** The same, to an administrator, who adds addons themselves. */
+      noSearchAdministrator:
+        'Aucun addon de métadonnées de ce serveur ne cherche de films\u202f: aucun film de l’export ne peut être trouvé. Ajoutez-en un dans Contenu › Sources.',
       file: 'Fichier d’export',
       fileHelp: 'Le fichier ZIP que donne Letterboxd, de 20 Mo au plus.',
       choose: 'Choisir le fichier',
@@ -636,11 +652,14 @@ const account: typeof en = {
         waitingSignIn: 'En attente de vous',
         reconnect: 'À reconnecter',
         unreachable: 'Nouvelles tentatives',
-        unavailable: 'Non configuré',
         appRefused: 'Application refusée',
       },
-      unavailable: (name: string) =>
-        `${name} n’est pas encore configuré sur ce serveur\u202f: un administrateur doit d’abord ajouter l’application ${name} dans les paramètres.`,
+      /** To an administrator: the services the server has no app for, which members do not see. */
+      notSetUp: (names: string, count: number) =>
+        count === 1
+          ? `${names} n’est pas encore configuré sur ce serveur\u202f: ajoutez son application dans les paramètres pour le connecter ici.`
+          : `${names} ne sont pas encore configurés sur ce serveur\u202f: ajoutez leurs applications dans les paramètres pour les connecter ici.`,
+      openSettings: 'Ouvrir Paramètres › Suivi',
       setUpApp: (name: string) => `Configurer l’application ${name}`,
       codeIntro: (name: string) =>
         `Connectez votre compte ${name}\u202f: Polyfin vous donne un code à saisir sur le site de ${name}.`,

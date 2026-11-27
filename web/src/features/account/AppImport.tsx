@@ -60,7 +60,8 @@ const apps: readonly AppKind[] = ['nuvio', 'stremio']
  * else the last one. The app chosen signs in with a form of its own, through `readers`, and the
  * account read then has its profile chosen with its addons: the server holds what it read a few
  * minutes only. `importEveryMinutes` is how often a connection kept is imported again, and
- * `secretKey` whether the server encrypts the sign-in it keeps.
+ * `secretKey` whether the server encrypts the sign-in it keeps. Under My account, signing in is
+ * one section's action among others, not the page's primary one.
  */
 export default function AppImport({
   current,
@@ -92,6 +93,7 @@ export default function AppImport({
   const text = t.account.appImport
   const every = t.account.importEvery(importEveryMinutes)
   const toast = useToast()
+  const submit = own ? 'secondary' : 'primary'
   const [app, setApp] = useState<AppKind>('nuvio')
   const [stayConnected, setStayConnected] = useState(false)
   const [account, setAccount] = useState<AppAccount | null>(null)
@@ -175,6 +177,7 @@ export default function AppImport({
               onRead={read}
               notice={notice}
               stayConnected={stayConnected}
+              submit={submit}
             />
           ) : (
             <StremioSignIn
@@ -182,6 +185,7 @@ export default function AppImport({
               onRead={read}
               notice={notice}
               stayConnected={stayConnected}
+              submit={submit}
             />
           )}
         </Panel>
@@ -370,18 +374,20 @@ const accountCodes = ['nuvio_sign_in_refused']
  * Signs in to a Nuvio account, on Nuvio's own backend or a self-hosted one, and hands the account
  * read to `onRead`. Each app signs in its own way, with a form of its own. The password only
  * lives in this form's state. `notice` is what went wrong with the last import's start;
- * `stayConnected` asks the server to keep the session.
+ * `stayConnected` asks the server to keep the session; `submit` is the look of its button.
  */
 function NuvioSignInForm({
   read,
   onRead,
   notice,
   stayConnected,
+  submit: submitVariant,
 }: {
   read: (body: NuvioSignIn) => Promise<AppAccount>
   onRead: (account: AppAccount) => void
   notice: string | undefined
   stayConnected: boolean
+  submit: SubmitVariant
 }) {
   const { t } = useI18n()
   const text = t.account.appImport
@@ -465,7 +471,7 @@ function NuvioSignInForm({
       <PanelFooter>
         <Button
           type="submit"
-          variant="primary"
+          variant={submitVariant}
           icon={SignInIcon}
           loading={signIn.isPending}
           disabled={email.trim() === '' || password === ''}
@@ -476,6 +482,9 @@ function NuvioSignInForm({
     </form>
   )
 }
+
+/** The look of a sign-in form's button: primary on its own page, secondary under My account. */
+type SubmitVariant = 'primary' | 'secondary'
 
 /** The ways to sign in to Stremio, in the order offered: the link code works for every account. */
 type StremioWay = 'link' | 'password' | 'key'
@@ -494,11 +503,13 @@ function StremioSignIn({
   onRead,
   notice,
   stayConnected,
+  submit,
 }: {
   readers: AppReaders['stremio']
   onRead: (account: AppAccount) => void
   notice: string | undefined
   stayConnected: boolean
+  submit: SubmitVariant
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -524,6 +535,7 @@ function StremioSignIn({
           onRead={onRead}
           notice={notice}
           stayConnected={stayConnected}
+          submit={submit}
         />
       ) : way === 'password' ? (
         <StremioPasswordForm
@@ -531,6 +543,7 @@ function StremioSignIn({
           onRead={onRead}
           notice={notice}
           stayConnected={stayConnected}
+          submit={submit}
         />
       ) : (
         <StremioKeyForm
@@ -538,6 +551,7 @@ function StremioSignIn({
           onRead={onRead}
           notice={notice}
           stayConnected={stayConnected}
+          submit={submit}
         />
       )}
     </>
@@ -553,11 +567,13 @@ function StremioLinkForm({
   onRead,
   notice,
   stayConnected,
+  submit,
 }: {
   readers: AppReaders['stremio']
   onRead: (account: AppAccount) => void
   notice: string | undefined
   stayConnected: boolean
+  submit: SubmitVariant
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -644,7 +660,7 @@ function StremioLinkForm({
       <PanelFooter>
         {link === null ? (
           <Button
-            variant="primary"
+            variant={submit}
             icon={SignInIcon}
             loading={ask.isPending}
             onClick={() => {
@@ -671,11 +687,13 @@ function StremioPasswordForm({
   onRead,
   notice,
   stayConnected,
+  submit: submitVariant,
 }: {
   read: AppReaders['stremio']['password']
   onRead: (account: AppAccount) => void
   notice: string | undefined
   stayConnected: boolean
+  submit: SubmitVariant
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -735,7 +753,7 @@ function StremioPasswordForm({
       <PanelFooter>
         <Button
           type="submit"
-          variant="primary"
+          variant={submitVariant}
           icon={SignInIcon}
           loading={signIn.isPending}
           disabled={email.trim() === '' || password === ''}
@@ -756,11 +774,13 @@ function StremioKeyForm({
   onRead,
   notice,
   stayConnected,
+  submit: submitVariant,
 }: {
   read: AppReaders['stremio']['key']
   onRead: (account: AppAccount) => void
   notice: string | undefined
   stayConnected: boolean
+  submit: SubmitVariant
 }) {
   const { t } = useI18n()
   const text = t.account.appImport.stremio
@@ -808,7 +828,7 @@ function StremioKeyForm({
       <PanelFooter>
         <Button
           type="submit"
-          variant="primary"
+          variant={submitVariant}
           icon={KeyIcon}
           loading={reading.isPending}
           disabled={key.trim() === ''}

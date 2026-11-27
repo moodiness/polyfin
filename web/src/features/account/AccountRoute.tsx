@@ -8,6 +8,7 @@ import {
   fetchOwnImport,
   fetchStatus,
   fetchOwnShareLinks,
+  fetchTracking,
   ownAppConnections,
   ownAppReaders,
   queryClient,
@@ -45,32 +46,54 @@ import OwnTrackChoices from './TrackChoices'
 import TwoStep from './TwoStep'
 import ProviderLink from './ProviderLink'
 
-const sectionIds = [
-  'statistics',
-  'tracking',
-  'resume',
-  'next-up',
-  'hidden',
-  'home-rows',
-  'taste',
-  'track-choices',
-  'metadata-language',
-  'web-theme',
-  'audio-region',
-  'interface-size',
-  'moonfin',
-  'sound',
-  'shared-links',
-  'reminders',
-  'import',
-  'app-import',
-  'notifications',
-  'devices',
-  'password',
-  'two-step',
-  'provider',
-] as const
-type SectionId = (typeof sectionIds)[number]
+type GroupId = 'account' | 'watching' | 'language-sound' | 'services' | 'import'
+type SectionId =
+  | 'password'
+  | 'two-step'
+  | 'provider'
+  | 'devices'
+  | 'appearance'
+  | 'statistics'
+  | 'resume'
+  | 'next-up'
+  | 'hidden'
+  | 'home-rows'
+  | 'taste'
+  | 'shared-links'
+  | 'reminders'
+  | 'languages'
+  | 'track-choices'
+  | 'sound'
+  | 'tracking'
+  | 'notifications'
+  | 'moonfin'
+  | 'import'
+  | 'app-import'
+
+/**
+ * The page's sections in their groups, in the order of the page: the account itself first, what a
+ * member comes for most, then what they watch, its languages and sound, the services connected and
+ * the imports.
+ */
+const sectionGroups: readonly { id: GroupId; sections: readonly SectionId[] }[] = [
+  { id: 'account', sections: ['password', 'two-step', 'provider', 'devices', 'appearance'] },
+  {
+    id: 'watching',
+    sections: [
+      'statistics',
+      'resume',
+      'next-up',
+      'hidden',
+      'home-rows',
+      'taste',
+      'shared-links',
+      'reminders',
+    ],
+  },
+  { id: 'language-sound', sections: ['languages', 'track-choices', 'sound'] },
+  { id: 'services', sections: ['tracking', 'notifications', 'moonfin'] },
+  { id: 'import', sections: ['import', 'app-import'] },
+]
 
 /** How often the user's own import is read while it runs. */
 const ownImportPollMs = 2000
@@ -81,20 +104,20 @@ const anchorMargin =
 
 /**
  * `/me/account`, in the frame of a user's page: a band with the person (avatar, name, role) and
- * Reset my preferences, then the sections as words on the left and their content beside them:
- * statistics, tracking services, Continue Watching, hidden titles, home rows, the taste profile,
- * track choices, the metadata language, the web player theme, the audio region, the interface
- * size, Moonfin's companion and the settings its apps synced, sound, shared links (while the user
- * may share or has links), programme reminders (with the Live TV permission), importing from
- * another server and from an app (unless the server turns it off), notifications, devices,
- * password, two-step sign-in and the identity provider (while the server offers one). Every
+ * Reset my preferences, then the sections as words on the left, in groups, and their content
+ * beside them. Account: password, two-step sign-in, the identity provider (while the server offers
+ * one), devices, and the interface size with the web player theme. What I watch: statistics,
+ * Continue Watching, Next Up, hidden titles, home rows, the taste profile, shared links (while the
+ * user may share or has links) and programme reminders (with the Live TV permission). Languages
+ * and sound: the metadata language with the audio region, track choices and sound. Services:
+ * tracking (for a member, while the server is set up with one), notifications and Moonfin's
+ * companion. Import: from another server and from an app (unless the server turns it off). Every
  * setting saves as it changes, so the page has no unsaved dock.
  */
 export default function AccountRoute() {
   const { t } = useI18n()
   const text = t.account
   const user = useSessionUser()
-  const current = useCurrentSection()
   const ownImport = useQuery({
     queryKey: queryKeys.ownImport,
     queryFn: ({ signal }) => fetchOwnImport(signal),
@@ -133,6 +156,13 @@ export default function AccountRoute() {
   })
   const reminding = reminders.data?.available === true
   const appImportShown = importingFromApps || appConnections.length > 0
+  // A member sees the tracking services the server is set up with, and no section without one.
+  const tracking = useQuery({
+    queryKey: queryKeys.tracking,
+    queryFn: ({ signal }) => fetchTracking(signal),
+  }).data
+  const trackingShown =
+    user.isAdministrator || tracking === undefined || tracking.services.some((s) => s.available)
   // The identity provider the server offers, whose link the last section makes.
   const provider = useQuery({
     queryKey: queryKeys.status,
@@ -143,75 +173,119 @@ export default function AccountRoute() {
   // Sections drawn once their answer comes: a #section address scrolls once it is there.
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [hash, sharing, reminding, provider])
+  }, [hash, sharing, reminding, provider, trackingShown, importing, appImportShown])
 
   const shown: Record<SectionId, boolean> = {
+    password: true,
+    'two-step': true,
+    provider: provider != null,
+    devices: true,
+    appearance: true,
     statistics: true,
-    tracking: true,
     resume: true,
     'next-up': true,
     hidden: true,
     'home-rows': true,
     taste: true,
-    'track-choices': true,
-    'metadata-language': true,
-    'web-theme': true,
-    'audio-region': true,
-    'interface-size': true,
-    moonfin: true,
-    sound: true,
     'shared-links': sharing,
     reminders: reminding,
-    import: importing,
-    'app-import': appImportShown,
+    languages: true,
+    'track-choices': true,
+    sound: true,
+    tracking: trackingShown,
     notifications: true,
-    devices: true,
-    password: true,
-    'two-step': true,
-    provider: provider != null,
+    moonfin: true,
+    import: ownImport.data !== undefined && importing,
+    'app-import': ownAppImport.data !== undefined && appImportShown,
   }
   const labels: Record<SectionId, string> = {
+    password: text.sections.password,
+    'two-step': text.sections.twoStep,
+    provider: text.sections.provider,
+    devices: text.sections.devices,
+    appearance: text.sections.appearance,
     statistics: text.sections.statistics,
-    tracking: text.sections.tracking,
     resume: text.sections.resume,
     'next-up': text.sections.nextUp,
     hidden: text.sections.hidden,
     'home-rows': text.sections.homeRows,
     taste: text.sections.taste,
-    'track-choices': text.sections.trackChoices,
-    'metadata-language': text.sections.metadataLanguage,
-    'web-theme': text.sections.webTheme,
-    'audio-region': text.sections.audioRegion,
-    'interface-size': text.sections.interfaceSize,
-    moonfin: text.sections.moonfin,
-    sound: text.sections.sound,
     'shared-links': text.sections.sharedLinks,
     reminders: text.sections.reminders,
+    languages: text.sections.languages,
+    'track-choices': text.sections.trackChoices,
+    sound: text.sections.sound,
+    tracking: text.sections.tracking,
+    notifications: text.sections.notifications,
+    moonfin: text.sections.moonfin,
     import: text.sections.import,
     'app-import': text.sections.appImport,
-    notifications: text.sections.notifications,
-    devices: text.sections.devices,
-    password: text.sections.password,
-    'two-step': text.sections.twoStep,
-    provider: text.sections.provider,
   }
-  // Words only, as on a user's page.
-  const items: SectionNavItem[] = sectionIds
-    .filter((id) => shown[id])
-    .map((id) => ({ id, label: labels[id], to: `#${id}` }))
+  const groupLabels: Record<GroupId, string> = {
+    account: text.groups.account,
+    watching: text.groups.watching,
+    'language-sound': text.groups.languageSound,
+    services: text.groups.services,
+    import: text.groups.import,
+  }
+  // Words only, as on a user's page, under their group's word; a group with nothing shown is left
+  // out.
+  const groups = sectionGroups
+    .map((group) => ({
+      id: group.id,
+      label: groupLabels[group.id],
+      items: group.sections
+        .filter((id) => shown[id])
+        .map((id): SectionNavItem => ({ id, label: labels[id], to: `#${id}` })),
+    }))
+    .filter((group) => group.items.length > 0)
+  const current = useCurrentSection(
+    sectionGroups.flatMap((group) => group.sections.filter((id) => shown[id])),
+  )
 
   return (
     <PageLayout
       head={<PersonBand user={user} />}
-      nav={<SectionNav label={text.sectionsLabel} current={current} items={items} />}
+      nav={<SectionNav label={text.sectionsLabel} current={current} items={groups} />}
     >
+      <AccountSection id="password" title={labels.password} help={text.passwordHelp}>
+        <PasswordForm />
+      </AccountSection>
+      <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
+        <TwoStep />
+      </AccountSection>
+      {provider != null && (
+        <AccountSection
+          id="provider"
+          title={labels.provider}
+          help={text.provider.help(provider.name)}
+        >
+          <ProviderLink provider={provider} />
+        </AccountSection>
+      )}
+      <AccountSection id="devices" title={labels.devices} help={text.devicesHelp}>
+        <DeviceList
+          queryKey={queryKeys.myDevices}
+          load={fetchMyDevices}
+          signOut={signOutMyDevice}
+        />
+      </AccountSection>
+      {/* Settings of one row each, two to a section: each row names itself and says what it is
+          for. Their own anchors stay, for the links to them. */}
+      <AccountSection id="appearance" title={labels.appearance}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+          <div id="interface-size" className={anchorMargin}>
+            <OwnInterfaceSize />
+          </div>
+          <div id="web-theme" className={anchorMargin}>
+            <OwnWebTheme />
+          </div>
+        </div>
+      </AccountSection>
       <AccountSection id="statistics" title={labels.statistics} help={text.statisticsHelp}>
         <div className="space-y-6">
           <StatisticsView scope="own" />
         </div>
-      </AccountSection>
-      <AccountSection id="tracking" title={labels.tracking} help={text.tracking.description}>
-        <TrackingServices />
       </AccountSection>
       <AccountSection id="resume" title={labels.resume} help={text.watching.resumeHelp}>
         <ResumeList />
@@ -228,35 +302,6 @@ export default function AccountRoute() {
       <AccountSection id="taste" title={labels.taste} help={text.taste.help}>
         <TasteProfile />
       </AccountSection>
-      <AccountSection
-        id="track-choices"
-        title={labels['track-choices']}
-        help={text.trackChoices.help}
-      >
-        <OwnTrackChoices />
-      </AccountSection>
-      {/* Four settings of one row each: the row is the section, its label the heading's
-              words, its help its caption. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
-        <div id="metadata-language" className={anchorMargin}>
-          <OwnMetadataLanguage />
-        </div>
-        <div id="web-theme" className={anchorMargin}>
-          <OwnWebTheme />
-        </div>
-        <div id="audio-region" className={anchorMargin}>
-          <OwnAudioRegion />
-        </div>
-        <div id="interface-size" className={anchorMargin}>
-          <OwnInterfaceSize />
-        </div>
-      </div>
-      <AccountSection id="moonfin" title={labels.moonfin} help={text.moonfin.sectionHelp}>
-        <OwnMoonfin />
-      </AccountSection>
-      <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
-        <OwnSoundOptions />
-      </AccountSection>
       {sharing && (
         <AccountSection
           id="shared-links"
@@ -271,6 +316,40 @@ export default function AccountRoute() {
           <ReminderList />
         </AccountSection>
       )}
+      <AccountSection id="languages" title={labels.languages}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+          <div id="metadata-language" className={anchorMargin}>
+            <OwnMetadataLanguage />
+          </div>
+          <div id="audio-region" className={anchorMargin}>
+            <OwnAudioRegion />
+          </div>
+        </div>
+      </AccountSection>
+      <AccountSection
+        id="track-choices"
+        title={labels['track-choices']}
+        help={text.trackChoices.help}
+      >
+        <OwnTrackChoices />
+      </AccountSection>
+      <AccountSection id="sound" title={labels.sound} help={text.sound.help}>
+        <OwnSoundOptions />
+      </AccountSection>
+      {trackingShown && (
+        <AccountSection id="tracking" title={labels.tracking} help={text.tracking.description}>
+          <TrackingServices />
+        </AccountSection>
+      )}
+      <AccountSection id="notifications" title={labels.notifications} help={text.notificationsHelp}>
+        <div className="flex flex-col gap-6">
+          <NotificationTargets scope="own" />
+          <ReminderSettingsForm />
+        </div>
+      </AccountSection>
+      <AccountSection id="moonfin" title={labels.moonfin} help={text.moonfin.sectionHelp}>
+        <OwnMoonfin />
+      </AccountSection>
       {ownImport.data !== undefined && importing && (
         <AccountSection id="import" title={labels.import} help={text.serverImport.description}>
           <ServerImport own={ownImport.data} />
@@ -313,34 +392,6 @@ export default function AccountRoute() {
           </div>
         </AccountSection>
       )}
-      <AccountSection id="notifications" title={labels.notifications} help={text.notificationsHelp}>
-        <div className="flex flex-col gap-6">
-          <NotificationTargets scope="own" />
-          <ReminderSettingsForm />
-        </div>
-      </AccountSection>
-      <AccountSection id="devices" title={labels.devices} help={text.devicesHelp}>
-        <DeviceList
-          queryKey={queryKeys.myDevices}
-          load={fetchMyDevices}
-          signOut={signOutMyDevice}
-        />
-      </AccountSection>
-      <AccountSection id="password" title={labels.password} help={text.passwordHelp}>
-        <PasswordForm />
-      </AccountSection>
-      <AccountSection id="two-step" title={labels['two-step']} help={text.twoStep.help}>
-        <TwoStep />
-      </AccountSection>
-      {provider != null && (
-        <AccountSection
-          id="provider"
-          title={labels.provider}
-          help={text.provider.help(provider.name)}
-        >
-          <ProviderLink provider={provider} />
-        </AccountSection>
-      )}
     </PageLayout>
   )
 }
@@ -379,7 +430,10 @@ function PersonBand({ user }: { user: SessionUser }) {
   )
 }
 
-/** A section of the page: an anchor for the list of sections, its group title and what it is for. */
+/**
+ * A section of the page: an anchor for the list of sections, its title and what it is for. A
+ * section of setting rows has no help of its own: each row says what it is for.
+ */
 function AccountSection({
   id,
   title,
@@ -388,7 +442,7 @@ function AccountSection({
 }: {
   id: SectionId
   title: string
-  help: string
+  help?: string
   children: ReactNode
 }) {
   const headingId = useId()
@@ -397,27 +451,31 @@ function AccountSection({
       <h2 id={headingId} className="text-h2 text-ink">
         {title}
       </h2>
-      <p className="mt-1 max-w-[72ch] text-small text-ink-2">{help}</p>
+      {help !== undefined && <p className="mt-1 max-w-[72ch] text-small text-ink-2">{help}</p>}
       <div className="mt-3">{children}</div>
     </section>
   )
 }
 
 /**
- * The section in view, for the list of sections: the last one whose top has passed the upper
- * third of the window, or the last one once the page is scrolled to its end.
+ * The section in view, for the list of sections: of the sections shown (`shown`, in the page's
+ * order), the last one whose top has passed the upper third of the window, or the last one once
+ * the page is scrolled to its end.
  */
-function useCurrentSection(): SectionId {
-  const [current, setCurrent] = useState<SectionId>(sectionIds[0])
+function useCurrentSection(shown: readonly SectionId[]): SectionId | undefined {
+  const [current, setCurrent] = useState<SectionId | undefined>(shown[0])
+  // The sections come and go as their answers come: the effect follows the list, not the array.
+  const order = shown.join(' ')
   useEffect(() => {
+    const ids = order.split(' ') as SectionId[]
     function update() {
       const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
-      let found: SectionId = sectionIds[0]
-      for (const id of sectionIds) {
+      let found = ids[0]
+      for (const id of ids) {
         const element = document.getElementById(id)
         if (element && element.getBoundingClientRect().top <= window.innerHeight / 3) found = id
       }
-      setCurrent(atEnd && window.scrollY > 0 ? sectionIds[sectionIds.length - 1] : found)
+      setCurrent(atEnd && window.scrollY > 0 ? ids[ids.length - 1] : found)
     }
     update()
     window.addEventListener('scroll', update, { passive: true })
@@ -426,6 +484,6 @@ function useCurrentSection(): SectionId {
       window.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
-  }, [])
+  }, [order])
   return current
 }
