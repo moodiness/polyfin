@@ -10,7 +10,7 @@ import {
   XIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { userImageUrl, type SessionUser } from '@/api'
 import { useI18n, type Messages } from '@/i18n'
@@ -22,6 +22,7 @@ import {
   adminSections,
   isCurrent,
   memberSections,
+  settingsGroups,
   settingsPath,
   settingsSections,
   type NavPage,
@@ -39,13 +40,28 @@ function RowIcon({ icon: Glyph }: { icon: Icon }) {
   return <Glyph size="1.25rem" aria-hidden="true" className="shrink-0 text-ink-2" />
 }
 
-/** The pages under an area, as the menu lists them: Content's and System's, Settings' sections. */
-function areaPages(section: NavSection, t: Messages): readonly { to: string; label: string }[] {
-  if (section.pages) return section.pages.map((page) => ({ to: page.to, label: page.label(t) }))
+type PageGroup = { id: string; label?: string; pages: readonly { to: string; label: string }[] }
+
+/**
+ * The pages under an area, as the menu lists them: Content's and System's in one group, Settings'
+ * sections in its groups under their heading words (Server, Streaming…), as its section list has.
+ */
+function areaPages(section: NavSection, t: Messages): readonly PageGroup[] {
+  if (section.pages) {
+    return [
+      {
+        id: section.id,
+        pages: section.pages.map((page) => ({ to: page.to, label: page.label(t) })),
+      },
+    ]
+  }
   if (section.id === 'settings') {
-    return settingsSections.map((each) => ({
-      to: settingsPath(each.id),
-      label: t.nav.settingsSections[each.key],
+    return settingsGroups.map((group) => ({
+      id: group,
+      label: t.settingsPage.sectionGroups[group],
+      pages: settingsSections
+        .filter((each) => each.group === group)
+        .map((each) => ({ to: settingsPath(each.id), label: t.nav.settingsSections[each.key] })),
     }))
   }
   return []
@@ -197,7 +213,7 @@ export function MobileMenu({
                   key={section.id}
                   section={section}
                   current={isCurrent(section, pathname)}
-                  pages={areaPages(section, t)}
+                  groups={areaPages(section, t)}
                   pathname={pathname}
                 />
               ))}
@@ -246,19 +262,23 @@ export function MobileMenu({
   )
 }
 
-/** An area as a section title's word (with a bar while current), and its pages as smaller words. */
+/**
+ * An area as a section title's word (with a bar while current), and its pages as smaller words,
+ * under a heading word per group when the area has groups.
+ */
 function Area({
   section,
   current,
-  pages,
+  groups,
   pathname,
 }: {
   section: NavSection
   current: boolean
-  pages: readonly { to: string; label: string }[]
+  groups: readonly PageGroup[]
   pathname: string
 }): ReactNode {
   const { t } = useI18n()
+  const id = useId()
   return (
     <div className="pt-1 pb-2">
       <Link
@@ -279,20 +299,35 @@ function Area({
           <ProblemCount className="ml-0 h-auto rounded-full px-2 py-0.5 text-small" />
         )}
       </Link>
-      {pages.length > 0 && (
-        <div className="flex flex-wrap gap-x-1 gap-y-0.5 px-0.5 pt-1">
-          {pages.map((page) => (
-            <Link
-              key={page.to}
-              to={page.to}
-              aria-current={isCurrentPage(page, pathname) ? 'page' : undefined}
-              className="focus-lit rounded-control px-2.5 py-2 text-control text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-[0.375rem]"
-            >
-              {page.label}
-            </Link>
-          ))}
-        </div>
-      )}
+      {groups.map((group) => {
+        const headingId = `${id}-${group.id}`
+        return (
+          <div
+            key={group.id}
+            role={group.label === undefined ? undefined : 'group'}
+            aria-labelledby={group.label === undefined ? undefined : headingId}
+            className="pt-1"
+          >
+            {group.label !== undefined && (
+              <div id={headingId} className="px-3 pt-2 text-micro font-semibold text-ink-3">
+                {group.label}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-x-1 gap-y-0.5 px-0.5">
+              {group.pages.map((page) => (
+                <Link
+                  key={page.to}
+                  to={page.to}
+                  aria-current={isCurrentPage(page, pathname) ? 'page' : undefined}
+                  className="focus-lit rounded-control px-2.5 py-2 text-control text-ink-2 hover:bg-s1 hover:text-ink [--lift:1.04] aria-[current=page]:font-semibold aria-[current=page]:text-ink aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-[0.375rem]"
+                >
+                  {page.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
