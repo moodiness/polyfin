@@ -1,6 +1,6 @@
 import { CaretRightIcon, MagnifyingGlassIcon, type Icon } from '@phosphor-icons/react'
 import { useEffect, useId, useRef } from 'react'
-import { NavLink } from 'react-router'
+import { Link, NavLink } from 'react-router'
 import { cx } from './cx'
 import { TextInput } from './Input'
 import { keepCurrentInView, useScrollFade } from './scroll'
@@ -31,8 +31,10 @@ export type SectionNavProps = {
   items: readonly (SectionNavItem | SectionNavGroup)[]
   /**
    * For anchors: the id of the section in view. Page links follow the address on their own.
+   * `null`: none is current, page links included, while the page shows something else than a
+   * section (Settings' search results).
    */
-  current?: string
+  current?: string | null
   /** A search field above the list (Settings). It filters what the page shows, not the list. */
   search?: {
     value: string
@@ -97,6 +99,10 @@ export function SectionNav({ label, items, current, search, className }: Section
       >
         {content}
       </a>
+    ) : current === null ? (
+      <Link key={item.id} to={item.to} className={linkClass}>
+        {content}
+      </Link>
     ) : (
       <NavLink key={item.id} to={item.to} className={linkClass}>
         {content}
