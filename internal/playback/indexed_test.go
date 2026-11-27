@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -85,19 +84,27 @@ func singleRanges(dir string, ranges *atomic.Int64) http.Handler {
 }
 
 // A track whose blocks a host serving one range per request would take
-// more requests than its share to serve is not offered as a file: the app
-// asking for it would get an error. Whether the host serves several
-// ranges is learned with one request, once per host. A host serving
-// several ranges at once is offered the track.
+// more requests than its share to serve, from what the source cache lacks,
+// is not offered as a file: the app asking for it would get an error. It
+// awaits a fill. Whether the host serves several ranges is learned with
+// one request, once per host. A host serving several ranges at once is
+// offered the track.
 func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 	t.Parallel()
-	dir := filepath.Join("..", "container", "testdata")
+	dir, analysis, _ := spread(t, 60)
 	var ranges atomic.Int64
-	s, _, version, analysis := servedBy(t, dir, "subtitles", singleRanges(dir, &ranges))
-	s.trackShare = 1
+	server := httptest.NewServer(singleRanges(dir, &ranges))
+	t.Cleanup(server.Close)
+	s := newService(t, &fileOpener{}, "ffprobe", nil)
+	version := library.Version{ID: accounts.ID{7}, URL: server.URL + "/spread.mkv", Addon: "files"}
+	s.analyses.Put(version.ID, analysis)
+	s.trackShare = 4
 	ctx := t.Context()
 	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 0 {
 		t.Errorf("located from a host serving a range per request: %v", located)
+	}
+	if index, _ := s.locations.Get(version.ID); !slices.Equal(index.awaiting, []int{spreadStream}) {
+		t.Errorf("awaiting %v", index.awaiting)
 	}
 	if ranges.Load() != 1 {
 		t.Errorf("%d requests for several ranges, want 1", ranges.Load())
@@ -109,10 +116,25 @@ func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 		t.Errorf("another version: %v, %d requests for several ranges", located, ranges.Load())
 	}
 
-	s, _, version, analysis = subtitled(t)
-	s.trackShare = 1
-	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 2 {
-		t.Errorf("located from a host serving several ranges: %v", located)
+	// A host serving several ranges at once, which the check finds.
+	var several atomic.Int64
+	files := http.FileServer(http.Dir(dir))
+	multi := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.Header.Get("Range"), ",") {
+			several.Add(1)
+		}
+		files.ServeHTTP(w, r)
+	}))
+	t.Cleanup(multi.Close)
+	s = newService(t, &fileOpener{}, "ffprobe", nil)
+	version = library.Version{ID: accounts.ID{9}, URL: multi.URL + "/spread.mkv", Addon: "files"}
+	s.analyses.Put(version.ID, analysis)
+	s.trackShare = 4
+	if located := s.SubtitlesLocated(ctx, version, analysis); !located[spreadStream] || several.Load() != 1 {
+		t.Errorf("located from a host serving several ranges: %v, %d requests for several", located, several.Load())
+	}
+	if index, _ := s.locations.Get(version.ID); len(index.awaiting) != 0 {
+		t.Errorf("awaiting %v from a host serving several ranges", index.awaiting)
 	}
 }
 
@@ -124,29 +146,10 @@ func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 // tracks rather than failing them all.
 func TestHostsRefusingSeveralRangesWith416ServeOnePerRequest(t *testing.T) {
 	t.Parallel()
-	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
-	if ffmpeg == "" {
-		t.Skip("POLYFIN_TEST_FFMPEG is not set")
-	}
-	// Uncompressed audio, 192 kB a second, sets the SubRip track's blocks
-	// at least 115 kB apart: each takes a range of its own, as a movie's.
-	dir := t.TempDir()
-	srt := filepath.Join("..", "container", "testdata", "subtitles.srt")
-	command := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-		"-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-i", srt, "-map", "0:a", "-map", "1", "-t", "12",
-		"-c:a", "pcm_s16le", "-c:s", "srt", filepath.Join(dir, "spread.mkv"))
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("%v: %s", err, output)
-	}
-	info, err := os.Stat(filepath.Join(dir, "spread.mkv"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	analysis := media.Analysis{Format: "matroska,webm", Duration: 12 * time.Second, Size: info.Size(), Streams: []media.Stream{
-		{Index: 0, Type: "audio", Codec: "pcm_s16le"}, {Index: 1, Type: "subtitle", Codec: "subrip"}}}
-	original, _ := os.ReadFile(srt)
-	want, _ := subtitles.Parse(original)
-	const srtStream = 1
+	// The track's blocks are a range each, as a movie's, past what reading
+	// the file's head and Cues brings into the source cache.
+	dir, analysis, want := spread(t, 60)
+	const srtStream = spreadStream
 	for name, told := range map[string]bool{"telling the size": true, "telling none": false} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -159,7 +162,7 @@ func TestHostsRefusingSeveralRangesWith416ServeOnePerRequest(t *testing.T) {
 				}
 				several.Add(1)
 				if told {
-					w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", info.Size()))
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", analysis.Size))
 				}
 				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 			}))
@@ -426,30 +429,36 @@ func TestTrackReadsWaitForTheirOwnHostOnly(t *testing.T) {
 	}
 }
 
-// A track read stops at its share of requests, and the track is not
-// offered again: a host that serves one range at a time would take a
-// request for nearly every block, hundreds for a movie. Here the share
-// leaves only the check of a Cluster.
+// A track read stops at its share of requests, and the track awaits a fill
+// rather than being offered again: a host that serves one range at a time
+// would take a request for nearly every block, hundreds for a movie. Here
+// the share, lowered once the track was located, leaves a few requests.
 func TestTrackReadsStopAtTheirShareOfRequests(t *testing.T) {
 	t.Parallel()
-	s, opener, version, analysis := subtitled(t)
-	s.trackShare = 1
+	dir, analysis, _ := spread(t, 60)
+	s, host, version := serveSpread(t, dir, analysis, 0)
+	s.fills.quiet = time.Hour
 	ctx := t.Context()
-	const srtStream = 1
-	if !s.SubtitlesLocated(ctx, version, analysis)[srtStream] {
+	if !s.SubtitlesLocated(ctx, version, analysis)[spreadStream] {
 		t.Fatal("the track is not located")
 	}
-	before := opener.requests.Load()
-	if _, err := s.SubtitleTrack(ctx, version, analysis, srtStream); !errors.Is(err, errTrackRequests) {
+	s.trackShare = 4
+	_, before := host.requests(0)
+	if _, err := s.SubtitleTrack(ctx, version, analysis, spreadStream); !errors.Is(err, errTrackRequests) {
 		t.Fatalf("read past its share: %v", err)
 	}
-	if made := opener.requests.Load() - before; made > 4 {
-		t.Errorf("%d requests for a read of one", made)
+	if _, after := host.requests(0); after-before > 4 {
+		t.Errorf("%d requests for a read of 4", after-before)
 	}
 	s.locations.Delete(version.ID)
-	s.untracked.Delete(trackKey{version.ID, srtStream})
-	if s.SubtitlesLocated(ctx, version, analysis)[srtStream] {
+	if s.SubtitlesLocated(ctx, version, analysis)[spreadStream] {
 		t.Error("the track is offered again")
+	}
+	if index, _ := s.locations.Get(version.ID); !slices.Equal(index.awaiting, []int{spreadStream}) {
+		t.Errorf("awaiting %v", index.awaiting)
+	}
+	if _, err := s.SubtitleTrack(ctx, version, analysis, spreadStream); !errors.Is(err, errTrackAwaited) {
+		t.Errorf("asked again: %v", err)
 	}
 }
 

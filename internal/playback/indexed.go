@@ -161,32 +161,44 @@ func indexedStreams(analysis media.Analysis) bool {
 	})
 }
 
+// subtitleIndex is what a version's Matroska index tells of its text and
+// PGS subtitle streams, by FFmpeg index: located are those whose blocks it
+// lists, offered as files, and awaiting those whose blocks it lists but
+// that its host would take too many requests to serve, offered once a fill
+// read them into the source cache (see subtitlefill.go).
+type subtitleIndex struct {
+	located, awaiting []int
+}
+
+// placed returns the index with stream among the streams located when
+// located is set, among those awaiting when awaiting is, and else neither.
+func (x subtitleIndex) placed(stream int, located, awaiting bool) subtitleIndex {
+	other := func(i int) bool { return i == stream }
+	placed := subtitleIndex{located: slices.DeleteFunc(slices.Clone(x.located), other), awaiting: slices.DeleteFunc(slices.Clone(x.awaiting), other)}
+	if located {
+		placed.located = append(placed.located, stream)
+		slices.Sort(placed.located)
+	}
+	if awaiting {
+		placed.awaiting = append(placed.awaiting, stream)
+		slices.Sort(placed.awaiting)
+	}
+	return placed
+}
+
 // SubtitlesLocated returns the text and PGS subtitle streams of a version,
 // by FFmpeg index, whose blocks its Matroska index lists, so that they can
 // be read whole: remembered, kept, or read from the version's head and Cues
 // now. None when the version is not a Matroska file or its index lists
-// none.
+// none. Those awaiting a fill are not: an app asking for one would wait
+// for the fill.
 func (s *Service) SubtitlesLocated(ctx context.Context, version library.Version, analysis media.Analysis) map[int]bool {
-	if !indexedStreams(analysis) {
+	index, ok := s.subtitleIndex(ctx, version, analysis)
+	if !ok {
 		return nil
 	}
-	streams, ok := s.locations.Get(version.ID)
-	if !ok {
-		if _, failed := s.unlocated.Get(version.ID); failed {
-			return nil
-		}
-		result, err, _ := s.flight.Do("located "+version.ID.String(), func() (any, error) {
-			// Kept like an analysis: read to the end even once the request
-			// that started it is canceled.
-			return s.locate(context.WithoutCancel(ctx), version, analysis)
-		})
-		if err != nil {
-			return nil
-		}
-		streams = result.([]int)
-	}
-	located := make(map[int]bool, len(streams))
-	for _, stream := range streams {
+	located := make(map[int]bool, len(index.located))
+	for _, stream := range index.located {
 		if _, failed := s.untracked.Get(trackKey{version.ID, stream}); !failed {
 			located[stream] = true
 		}
@@ -194,47 +206,101 @@ func (s *Service) SubtitlesLocated(ctx context.Context, version library.Version,
 	return located
 }
 
-// locate reads which text subtitle streams of a version its index lists,
-// from the database or the version itself.
-func (s *Service) locate(ctx context.Context, version library.Version, analysis media.Analysis) ([]int, error) {
-	var streams []int32
-	err := s.db.QueryRow(ctx, "SELECT located FROM media_subtitle_index WHERE version_id = $1", version.ID).Scan(&streams)
-	if err == nil {
-		located := make([]int, len(streams))
-		for i, stream := range streams {
-			located[i] = int(stream)
-		}
-		s.locations.Put(version.ID, located)
-		return located, nil
+// subtitleIndex returns what a version's index tells of its subtitle
+// streams: remembered, kept, or read from the version's head and Cues now.
+// False when the version is not a Matroska file with such streams, or its
+// index could not be read lately.
+func (s *Service) subtitleIndex(ctx context.Context, version library.Version, analysis media.Analysis) (subtitleIndex, bool) {
+	if !indexedStreams(analysis) {
+		return subtitleIndex{}, false
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if index, ok := s.locations.Get(version.ID); ok {
+		return index, true
+	}
+	if _, failed := s.unlocated.Get(version.ID); failed {
+		return subtitleIndex{}, false
+	}
+	result, err, _ := s.flight.Do("located "+version.ID.String(), func() (any, error) {
+		// Kept like an analysis: read to the end even once the request
+		// that started it is canceled.
+		return s.locate(context.WithoutCancel(ctx), version, analysis)
+	})
+	if err != nil {
+		return subtitleIndex{}, false
+	}
+	return result.(subtitleIndex), true
+}
+
+// locate reads which text subtitle streams of a version its index lists,
+// from the database or the version itself. An index kept before streams
+// awaited fills, whose awaiting is NULL, left out the streams its host
+// would take too many requests to serve: it is read again when it does not
+// locate every stream that may be. A read again that fails keeps the
+// streams it located, for a while: they were read through it before.
+func (s *Service) locate(ctx context.Context, version library.Version, analysis media.Analysis) (subtitleIndex, error) {
+	var located, awaiting []int32
+	var before bool
+	err := s.db.QueryRow(ctx, "SELECT located, coalesce(awaiting, '{}'), awaiting IS NULL FROM media_subtitle_index WHERE version_id = $1",
+		version.ID).Scan(&located, &awaiting, &before)
+	kept := err == nil
+	if kept && (!before || !unlocatedStreams(analysis, located)) {
+		index := subtitleIndex{located: ints(located), awaiting: ints(awaiting)}
+		s.locations.Put(version.ID, index)
+		return index, nil
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.logger.Warn("Reading a subtitle index failed", "error", err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.locateTime)
 	defer cancel()
-	located, err := s.readLocations(ctx, version, analysis)
+	index, err := s.readLocations(ctx, version, analysis)
 	if err != nil {
 		// The host or the network failed: asked again a while later; a
 		// torrent that did not send in time, at the next play (see
 		// passing).
 		s.logger.Info("The subtitles of a version could not be located", "addon", version.AddonLog, "error", err)
+		if kept {
+			index := subtitleIndex{located: ints(located), awaiting: []int{}}
+			s.locations.Put(version.ID, index)
+			return index, nil
+		}
 		if !passing(version, err) {
 			s.unlocated.Put(version.ID, err)
 		}
-		return nil, err
+		return subtitleIndex{}, err
 	}
-	if _, err := s.db.Exec(ctx, `INSERT INTO media_subtitle_index (version_id, located) VALUES ($1, $2)
-		ON CONFLICT (version_id) DO UPDATE SET located = excluded.located, indexed_at = now()`, version.ID, located); err != nil {
+	if _, err := s.db.Exec(ctx, `INSERT INTO media_subtitle_index (version_id, located, awaiting) VALUES ($1, $2, $3)
+		ON CONFLICT (version_id) DO UPDATE SET located = excluded.located, awaiting = excluded.awaiting, indexed_at = now()`,
+		version.ID, index.located, index.awaiting); err != nil {
 		s.logger.Warn("Saving a subtitle index failed", "error", err)
 	}
-	s.locations.Put(version.ID, located)
-	return located, nil
+	s.locations.Put(version.ID, index)
+	return index, nil
+}
+
+// unlocatedStreams reports whether an analysis has a subtitle stream that
+// may be read whole through an index and is not among located.
+func unlocatedStreams(analysis media.Analysis, located []int32) bool {
+	codecs := slices.Collect(maps.Values(indexedCodecs))
+	return slices.ContainsFunc(analysis.Streams, func(stream media.Stream) bool {
+		return stream.Type == "subtitle" && slices.Contains(codecs, stream.Codec) && !slices.Contains(located, int32(stream.Index))
+	})
+}
+
+// ints converts the integers of a database array.
+func ints(values []int32) []int {
+	converted := make([]int, len(values))
+	for i, value := range values {
+		converted[i] = int(value)
+	}
+	return converted
 }
 
 // readLocations reads a version's head and Cues. A file without an index,
-// or with one that cannot be read, locates nothing, for good. Neither does
-// a track whose blocks its host would take too many requests to serve.
-func (s *Service) readLocations(ctx context.Context, version library.Version, analysis media.Analysis) ([]int, error) {
+// or with one that cannot be read, locates nothing, for good. A track
+// whose blocks its host would take too many requests to serve awaits a
+// fill.
+func (s *Service) readLocations(ctx context.Context, version library.Version, analysis media.Analysis) (subtitleIndex, error) {
 	src := s.open(version)
 	defer src.Release()
 	var m *container.Matroska
@@ -246,26 +312,29 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 		}
 		return err
 	})
+	none := subtitleIndex{located: []int{}, awaiting: []int{}}
 	switch {
 	case errors.Is(err, container.ErrNoIndex):
-		return []int{}, nil
+		return none, nil
 	case errors.Is(err, container.ErrUnreadable):
 		s.logger.Info("The index of a version cannot be read", "addon", version.AddonLog, "error", err)
-		return []int{}, nil
+		return none, nil
 	case err != nil:
-		return nil, err
+		return subtitleIndex{}, err
 	}
 	// A host serving a range per request takes a request for nearly every
-	// block of a track: one taking more than its share is located only
-	// from a host serving several ranges at once.
+	// block of a track, but those the source cache holds: one taking more
+	// than its share is located only from a host serving several ranges at
+	// once, and else awaits a fill.
+	cached := func(start, end int64) bool { return src.Missing(source.Span{Off: start, End: end}) == 0 }
 	located, costly := []int{}, []int{}
 	for stream, track := range streamTracks(analysis, m.Tracks()) {
 		if _, indexed := indexedCodecs[track.CodecID]; !indexed || track.Type != trackSubtitle || !track.Decodable || counts[track.Number] == 0 {
 			continue
 		}
-		requests, err := m.SingleRangeRequests(ctx, track.Number)
+		requests, err := m.SingleRangeRequests(ctx, track.Number, cached)
 		if err != nil {
-			return nil, err
+			return subtitleIndex{}, err
 		}
 		if requests > s.trackShare {
 			costly = append(costly, stream)
@@ -273,23 +342,26 @@ func (s *Service) readLocations(ctx context.Context, version library.Version, an
 			located = append(located, stream)
 		}
 	}
+	awaiting := []int{}
 	if len(costly) > 0 {
 		served, err := s.servesRanges(ctx, version, src)
 		switch {
 		case err != nil:
-			return nil, err
+			return subtitleIndex{}, err
 		case served:
 			located = append(located, costly...)
 		default:
 			// Offered as files, these tracks would fail the apps asking for
-			// them; once a remux has extracted them whole, they are.
-			s.logger.Info("Subtitle tracks inside a version are not offered as files: its host serves one range per request, "+
-				"and reading them whole would take it too many requests; they are once a remux has read the whole version",
+			// them; once a fill or a remux has read them whole, they are.
+			awaiting = costly
+			slices.Sort(awaiting)
+			s.logger.Info("Subtitle tracks inside a version are offered as files once a play has them read into the source cache "+
+				"while nothing plays: its host serves one range per request, and reading them whole would take it too many requests",
 				"addon", version.AddonLog, "tracks", len(costly))
 		}
 	}
 	slices.Sort(located)
-	return located, nil
+	return subtitleIndex{located: located, awaiting: awaiting}, nil
 }
 
 // servesRanges reports whether the host of a version serves several ranges
@@ -378,6 +450,8 @@ func (s *Service) correctSize(ctx context.Context, version accounts.ID, analysis
 // SubtitleTrack returns a version's text or PGS subtitle stream, by FFmpeg
 // index, read whole through its index: remembered, kept, or read now, which
 // may take a while. ErrNotLocated when the index does not list its blocks.
+// A track its host would take too many requests to serve awaits a fill,
+// which the ask queues (see FillSubtitles): errTrackAwaited meanwhile.
 func (s *Service) SubtitleTrack(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	key := trackKey{version.ID, stream}
 	if track, ok := s.tracks.Get(key); ok {
@@ -389,9 +463,24 @@ func (s *Service) SubtitleTrack(ctx context.Context, version library.Version, an
 	if err, failed := s.untracked.Get(key); failed {
 		return Track{}, err
 	}
-	if !s.SubtitlesLocated(ctx, version, analysis)[stream] {
+	index, ok := s.subtitleIndex(ctx, version, analysis)
+	switch {
+	case ok && slices.Contains(index.awaiting, stream):
+		s.queueFill(version, analysis)
+		return Track{}, errTrackAwaited
+	case !ok || !slices.Contains(index.located, stream):
 		return Track{}, ErrNotLocated
 	}
+	track, err := s.sharedTrack(ctx, version, analysis, stream)
+	if errors.Is(err, errTrackRequests) {
+		s.queueFill(version, analysis)
+	}
+	return track, err
+}
+
+// sharedTrack reads a track whole through its index, once for those
+// asking at once.
+func (s *Service) sharedTrack(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	results := s.doShared("track "+version.ID.String()+" "+strconv.Itoa(stream), func() (any, error) {
 		// Read to the end even when the request that started it gives up:
 		// the app asks again, or the next one does.
@@ -447,8 +536,9 @@ func (s *Service) keptTrack(ctx context.Context, key trackKey) (Track, bool) {
 
 // readTrack reads a track's blocks through the version's index and keeps
 // the file they make. A track that cannot be read so, for what its file
-// holds or for the requests its host would take, is not offered anymore;
-// one its host failed to serve is not offered for a while.
+// holds, is not offered anymore; one that would take its host too many
+// requests awaits a fill; one its host failed to serve is not offered for
+// a while.
 func (s *Service) readTrack(ctx context.Context, version library.Version, analysis media.Analysis, stream int) (Track, error) {
 	// The host's slot first: a read waiting for a slot over every host
 	// holds up only its own host's reads.
@@ -468,11 +558,15 @@ func (s *Service) readTrack(ctx context.Context, version library.Version, analys
 	track, err := s.readBlocks(ctx, version, analysis, stream)
 	if err != nil {
 		s.logger.Info("A subtitle track could not be read through its index", "addon", version.AddonLog, "error", err)
+		if errors.Is(err, errTrackRequests) {
+			s.place(ctx, version.ID, stream, false, true)
+			return Track{}, err
+		}
 		if !passing(version, err) {
 			s.untracked.Put(key, err)
 		}
 		if lasting(err) {
-			s.unlocate(ctx, version.ID, stream)
+			s.place(ctx, version.ID, stream, false, false)
 		}
 		return Track{}, err
 	}
@@ -526,17 +620,23 @@ var errTrackFile = errors.New("the blocks of the subtitle track do not make a fi
 // than trackRequests.
 var errTrackRequests = errors.New("reading the subtitle track would take its host too many requests")
 
+// errTrackAwaited reports a track that awaits a fill before it is read.
+var errTrackAwaited = errors.New("the subtitle track is read into the source cache first")
+
 // trackRequests bounds the requests of a track read. A host that serves
 // several ranges at once is asked by batches: a movie's track, a few
 // thousand blocks, takes a few dozen. One that serves a range at a time
 // would take a request for nearly every block, hundreds for a movie, which
 // providers answer with 429 and which slows the video they serve too:
-// such a track is left to remuxes, unless it has few blocks.
+// such a track is read from the source cache, once a fill brought it
+// there, unless it has few blocks.
 const trackRequests = 64
 
-// boundedFetcher fails the requests of a read past its share. left is a
-// typed atomic, which the compiler aligns on 32-bit targets too: a raw
-// int64 there sat at offset 4, and atomic.AddInt64 panicked on it.
+// boundedFetcher reads the blocks of a track: those the source cache holds
+// with no request, as a relayed playback or a fill brought them, and the
+// others with requests, past whose share it fails. left is a typed atomic,
+// which the compiler aligns on 32-bit targets too: a raw int64 there sat
+// at offset 4, and atomic.AddInt64 panicked on it.
 type boundedFetcher struct {
 	src  *source.Source
 	left atomic.Int64
@@ -555,36 +655,77 @@ func (f *boundedFetcher) take() error {
 	return nil
 }
 
+// cached reads the n bytes at off from the source cache, when it holds
+// them all.
+func (f *boundedFetcher) cached(ctx context.Context, off int64, n int) ([]byte, bool) {
+	data, err := f.src.Cached().Fetch(ctx, off, n)
+	return data, err == nil
+}
+
 func (f *boundedFetcher) Fetch(ctx context.Context, off int64, n int) ([]byte, error) {
+	if data, ok := f.cached(ctx, off, n); ok {
+		return data, nil
+	}
 	if err := f.take(); err != nil {
 		return nil, err
 	}
 	return f.src.Fetch(ctx, off, n)
 }
 
+// FetchRanges reads the ranges the source cache holds from it, and the
+// others with one request; with none from a source known to serve one
+// range per request, which reads them one by one through Fetch then.
 func (f *boundedFetcher) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
+	result := make([][]byte, len(ranges))
+	var missing []int
+	for i, r := range ranges {
+		if data, ok := f.cached(ctx, r.Off, r.N); ok {
+			result[i] = data
+		} else {
+			missing = append(missing, i)
+		}
+	}
+	if len(missing) == 0 {
+		return result, nil
+	}
+	if served, known := f.src.ServesRanges(); len(missing) > 1 && known && !served {
+		return nil, container.ErrMultiRangeUnsupported
+	}
 	if err := f.take(); err != nil {
 		return nil, err
 	}
-	return f.src.FetchRanges(ctx, ranges)
+	asked := make([]container.Range, len(missing))
+	for j, i := range missing {
+		asked[j] = ranges[i]
+	}
+	data, err := f.src.FetchRanges(ctx, asked)
+	if err != nil {
+		return nil, err
+	}
+	for j, i := range missing {
+		result[i] = data[j]
+	}
+	return result, nil
 }
 
 // lasting reports whether reading a track failed for a reason reading it
-// again would meet again: what its file holds, from any host, or the
-// requests its version's host would take.
+// again would meet again, from any host: what its file holds.
 func lasting(err error) bool {
 	return errors.Is(err, container.ErrUnreadable) || errors.Is(err, container.ErrNoIndex) ||
-		errors.Is(err, ErrNotLocated) || errors.Is(err, errTrackFile) || errors.Is(err, errTrackRequests)
+		errors.Is(err, ErrNotLocated) || errors.Is(err, errTrackFile)
 }
 
-// unlocate stops offering a stream whose track cannot be read whole, for
-// good: the version's index is kept without it.
-func (s *Service) unlocate(ctx context.Context, version accounts.ID, stream int) {
-	if located, ok := s.locations.Get(version); ok {
-		s.locations.Put(version, slices.DeleteFunc(slices.Clone(located), func(i int) bool { return i == stream }))
-	}
-	if _, err := s.db.Exec(ctx, "UPDATE media_subtitle_index SET located = array_remove(located, $2::integer) WHERE version_id = $1",
-		version, stream); err != nil {
+// place has a version's index hold stream among the streams located,
+// offered as files, when located is set, among those awaiting a fill when
+// awaiting is, and else neither, for good: its track cannot be read whole.
+func (s *Service) place(ctx context.Context, version accounts.ID, stream int, located, awaiting bool) {
+	s.locations.Update(version, func(index subtitleIndex, ok bool) (subtitleIndex, bool) {
+		return index.placed(stream, located, awaiting), ok
+	})
+	if _, err := s.db.Exec(ctx, `UPDATE media_subtitle_index SET
+		located = array_remove(located, $2::integer) || CASE WHEN $3 THEN ARRAY[$2::integer] ELSE '{}' END,
+		awaiting = array_remove(coalesce(awaiting, '{}'), $2::integer) || CASE WHEN $4 THEN ARRAY[$2::integer] ELSE '{}' END
+		WHERE version_id = $1`, version, stream, located, awaiting); err != nil {
 		s.logger.Warn("Saving a subtitle index failed", "error", err)
 	}
 }

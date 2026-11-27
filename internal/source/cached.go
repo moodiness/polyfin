@@ -32,6 +32,11 @@ func (c *Cache) Cached(id accounts.ID) (Cached, bool) {
 	return Cached{s: s}, s != nil
 }
 
+// Cached returns what the cache holds of the source.
+func (s *Source) Cached() Cached {
+	return Cached{s: s}
+}
+
 // KnownSize returns the size of the source, once it answered.
 func (c Cached) KnownSize() (int64, bool) {
 	return c.s.knownSize()

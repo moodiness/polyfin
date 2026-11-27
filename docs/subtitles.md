@@ -285,11 +285,28 @@ For a Matroska file, Polyfin reads the track whole through the file's index, whi
 
 A host that answers one byte range at a time would take a request for nearly every line. Providers refuse requests past a rate.
 
-- A track that would take such a host more than 64 requests is not read this way, nor offered as a file. The dialogue of a movie is one such track.
-- Before it offers such a track, Polyfin learns whether the host serves several ranges at once.
+- Lines already in the [source cache](reading-the-sources.md#keeping-the-files-read-across-restarts) cost no request, such as those of a relayed playback (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)).
+- A track that would take such a host more than 64 requests for the other lines is not read this way at once. The dialogue of a movie is one such track. It is read into the source cache first (see below).
+- Before it holds back such a track, Polyfin learns whether the host serves several ranges at once.
 - It learns this from what it already knows of the host, or with one request for two ranges.
 - A host that answers a request for several ranges with the whole file, or with `416` for ranges the file holds, answers one range at a time. Some hosts serve one range but refuse two this way. Polyfin then reads the shorter tracks one range a request, and the version's other tracks are still offered.
-- Polyfin logs the tracks it leaves out.
+
+### Tracks read into the source cache
+
+A track held back is listed, but shows nothing when picked. Once a playback of its version or a request for the track has asked for it, Polyfin reads it in the background, and the next playback offers it as a file. Opening the title, which may start its playback early, does not.
+
+- **What:** the part of the file from the track's first line to its last, read into the source cache once for all the version's tracks held back. The tracks are then read from the cache with no request, and kept like the others.
+- **When:** while no app plays, nothing reads a file of that host for a playback, and neither did for about 2 minutes. One version at a time, the one asked for last first.
+- **How fast:** at the **Speed limit (Mbit/s)** and above the **Free space to keep (GB)** of [next-episode preloading](reading-the-sources.md#preloading-the-next-episodes) while it is on, else at their defaults, 20 Mbit/s and 20 GB.
+- **Playback first:** a starting playback stops it within a second. It resumes once the host is quiet again, skipping the parts already in the cache.
+- **Small caches:** a part larger than half of **Disk space for files being read (GB)** is not read. The **Small** preset's 10 GB takes a 4 GB file.
+  - Each pass reads at most a quarter of the disk space, 8 MiB at least, as preloading does, so played parts stay. The next pass comes 15 minutes later and goes on from there.
+  - All such reads take at most the disk space a day, and stop for a version once they fetched twice its part, as when the cache removes it faster than it is read.
+- **Complete only:** a track is offered only once read whole. One that cannot be read waits for a [repackaging](#tracks-offered-after-repackaging).
+- **Hosts that refuse:** a host answering `509`, its bandwidth quota spent, gets no such read for 24 hours. One answering `429`, `502`, `503` or `504` gets none for an hour. Other failures are tried again 1, 2 and 4 hours later, then left for a day.
+- **Which files:** addon and IPTV files, and those of [local folders and network shares](local-folders.md) read one range at a time, which are then copied into the cache within the same bounds. Torrents are never read this way.
+- **Not kept across restarts:** the versions waiting, the bytes read today, what each version fetched and the hosts held. After a restart, the next playback asks again and the bounds start over.
+- **Logs:** at Info, `Subtitle tracks inside a version are offered as files once a play has them read into the source cache while nothing plays`, `Subtitle tracks read into the source cache are offered as files`, `A host answered that its bandwidth quota is spent`, and `Subtitle tracks inside a version are not read into the source cache` once given up.
 
 <a id="tracks-offered-after-a-remux"></a>
 
@@ -297,7 +314,7 @@ A host that answers one byte range at a time would take a request for nearly eve
 
 Two kinds of tracks are offered as files once repackaging has read them whole (see [Transcoding](transcoding.md)):
 
-- tracks left out for the reason above;
+- tracks held back for the reasons above, until then;
 - tracks the index does not locate, as in MP4 files.
 
 ## ASS styles and fonts

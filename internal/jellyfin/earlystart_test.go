@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/moodiness/polyfin/internal/accounts"
+	"github.com/moodiness/polyfin/internal/media"
 	"github.com/moodiness/polyfin/internal/playback"
 )
 
@@ -344,4 +346,37 @@ func TestAPlayPressedAsItsEarlyPlayStartsGoesOnOnce(t *testing.T) {
 			t.Error("a play started early again for the title being played")
 		}
 	})
+}
+
+// A play started early, as the title opens, has no subtitle track read
+// into the source cache: nothing plays yet. The PlaybackInfo of Play does,
+// for a track the app would take as a file that awaits it.
+func TestAPlayStartedEarlyReadsNoSubtitleTrackIntoTheCache(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("POLYFIN_TEST_FFMPEG") == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set: the remux runs FFmpeg")
+	}
+	p := playing(t)
+	p.warnings.all.Store(true)
+	p.remuxable(t, media.Stream{Index: 2, Type: "subtitle", Codec: "subrip", Language: "eng"})
+	// The index of the version located the track, its host too costly to
+	// read it from.
+	if _, err := p.pool.Exec(t.Context(), "INSERT INTO media_subtitle_index (version_id, located, awaiting) VALUES ($1, '{}', '{2}')",
+		p.versions[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	p.setting(t, func(settings *accounts.Settings) { settings.PrepareAhead = true })
+	profile := p.noMatroska(t)
+	p.call(http.MethodPost, "/Items/"+p.remote+"/PlaybackInfo", app("tv", p.token),
+		map[string]any{"UserId": p.user.ID.String(), "MaxStreamingBitrate": 120_000_000, "DeviceProfile": profile})
+	const queued = "Subtitle tracks of a version are to be read into the source cache while nothing plays"
+	p.detailsOn(t, "tv", p.token, p.movie)
+	p.startedEarly(t)
+	if slices.Contains(p.warnings.logged(), queued) {
+		t.Fatal("a play started early queued its subtitle tracks to be read")
+	}
+	p.playInfo(t, profile, nil)
+	if !slices.Contains(p.warnings.logged(), queued) {
+		t.Error("Play queued no subtitle track to be read")
+	}
 }
