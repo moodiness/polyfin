@@ -1,13 +1,14 @@
 import {
   ArrowCounterClockwiseIcon,
+  DotsThreeIcon,
   PuzzlePieceIcon,
   TrashIcon,
   UserPlusIcon,
   UsersThreeIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useState, type FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useId, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router'
 import {
   addGroupMembers,
   ApiError,
@@ -15,6 +16,7 @@ import {
   fetchAddons,
   fetchGroup,
   fetchUsers,
+  groupSections,
   queryClient,
   queryKeys,
   setGroupSource,
@@ -37,13 +39,15 @@ import {
   Checkbox,
   ConfirmDialog,
   EmptyState,
+  IconButton,
   IconTile,
   InlineError,
+  Menu,
+  MenuItem,
   Modal,
   Notice,
   Row,
   RowList,
-  SectionNav,
   SettingRow,
   Skeleton,
   SkeletonRows,
@@ -51,8 +55,8 @@ import {
   useToast,
 } from '@/ui'
 import { DraftForm, useDraftPart } from './draft'
-import { Band, PageSection } from './rows'
-import { groupSaved, refreshGroupIfGone, useSectionInView, UserState } from './shared'
+import { Band, PageSection, ShownSections, useSectionPages, type SectionGroup } from './rows'
+import { groupSaved, refreshGroupIfGone, UserState } from './shared'
 import {
   AllowedHoursSection,
   BlockedGenresSection,
@@ -65,19 +69,6 @@ import {
   VisibleLibrariesSection,
   type LimitsTarget,
 } from './UserForms'
-
-const sectionIds = [
-  'name',
-  'access',
-  'playback',
-  'parental',
-  'libraries',
-  'genres',
-  'hours',
-  'channels',
-  'sources',
-  'members',
-] as const
 
 /** `/users/groups/:id`: one group's page, with the sections its members follow and its members. */
 export default function GroupDetail({ id }: { id: string }) {
@@ -131,18 +122,11 @@ function GroupPage({ group }: { group: Group }) {
   const { t } = useI18n()
   const toast = useToast()
   const navigate = useNavigate()
-  const { hash } = useLocation()
-  const current = useSectionInView(sectionIds, true)
   const [deleting, setDeleting] = useState(false)
   const [resetting, setResetting] = useState(false)
   // Each save, discard or reset draws the sections again from the saved values.
   const [version, setVersion] = useState(0)
   const target: LimitsTarget = { kind: 'group', group }
-
-  // The content arrives after the first render: a #section address scrolls once it is drawn.
-  useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [hash])
 
   const remove = useMutation({
     mutationFn: () => deleteGroup(group.id),
@@ -157,27 +141,30 @@ function GroupPage({ group }: { group: Group }) {
     onError: refreshGroupIfGone,
   })
 
-  const sections: [string, string][] = [
-    ['name', t.groups.name],
-    ['access', t.users.accessTitle],
-    ['playback', t.users.playbackAccessTitle],
-    ['parental', t.users.parentalTitle],
-    ['libraries', t.users.visibleLibrariesTitle],
-    ['genres', t.users.blockedGenresTitle],
-    ['hours', t.users.allowedHoursTitle],
-    ['channels', t.users.liveTvChannelsTitle],
-    ['sources', t.groups.sourcesTitle],
-    ['members', t.groups.membersTitle],
+  const sections: SectionGroup[] = [
+    {
+      id: 'group',
+      label: t.groups.group,
+      items: [
+        { id: 'name', label: t.groups.name },
+        {
+          id: 'members',
+          label: t.groups.membersTitle,
+          note: t.groups.memberCount(group.memberCount),
+        },
+      ],
+    },
+    {
+      id: 'limits',
+      label: t.users.navLimits,
+      items: [
+        ...groupSections.map((section) => ({ id: section, label: sectionTitle(t, section) })),
+        { id: 'sources', label: t.groups.sourcesTitle },
+      ],
+    },
   ]
-  const nav = (
-    <SectionNav
-      label={t.groups.sectionsLabel}
-      current={current}
-      items={sections.map(([id, label]) => ({ id, label, to: `#${id}` }))}
-    />
-  )
-
-  const head = (
+  const more = t.groups.moreActions(group.name)
+  const band = (
     <Band
       back={{ to: '/users/groups', label: t.groups.title }}
       leading={<IconTile icon={UsersThreeIcon} size="xl" />}
@@ -189,52 +176,60 @@ function GroupPage({ group }: { group: Group }) {
         </>
       }
       actions={
-        <>
-          <Button
-            variant="secondary"
-            icon={ArrowCounterClockwiseIcon}
-            onClick={() => setResetting(true)}
-          >
+        <Menu
+          label={more}
+          align="end"
+          trigger={(props) => <IconButton {...props} label={more} icon={DotsThreeIcon} />}
+        >
+          <MenuItem icon={ArrowCounterClockwiseIcon} onSelect={() => setResetting(true)}>
             {t.resetDefaults.button}
-          </Button>
-          <Button
-            variant="danger"
+          </MenuItem>
+          <MenuItem
             icon={TrashIcon}
-            onClick={() => {
+            danger
+            onSelect={() => {
               remove.reset()
               setDeleting(true)
             }}
           >
             {t.groups.delete}
-          </Button>
-        </>
+          </MenuItem>
+        </Menu>
       }
     />
   )
+  const pages = useSectionPages({
+    label: t.groups.sectionsLabel,
+    name: group.name,
+    groups: sections,
+    band,
+  })
 
   return (
     <>
-      <PageLayout head={head} nav={nav}>
-        <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
-          {({ nameError }) => (
-            <>
-              <NameSection key={`name:${version}`} group={group} nameError={nameError} />
-              <AccessSection group={group} />
-              <PlaybackAccessSection key={`playback:${version}`} id="playback" target={target} />
-              <ParentalControlSection key={`parental:${version}`} id="parental" target={target} />
-              <VisibleLibrariesSection
-                key={`libraries:${version}`}
-                id="libraries"
-                target={target}
-              />
-              <BlockedGenresSection key={`genres:${version}`} id="genres" target={target} />
-              <AllowedHoursSection key={`hours:${version}`} id="hours" target={target} />
-              <LiveTvChannelsSection key={`channels:${version}`} id="channels" target={target} />
-              <SourcesSection group={group} />
-              <MembersSection group={group} />
-            </>
-          )}
-        </DraftForm>
+      <PageLayout head={pages.head} nav={pages.nav}>
+        <ShownSections shown={pages.shown}>
+          <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
+            {({ nameError }) => (
+              <>
+                <NameSection key={`name:${version}`} group={group} nameError={nameError} />
+                <MembersSection group={group} />
+                <AccessSection group={group} />
+                <PlaybackAccessSection key={`playback:${version}`} id="playback" target={target} />
+                <ParentalControlSection key={`parental:${version}`} id="parental" target={target} />
+                <VisibleLibrariesSection
+                  key={`libraries:${version}`}
+                  id="libraries"
+                  target={target}
+                />
+                <BlockedGenresSection key={`genres:${version}`} id="genres" target={target} />
+                <AllowedHoursSection key={`hours:${version}`} id="hours" target={target} />
+                <LiveTvChannelsSection key={`channels:${version}`} id="channels" target={target} />
+                <SourcesSection group={group} />
+              </>
+            )}
+          </DraftForm>
+        </ShownSections>
       </PageLayout>
       <ConfirmDialog
         open={deleting}
@@ -296,7 +291,8 @@ function AccessSection({ group }: { group: Group }) {
       )}
       <PermissionRows
         values={group}
-        disabled={false}
+        readOnly={false}
+        forGroup
         onChange={(patch) => {
           // A change waits for the one before it.
           if (!access.isPending) {

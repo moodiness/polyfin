@@ -30,9 +30,9 @@ const users: typeof en = {
       'Changer le mot de passe déconnecte tous les appareils Jellyfin de cet utilisateur.',
     passwordReset: 'Le mot de passe a été réinitialisé.',
     accessTitle: 'Accès',
-    isDisabled: 'Désactivé',
-    isDisabledHelp:
-      'Un utilisateur désactivé ne peut plus se connecter, et tous ses appareils sont déconnectés.',
+    canSignIn: 'Peut se connecter',
+    canSignInHelp:
+      'Désactivé, le compte ne peut plus se connecter et tous ses appareils sont déconnectés. Tout ce qu’il possède est gardé.',
     providerOnly: 'Fournisseur d’identité uniquement',
     providerOnlyHelp:
       'L’utilisateur se connecte avec le fournisseur d’identité configuré dans Paramètres › Sécurité, jamais avec un mot de passe\u202f: le mot de passe est refusé, et un compte créé ainsi n’en a pas besoin. Les applications Jellyfin qui ne peuvent pas ouvrir le fournisseur se connectent avec Quick Connect.',
@@ -72,6 +72,7 @@ const users: typeof en = {
     noAudioTranscoding: 'Sans conversion du son',
     noDownloads: 'Sans téléchargement',
     turnOffDownloads: 'Désactiver les téléchargements pour tous',
+    turnOffDownloadsButton: 'Désactiver',
     turnOffDownloadsConfirm:
       'Tous les utilisateurs et tous les groupes perdent l’autorisation de télécharger, y compris dans les applications Jellyfin déjà connectées. Vous pouvez la rendre à un utilisateur ou à un groupe depuis sa page, dans Accès.',
     turningOffDownloads: 'Désactivation…',
@@ -91,6 +92,29 @@ const users: typeof en = {
     disabling: 'Désactivation…',
     disabledNow: (name: string) => `${name} a été désactivé.`,
     enabledNow: (name: string) => `${name} peut de nouveau se connecter.`,
+    disableConfirm: (name: string, devices: number | null) =>
+      `${name} ne peut plus se connecter jusqu’à ce que vous réactiviez la connexion. ${
+        devices === null
+          ? 'Tous ses appareils sont déconnectés'
+          : devices === 0
+            ? 'Aucun de ses appareils n’est connecté'
+            : devices === 1
+              ? 'Son appareil est déconnecté'
+              : `Ses ${devices} appareils sont déconnectés`
+      }, et les liens qu’il a partagés cessent de fonctionner.`,
+    makeAdministrator: 'Rendre administrateur',
+    makeAdministratorTitle: (name: string) => `Rendre ${name} administrateur\u202f?`,
+    makeAdministratorConfirm: (name: string, group: string | null) =>
+      `${name} peut alors gérer les utilisateurs et les paramètres du serveur, et le compte ne prend jamais fin.${
+        group === null
+          ? ''
+          : ` ${name} quitte aussi le groupe ${group}\u202f: ses valeurs restent comme ses propres réglages.`
+      }`,
+    removeAdministrator: 'Retirer les droits d’administrateur',
+    removeAdministratorTitle: (name: string) =>
+      `Retirer les droits d’administrateur de ${name}\u202f?`,
+    removeAdministratorConfirm: (name: string) =>
+      `${name} ne peut plus gérer les utilisateurs ni les paramètres du serveur, et devient un membre avec les autorisations de la section Accès.`,
     signOutAll: 'Déconnecter tous les appareils',
     signOutAllConfirm: (name: string) =>
       `Déconnecter tous les appareils Jellyfin de ${name}\u202f? Chaque application devra se reconnecter.`,
@@ -117,7 +141,7 @@ const users: typeof en = {
       'Les applications Moonfin trouvent le compagnon de Polyfin pour cet utilisateur\u202f: ses réglages synchronisés entre ses appareils, les notes MDBList et les compléments TMDB.',
     moonfinRow: 'Compagnon',
     moonfinHelp:
-      'Le réglage du serveur suit Servir le compagnon de Moonfin, dans Paramètres › Général.',
+      'Le réglage du serveur suit Servir le compagnon de Moonfin, dans Paramètres › Moonfin.',
     moonfinChange: 'Lui permettre de le changer',
     moonfinChangeHelp: 'Dans Mon compte › Moonfin. Désactivé, le choix fait ici reste le sien.',
     moonfinResetTitle: (name: string) =>
@@ -312,12 +336,18 @@ const users: typeof en = {
     metadataLanguageRow: 'Langue des titres',
     webThemeRow: 'Thème',
     audioRegionRow: 'Région du doublage',
+    advancedOptions: 'Options avancées',
+    /** The heading words of a user's sections. */
+    navAccount: 'Compte',
+    navPreferences: 'Préférences',
+    navLimits: 'Limites',
+    navActivity: 'Activité',
     jellyfinImport: {
       summary: 'Les comptes et les données de visionnage d’un serveur Jellyfin, Emby ou Plex.',
       open: 'Importer depuis un autre serveur',
       title: 'Importer depuis un autre serveur',
       description:
-        'Reprenez les comptes d’un serveur Jellyfin, Emby ou Plex et ce qu’ils ont regardé\u202f: noms des comptes et statut d’administrateur, puis pour chaque utilisateur les films et épisodes vus avec leurs dates, les points de reprise et les favoris, reconnus par IMDb, TMDB ou TVDB, et si vous le souhaitez leurs notes, les collections du serveur et leurs playlists. Les données de Polyfin sont seulement complétées, et rien n’est écrit sur l’autre serveur. Les serveurs ne donnent pas les mots de passe\u202f: vous en choisissez un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
+        'Reprenez les comptes d’un serveur Jellyfin, Emby ou Plex et ce qu’ils ont regardé. Les données de Polyfin sont seulement complétées, et rien n’est écrit sur l’autre serveur. Les mots de passe ne sont pas repris\u202f: choisissez-en un pour chaque nouveau compte, ou gardez celui avec lequel l’utilisateur se connecte.',
       serverKind: 'Serveur',
       servers: {
         jellyfin: 'Jellyfin',
@@ -550,7 +580,7 @@ const users: typeof en = {
       open: 'Importer depuis une appli',
       title: 'Importer depuis une appli',
       description:
-        'Reprenez les données de visionnage d’un utilisateur depuis son compte sur une appli basée sur des addons\u202f: les films et épisodes vus avec leurs dates, ses points de reprise, et la bibliothèque de l’appli, qui va dans la liste de lecture «\u202fÀ regarder\u202f» de ses applis Jellyfin, reconnus par IMDb, TMDB ou Kitsu. Les données de Polyfin sont seulement complétées, et rien n’est écrit dans l’appli. Il vous faut les identifiants de l’utilisateur pour l’appli\u202f; les utilisateurs peuvent aussi importer eux-mêmes, sous Mon compte.',
+        'Reprenez les données de visionnage et la bibliothèque d’un utilisateur depuis son compte sur une appli basée sur des addons, avec ses identifiants pour l’appli. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer les leurs, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp:
         'L’utilisateur de Polyfin dont l’importation complète les données de visionnage et les addons.',
@@ -560,7 +590,7 @@ const users: typeof en = {
       open: 'Importer depuis Letterboxd',
       title: 'Importer depuis Letterboxd',
       description:
-        'Reprenez les films d’un utilisateur depuis son fichier d’export Letterboxd\u202f: les films vus avec leurs dates et leur nombre de lectures, sa watchlist, ses notes, et les films aimés en favoris si vous le choisissez. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer le leur, sous Mon compte.',
+        'Reprenez les films d’un utilisateur depuis son fichier d’export Letterboxd\u202f: ce qu’il a vu, sa watchlist et ses notes. Les données de Polyfin sont seulement complétées. Les utilisateurs peuvent aussi importer le leur, sous Mon compte.',
       user: 'Dans le compte de',
       userHelp: 'L’utilisateur de Polyfin dont l’importation complète les données de visionnage.',
     },
@@ -617,6 +647,9 @@ const users: typeof en = {
       'Le lien cesse aussitôt de fonctionner. Les comptes déjà créés grâce à lui sont conservés.',
     revoking: 'Révocation…',
     revoked: 'Le lien d’invitation est révoqué.',
+    openLinks: 'Liens d’invitation ouverts',
+    noneOpen: 'Aucun lien d’invitation n’est ouvert.',
+    closedLinks: (count: number) => (count <= 1 ? `${count} lien fermé` : `${count} liens fermés`),
   },
   groups: {
     tabsLabel: 'Utilisateurs et groupes',
@@ -646,7 +679,7 @@ const users: typeof en = {
     pageHelp: 'Les changements enregistrés atteignent aussitôt les membres qui suivent le groupe.',
     updated: 'Le groupe a été mis à jour.',
     accessHelp:
-      'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, «\u202fDésactivé\u202f» et la date de fin restent sur leur propre page.',
+      'Les autorisations que les membres reçoivent du groupe. Leur rôle, l’écran de connexion, «\u202fPeut se connecter\u202f» et la date de fin restent sur leur propre page.',
     delete: 'Supprimer le groupe',
     deleteTitle: (name: string) => `Supprimer le groupe ${name}\u202f?`,
     deleteConfirm:
@@ -684,13 +717,19 @@ const users: typeof en = {
       `Rendre cet utilisateur administrateur le retire du groupe ${name}.`,
     newAccountGroupHelp: 'Les comptes créés rejoignent ce groupe et le suivent.',
     newUserGroupHelp: 'L’utilisateur rejoint ce groupe et le suit.',
-    values: 'Valeurs',
     valuesHelp:
       'Reprises du groupe, les valeurs changent avec lui. Propres, elles se règlent sur cette page, et les changements ultérieurs du groupe ne les touchent pas.',
     valuesFromGroup: (name: string) => `Du groupe ${name}`,
     valuesOwn: 'Propres à cet utilisateur',
+    valuesOf: (section: string) => `Valeurs de ${section}`,
     followEverywhere: 'Suivre le groupe partout',
-    setByGroup: (name: string) => `Réglé par le groupe ${name}.`,
+    follows: (name: string, following: number, total: number) =>
+      following === total
+        ? `Suit le groupe ${name} dans toutes les sections.`
+        : following === 0
+          ? `Dans le groupe ${name}, avec ses propres valeurs dans toutes les sections.`
+          : `Suit le groupe ${name} dans ${following} sections sur ${total}.`,
+    moreActions: (name: string) => `Autres actions pour le groupe ${name}`,
     openGroup: 'Ouvrir le groupe',
     joinTitle: 'Rejoindre le groupe\u202f?',
     joinConfirm: (user: string, group: string) =>
@@ -718,13 +757,65 @@ const users: typeof en = {
     changeWhoUses: 'Changer qui l’utilise sur sa page',
     sourceGiven: (name: string) => `Le groupe reçoit ${name}.`,
     sourceTaken: (name: string) => `Le groupe ne reçoit plus ${name}.`,
+    /** The help of rows on a group's page, which names its members rather than one user. */
+    help: {
+      remoteAccessHelp:
+        'Permet aux membres du groupe de se connecter, de parcourir et de lire depuis n’importe où. Désactivé, ils ne le peuvent que depuis le réseau local, tel que les Proxys connus de Paramètres › Sécurité le définissent. Les liens qu’ils partagent restent lisibles partout.',
+      remoteAccessUnknownProxy:
+        'La page Santé voit un proxy inverse absent des Proxys connus\u202f: tous ceux qui passent par lui comptent comme extérieurs au réseau local, et les membres du groupe sont donc refusés à travers lui, même depuis le réseau local.',
+      videoTranscodingHelp:
+        'Le serveur peut convertir l’image quand l’application d’un membre ne sait pas la lire telle quelle. Sinon, l’image est lue telle quelle ou simplement présentée autrement, jamais convertie.',
+      audioTranscodingHelp:
+        'Le serveur peut convertir le son quand l’application d’un membre ne sait pas le lire tel quel, l’image copiée quand c’est possible. Sinon, le son est lu tel quel, jamais converti.',
+      canDownloadHelp:
+        'Permet aux membres du groupe d’enregistrer des titres dans les applications Jellyfin pour les regarder hors connexion.',
+      canPlayTorrentsHelp:
+        'Propose aux membres du groupe les torrents que listent les addons, quand Paramètres › Torrents les lit. Désactivé jusqu’à ce qu’on le donne.',
+      canAddAddonsHelp:
+        'Les membres du groupe peuvent ajouter leurs propres addons Stremio, et faire des listes intelligentes, depuis leur page Mes sources. Sinon, leurs addons et listes intelligentes sont conservés mais pas utilisés.',
+      canManageCollectionsHelp:
+        'Permet aux membres du groupe de créer des collections de titres dans les applications Jellyfin, d’y ajouter ou d’en retirer des titres, et de les supprimer. Tous les utilisateurs voient les collections, chacun avec seulement les titres qu’il a le droit de voir.',
+      canManageSubtitlesHelp:
+        'Permet aux membres du groupe d’ajouter des fichiers de sous-titres aux titres depuis leurs applications Jellyfin, et d’y chercher les sous-titres des addons.',
+      canShareHelp:
+        'Permet aux membres du groupe de donner un film ou un épisode à quelqu’un qui n’a pas de compte, grâce à un lien qui expire, depuis Mon compte ou la page d’un titre dans le lecteur web, tant que Paramètres › Sécurité › «\u202fAutoriser les liens de partage\u202f» est activé. Le désactiver révoque leurs liens.',
+      maxPlaybacksHelp:
+        'Le nombre d’appareils de chaque membre qui peuvent lire en même temps. Ils peuvent toujours se connecter sur d’autres appareils.',
+      maxBitrateHelp:
+        'Au-delà, la vidéo est convertie si les membres peuvent utiliser la conversion\u202f; sinon, une version plus légère est lue.',
+      liveTvHelp: 'Montre les chaînes de TV en direct aux membres du groupe.',
+      remoteControlHelp:
+        'Permet aux membres du groupe de lancer, mettre en pause ou envoyer des messages aux applications Jellyfin des autres utilisateurs. Chacun peut contrôler ses propres applications.',
+      localFirstHelp:
+        'Place les versions des dossiers locaux et des partages réseau avant les autres dans les menus de versions des membres, quoi que dise «\u202fTrier les versions par\u202f», pour que la lecture commence par elles. Les autres utilisateurs gardent l’ordre du serveur.',
+      boostVolumeHelp:
+        'Rend les vidéos plus fortes dans le lecteur web des membres, dans un navigateur et dans les applications Jellyfin pour Android et iOS\u202f: environ 8 dB sur les passages calmes et 5 dB sur les passages forts, les crêtes tenues près de la pleine échelle. Le navigateur fait le travail, mais pour qu’il atteigne les flux des addons, le serveur envoie lui-même ces flux au lecteur web des membres au lieu de l’envoyer à leur source, ce qui prend de la bande passante au serveur. Les lecteurs propres aux applications ne sont pas concernés, ni les flux qu’un iPhone ou un iPad lit en HLS.',
+      convertSoundHelp:
+        'Le serveur convertit le son des vidéos et des chaînes des membres et l’égalise à -16 LUFS, l’image copiée, pour que chaque application le lise plus fort et de façon égale. Le prix\u202f: rien n’est lu directement, chaque lecture prend un peu du processeur du serveur, et le son multicanal arrive à un ampli converti plutôt que dans sa piste d’origine.',
+      qualityGroupHelp:
+        'La meilleure définition proposée aux membres. Les versions de définition supérieure sont écartées tant qu’une autre convient\u202f; si aucune ne convient, elles sont converties, ou refusées si les membres ne peuvent pas utiliser la conversion. La TV en direct est aussi convertie. Seules les versions qui conviennent sont téléchargées telles quelles\u202f; avec «\u202fTéléchargements convertis\u202f» dans Paramètres › Conversion (transcodage), les applis qui le demandent téléchargent les autres converties.',
+      maxRatingHelp:
+        'Les classifications du Pays des classifications du serveur, choisi dans Paramètres › Général. Les titres classés au-delà de cette limite dans ce pays sont masqués pour les membres du groupe.',
+      visibleLibrariesHelp:
+        'Les bibliothèques du serveur que les applications des membres affichent. Les bibliothèques ajoutées plus tard sont affichées. Ce choix ne bloque aucun titre\u202f: on peut toujours les trouver dans d’autres bibliothèques, par la recherche ou par un lien. Pour bloquer des titres, utilisez le contrôle parental ou les genres bloqués.',
+      noServerLibrariesHelp:
+        'Ajoutez une bibliothèque dans Contenu › Bibliothèques, puis choisissez ici celles que les membres du groupe voient.',
+      blockedGenresHelp:
+        'Les titres de l’un de ces genres sont masqués partout pour les membres du groupe, comme ceux qui dépassent la limite de leur contrôle parental.',
+      liveTvChannelsHelp:
+        'Les chaînes des sources de TV en direct du serveur que les membres voient, choisies par groupe et par chaîne. Les chaînes masquées n’apparaissent ni dans la liste des chaînes, ni dans le guide, les recherches, le Replay, les enregistrements, les programmations ou les rappels, et ne se lisent pas. Les sources propres des membres ne sont pas limitées.',
+      allowedHoursHelp:
+        'Si des horaires sont définis, les membres du groupe ne peuvent se connecter et utiliser le serveur que pendant ces horaires, à l’heure du serveur. En dehors, leurs applications sont refusées.',
+      noAllowedHours:
+        'Aucun horaire\u202f: les membres du groupe peuvent utiliser le serveur à toute heure.',
+    },
   },
   resetDefaults: {
     button: 'Rétablir les réglages par défaut',
     title: (name: string) => `Rétablir les réglages par défaut de ${name}\u202f?`,
     groupTitle: (name: string) => `Rétablir les réglages par défaut du groupe ${name}\u202f?`,
     userHelp: (name: string) =>
-      `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne «\u202fCréer un utilisateur\u202f»\u202f; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Désactivé, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
+      `Les autorisations d’Accès, Lecture et accès avec le Groupe de qualité, Contrôle parental, Bibliothèques visibles, Genres bloqués et Horaires autorisés reprennent les réglages d’un nouvel utilisateur, ceux que donne «\u202fCréer un utilisateur\u202f»\u202f; les applications de ${name} déjà connectées les ont aussitôt. Son nom et son mot de passe, Administrateur, Afficher sur l’écran de connexion, Peut se connecter, Prend fin le, son groupe, ses propres addons, ses connexions, ses comptes de suivi et tout ce qu’il a regardé restent.`,
     ownSettingsHelp: (group: string, sections: string) =>
       `Seules les sections gardées comme propres reprennent les réglages d’un nouvel utilisateur\u202f: ${sections}. Cet utilisateur reste dans le groupe ${group} et le suit dans les autres.`,
     groupHelp:

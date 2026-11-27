@@ -8,7 +8,8 @@ import {
   UsersIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import {
   fetchGroups,
   fetchUsers,
@@ -56,6 +57,21 @@ export default function UsersList() {
   const toast = useToast()
   const [creating, setCreating] = useState(false)
   const [inviting, setInviting] = useState(false)
+  // `/users?action=invite`, which the search opens, opens the invite form, then leaves the
+  // address, so that closing the form does not open it again.
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('action')
+  useEffect(() => {
+    if (asked === null) return
+    if (asked === 'invite') setInviting(true)
+    setParams(
+      (current) => {
+        current.delete('action')
+        return current
+      },
+      { replace: true },
+    )
+  }, [asked, setParams])
   const [stoppingDownloads, setStoppingDownloads] = useState(false)
   const [shownGroup, setShownGroup] = useState(allUsers)
   const users = useQuery({ queryKey: queryKeys.users, queryFn: ({ signal }) => fetchUsers(signal) })
@@ -159,14 +175,26 @@ export default function UsersList() {
               title={t.users.letterboxdImport.open}
               meta={t.users.letterboxdImport.summary}
             />
+          </RowList>
+          {/* Not a way to another page but an action on every account: its own row, with its
+              button in the danger words, asked first. */}
+          <RowList aria-label={t.users.turnOffDownloads} className="mt-4">
             <Row
-              onClick={() => {
-                downloadsOff.reset()
-                setStoppingDownloads(true)
-              }}
               leading={DownloadSimpleIcon}
               title={t.users.turnOffDownloads}
               meta={t.users.turnOffDownloadsSummary}
+              trailing={
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    downloadsOff.reset()
+                    setStoppingDownloads(true)
+                  }}
+                >
+                  {t.users.turnOffDownloadsButton}
+                </Button>
+              }
             />
           </RowList>
         </Block>
@@ -201,16 +229,17 @@ export default function UsersList() {
 }
 
 /**
- * A user as a row: the avatar, the name with its tags, the last activity, and the state; then,
- * outside its link, the "…" of quick actions. As on a source's row, whose controls sit beside its
- * link, the row draws no chevron. On a phone the state leads the second line, and the tags keep
- * to one line under the name when they do not fit beside it.
+ * A user as a row: the avatar, the name with its tags, then their group, the last activity and
+ * the limits; then, outside its link, the "…" of quick actions. As on a source's row, whose
+ * controls sit beside its link, the row draws no chevron. The state shows only when the account
+ * does not work as usual (disabled, ended, blocked): on a phone it leads the second line.
  */
 function UserRow({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const restrictions = useRestrictions(user)
   const end = accountEnd(user, t, language)
+  const usual = !user.isDisabled && !user.ended && user.blockedUntil === null
   const tags = [
     user.id === self.id && <Badge key="you">{t.users.you}</Badge>,
     user.isAdministrator && (
@@ -221,13 +250,6 @@ function UserRow({ user }: { user: User }) {
     user.passwordResetPin !== null && (
       <Badge key="pin" tone="warn">
         {t.users.pinRequested}
-      </Badge>
-    ),
-    user.groupName !== null && (
-      <Badge key="group">
-        {user.ownSections.length === 0
-          ? t.groups.groupBadge(user.groupName)
-          : t.groups.groupOwnBadge(user.groupName)}
       </Badge>
     ),
   ].filter(Boolean)
@@ -246,9 +268,17 @@ function UserRow({ user }: { user: User }) {
       meta={
         <span className="min-w-0">
           {/* On a phone the state leads this line, leaving the name its width. */}
-          <span className="mr-2 inline-flex align-middle sm:hidden">
-            <UserState user={user} />
-          </span>
+          {!usual && (
+            <span className="mr-2 inline-flex align-middle sm:hidden">
+              <UserState user={user} />
+            </span>
+          )}
+          {user.groupName !== null &&
+            `${
+              user.ownSections.length === 0
+                ? t.groups.groupBadge(user.groupName)
+                : t.groups.groupOwnBadge(user.groupName)
+            } · `}
           <LastActivity user={user} />
           {end !== null && (
             <span>
@@ -260,9 +290,11 @@ function UserRow({ user }: { user: User }) {
         </span>
       }
       trailing={
-        <span className="max-sm:hidden">
-          <UserState user={user} />
-        </span>
+        !usual && (
+          <span className="max-sm:hidden">
+            <UserState user={user} />
+          </span>
+        )
       }
       actions={<UserActions user={user} />}
     />

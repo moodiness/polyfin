@@ -23,11 +23,12 @@ A new account copies everything its model's page sets except the name, password,
 
 The link is shown once, with **Copy link**: Polyfin keeps only its hash and cannot show it again. It starts with the **Public address** (**Settings › Notifications**) when set, else the admin app's current address.
 
-**Invite links**, under the accounts, lists each link with:
+**Invite links**, under the accounts, lists the open links first, each titled by its group (or whose settings it gives) and its expiry, as "Group Kids · Expires in 2 weeks", with:
 
 - accounts created out of those allowed, and whose settings it gives;
-- when it expires, when its accounts end, and who created it;
-- its state: **Active**, **Used up**, **Expired** or **Revoked**.
+- when its accounts end, and who created it.
+
+The links that no longer work fold under one button, as "5 closed links", each with its state: **Used up**, **Expired** or **Revoked**. The count beside **Invite links** counts the open ones.
 
 **Revoke** stops an active link at once and keeps its accounts. Deleting the user a link copies revokes it too.
 

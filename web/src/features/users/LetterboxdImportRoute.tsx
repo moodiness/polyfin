@@ -48,7 +48,8 @@ export default function LetterboxdImportRoute() {
           {errorMessage(t, users.error)}
         </InlineError>
       ) : (
-        <div className="flex flex-col gap-6">
+        // As wide as its form, so that its button stays beside it.
+        <div className="flex max-w-[44rem] flex-col gap-6">
           <SettingRow
             kind="choice"
             label={text.user}

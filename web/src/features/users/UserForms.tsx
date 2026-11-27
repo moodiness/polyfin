@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { PlusIcon, TrashIcon, XIcon } from '@phosphor-icons/react'
-import { Fragment, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
   fetchGroup,
   fetchGroupDefaults,
@@ -106,32 +106,27 @@ export function sectionTitle(t: Messages, section: GroupSection): string {
   return titles[section]
 }
 
-/** "Set by the group Kids.", with a link to the group, above the values a member follows. */
-export function FollowedNotice({ group }: { group: { id: string; name: string } }) {
-  const { t } = useI18n()
-  return (
-    <Notice
-      action={
-        <TextLink to={`/users/groups/${group.id}`} arrow>
-          {t.groups.openGroup}
-        </TextLink>
-      }
-    >
-      {t.groups.setByGroup(group.name)}
-    </Notice>
-  )
+/** A row's help that names whom it applies to: the user's, or on a group's page its members'. */
+type HelpKey = keyof Messages['groups']['help']
+
+export function helpFor(t: Messages, forGroup: boolean, key: HelpKey): string {
+  return forGroup ? t.groups.help[key] : t.users[key]
 }
 
 /**
- * Values, From the group Kids or Own for this user: whether a member follows their group in a
- * section or keeps their own values there.
+ * Beside a section's title on a member's page, where its values come from: From the group Kids,
+ * or Own for this user. Following the group, the rows below show its values read only. With
+ * `saved`, a choice not saved yet keeps a dot and "was …", as a changed row does.
  */
-export function SectionValuesRow({
+export function SectionValues({
+  title,
   group,
   own,
   saved,
   onChange,
 }: {
+  /** The section's title, which the list's name reads. */
+  title: string
   group: { name: string }
   own: boolean
   /** The saved choice, for "was …"; undefined where the choice saves at once. */
@@ -139,20 +134,33 @@ export function SectionValuesRow({
   onChange: (own: boolean) => void
 }) {
   const { t } = useI18n()
-  const value = (own: boolean) => (own ? 'own' : 'group')
+  const helpId = useId()
+  const label = (own: boolean) => (own ? t.groups.valuesOwn : t.groups.valuesFromGroup(group.name))
   return (
-    <SettingRow<'group' | 'own'>
-      kind="choice"
-      label={t.groups.values}
-      help={t.groups.valuesHelp}
-      value={value(own)}
-      saved={saved === undefined ? undefined : value(saved)}
-      options={[
-        { value: 'group', label: t.groups.valuesFromGroup(group.name) },
-        { value: 'own', label: t.groups.valuesOwn },
-      ]}
-      onChange={(choice) => onChange(choice === 'own')}
-    />
+    <div className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1">
+      {saved !== undefined && saved !== own && (
+        <span className="inline-flex items-center gap-1.5 text-micro text-link">
+          <span aria-hidden="true" className="size-1.5 rounded-full bg-link" />
+          {t.ui.was(label(saved))}
+        </span>
+      )}
+      <Select<'group' | 'own'>
+        size="sm"
+        wrap
+        value={own ? 'own' : 'group'}
+        options={[
+          { value: 'group', label: label(false) },
+          { value: 'own', label: label(true) },
+        ]}
+        onValue={(choice) => onChange(choice === 'own')}
+        aria-label={t.groups.valuesOf(title)}
+        aria-describedby={helpId}
+        className="w-[18rem] max-w-full"
+      />
+      <span id={helpId} hidden>
+        {t.groups.valuesHelp}
+      </span>
+    </div>
   )
 }
 
@@ -179,9 +187,15 @@ const sectionFields = {
 
 /**
  * What the rows of a section show: the values they start from, the saved ones that mark a changed
- * row with "was …" (undefined to mark none, and count no change), and whether they are read only.
+ * row with "was …" (undefined to mark none, and count no change), whether they are read only, and
+ * whether they are a group's, whose help names its members.
  */
-type SectionView = { values: GroupLimits; saved: GroupLimits | undefined; readOnly: boolean }
+type SectionView = {
+  values: GroupLimits
+  saved: GroupLimits | undefined
+  readOnly: boolean
+  forGroup: boolean
+}
 
 /**
  * Tells the dock what a section's rows change: nothing while they show the group's values a
@@ -199,9 +213,12 @@ function useSectionDraft(
 
 /**
  * A section of limits on a user's or a group's page: its title and its rows, whose changes go to
- * the page's dock. On a member's page it starts with Values, From the group or Own for this user,
- * itself a change in the dock: following the group, the rows show its values read only, under a
- * notice saying so; going back to it shows the group's values against the member's own.
+ * the page's dock. On a member's page its title carries Values, From the group or Own for this
+ * user, itself a change in the dock: following the group, the rows show its values read only;
+ * going back to it shows the group's values against the member's own.
+ *
+ * Read only, a row keeps its name and help at full ink, as they still inform, and only its
+ * control is dimmed and unusable (the fieldset disables it), unlike an inactive row.
  */
 function LimitsSection({
   id,
@@ -220,6 +237,7 @@ function LimitsSection({
 }) {
   const { t } = useI18n()
   const limits = limitsOf(target)
+  const forGroup = target.kind === 'group'
   const member = target.kind === 'user' ? target.user : null
   const group = member === null ? null : memberGroup(member)
   const savedOwn = member === null || group === null || member.ownSections.includes(section)
@@ -235,12 +253,12 @@ function LimitsSection({
   )
 
   const view: SectionView | null = own
-    ? { values: limits, saved: limits, readOnly: false }
+    ? { values: limits, saved: limits, readOnly: false, forGroup }
     : !back
-      ? { values: limits, saved: undefined, readOnly: true }
+      ? { values: limits, saved: undefined, readOnly: true, forGroup }
       : groupValues.data === undefined
         ? null
-        : { values: groupValues.data, saved: limits, readOnly: true }
+        : { values: groupValues.data, saved: limits, readOnly: true, forGroup }
   // The rows start again from their values when the choice changes, and, read only, when the
   // group's values reach the member.
   const key = own
@@ -250,13 +268,20 @@ function LimitsSection({
       : JSON.stringify(sectionFields[section].map((field) => limits[field]))
 
   return (
-    <PageSection id={id} title={title} description={description}>
-      {group !== null && (
-        <SectionValuesRow group={group} own={own} saved={savedOwn} onChange={setOwn} />
-      )}
-      {group !== null && !own && <FollowedNotice group={group} />}
+    <PageSection
+      id={id}
+      title={title}
+      description={description}
+      aside={
+        group !== null && (
+          <SectionValues title={title} group={group} own={own} saved={savedOwn} onChange={setOwn} />
+        )
+      }
+    >
       {view !== null ? (
-        <Fragment key={key}>{children(view)}</Fragment>
+        <fieldset key={key} disabled={view.readOnly} className="contents">
+          {children(view)}
+        </fieldset>
       ) : groupValues.isError ? (
         <InlineError onRetry={() => void groupValues.refetch()} retrying={groupValues.isFetching}>
           {errorMessage(t, groupValues.error)}
@@ -347,7 +372,7 @@ export function PlaybackAccessSection({ target, id }: { target: LimitsTarget; id
 
 function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
   const { t, language } = useI18n()
-  const { readOnly } = view
+  const help = (key: HelpKey) => helpFor(t, view.forGroup, key)
   const saved = playbackOf(view.saved ?? view.values)
   const [form, setForm] = useState(() => playbackOf(view.values))
   useSectionDraft(id, view, countChanged(form, saved), () => changedFields(form, saved))
@@ -371,12 +396,12 @@ function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
   }
 
   const switches = [
-    ['liveTv', t.users.liveTv, t.users.liveTvHelp],
-    ['remoteControl', t.users.remoteControl, t.users.remoteControlHelp],
+    ['liveTv', t.users.liveTv, help('liveTvHelp')],
+    ['remoteControl', t.users.remoteControl, help('remoteControlHelp')],
     ['liveTvManagement', t.users.liveTvManagement, t.users.liveTvManagementHelp],
-    ['localFirst', t.users.localFirst, t.users.localFirstHelp],
-    ['boostVolume', t.users.boostVolume, t.users.boostVolumeHelp],
-    ['convertSound', t.users.convertSound, t.users.convertSoundHelp],
+    ['localFirst', t.users.localFirst, help('localFirstHelp')],
+    ['boostVolume', t.users.boostVolume, help('boostVolumeHelp')],
+    ['convertSound', t.users.convertSound, help('convertSoundHelp')],
   ] as const
 
   return (
@@ -384,36 +409,33 @@ function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
       <SettingRow
         kind="number"
         label={t.users.maxPlaybacks}
-        help={t.users.maxPlaybacksHelp}
+        help={help('maxPlaybacksHelp')}
         value={form.maxPlaybacks}
         saved={was?.maxPlaybacks}
         min={maxPlaybacksRange.min}
         max={maxPlaybacksRange.max}
         format={(value) => (value === 0 ? t.users.noLimit : String(value))}
-        disabled={readOnly}
         onChange={(value) => update({ maxPlaybacks: Math.trunc(value ?? 0) })}
       />
       <SettingRow<number>
         kind="choice"
         label={t.users.maxBitrate}
-        help={t.users.maxBitrateHelp}
+        help={help('maxBitrateHelp')}
         value={form.maxBitrate}
         saved={was?.maxBitrate}
         options={bitrates}
-        disabled={readOnly}
         onChange={(maxBitrate) => update({ maxBitrate })}
       />
       <SettingRow<number>
         kind="choice"
         label={t.users.qualityGroup}
-        help={t.users.qualityGroupHelp}
+        help={help('qualityGroupHelp')}
         value={form.qualityGroup}
         saved={was?.qualityGroup}
         options={qualityGroups.map((group) => ({
           value: group as number,
           label: group === 0 ? t.users.qualityGroupOriginal : qualityGroupName(group),
         }))}
-        disabled={readOnly}
         onChange={(qualityGroup) => update({ qualityGroup: qualityGroup as QualityGroup })}
       />
       <SettingRow<SyncPlayAccess>
@@ -427,7 +449,6 @@ function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
           { value: 'JoinGroups', label: t.users.syncPlayJoin },
           { value: 'None', label: t.users.syncPlayNone },
         ]}
-        disabled={readOnly}
         onChange={(syncPlay) => update({ syncPlay })}
       />
       {switches.map(([field, label, help]) => (
@@ -438,7 +459,6 @@ function PlaybackAccessRows({ id, view }: { id: string; view: SectionView }) {
           help={help}
           checked={form[field]}
           saved={was?.[field]}
-          disabled={readOnly}
           onChange={(checked) => update({ [field]: checked })}
         />
       ))}
@@ -461,7 +481,6 @@ export function ParentalControlSection({ target, id }: { target: LimitsTarget; i
 function ParentalControlRows({ id, view }: { id: string; view: SectionView }) {
   const { t } = useI18n()
   const ratings = useParentalRatings()
-  const { readOnly } = view
   const marked = view.saved !== undefined
   const start = view.values.parentalControl
   const initial = (view.saved ?? view.values).parentalControl
@@ -512,14 +531,13 @@ function ParentalControlRows({ id, view }: { id: string; view: SectionView }) {
         <SettingRow<number>
           kind="choice"
           label={t.users.maxRating}
-          help={t.users.maxRatingHelp}
+          help={helpFor(t, view.forGroup, 'maxRatingHelp')}
           value={selected}
           saved={marked ? savedSelected : undefined}
           options={[
             { value: -1, label: t.users.noLimit },
             ...groups.map((group, index) => ({ value: index, label: group.name })),
           ]}
-          disabled={readOnly}
           onChange={(index) => {
             const group = groups[index]
             setLimit(
@@ -535,7 +553,6 @@ function ParentalControlRows({ id, view }: { id: string; view: SectionView }) {
         label={t.users.blockUnratedMovies}
         checked={blockMovies}
         saved={marked ? savedMovies : undefined}
-        disabled={readOnly}
         onChange={setBlockMovies}
       />
       <SettingRow
@@ -543,7 +560,6 @@ function ParentalControlRows({ id, view }: { id: string; view: SectionView }) {
         label={t.users.blockUnratedShows}
         checked={blockShows}
         saved={marked ? savedShows : undefined}
-        disabled={readOnly}
         onChange={setBlockShows}
       />
     </>
@@ -558,7 +574,7 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
       section="libraries"
       target={target}
       title={t.users.visibleLibrariesTitle}
-      description={t.users.visibleLibrariesHelp}
+      description={helpFor(t, target.kind === 'group', 'visibleLibrariesHelp')}
     >
       {(view) => <VisibleLibrariesRows id={id} view={view} />}
     </LimitsSection>
@@ -567,7 +583,6 @@ export function VisibleLibrariesSection({ target, id }: { target: LimitsTarget; 
 
 function VisibleLibrariesRows({ id, view }: { id: string; view: SectionView }) {
   const { t } = useI18n()
-  const { readOnly } = view
   const choices = useQuery({
     queryKey: queryKeys.userContentChoices,
     queryFn: ({ signal }) => fetchUserContentChoices(signal),
@@ -590,7 +605,9 @@ function VisibleLibrariesRows({ id, view }: { id: string; view: SectionView }) {
           {errorMessage(t, choices.error)}
         </InlineError>
       ) : choices.data.libraries.length === 0 ? (
-        <EmptyState title={t.users.noServerLibraries}>{t.users.noServerLibrariesHelp}</EmptyState>
+        <EmptyState title={t.users.noServerLibraries}>
+          {helpFor(t, view.forGroup, 'noServerLibrariesHelp')}
+        </EmptyState>
       ) : (
         // A checklist in two columns: a library is a line to tick, shown or hidden in the apps.
         <div
@@ -606,7 +623,6 @@ function VisibleLibrariesRows({ id, view }: { id: string; view: SectionView }) {
                 key={library.id}
                 label={library.name}
                 checked={shown}
-                disabled={readOnly}
                 onChange={(on) =>
                   setHidden(on ? hidden.filter((id) => id !== library.id) : [...hidden, library.id])
                 }
@@ -635,7 +651,7 @@ export function BlockedGenresSection({ target, id }: { target: LimitsTarget; id:
       section="genres"
       target={target}
       title={t.users.blockedGenresTitle}
-      description={t.users.blockedGenresHelp}
+      description={helpFor(t, target.kind === 'group', 'blockedGenresHelp')}
     >
       {(view) => <BlockedGenresRows id={id} view={view} />}
     </LimitsSection>
@@ -726,7 +742,7 @@ export function LiveTvChannelsSection({ target, id }: { target: LimitsTarget; id
       section="channels"
       target={target}
       title={t.users.liveTvChannelsTitle}
-      description={t.users.liveTvChannelsHelp}
+      description={helpFor(t, target.kind === 'group', 'liveTvChannelsHelp')}
     >
       {(view) => <LiveTvChannelsRows id={id} view={view} />}
     </LimitsSection>
@@ -838,7 +854,6 @@ function LiveTvChannelsRows({ id, view }: { id: string; view: SectionView }) {
           { value: 'only', label: t.users.channelsOnly },
           { value: 'except', label: t.users.channelsExcept },
         ]}
-        disabled={readOnly}
         onChange={setMode}
       />
       {mode !== 'all' &&
@@ -992,7 +1007,7 @@ export function AllowedHoursSection({ target, id }: { target: LimitsTarget; id: 
       section="hours"
       target={target}
       title={t.users.allowedHoursTitle}
-      description={t.users.allowedHoursHelp}
+      description={helpFor(t, target.kind === 'group', 'allowedHoursHelp')}
     >
       {(view) => <AllowedHoursRows id={id} view={view} />}
     </LimitsSection>
@@ -1016,7 +1031,9 @@ function AllowedHoursRows({ id, view }: { id: string; view: SectionView }) {
   return (
     <fieldset disabled={readOnly} className="contents">
       {schedules.length === 0 ? (
-        <p className={cx(tile, 'text-body text-ink-2')}>{t.users.noAllowedHours}</p>
+        <p className={cx(tile, 'text-body text-ink-2')}>
+          {helpFor(t, view.forGroup, 'noAllowedHours')}
+        </p>
       ) : (
         <ul
           className="grid grid-cols-[minmax(0,1fr)] gap-1.5"
@@ -1099,57 +1116,65 @@ export type Permissions = Pick<
  * The switches of the permissions in Access, on a user's page and on a group's, each saved as it
  * changes. Remote access off warns when Health sees a reverse proxy missing from Known proxies:
  * everyone coming through it counts as outside the local network, so the user is refused through it.
+ * Read only (a member following their group), the names and help stay at full ink and only the
+ * switches are dimmed, as in LimitsSection.
  */
 export function PermissionRows({
   values,
-  disabled,
+  readOnly,
+  forGroup,
   onChange,
 }: {
   values: Permissions
-  disabled: boolean
+  readOnly: boolean
+  /** On a group's page: the help names its members. */
+  forGroup: boolean
   onChange: (patch: Partial<Permissions>) => void
 }) {
   const { t } = useI18n()
   const unknownProxy =
     useHealthProblems().data?.some((problem) => problem.code === 'unknown_proxy') ?? false
+  const help = (key: HelpKey) => helpFor(t, forGroup, key)
   const rows = [
-    ['remoteAccess', t.users.remoteAccess, t.users.remoteAccessHelp],
-    ['videoTranscoding', t.users.videoTranscoding, t.users.videoTranscodingHelp],
-    ['audioTranscoding', t.users.audioTranscoding, t.users.audioTranscodingHelp],
-    ['downloads', t.users.canDownload, t.users.canDownloadHelp],
-    ['torrentStreams', t.users.canPlayTorrents, t.users.canPlayTorrentsHelp],
-    ['personalAddons', t.users.canAddAddons, t.users.canAddAddonsHelp],
-    ['collectionManagement', t.users.canManageCollections, t.users.canManageCollectionsHelp],
-    ['subtitleManagement', t.users.canManageSubtitles, t.users.canManageSubtitlesHelp],
-    ['canShare', t.users.canShare, t.users.canShareHelp],
+    ['remoteAccess', t.users.remoteAccess, help('remoteAccessHelp')],
+    ['videoTranscoding', t.users.videoTranscoding, help('videoTranscodingHelp')],
+    ['audioTranscoding', t.users.audioTranscoding, help('audioTranscodingHelp')],
+    ['downloads', t.users.canDownload, help('canDownloadHelp')],
+    ['torrentStreams', t.users.canPlayTorrents, help('canPlayTorrentsHelp')],
+    ['personalAddons', t.users.canAddAddons, help('canAddAddonsHelp')],
+    ['collectionManagement', t.users.canManageCollections, help('canManageCollectionsHelp')],
+    ['subtitleManagement', t.users.canManageSubtitles, help('canManageSubtitlesHelp')],
+    ['canShare', t.users.canShare, help('canShareHelp')],
   ] as const
-  return rows.map(([field, title, help]) =>
-    field === 'remoteAccess' && !values.remoteAccess && unknownProxy ? (
-      <SettingRow
-        key={field}
-        kind="switch"
-        label={title}
-        help={help}
-        checked={values[field]}
-        disabled={disabled}
-        onChange={(checked) => onChange({ [field]: checked })}
-      >
-        <p className="text-warn">{t.users.remoteAccessUnknownProxy}</p>
-        <TextLink to="/settings/security#known-proxies" className="mt-2 -ml-3">
-          {t.users.openKnownProxies}
-        </TextLink>
-      </SettingRow>
-    ) : (
-      <SettingRow
-        key={field}
-        kind="switch"
-        label={title}
-        help={help}
-        checked={values[field]}
-        disabled={disabled}
-        onChange={(checked) => onChange({ [field]: checked })}
-      />
-    ),
+  return (
+    <fieldset disabled={readOnly} className="contents">
+      {rows.map(([field, title, text]) =>
+        field === 'remoteAccess' && !values.remoteAccess && unknownProxy ? (
+          <SettingRow
+            key={field}
+            kind="switch"
+            label={title}
+            help={text}
+            checked={values[field]}
+            onChange={(checked) => onChange({ [field]: checked })}
+          >
+            <p className="text-warn">{help('remoteAccessUnknownProxy')}</p>
+            <TextLink to="/settings/security#known-proxies" className="mt-2 -ml-3">
+              {t.users.openKnownProxies}
+            </TextLink>
+          </SettingRow>
+        ) : (
+          <SettingRow
+            key={field}
+            kind="switch"
+            label={title}
+            help={text}
+            checked={values[field]}
+            onChange={(checked) => onChange({ [field]: checked })}
+          />
+        ),
+      )}
+    </fieldset>
   )
 }
 

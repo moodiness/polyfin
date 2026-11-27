@@ -124,7 +124,7 @@ export default function UserActions({ user }: { user: User }) {
         busy={access.isPending}
         error={access.isError ? errorMessage(t, access.error) : undefined}
       >
-        {t.users.isDisabledHelp}
+        {t.users.disableConfirm(user.name, null)}
       </ConfirmDialog>
       <ConfirmDialog
         open={asked === 'signOut'}

@@ -30,9 +30,9 @@ const users: typeof en = {
       'Al cambiar la contraseña se cierra la sesión en todos los dispositivos Jellyfin de este usuario.',
     passwordReset: 'Se ha restablecido la contraseña.',
     accessTitle: 'Acceso',
-    isDisabled: 'Desactivado',
-    isDisabledHelp:
-      'Un usuario desactivado no puede iniciar sesión y se cierra la sesión en todos sus dispositivos.',
+    canSignIn: 'Puede iniciar sesión',
+    canSignInHelp:
+      'Desactivado, la cuenta no puede iniciar sesión y se cierra la sesión en todos sus dispositivos. Todo lo que tiene se conserva.',
     providerOnly: 'Solo el proveedor de identidad',
     providerOnlyHelp:
       'El usuario inicia sesión con el proveedor de identidad configurado en Ajustes › Seguridad, nunca con una contraseña: la contraseña se rechaza, y una cuenta creada así no necesita ninguna. Las aplicaciones de Jellyfin que no pueden abrir el proveedor inician sesión con Quick Connect.',
@@ -72,6 +72,7 @@ const users: typeof en = {
     noAudioTranscoding: 'Sin conversión de audio',
     noDownloads: 'Sin descargas',
     turnOffDownloads: 'Desactivar las descargas para todos',
+    turnOffDownloadsButton: 'Desactivar',
     turnOffDownloadsConfirm:
       'Todos los usuarios y todos los grupos pierden el permiso para descargar, también en las aplicaciones de Jellyfin con sesión ya iniciada. Puede volver a concederlo a un usuario o a un grupo en su página, en Acceso.',
     turningOffDownloads: 'Desactivando…',
@@ -90,6 +91,28 @@ const users: typeof en = {
     disabling: 'Desactivando…',
     disabledNow: (name: string) => `Se ha desactivado a ${name}.`,
     enabledNow: (name: string) => `${name} puede volver a iniciar sesión.`,
+    disableConfirm: (name: string, devices: number | null) =>
+      `${name} no podrá iniciar sesión hasta que vuelva a permitírselo. ${
+        devices === null
+          ? 'Se cierra la sesión en todos sus dispositivos'
+          : devices === 0
+            ? 'No tiene ningún dispositivo con la sesión iniciada'
+            : devices === 1
+              ? 'Se cierra la sesión en su dispositivo'
+              : `Se cierra la sesión en sus ${devices} dispositivos`
+      }, y los enlaces que ha compartido dejan de funcionar.`,
+    makeAdministrator: 'Convertir en administrador',
+    makeAdministratorTitle: (name: string) => `¿Convertir a ${name} en administrador?`,
+    makeAdministratorConfirm: (name: string, group: string | null) =>
+      `${name} podrá gestionar los usuarios y los ajustes del servidor, y su cuenta nunca finalizará.${
+        group === null
+          ? ''
+          : ` ${name} también sale del grupo ${group}: sus valores se conservan como ajustes propios.`
+      }`,
+    removeAdministrator: 'Quitar los derechos de administrador',
+    removeAdministratorTitle: (name: string) => `¿Quitar los derechos de administrador de ${name}?`,
+    removeAdministratorConfirm: (name: string) =>
+      `${name} ya no podrá gestionar los usuarios ni los ajustes del servidor, y pasa a ser un miembro con los permisos de Acceso.`,
     signOutAll: 'Cerrar sesión en todos los dispositivos',
     signOutAllConfirm: (name: string) =>
       `¿Cerrar la sesión de todos los dispositivos Jellyfin de ${name}? Cada aplicación tendrá que volver a iniciar sesión.`,
@@ -116,7 +139,7 @@ const users: typeof en = {
       'Las aplicaciones de Moonfin encuentran el compañero de Polyfin para este usuario: sus ajustes sincronizados entre sus dispositivos, las valoraciones de MDBList y los extras de TMDB.',
     moonfinRow: 'Compañero',
     moonfinHelp:
-      'El valor del servidor sigue «Servir el compañero de Moonfin», en Ajustes › General.',
+      'El valor del servidor sigue «Servir el compañero de Moonfin», en Ajustes › Moonfin.',
     moonfinChange: 'Permitirle cambiarlo',
     moonfinChangeHelp:
       'En Mi cuenta › Moonfin. Desactivado, la elección hecha aquí sigue siendo la suya.',
@@ -310,12 +333,18 @@ const users: typeof en = {
     metadataLanguageRow: 'Idioma de los títulos',
     webThemeRow: 'Tema',
     audioRegionRow: 'Región del doblaje',
+    advancedOptions: 'Opciones avanzadas',
+    /** The heading words of a user's sections. */
+    navAccount: 'Cuenta',
+    navPreferences: 'Preferencias',
+    navLimits: 'Límites',
+    navActivity: 'Actividad',
     jellyfinImport: {
       summary: 'Cuentas y datos de visionado de un servidor Jellyfin, Emby o Plex.',
       open: 'Importar desde otro servidor',
       title: 'Importar desde otro servidor',
       description:
-        'Traiga las cuentas y sus datos de visualización desde un servidor Jellyfin, Emby o Plex: nombres de cuenta y condición de administrador y, para cada usuario, las películas y episodios reproducidos con sus fechas, los puntos de reanudación y los favoritos, identificados por IMDb, TMDB o TVDB, y si lo desea sus valoraciones, las colecciones del servidor y sus listas de reproducción. A los datos de Polyfin solo se les añade información, y no se escribe nada en el otro servidor. Los servidores no facilitan las contraseñas: usted establece una para cada cuenta nueva, o conserva la que usa el usuario para iniciar sesión.',
+        'Traiga las cuentas y lo que han visto desde un servidor Jellyfin, Emby o Plex. A los datos de Polyfin solo se les añade información, y no se escribe nada en el otro servidor. Las contraseñas no se transfieren: establezca una para cada cuenta nueva, o conserve la que usa el usuario para iniciar sesión.',
       serverKind: 'Servidor',
       servers: {
         jellyfin: 'Jellyfin',
@@ -542,7 +571,7 @@ const users: typeof en = {
       open: 'Importar desde una aplicación',
       title: 'Importar desde una aplicación',
       description:
-        'Traiga los datos de visionado de un usuario desde su cuenta en una aplicación basada en extensiones: las películas y episodios que ha reproducido con sus fechas, sus puntos de reanudación y la biblioteca de la aplicación, que pasa a su lista de reproducción «Para ver» en las aplicaciones de Jellyfin, identificados mediante IMDb, TMDB o Kitsu. A los datos de Polyfin solo se les añade información, y no se escribe nada en la aplicación. Necesita los datos de inicio de sesión del usuario en la aplicación; los usuarios también pueden importarlos ellos mismos, en «Mi cuenta».',
+        'Traiga los datos de visionado y la biblioteca de un usuario desde su cuenta en una aplicación basada en extensiones, con sus datos de inicio de sesión en ella. A los datos de Polyfin solo se les añade información. Los usuarios también pueden importar los suyos, en «Mi cuenta».',
       user: 'En la cuenta de',
       userHelp:
         'El usuario de Polyfin a cuyos datos de visionado y extensiones se añade la importación.',
@@ -552,7 +581,7 @@ const users: typeof en = {
       open: 'Importar desde Letterboxd',
       title: 'Importar desde Letterboxd',
       description:
-        'Traiga las películas de un usuario desde su archivo de exportación de Letterboxd: las películas que ha visto con sus fechas y número de reproducciones, su lista de seguimiento, sus valoraciones y, si lo desea, las películas que le han gustado como favoritos. A los datos de Polyfin solo se les añade información. Los usuarios también pueden importar los suyos, en «Mi cuenta».',
+        'Traiga las películas de un usuario desde su archivo de exportación de Letterboxd: lo que ha visto, su lista de seguimiento y sus valoraciones. A los datos de Polyfin solo se les añade información. Los usuarios también pueden importar los suyos, en «Mi cuenta».',
       user: 'En la cuenta de',
       userHelp: 'El usuario de Polyfin a cuyos datos de visionado se añade la importación.',
     },
@@ -607,6 +636,10 @@ const users: typeof en = {
       'El enlace deja de funcionar de inmediato. Se conservan las cuentas ya creadas con él.',
     revoking: 'Revocando…',
     revoked: 'Se ha revocado el enlace de invitación.',
+    openLinks: 'Enlaces de invitación abiertos',
+    noneOpen: 'No hay ningún enlace de invitación abierto.',
+    closedLinks: (count: number) =>
+      count === 1 ? '1 enlace cerrado' : `${count} enlaces cerrados`,
   },
   groups: {
     tabsLabel: 'Usuarios y grupos',
@@ -636,7 +669,7 @@ const users: typeof en = {
     pageHelp: 'Los cambios guardados llegan de inmediato a los miembros que siguen el grupo.',
     updated: 'Se ha actualizado el grupo.',
     accessHelp:
-      'Los permisos que los miembros reciben del grupo. Su rol, la pantalla de inicio de sesión, «Desactivado» y la fecha de fin se mantienen en su propia página.',
+      'Los permisos que los miembros reciben del grupo. Su rol, la pantalla de inicio de sesión, «Puede iniciar sesión» y la fecha de fin se mantienen en su propia página.',
     delete: 'Borrar grupo',
     deleteTitle: (name: string) => `¿Borrar el grupo ${name}?`,
     deleteConfirm:
@@ -673,13 +706,19 @@ const users: typeof en = {
       `Convertir a este usuario en administrador lo saca del grupo ${name}.`,
     newAccountGroupHelp: 'Las cuentas creadas se unen a este grupo y lo siguen.',
     newUserGroupHelp: 'El usuario se une a este grupo y lo sigue.',
-    values: 'Valores',
     valuesHelp:
       'Tomados del grupo, los valores cambian con él. Propios, se fijan en esta página y los cambios posteriores del grupo no les afectan.',
     valuesFromGroup: (name: string) => `Del grupo ${name}`,
     valuesOwn: 'Propios de este usuario',
+    valuesOf: (section: string) => `Valores de ${section}`,
     followEverywhere: 'Seguir el grupo en todo',
-    setByGroup: (name: string) => `Definido por el grupo ${name}.`,
+    follows: (name: string, following: number, total: number) =>
+      following === total
+        ? `Sigue el grupo ${name} en todas las secciones.`
+        : following === 0
+          ? `En el grupo ${name}, con valores propios en todas las secciones.`
+          : `Sigue el grupo ${name} en ${following} de ${total} secciones.`,
+    moreActions: (name: string) => `Más acciones para el grupo ${name}`,
     openGroup: 'Abrir el grupo',
     joinTitle: '¿Unirse al grupo?',
     joinConfirm: (user: string, group: string) =>
@@ -707,13 +746,65 @@ const users: typeof en = {
     changeWhoUses: 'Cambiar quién la usa en su página',
     sourceGiven: (name: string) => `El grupo recibe ${name}.`,
     sourceTaken: (name: string) => `El grupo ya no recibe ${name}.`,
+    /** The help of rows on a group's page, which names its members rather than one user. */
+    help: {
+      remoteAccessHelp:
+        'Permite a los miembros del grupo iniciar sesión, explorar y reproducir desde cualquier lugar. Desactivado, solo pueden hacerlo desde la red local, tal como lo indican los Proxies conocidos de Ajustes › Seguridad. Los enlaces que comparten se siguen reproduciendo en cualquier lugar.',
+      remoteAccessUnknownProxy:
+        'Estado del sistema ve un proxy inverso que no está en Proxies conocidos: todos los que pasan por él cuentan como externos a la red local, así que los miembros del grupo son rechazados a través de él, también desde la red local.',
+      videoTranscodingHelp:
+        'Permite que el servidor vuelva a codificar el vídeo cuando la aplicación de un miembro no puede reproducirlo tal cual. Sin ello, el vídeo se reproduce tal cual o simplemente reempaquetado, nunca recodificado.',
+      audioTranscodingHelp:
+        'Permite que el servidor vuelva a codificar el audio cuando la aplicación de un miembro no puede reproducirlo tal cual, con el vídeo copiado cuando es posible. Sin ello, el audio se reproduce tal cual, nunca recodificado.',
+      canDownloadHelp:
+        'Permite a los miembros del grupo guardar títulos en las aplicaciones de Jellyfin para verlos sin conexión.',
+      canPlayTorrentsHelp:
+        'Ofrece a los miembros del grupo la lista de torrents de las extensiones, cuando Ajustes › Torrents los reproduce. Desactivado hasta que se conceda.',
+      canAddAddonsHelp:
+        'Permite a los miembros del grupo añadir sus propias extensiones de Stremio, y crear listas inteligentes, en su página Mis fuentes. Sin ello, sus extensiones y listas inteligentes se conservan pero no se usan.',
+      canManageCollectionsHelp:
+        'Permite a los miembros del grupo crear colecciones de títulos en las aplicaciones de Jellyfin, añadirles títulos o quitárselos, y borrarlas. Todos los usuarios ven las colecciones, cada uno solo con los títulos que puede ver.',
+      canManageSubtitlesHelp:
+        'Permite a los miembros del grupo añadir archivos de subtítulos a los títulos desde sus aplicaciones de Jellyfin y buscar allí los subtítulos de las extensiones.',
+      canShareHelp:
+        'Permite a los miembros del grupo dar acceso a una película o un episodio a alguien sin cuenta, mediante un enlace que caduca, desde Mi cuenta o la página de un título en el reproductor web, mientras Ajustes › Seguridad › Permitir enlaces para compartir esté activado. Al desactivarlo, se revocan sus enlaces.',
+      maxPlaybacksHelp:
+        'Cuántos dispositivos de cada miembro pueden reproducir al mismo tiempo. Pueden seguir iniciando sesión en más dispositivos.',
+      maxBitrateHelp:
+        'Por encima de ella, el vídeo se convierte a menor calidad si los miembros pueden usar la conversión; si no, se reproduce una versión más ligera.',
+      liveTvHelp: 'Muestra los canales de televisión en vivo a los miembros del grupo.',
+      remoteControlHelp:
+        'Permite a los miembros del grupo reproducir, pausar o enviar mensajes a las aplicaciones de Jellyfin de otros usuarios. Todos pueden controlar sus propias aplicaciones.',
+      localFirstHelp:
+        'Coloca las versiones de las carpetas locales y de los recursos compartidos de red antes que las demás en los menús de versiones de los miembros, diga lo que diga «Ordenar las versiones por», para que la reproducción empiece por ellas. Los demás usuarios conservan el orden del servidor.',
+      boostVolumeHelp:
+        'Hace que los vídeos suenen más fuerte en el reproductor web de los miembros, en un navegador y en las aplicaciones de Jellyfin para Android e iOS: unos 8 dB en los pasajes tranquilos y 5 dB en los fuertes, con los picos contenidos cerca de la plena escala. El trabajo lo hace el navegador, pero para que llegue a las emisiones de las extensiones, el servidor envía él mismo esas emisiones al reproductor web de los miembros en lugar de mandarlo a su fuente, lo que consume ancho de banda del servidor. No llega a los reproductores propios de las aplicaciones, ni a las emisiones que un iPhone o un iPad reproduce como HLS.',
+      convertSoundHelp:
+        'El servidor convierte el audio de los vídeos y canales de los miembros y lo iguala a -16 LUFS, con la imagen copiada, para que todas las aplicaciones lo reproduzcan más fuerte y parejo. El coste: nada se reproduce directamente, cada reproducción usa un poco del procesador del servidor, y el sonido envolvente llega a un receptor convertido en lugar de como la pista original.',
+      qualityGroupHelp:
+        'La resolución más alta que se ofrece a los miembros. Las versiones superiores se descartan mientras haya una que se ajuste; si ninguna se ajusta, se convierten a menor resolución, o se rechazan si los miembros no pueden usar la conversión. La televisión en directo también se convierte a menor resolución. Solo las versiones que se ajustan se descargan tal cual; con «Descargas convertidas» activado en Ajustes › Conversión (transcodificación), las aplicaciones que lo solicitan descargan las demás convertidas a menor resolución.',
+      maxRatingHelp:
+        'Las clasificaciones del País de las clasificaciones del servidor, elegido en Ajustes › General. Los títulos con una clasificación superior a este límite en ese país se ocultan a los miembros del grupo.',
+      visibleLibrariesHelp:
+        'Las bibliotecas del servidor que muestran las aplicaciones de los miembros. Las bibliotecas añadidas más adelante se muestran. Esto solo elige las bibliotecas que se muestran: los títulos siguen siendo accesibles desde otras bibliotecas, la búsqueda o enlaces. Para bloquear títulos, use el control parental o los géneros bloqueados.',
+      noServerLibrariesHelp:
+        'Añada una biblioteca en Contenido › Bibliotecas y, a continuación, elija aquí cuáles ven los miembros del grupo.',
+      blockedGenresHelp:
+        'Los títulos de cualquiera de estos géneros se ocultan a los miembros del grupo en todas partes, como los títulos que superan su límite de control parental.',
+      liveTvChannelsHelp:
+        'Los canales de las fuentes de televisión en vivo del servidor que ven los miembros, elegidos por grupo y por canal. Los canales ocultos no aparecen en la lista de canales, la guía, las búsquedas, Replay, las grabaciones, los temporizadores ni los recordatorios, y no se reproducen. Las fuentes propias de los miembros no se limitan.',
+      allowedHoursHelp:
+        'Si se define un horario, los miembros del grupo solo pueden iniciar sesión y usar el servidor dentro de él, según la zona horaria del servidor. Fuera de ese horario, se rechazan sus aplicaciones.',
+      noAllowedHours:
+        'Sin horario definido: los miembros del grupo pueden usar el servidor a cualquier hora.',
+    },
   },
   resetDefaults: {
     button: 'Restablecer los valores predeterminados',
     title: (name: string) => `¿Restablecer los ajustes de ${name}?`,
     groupTitle: (name: string) => `¿Restablecer los ajustes del grupo ${name}?`,
     userHelp: (name: string) =>
-      `Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo, los que da «Crear un usuario»; las aplicaciones de ${name} ya conectadas los tienen al instante. Su nombre y contraseña, Administrador, Mostrar en la pantalla de inicio de sesión, Desactivado, Finaliza el, su grupo, sus propios addons, conexiones, cuentas de seguimiento y todo lo que ha visto se mantienen.`,
+      `Los permisos de Acceso, Reproducción y acceso con el Grupo de calidad, Control parental, Bibliotecas visibles, Géneros bloqueados y Horario permitido vuelven a los ajustes de un usuario nuevo, los que da «Crear un usuario»; las aplicaciones de ${name} ya conectadas los tienen al instante. Su nombre y contraseña, Administrador, Mostrar en la pantalla de inicio de sesión, Puede iniciar sesión, Finaliza el, su grupo, sus propios addons, conexiones, cuentas de seguimiento y todo lo que ha visto se mantienen.`,
     ownSettingsHelp: (group: string, sections: string) =>
       `Solo vuelven a los ajustes de un usuario nuevo las secciones que conserva como propias: ${sections}. Sigue en el grupo ${group} y lo sigue en las demás.`,
     groupHelp:

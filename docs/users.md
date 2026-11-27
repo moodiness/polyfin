@@ -6,7 +6,13 @@ This page is for administrators. It covers user accounts, groups, and the limits
 
 Each user has their own account, and signs in with a password or Quick Connect, as on Jellyfin. Polyfin keeps watch state, favorites, resume points and Next Up for each user. Each user can be limited to titles up to a rating.
 
-Create a user with **Create a user**, at the top of **Users**. Each user is a row with their last activity and state; open one to set their limits. The "…" at the end of a row does three things without opening the page: **Disable** (**Enable** for a disabled user), **Reset password** and **Sign out of all devices**, which signs out every Jellyfin app the user has. **Disable** and **Sign out of all devices** ask first, and your own row has no **Disable**. A user's page starts with their role, state, last activity and, while they play something, what they watch, then lists its sections on the left.
+Create a user with **Create a user**, at the top of **Users**. Its form asks for a **Name**, a **Password** and a **Group**. **Advanced options** opens three switches: **Administrator**, **Show on the sign-in screen** and **Identity provider only**, the last of which needs no password.
+
+Each user is a row with their group, last activity and limits. Its state shows only when the account doesn't work as usual: **Disabled**, **Ended** or blocked. Open a row to set the user's limits. The "…" at the end of a row does three things without opening the page: **Disable** (**Enable** for a disabled user), **Reset password** and **Sign out of all devices**, which signs out every Jellyfin app the user has. **Disable** and **Sign out of all devices** ask first, and your own row has no **Disable**.
+
+A user's page starts with a band: their role, state, last activity and, while they play something, what they watch. For a member it says how much of their page follows their group, as "Follows the group Kids in 5 of 7 sections", with **Open the group**. The band's "…" menu holds **Reset to defaults** and **Delete user**. The sections follow, listed on the left under **Account**, **Preferences**, **Limits** and **Activity**.
+
+On a phone, each section is a page of its own. The user's page shows the band and the list of sections, each marked **From the group Kids** where the member follows the group. A section opens alone, with a link back to the list. Changes not saved yet wait in the dock while you move between sections.
 
 **Last activity** is the user's last request from a Jellyfin app, a [Silo app](silo-apps.md) or the admin app, to the minute. It reads **Never** for a user not seen yet, such as one imported from another server. A Jellyfin app signs in once and keeps its sign-in for months, so every request counts, not only sign-ins. Share-link guests, API keys and DLNA devices don't count as the user's activity. The user's own Jellyfin apps, and administrators', get the same time as the user's last activity date (see [What users see of each other](#what-users-see-of-each-other)).
 
@@ -15,7 +21,7 @@ The app the last activity came from follows the time, as in "Last activity: 3 mi
 | Section | What it sets | Saved |
 |---|---|---|
 | **Name and password** | Name, password | Name: with **Save**. Password: **Reset password**, in its own dialog |
-| **Access** | Administrator, disabled, end date, permissions | Switches: at once. **Ends on**: **Save date** (see [Ending an account](#ending-an-account)) |
+| **Access** | Administrator, Can sign in, end date, permissions | Switches: at once. **Administrator**, either way, and turning **Can sign in** off ask first: making someone an administrator takes them out of their group, and turning sign-in off signs out their devices. **Ends on**: **Save date** (see [Ending an account](#ending-an-account)) |
 | **Metadata language** · **Web player theme** · **Audio region** | Per-user choices (see [Metadata language](watch-state.md#metadata-language), [Web player theme](themes-and-custom-code.md#theme-per-user), [Audio region](watch-state.md#audio-region)) | At once, as chosen |
 | **Playback and access** | Playbacks at once, maximum quality, conversion, torrents and more | With **Save** |
 | **Parental control** | Highest rating allowed | With **Save** |
@@ -31,7 +37,7 @@ The sections saved with **Save** keep their changes until then: a changed row sh
 Administrators can set most of these from a Jellyfin app too. Each section below says where a setting lives.
 
 - **Groups** give several accounts the same limits at once (see [User groups](#user-groups)).
-- **Reset to defaults**, at the top of the page, puts the limits back to a new user's (see [Resetting settings to their defaults](#resetting-settings-to-their-defaults)).
+- **Reset to defaults**, in the "…" menu of the band, puts the limits back to a new user's (see [Resetting settings to their defaults](#resetting-settings-to-their-defaults)).
 
 Other ways to bring users and their history in, listed under **Imports and downloads** on **Users** with **Turn off downloads for everyone**:
 
@@ -56,7 +62,7 @@ API details: [Other users](jellyfin-api.md#other-users-for-apps).
 
 ### Deleting a user
 
-**Delete user**, on a user's page, deletes the account with its devices, sessions and everything kept for it. Deleting the user from a Jellyfin app does the same.
+**Delete user**, in the "…" menu of a user's band, deletes the account with its devices, sessions and everything kept for it. It asks first. Deleting the user from a Jellyfin app does the same.
 
 Polyfin also ends, in the background, what it opened for that user at apps and services outside Polyfin:
 
@@ -82,11 +88,11 @@ A group gives several accounts, such as a family's children, the same limits. A 
 
 A group's page holds the limit sections of a user's page:
 
-- **Access**: **Can convert video (transcoding)**, **Can convert audio (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Disabled** and **Ends on** stay each user's own;
+- **Access**: **Can convert video (transcoding)**, **Can convert audio (transcoding)**, **Can download**, **Can add their own addons**, **Can manage collections**, **Can manage subtitles**, **Can share titles** and **Can play torrent streams**. **Administrator**, **Show on the sign-in screen**, **Can sign in** and **Ends on** stay each user's own;
 - **Playback and access**, with the **Quality group** and the two options of [Louder sound](loudness.md#louder-sound);
 - **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**.
 
-As on a user's page, the **Access** switches save at once, and the group's name and the other sections with the dock's **Save**. The **Sources** switches save at once too (see [Server sources a group uses](#server-sources-a-group-uses)). The page also lists the **Members**, with **Add members**, and offers **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**.
+As on a user's page, the **Access** switches save at once, and the group's name and the other sections with the dock's **Save**. The **Sources** switches save at once too (see [Server sources a group uses](#server-sources-a-group-uses)). The page lists the **Members** second, with **Add members**. The band's "…" menu holds **Reset to defaults** (see [Limits of a group](#limits-of-a-group)) and **Delete group**. The help of each row speaks of the group's members. On a phone, as on a user's page, each section is a page of its own.
 
 ### Members
 
@@ -99,20 +105,20 @@ As on a user's page, the **Access** switches save at once, and the group's name 
 
 ### Following the group
 
-A member follows their group section by section. Each of the seven sections of their page, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**, starts with a **Values** row: **From the group Kids**, the default, or **Own for this user**.
+A member follows their group section by section. Each of the seven sections of their page, **Access**, **Playback and access**, **Parental control**, **Visible libraries**, **Blocked genres**, **Allowed hours** and **Live TV channels**, has a **Values** list beside its title: **From the group Kids**, the default, or **Own for this user**. The band says once how many sections follow the group.
 
 In a section that takes its values from the group:
 
-- the rows show the group's values read only, with "Set by the group Kids.";
+- the rows show the group's values read only: their names and help stay readable, and only their controls are dimmed;
 - a group change reaches the member at once, as saving their page would;
 - their signed-in apps get the new limits from their next request, downloads and allowed hours included;
 - a member whose **Access** follows a group that may not share titles loses their share links.
 
 In a section that is **Own for this user**, the member keeps the group's current values, their page can change them, and later group changes to that section pass them by. The other sections keep following.
 
-- **Changing:** the **Values** row is a change like the others, saved with the dock's **Save**. Going back to **From the group** shows the group's values, each marked with the member's own one, before saving. In **Access**, which saves at once, going back asks first.
+- **Changing:** the **Values** list is a change like the others, saved with the dock's **Save**, and shows "was …" until then. Going back to **From the group** shows the group's values, each marked with the member's own one, before saving. In **Access**, which saves at once, going back asks first.
 - **Everywhere:** **Follow the group everywhere**, in **Access**, makes every section follow again, after asking. It shows when at least one section is own.
-- **Listed:** the member shows as **Group Kids, own settings** on their page and in **Users**. The group's **Members** list names their own sections, as "Own: Playback and access, Visible libraries".
+- **Listed:** in **Users**, the member's row reads **Group Kids, own settings**, and their band says how many sections follow the group. The group's **Members** list names their own sections, as "Own: Playback and access, Visible libraries".
 
 Leaving with **No group**, or deleting the group, keeps the members' values as their own. Joining or moving to another group follows it everywhere. An invite link naming a deleted group creates accounts in no group.
 
@@ -169,13 +175,13 @@ An administrator can put a user's or group's limits back to a new user's setting
 
 ### Limits of a user
 
-**Reset to defaults**, at the top of a user's page, gives the limit sections the settings **Create a user** gives: **Access** permissions, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change, and the settings that change in **Access** and **Playback and access**, or saying nothing changes.
+**Reset to defaults**, in the "…" menu of a user's band, gives the limit sections the settings **Create a user** gives: **Access** permissions, **Playback and access** with the **Quality group**, **Parental control**, **Visible libraries**, **Blocked genres** and **Allowed hours**. It asks first, listing the sections that change, and the settings that change in **Access** and **Playback and access**, or saying nothing changes.
 
 - Administrators get **Can control other users' apps**, **Can manage collections**, **Can manage subtitles** and **Can record Live TV** on, as **Create a user** does with **Administrator**. Other users get them off.
-- Kept: name and password, **Administrator**, **Show on the sign-in screen**, **Disabled**, **Ends on**, the group, **Metadata language**, **Web player theme**, **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
+- Kept: name and password, **Administrator**, **Show on the sign-in screen**, **Can sign in**, **Ends on**, the group, **Metadata language**, **Web player theme**, **Audio region**, the user's own addons, connections and tracking accounts, and everything they watched.
 - Signed-in apps get the new limits from their next request, as after saving.
 - A new user may not share titles, so the user loses their share links (see [Share links](invite-and-share-links.md#share-links)).
-- A member following their group everywhere has no button: the group's page resets them.
+- A member following their group everywhere has no **Reset to defaults** in their menu: the group's page resets them.
 - A member with own sections gets a new user's settings in those sections only. The sections that follow the group keep its values, and the own ones stay own.
 - The activity log records it, as "alex reset the settings of sam to their defaults".
 
@@ -183,7 +189,7 @@ An administrator can put a user's or group's limits back to a new user's setting
 
 ### Limits of a group
 
-**Reset to defaults**, at the top of a group's page, gives the group's sections the values **Create a group** gives from a new user's settings.
+**Reset to defaults**, in the "…" menu of a group's band, gives the group's sections the values **Create a group** gives from a new user's settings.
 
 - It asks first, listing what changes and how many members follow the group, as they get the change at once.
 - Members keep their values in the sections that are own for them.
@@ -229,11 +235,11 @@ From its end the account is refused like a disabled one, but signs out less:
 | Can sign in (Jellyfin apps, Silo's apps, Quick Connect with a Silo TV's code, admin app) | No | No |
 | Its devices and admin sessions | Signed out | Kept, but refused until the account comes back |
 | What the account has | Kept | Kept, its devices included |
-| Undo | Turn **Disabled** off | A later date, or **Never**: the account comes back as it was |
+| Undo | Turn **Can sign in** back on | A later date, or **Never**: the account comes back as it was |
 
 - **Users** shows each end date, as "Ends on October 20, 2026", and **Ended** once passed, as does the user's page. An exact end shows its time too, in your browser's time zone, as "Ends on November 9, 2026 at 6:40 PM".
 - An hourly scheduled task logs each ended account once, within the hour, as "The account of sam ended" (see [Scheduled tasks](administration.md#scheduled-tasks)). Given a later end, it is logged again on reaching it.
-- Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Disabled** off, and only the admin app changes the date.
+- Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Can sign in** on, and only the admin app changes the date.
 - An administrator's account never ends, so the last administrator is never locked out. Administrators cannot get an end date, and becoming one clears it.
 - Live TV recordings, new episode notifications, the weekly summary and imports from an app stop, as for a disabled account.
 - Its devices still count as unused for **Sign out devices unused for (days, 0 = never)** (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices)).

@@ -1,14 +1,15 @@
 import {
   ArrowCounterClockwiseIcon,
   CheckCircleIcon,
+  DotsThreeIcon,
   LinkIcon,
   ShareNetworkIcon,
   TrashIcon,
   UserCircleDashedIcon,
 } from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type ReactNode } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router'
 import {
   ApiError,
   deleteUser,
@@ -23,6 +24,7 @@ import {
   fetchUsers,
   fetchWebThemes,
   forgetUserMoonfin,
+  groupSections,
   queryClient,
   queryKeys,
   revokeShareLink,
@@ -50,35 +52,45 @@ import {
   ButtonLink,
   ConfirmDialog,
   EmptyState,
+  IconButton,
   InlineError,
+  Menu,
+  MenuItem,
   Notice,
   OpenRow,
-  SectionNav,
   Select,
   SettingRow,
   Skeleton,
   SkeletonRows,
   TextInput,
+  TextLink,
   useToast,
 } from '@/ui'
 import DeviceList from './DeviceList'
 import PasswordModal from './PasswordModal'
 import { DraftForm, useDraftPart } from './draft'
-import { Band, PageSection, posterUrl, useWatching, WatchingLink } from './rows'
+import {
+  Band,
+  PageSection,
+  posterUrl,
+  ShownSections,
+  useSectionPages,
+  useWatching,
+  WatchingLink,
+  type SectionGroup,
+} from './rows'
 import {
   accountEnd,
   clockTime,
   LastActivity,
   refreshIfGone,
   storeUser,
-  useSectionInView,
   UserState,
   useUserPatch,
 } from './shared'
 import {
   AllowedHoursSection,
   BlockedGenresSection,
-  FollowedNotice,
   followedGroup,
   LiveTvChannelsSection,
   memberGroup,
@@ -87,29 +99,11 @@ import {
   PlaybackAccessSection,
   ResetDefaultsDialog,
   sectionTitle,
-  SectionValuesRow,
+  SectionValues,
   VisibleLibrariesSection,
   withOwnSection,
   type LimitsTarget,
 } from './UserForms'
-
-const sectionIds = [
-  'profile',
-  'access',
-  'metadata-language',
-  'web-theme',
-  'moonfin',
-  'audio-region',
-  'playback',
-  'parental',
-  'libraries',
-  'genres',
-  'hours',
-  'channels',
-  'share-links',
-  'import-titles',
-  'devices',
-] as const
 
 /** `/users/:id`: one user's page, with every permission in its section. */
 export default function UserDetail({ id }: { id: string }) {
@@ -150,14 +144,12 @@ export default function UserDetail({ id }: { id: string }) {
   return <UserPage user={user} />
 }
 
-/** The address of a title's poster, as Now playing loads it. */
+/** One user's page: their band, then their sections, a page each on a phone. */
 function UserPage({ user }: { user: User }) {
   const { t, language } = useI18n()
   const self = useSessionUser()
   const toast = useToast()
   const navigate = useNavigate()
-  const { hash } = useLocation()
-  const current = useSectionInView(sectionIds, true)
   const watching = useWatching(user.id)
   const [artFailed, setArtFailed] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -170,11 +162,6 @@ function UserPage({ user }: { user: User }) {
   const formsKey = (section: GroupSection) =>
     `${section}:${version}:${user.groupId}:${user.ownSections.includes(section)}`
 
-  // The content arrives after the first render: a #section address scrolls once it is drawn.
-  useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
-  }, [hash])
-
   const remove = useMutation({
     mutationFn: () => deleteUser(user.id),
     onSuccess: () => {
@@ -186,35 +173,56 @@ function UserPage({ user }: { user: User }) {
     onError: refreshIfGone,
   })
 
-  const sections: [string, string][] = [
-    ['profile', t.users.profileTitle],
-    ['access', t.users.accessTitle],
-    ['metadata-language', t.users.metadataLanguageTitle],
-    ['web-theme', t.users.webThemeTitle],
-    ['moonfin', t.users.moonfinTitle],
-    ['audio-region', t.users.audioRegionTitle],
-    ['playback', t.users.playbackAccessTitle],
-    ['parental', t.users.parentalTitle],
-    ['libraries', t.users.visibleLibrariesTitle],
-    ['genres', t.users.blockedGenresTitle],
-    ['hours', t.users.allowedHoursTitle],
-    ['channels', t.users.liveTvChannelsTitle],
-    ['share-links', t.users.shareLinksTitle],
-    ['import-titles', t.importTitles.sectionTitle],
-    ['devices', t.users.devicesTitle],
+  const userGroup = memberGroup(user)
+  const following = groupSections.filter((section) => !user.ownSections.includes(section))
+  // On a phone the list of sections says which ones follow the group.
+  const held = (section: GroupSection) => ({
+    id: section,
+    label: sectionTitle(t, section),
+    note:
+      userGroup !== null && following.includes(section)
+        ? t.groups.valuesFromGroup(userGroup.name)
+        : undefined,
+  })
+  const sections: SectionGroup[] = [
+    {
+      id: 'account',
+      label: t.users.navAccount,
+      items: [{ id: 'profile', label: t.users.profileTitle }, held('access')],
+    },
+    {
+      id: 'preferences',
+      label: t.users.navPreferences,
+      items: [
+        { id: 'metadata-language', label: t.users.metadataLanguageTitle },
+        { id: 'web-theme', label: t.users.webThemeTitle },
+        { id: 'moonfin', label: t.users.moonfinTitle },
+        { id: 'audio-region', label: t.users.audioRegionTitle },
+      ],
+    },
+    {
+      id: 'limits',
+      label: t.users.navLimits,
+      items: (['playback', 'parental', 'libraries', 'genres', 'hours', 'channels'] as const).map(
+        held,
+      ),
+    },
+    {
+      id: 'activity',
+      label: t.users.navActivity,
+      items: [
+        { id: 'share-links', label: t.users.shareLinksTitle },
+        { id: 'import-titles', label: t.importTitles.sectionTitle },
+        { id: 'devices', label: t.users.devicesTitle },
+      ],
+    },
   ]
-  const nav = (
-    <SectionNav
-      label={t.users.sectionsLabel}
-      current={current}
-      items={sections.map(([id, label]) => ({ id, label, to: `#${id}` }))}
-    />
-  )
 
   const end = accountEnd(user, t, language)
   const item = watching?.item ?? null
   const art = item?.posterId && artFailed !== item.posterId ? item.posterId : null
-  const head = (
+  const more = t.users.moreActions(user.name)
+  const band = (
     <Band
       back={{ to: '/users', label: t.users.title }}
       art={art === null ? null : posterUrl(art, 300)}
@@ -225,13 +233,6 @@ function UserPage({ user }: { user: User }) {
           <span>{user.isAdministrator ? t.users.administrator : t.users.member}</span>
           <UserState user={user} />
           {user.id === self.id && <Badge>{t.users.you}</Badge>}
-          {user.groupName !== null && (
-            <Badge>
-              {user.ownSections.length === 0
-                ? t.groups.groupBadge(user.groupName)
-                : t.groups.groupOwnBadge(user.groupName)}
-            </Badge>
-          )}
           <span>
             <LastActivity user={user} />
           </span>
@@ -239,67 +240,93 @@ function UserPage({ user }: { user: User }) {
         </>
       }
       extra={
-        watching !== null && (
-          <WatchingLink session={watching} art={art} onArtError={() => setArtFailed(art)} />
-        )
+        <>
+          {/* Said once for the page: each section it follows the group in carries the choice. */}
+          {userGroup !== null && (
+            // The link's own padding sets it apart on the line, and starts it flush when wrapped.
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-1 text-control text-ink-2">
+              <span className="mr-3">
+                {t.groups.follows(userGroup.name, following.length, groupSections.length)}
+              </span>
+              <TextLink to={`/users/groups/${userGroup.id}`} className="-ml-3">
+                {t.groups.openGroup}
+              </TextLink>
+            </p>
+          )}
+          {watching !== null && (
+            <WatchingLink session={watching} art={art} onArtError={() => setArtFailed(art)} />
+          )}
+        </>
       }
       actions={
-        <>
+        <Menu
+          label={more}
+          align="end"
+          trigger={(props) => <IconButton {...props} label={more} icon={DotsThreeIcon} />}
+        >
           {/* A member following their group everywhere has its values: its page resets them. */}
-          {(user.groupId === null || user.ownSections.length > 0) && (
-            <Button
-              variant="secondary"
-              icon={ArrowCounterClockwiseIcon}
-              onClick={() => setResetting(true)}
-            >
+          {(userGroup === null || user.ownSections.length > 0) && (
+            <MenuItem icon={ArrowCounterClockwiseIcon} onSelect={() => setResetting(true)}>
               {t.resetDefaults.button}
-            </Button>
+            </MenuItem>
           )}
-          <Button
-            variant="danger"
+          <MenuItem
             icon={TrashIcon}
-            onClick={() => {
+            danger
+            onSelect={() => {
               remove.reset()
               setDeleting(true)
             }}
           >
             {t.users.delete}
-          </Button>
-        </>
+          </MenuItem>
+        </Menu>
       }
     />
   )
+  const pages = useSectionPages({
+    label: t.users.sectionsLabel,
+    name: user.name,
+    groups: sections,
+    band,
+  })
 
   return (
     <>
-      <PageLayout head={head} nav={nav}>
-        <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
-          {({ nameError }) => (
-            <>
-              <ProfileSection key={`profile:${version}`} user={user} nameError={nameError} />
-              <AccessSection user={user} />
-              <MetadataLanguageSection user={user} />
-              <WebThemeSection user={user} />
-              <MoonfinSection user={user} />
-              <AudioRegionSection user={user} />
-              <PlaybackAccessSection key={formsKey('playback')} id="playback" target={target} />
-              <ParentalControlSection key={formsKey('parental')} id="parental" target={target} />
-              <VisibleLibrariesSection key={formsKey('libraries')} id="libraries" target={target} />
-              <BlockedGenresSection key={formsKey('genres')} id="genres" target={target} />
-              <AllowedHoursSection key={formsKey('hours')} id="hours" target={target} />
-              <LiveTvChannelsSection key={formsKey('channels')} id="channels" target={target} />
-              <ShareLinksSection user={user} />
-              <ImportTitlesSection user={user} />
-              <PageSection id="devices" title={t.users.devicesTitle}>
-                <DeviceList
-                  queryKey={queryKeys.userDevices(user.id)}
-                  load={(signal) => fetchUserDevices(user.id, signal)}
-                  signOut={(deviceId) => signOutUserDevice(user.id, deviceId)}
+      <PageLayout head={pages.head} nav={pages.nav}>
+        <ShownSections shown={pages.shown}>
+          <DraftForm target={target} onVersion={() => setVersion((count) => count + 1)}>
+            {({ nameError }) => (
+              <>
+                <ProfileSection key={`profile:${version}`} user={user} nameError={nameError} />
+                <AccessSection user={user} />
+                <MetadataLanguageSection user={user} />
+                <WebThemeSection user={user} />
+                <MoonfinSection user={user} />
+                <AudioRegionSection user={user} />
+                <PlaybackAccessSection key={formsKey('playback')} id="playback" target={target} />
+                <ParentalControlSection key={formsKey('parental')} id="parental" target={target} />
+                <VisibleLibrariesSection
+                  key={formsKey('libraries')}
+                  id="libraries"
+                  target={target}
                 />
-              </PageSection>
-            </>
-          )}
-        </DraftForm>
+                <BlockedGenresSection key={formsKey('genres')} id="genres" target={target} />
+                <AllowedHoursSection key={formsKey('hours')} id="hours" target={target} />
+                <LiveTvChannelsSection key={formsKey('channels')} id="channels" target={target} />
+                <ShareLinksSection user={user} />
+                <ImportTitlesSection user={user} />
+                <PageSection id="devices" title={t.users.devicesTitle}>
+                  <DeviceList
+                    queryKey={queryKeys.userDevices(user.id)}
+                    load={(signal) => fetchUserDevices(user.id, signal)}
+                    signOut={(deviceId) => signOutUserDevice(user.id, deviceId)}
+                  />
+                </PageSection>
+              </>
+            )}
+          </DraftForm>
+        </ShownSections>
       </PageLayout>
       <ConfirmDialog
         open={deleting}
@@ -446,8 +473,10 @@ function ProfileSection({ user, nameError }: { user: User; nameError: string | u
 }
 
 /**
- * What applies at once: role, sign-in screen, disabled, the end date, the group, and the user's
- * rights, which the group of a member sets while Access follows it.
+ * What applies at once: role, sign-in screen, whether the account can sign in, the end date, the
+ * group, and the user's rights, which the group of a member sets while Access follows it. What a
+ * tap cannot take back alone is asked first, naming its effects: the administrator's role either
+ * way, turning sign-in off, joining a group and following it again.
  */
 function AccessSection({ user }: { user: User }) {
   const { t, language } = useI18n()
@@ -458,10 +487,14 @@ function AccessSection({ user }: { user: User }) {
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => fetchStatus(signal),
   }).data?.provider
-  // Joining a group and following it again, in Access or everywhere, replace the user's values:
-  // each is asked first.
   const [asked, setAsked] = useState<
-    { groupId: string; name: string } | 'access' | 'everywhere' | null
+    | { groupId: string; name: string }
+    | 'access'
+    | 'everywhere'
+    | 'administrator'
+    | 'demote'
+    | 'disable'
+    | null
   >(null)
   // Losing the permission, or being disabled, revokes the user's share links. A change waits for
   // the one before it, so that no row is turned off under the keyboard meanwhile.
@@ -479,12 +512,95 @@ function AccessSection({ user }: { user: User }) {
   const userGroup = memberGroup(user)
   const accessOwn = user.ownSections.includes('access')
   const followed = followedGroup(user, 'access')
+  // How many devices turning sign-in off signs out, read when asked.
+  const devices = useQuery({
+    queryKey: queryKeys.userDevices(user.id),
+    queryFn: ({ signal }) => fetchUserDevices(user.id, signal),
+    enabled: asked === 'disable',
+  }).data?.length
+
+  // The confirmation of what is asked: its title, its words, its button and what it applies.
+  const confirm =
+    asked === null
+      ? null
+      : asked === 'administrator'
+        ? {
+            title: t.users.makeAdministratorTitle(user.name),
+            body: t.users.makeAdministratorConfirm(user.name, user.groupName),
+            label: t.users.makeAdministrator,
+            tone: 'primary' as const,
+            apply: () => change({ isAdministrator: true }),
+          }
+        : asked === 'demote'
+          ? {
+              title: t.users.removeAdministratorTitle(user.name),
+              body: t.users.removeAdministratorConfirm(user.name),
+              label: t.users.removeAdministrator,
+              tone: 'danger' as const,
+              apply: () => change({ isAdministrator: false }),
+            }
+          : asked === 'disable'
+            ? {
+                title: t.users.disableTitle(user.name),
+                body: t.users.disableConfirm(user.name, devices ?? null),
+                label: t.users.disable,
+                tone: 'danger' as const,
+                apply: () => change({ isDisabled: true }),
+              }
+            : asked === 'access'
+              ? {
+                  title: t.groups.followSectionTitle(sectionTitle(t, 'access')),
+                  body: t.groups.followSectionConfirm(
+                    user.name,
+                    userGroup?.name ?? '',
+                    t.users.accessTitle,
+                  ),
+                  label: t.groups.followAgain,
+                  tone: 'primary' as const,
+                  apply: () =>
+                    change({ ownSections: withOwnSection(user.ownSections, 'access', false) }),
+                }
+              : asked === 'everywhere'
+                ? {
+                    title: t.groups.followEverywhereTitle,
+                    body: t.groups.followEverywhereConfirm(user.name, userGroup?.name ?? ''),
+                    label: t.groups.followAgain,
+                    tone: 'primary' as const,
+                    apply: () => change({ ownSections: [] }),
+                  }
+                : {
+                    title: t.groups.joinTitle,
+                    body: t.groups.joinConfirm(user.name, asked.name),
+                    label: t.groups.join,
+                    tone: 'primary' as const,
+                    apply: () => change({ groupId: asked.groupId }),
+                  }
+  const ask = (what: NonNullable<typeof asked>) => {
+    access.reset()
+    setAsked(what)
+  }
 
   return (
     <PageSection
       id="access"
       title={t.users.accessTitle}
       description={<SavedAtOnce>{`${t.users.accessHelp} ${t.users.lastAdminHelp}`}</SavedAtOnce>}
+      aside={
+        userGroup !== null && (
+          <SectionValues
+            title={t.users.accessTitle}
+            group={userGroup}
+            own={accessOwn}
+            onChange={(own) => {
+              if (!own) ask('access')
+              else {
+                access.reset()
+                change({ ownSections: withOwnSection(user.ownSections, 'access', true) })
+              }
+            }}
+          />
+        )
+      }
     >
       {access.isError && asked === null && (
         <Notice tone={lastAdmin ? 'warn' : 'danger'} live>
@@ -500,7 +616,7 @@ function AccessSection({ user }: { user: User }) {
             : `${t.users.isAdministratorHelp} ${t.groups.administratorLeaves(user.groupName)}`
         }
         checked={user.isAdministrator}
-        onChange={(isAdministrator) => change({ isAdministrator })}
+        onChange={(isAdministrator) => ask(isAdministrator ? 'administrator' : 'demote')}
       />
       <SettingRow
         kind="switch"
@@ -511,10 +627,10 @@ function AccessSection({ user }: { user: User }) {
       />
       <SettingRow
         kind="switch"
-        label={t.users.isDisabled}
-        help={t.users.isDisabledHelp}
-        checked={user.isDisabled}
-        onChange={(isDisabled) => change({ isDisabled })}
+        label={t.users.canSignIn}
+        help={t.users.canSignInHelp}
+        checked={!user.isDisabled}
+        onChange={(canSignIn) => (canSignIn ? change({ isDisabled: false }) : ask('disable'))}
       />
       <SettingRow
         kind="switch"
@@ -579,58 +695,26 @@ function AccessSection({ user }: { user: User }) {
           help={t.groups.ownSections(
             user.ownSections.map((section) => sectionTitle(t, section)).join(', '),
           )}
-          onClick={() => {
-            access.reset()
-            setAsked('everywhere')
-          }}
+          onClick={() => ask('everywhere')}
         />
       )}
-      {userGroup !== null && (
-        <SectionValuesRow
-          group={userGroup}
-          own={accessOwn}
-          onChange={(own) => {
-            access.reset()
-            if (own) change({ ownSections: withOwnSection(user.ownSections, 'access', true) })
-            else setAsked('access')
-          }}
-        />
-      )}
-      {followed !== null && <FollowedNotice group={followed} />}
-      <PermissionRows values={user} disabled={followed !== null} onChange={change} />
+      <PermissionRows
+        values={user}
+        readOnly={followed !== null}
+        forGroup={false}
+        onChange={change}
+      />
       <ConfirmDialog
-        open={asked !== null}
+        open={confirm !== null}
         onClose={() => setAsked(null)}
-        onConfirm={() =>
-          asked === 'access'
-            ? change({ ownSections: withOwnSection(user.ownSections, 'access', false) })
-            : asked === 'everywhere'
-              ? change({ ownSections: [] })
-              : asked !== null && change({ groupId: asked.groupId })
-        }
-        title={
-          asked === 'access'
-            ? t.groups.followSectionTitle(sectionTitle(t, 'access'))
-            : asked === 'everywhere'
-              ? t.groups.followEverywhereTitle
-              : t.groups.joinTitle
-        }
-        confirmLabel={
-          access.isPending
-            ? t.common.saving
-            : asked === 'access' || asked === 'everywhere'
-              ? t.groups.followAgain
-              : t.groups.join
-        }
-        tone="primary"
+        onConfirm={() => confirm?.apply()}
+        title={confirm?.title ?? ''}
+        confirmLabel={access.isPending ? t.common.saving : (confirm?.label ?? '')}
+        tone={confirm?.tone}
         busy={access.isPending}
         error={access.isError ? errorMessage(t, access.error) : undefined}
       >
-        {asked === 'access'
-          ? t.groups.followSectionConfirm(user.name, userGroup?.name ?? '', t.users.accessTitle)
-          : asked === 'everywhere'
-            ? t.groups.followEverywhereConfirm(user.name, userGroup?.name ?? '')
-            : asked !== null && t.groups.joinConfirm(user.name, asked.name)}
+        {confirm?.body}
       </ConfirmDialog>
     </PageSection>
   )
