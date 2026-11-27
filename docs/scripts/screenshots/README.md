@@ -40,7 +40,7 @@ node docs/scripts/screenshots/sweep.mjs \
 ```
 
 - **Version:** the build takes the latest release's number, so that **Home** shows a version rather than `dev`.
-- **Time:** the shots take about a minute and a half, the sweep about three minutes.
+- **Time:** the shots take about a minute and a half, the sweep about four minutes.
 - **Disk:** the demo video takes about 280 MB in the system's temporary folder while it runs.
 - **Log:** Polyfin's log is left in the temporary folder, as `polyfin-screenshots.log`, or `polyfin-sweep.log` for the sweep. It tells why a step failed.
 
@@ -118,10 +118,12 @@ Each shot is a `shot('<name>', …)` step of `take.mjs`. It opens a page, brings
 - **Addresses:** a route without a parameter is visited as is. Signed in at 1440 pixels in English, the sweep follows each page's links to the routes with parameters, 40 addresses of each at most, then visits those in every other case. Signed out, every address leads to the sign-in page, so one address of each route is enough. A title's versions, which a search opens, and an open invite, which no page links to, are given. An invite that does not exist is visited signed out only: each lookup counts against the address's sign-in attempts, which a dozen exhaust.
 - **A route no page links to** fails the sweep: give the demo something that shows it.
 - **When it measures:** once no request has been under way for half a second, the fonts are loaded and the entrances and transitions under way have ended, so that boxes are measured where they rest. A rising block is a fraction of a pixel off, enough for a box left to screen readers to count as seen.
+- **States:** a visit sees each page as it loads. Then, as the administrator, in the six languages at 1440, 1024, 768 and 390 pixels, the sweep takes a few steps a visit never reaches and checks the state they lead to as it checks a page: a change in **Settings › Conversion**, so that the unsaved dock shows; a row's menu in **Users**; **Add source** in **Sources**; and the keyboard's focus on a section other than the current one. `steps` in `sweep.mjs` lists them; findings name the step after the address.
 - **Findings:**
   - **Overflow:** the page scrolls sideways, or an element goes past its edge, unless a box that scrolls or clips keeps it in.
   - **Requests:** the page sends the same GET of the admin API twice from its start until it settles, query included: its components should share the answer (the admin app keeps one 5 seconds). `repeatsAllowed` in `sweep.mjs` lists the addresses that may come again, each with its reason; it has none.
   - **Text:** text runs out of the nearest box that frames it (a border, a background or its own overflow), or is cut off by it, unless it ends with an ellipsis or a line clamp, or the box scrolls. What only screen readers read is left out.
   - **Console:** any error, but the two expected: the 401 of the session check signed out, and the 404 of an invite that does not exist.
+  - **Save:** after the change, the dock's Save lies inside its card, and a click at its centre lands on it, not on what paints over it.
   - **Accessibility:** a serious or critical violation of axe-core's rules, run on the settled page. `axeAllowed` in `sweep.mjs` lists those accepted, each with its reason; keep it short. It has one: the contrast of a disabled setting's name, value and explanation (`data-inactive` on its row), dimmed as an inactive control, which WCAG exempts. A link or a button in that row is never accepted.
 - **Report:** the findings, by page and case, then an exit code of 1. With `--shots`, a screenshot of each page with a finding. The log also counts axe's violations by rule and impact, the moderate and minor ones and those accepted included.
