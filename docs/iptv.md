@@ -185,9 +185,9 @@ Each source has its own page, titled with the source's name and kind: **M3U play
 
 ![An M3U playlist source's page on Summary, beside the list of sources, with Download again and its six sections as words under its name](images/iptv-source.webp)
 
-- The page's head holds **Download again**, on every section, and the more-actions menu with **Edit the account** and **Remove**.
+- The page's head holds **Download again**, on every section, and the more-actions menu with **Edit the address** (an M3U playlist) or **Edit the account** (an Xtream Codes account), and **Remove**.
 - The page has six sections, as words under its name: **Summary**, **Import options**, **Categories**, **Channels**, **Guides** and **Guide mapping**.
-- **Summary** shows a failed download first, with **Download again**, then the Live TV figures, the first channels, **Enabled**, **Used by**, the order, and the lists' downloads.
+- A failed download shows first, above the sections, with **Download again** and **Edit the address** or **Edit the account** (see [The page of a source](addons.md#the-page-of-a-source)). **Summary** then shows the Live TV figures, the first channels, **Enabled**, **Used by**, the order, and the lists' downloads.
 - While **Live TV channels** is off, the four Live TV sections are hidden: **Categories**, **Channels**, **Guides** and **Guide mapping**.
 - **Content › Live TV** also lists each IPTV source's channel counts; its row opens the source's **Channels**.
 
@@ -213,7 +213,7 @@ Add, rename, reorder, turn on or off, and delete categories.
 
 ### Channels
 
-The channel list loads from the server 100 at a time. It filters by category, state, visibility in apps, guide and archive.
+The channel list loads from the server 100 at a time, with page buttons only when the channels do not fit on one page. It filters by search, category, state, visibility in apps, guide and archive, on two rows of three.
 
 - A channel whose provider keeps its past programmes shows for how many days, such as **Replay, 7 days**.
 - A channel whose every turned-on stream needs a DRM Polyfin does not support, such as Widevine, shows **Needs a DRM**, and is not shown in apps (see [DASH channels and encryption](iptv-streams.md#dash-channels-and-encryption)).
@@ -249,11 +249,11 @@ Each stream shows how it last answered when its channel was opened.
 
 ### Guides
 
-The catalog's XMLTV guides in order, with their status and the automatic mapping. See [XMLTV guides](live-tv.md#xmltv-guides).
+The catalog's XMLTV guides in order, with their status and the automatic mapping. **Download the guides** fetches them all again. See [XMLTV guides](live-tv.md#xmltv-guides).
 
 ### Guide mapping
 
-The guide channel each channel takes its programmes from. Set it by hand from a search across the guides, which shows what airs now. See [Remapping and mapping by hand](live-tv.md#remapping-and-mapping-by-hand).
+The guide channel each channel takes its programmes from. Each row has one **Change** button, which opens a search across the guides, showing what airs now, with **No guide** and **Back to automatic** beside **Cancel**. See [Remapping and mapping by hand](live-tv.md#remapping-and-mapping-by-hand).
 
 A Stremio addon's Live TV catalog has the same **Guides** and **Guide mapping** views. Open them with **Guides and mapping** on its row in **Content › Live TV** (see [Live TV](live-tv.md)).
 

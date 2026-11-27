@@ -254,7 +254,25 @@ Manifest addresses usually hold your addon settings or keys. Polyfin never shows
 
 With `POLYFIN_SECRET_KEY` set, Polyfin stores them encrypted, and the addresses of IPTV sources and guides too (see [Addon and source addresses](configuration.md#addon-and-source-addresses)).
 
-Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit. The page shows its details, an addon's **Name**, the **Enabled** switch, **Used by** and its place in the order. **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+### The list of sources
+
+**Content › Sources** and **My sources** list the sources in two groups:
+
+- **Needs attention:** the sources with a problem, first, such as an addon that does not answer, a list that failed to download or a folder that cannot be read.
+- **In their order:** the others, in the order of sources (see [The order of sources](#the-order-of-sources)). Without a problem, the list shows this group alone, untitled.
+
+Each row has its switch, and up and down arrows that move it among the sources of its kind of owner. The arrows show on the open row and on the row under the mouse or the keyboard, and always on a touch screen. A row under **Needs attention** has none: its page's **Order** moves it. Below 1024 px, where a row opens a page of its own, the page's **Order** moves the source too.
+
+### The page of a source
+
+Each source has its own page: select its row in **Content › Sources** or **My sources**, and the page opens beside the list, with the row lit.
+
+- **A problem first:** a source that does not work shows its alert first, before any of its settings, with what fixes it: **Refresh**, **Download again** or **Scan now** to read it again, and **Replace the address**, **Edit the address**, **Edit the account** or **Edit the folder** to change it.
+- **Details:** read-only details, such as the version, the address and **Network**, are label and value pairs in one panel.
+- **Settings:** an addon's **Name**, the **Enabled** switch, **Used by** and **Order**, its place in the order. **Order** says what it decides, and links to **Settings › Version choice** for the order of versions.
+- **Remove**, in the more-actions menu, asks first (see [Removing a source](#removing-a-source)).
+
+**Add a source** keeps **Cancel** and its action in the dialog's footer. The address `/admin/sources?add=source` opens the list with the dialog open, as the search's **Add a source** does (see [Signing in and search](administration.md#signing-in-and-search)).
 
 ### Configuring an addon
 

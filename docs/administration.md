@@ -26,7 +26,7 @@ A row of big words at the top of every page holds the areas, for administrators:
 - **Home** (`/admin/`): what plays now and what needs a look;
 - **Content**: **Sources** (`/admin/sources`), **Libraries** (`/admin/libraries`), **Live TV** (`/admin/live-tv`) and **Versions** (`/admin/versions`);
 - **Users** (`/admin/users`);
-- **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`), with a red count beside it while Health finds problems;
+- **System**: **Health**, **Statistics**, **Schedule**, **Logs** and **API keys** (`/admin/system/…`), with a count beside it while Health finds problems: red when one of them is an error, amber when they are all warnings;
 - **Settings**, one page per section (`/admin/settings/general`, `/admin/settings/content`…).
 
 The pages of Content and System show as smaller words under the page's title. The account, on the right after **Search** and the web player, opens a panel with **My account**, **My sources** and **Quick Connect** (`/admin/me/…`), the language, a link to Polyfin's source code on GitHub, and **Sign out**.
@@ -36,8 +36,8 @@ The pages of Content and System show as smaller words under the page's title. Th
 1: the areas. 2: **Search**, with the **Web player** link beside it. 3: the account panel.
 
 - **Members** see shorter words: **Home**, **My sources**, **My account** and **Quick Connect**. The other pages tell them they may not open them.
-- Below 1280 px, **Search** and **Web player** show their icons alone.
-- On a phone, the row keeps the logo, search, the web player, the account and a menu button. The menu fills the screen: the account, search, the web player, the areas with their pages, then the account's pages, the language and **Sign out**.
+- Below 1280 px, **Search** and **Web player** show their icons alone. The areas keep their words in the row down to 768 px.
+- Below 768 px, on a phone, the row keeps the logo, search, the web player, the account and a menu button, which carries Health's count. The menu fills the screen: the account, search, the web player, the areas with their pages, then the account's pages, the language and **Sign out**.
 
 ### The web player link
 
@@ -95,9 +95,11 @@ Sign in to the admin app with the account's name and password. An account with t
 - Administrators can require two-step sign-in of administrators in **Settings › Security**.
 - They can turn it off for a user who lost their phone (see [For administrators](sign-in-and-security.md#for-administrators)).
 
-**Search** finds pages, settings, users and sources by name, with or without accents.
+**Search** finds pages, settings, users and sources by name, with or without accents, and the most common actions by their verb.
 
 - Open it with ⌘K on a Mac, Ctrl K elsewhere, or `/`.
+- **Actions:** "invite" finds **Create an invite link**, which opens **Users** with the invite dialog open (`/admin/users?action=invite`). "add" finds **Add a source**, which opens **Content › Sources** with its dialog open (`/admin/sources?add=source`). The verbs work in the admin app's language and in English.
+- **Order:** people come before settings, so a name finds its user first. A result that repeats an earlier one on the same page, such as a setting named as its section, is left out.
 - Use the arrows and Enter to open a result, and Escape to close the search.
 
 Addresses from before this layout, such as `/admin/health` or `/admin/settings#settings-tracking`, still open the right page.

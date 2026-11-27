@@ -365,7 +365,7 @@ Some IPTV addons publish no Native EPG guide, while their provider publishes one
 | Its refresh is due | Once **Refresh Live TV lists and guides every (hours)** has passed. Polyfin looks for the guides due every 5 minutes. |
 | Its download failed | After 5 minutes, then 15 minutes, then every hour, never later than the setting. Later when the server asked to wait. |
 | It is a file of the server that changed, or became unreadable | Within 5 minutes |
-| You press **Download again** on the **Guides** page | At once, with every guide of the catalog |
+| You press **Download the guides** on the **Guides** page | At once, with every guide of the catalog |
 
 The catalog's row then shows when its first guide was last fetched and will be fetched next. It also shows how many of its channels are mapped to a guide channel, and why the last fetch failed, if it did. The **Guides** page shows the same for each guide, with the channels and programmes it held.
 
@@ -435,12 +435,12 @@ A channel whose catalog or line-up gives no logo, such as a tuner's, shows the i
 Channels are mapped again from what is kept, without downloading:
 
 - after every download, list refresh and change of an IPTV source's options;
-- from **Automatic mapping**, on the **Guides** page. **Map channels without a guide** maps only the channels without a mapping. **Remap every channel** remaps every channel, after asking.
+- from **Automatic mapping**, on the **Guides** page. **Map channels without a guide**, its main button, maps only the channels without a mapping. **Remap every channel**, a secondary button, remaps every channel, after asking.
 
 The **Guide mapping** page lists the catalog's channels with their mapping: all, with a guide, without a guide, or set by hand.
 
 - **Searching:** it searches the guides' channels by name or identifier, showing what each airs now.
-- **By hand:** **Choose a guide channel** maps a channel by hand, to a guide channel or to no guide at all.
+- **By hand:** **Change**, on a channel's row, opens the search and maps the channel by hand to a guide channel, or with **No guide** to no guide at all.
 - **Keeping it:** a choice made by hand survives downloads, refreshes and **Map channels without a guide**. Only **Remap every channel**, or **Back to automatic**, returns the channel to automatic mapping.
 
 #### Where XMLTV programmes appear
