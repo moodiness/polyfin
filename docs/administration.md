@@ -229,6 +229,8 @@ An administrator whose **Can control other users' apps** permission was taken aw
 
 In **Recent activity**, the title an entry names (the movie, episode or track of a playback, or the title of a share link) opens its page in the web player, while Polyfin serves it: in a new tab, or in place when you came from the web player or a Jellyfin app. A title removed since, or one your own view does not hold, such as a member's own source, stays plain text, and so do the entries written before Polyfin kept where their title is.
 
+**Recent activity** reads each entry in the language you chose for the admin app, whichever language the server used when it was written: "Connexion de sam" for an administrator reading in French, "sam hat sich angemeldet" for one reading in German. Jellyfin apps read it in the server's language, **Language of generated names** in **Settings › General**. Entries written before Polyfin kept them this way stay in the language they were written in.
+
 ## Statistics
 
 **System › Statistics** shows how the server is used, with **Export CSV**:

@@ -5194,10 +5194,14 @@ export const createApiKey = (app: string) => request<NewApiKey>('POST', '/api-ke
 
 export const deleteApiKey = (id: string) => request<void>('DELETE', `/api-keys/${seg(id)}`)
 
-/** Which entries of the activity log to list: `limit` (1 to 100) from `start`, newest first. */
+/**
+ * Which entries of the activity log to list: `limit` (1 to 100) from `start`, newest first,
+ * named in `language`.
+ */
 export type ActivityQuery = {
   limit: number
   start?: number
+  language: Language
   /** Entry types kept; empty keeps all. */
   types?: readonly string[]
   /** Severities kept; empty keeps all. */
@@ -5205,7 +5209,7 @@ export type ActivityQuery = {
 }
 
 export function fetchActivity(query: ActivityQuery, signal?: AbortSignal) {
-  const params = new URLSearchParams({ limit: String(query.limit) })
+  const params = new URLSearchParams({ limit: String(query.limit), language: query.language })
   if (query.start) params.set('start', String(query.start))
   if (query.types?.length) params.set('type', query.types.join(','))
   if (query.severities?.length) params.set('severity', query.severities.join(','))

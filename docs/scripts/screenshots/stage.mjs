@@ -815,10 +815,11 @@ async function enrich(stage, { addon, iptv, users, title }) {
     groupId: groupIds['Weekend movie club'],
   })
 
-  // An activity log as long as a real one's, its names up to 108 characters.
+  // An activity log as long as a real one's, its names up to 108 characters. Each entry keeps its
+  // phrases, as Polyfin writes them, so that it reads in the admin app's language.
   await query(
     databaseUrl,
-    `INSERT INTO activity_log (name, short_overview, type, user_id, date, severity)
+    `INSERT INTO activity_log (name, short_overview, type, user_id, date, severity, name_phrase, short_overview_phrase)
       SELECT CASE n % 3
           WHEN 0 THEN u.name || ' is playing Night Train on Living room TV'
           WHEN 1 THEN u.name || ' signed in'
@@ -826,7 +827,15 @@ async function enrich(stage, { addon, iptv, users, title }) {
         END,
         CASE n % 3 WHEN 1 THEN 'Address: 127.0.0.1' END,
         CASE n % 3 WHEN 0 THEN 'VideoPlayback' WHEN 1 THEN 'AuthenticationSucceeded' ELSE 'VideoPlaybackStopped' END,
-        u.id, now() - make_interval(mins => n * 50), 'Information'
+        u.id, now() - make_interval(mins => n * 50), 'Information',
+        CASE n % 3
+          WHEN 0 THEN jsonb_build_object('key', 'videoStarted', 'args', jsonb_build_array(
+            jsonb_build_object('text', u.name), '{"text": "Night Train"}'::jsonb, '{"text": "Living room TV"}'::jsonb))
+          WHEN 1 THEN jsonb_build_object('key', 'signedIn', 'args', jsonb_build_array(jsonb_build_object('text', u.name)))
+          ELSE jsonb_build_object('key', 'videoStopped', 'args', jsonb_build_array(jsonb_build_object('text', u.name),
+            '{"text": "Glass Garden, season 1, episode 4, In Bloom (extended version)"}'::jsonb, '{"text": "Upstairs bedroom TV"}'::jsonb))
+        END,
+        CASE n % 3 WHEN 1 THEN '{"key": "address", "args": [{"text": "127.0.0.1"}]}'::jsonb END
       FROM generate_series(1, 1150) n
       JOIN LATERAL (SELECT id, name FROM users ORDER BY name OFFSET (n % 10) LIMIT 1) u ON true`,
   )
