@@ -2,8 +2,11 @@ import type { Icon } from '@phosphor-icons/react'
 import type { SessionUser } from '@/api'
 import type { Messages } from '@/i18n'
 
-/** The groups of results, in the order the palette shows them. */
-export const paletteGroups = ['pages', 'settings', 'users', 'sources'] as const
+/**
+ * The groups of results, in the order the palette shows them: people before settings, so that a
+ * name finds its user before a setting that happens to contain it.
+ */
+export const paletteGroups = ['pages', 'users', 'settings', 'sources'] as const
 
 type PaletteGroup = (typeof paletteGroups)[number]
 

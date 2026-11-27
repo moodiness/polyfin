@@ -81,6 +81,10 @@ const nav: typeof en = {
       local: 'Cartella locale',
     },
     ownedBy: (kind: string, owner: string) => `${kind} di ${owner}`,
+    verbs: {
+      addSource: ['aggiungere', 'installare', 'nuova origine', 'addon'],
+      invite: ['invitare', 'invito'],
+    },
   },
 }
 

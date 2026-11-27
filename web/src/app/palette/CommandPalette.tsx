@@ -18,8 +18,12 @@ import { paletteGroups, paletteSources, type PaletteEntry } from './registry'
 
 // Each area registers its entries in `src/features/<area>/palette.ts`; loading them here is all
 // it takes for the palette to offer them. They load on the palette's first opening, not with the
-// app: the settings' entries bring the settings catalog and two languages' words for it.
-const areaEntries = import.meta.glob('/src/features/*/palette.ts')
+// app, as do the actions: the settings' entries bring the settings catalog and two languages'
+// words for it, the actions the English verbs.
+const areaEntries = [
+  ...Object.values(import.meta.glob('/src/features/*/palette.ts')),
+  () => import('./actionEntries'),
+]
 let areaEntriesLoaded: Promise<unknown> | undefined
 
 const PaletteContext = createContext<() => void>(() => {})
@@ -49,7 +53,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   useEffect(() => {
     if (!open || ready) return
-    areaEntriesLoaded ??= Promise.all(Object.values(areaEntries).map((load) => load()))
+    areaEntriesLoaded ??= Promise.all(areaEntries.map((load) => load()))
     void areaEntriesLoaded.then(() => setReady(true))
   }, [open, ready])
 
@@ -141,8 +145,18 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
 
-  // Each source is a hook: they run in registration order on every draw of the open palette.
-  const entries = paletteSources().flatMap((source) => source.use({ t, user }))
+  // Each source is a hook: they run in registration order on every draw of the open palette. An
+  // entry that says what an earlier one says, on the same page (a setting named as its section),
+  // is left out.
+  const seen = new Set<string>()
+  const entries = paletteSources()
+    .flatMap((source) => source.use({ t, user }))
+    .filter((entry) => {
+      const key = `${entry.group}\n${entry.label}\n${entry.to.split('#')[0]}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
   // Every word typed must be found, without regard to accents or case.
   const words = searchable(query.trim()).split(/\s+/).filter(Boolean)
