@@ -6,7 +6,7 @@ import { errorMessage } from '@/format'
 import { computer, useServerSystem } from '@/features/sources/LocalFolders'
 import { useI18n } from '@/i18n'
 import { Button, Field, Notice, TextInput } from '@/ui'
-import { AuthFrame, authForm, wideButton } from './AuthFrame'
+import { AuthFrame, authForm, useFirstField, wideButton } from './AuthFrame'
 import SetupRestore from './SetupRestore'
 
 /**
@@ -22,6 +22,7 @@ export default function SetupRoute() {
   const [confirmation, setConfirmation] = useState('')
   const [mismatch, setMismatch] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const firstField = useFirstField()
 
   const mutation = useMutation({
     mutationFn: setup,
@@ -70,7 +71,7 @@ export default function SetupRoute() {
             spellCheck={false}
             placeholder="XXXX-XXXX"
             mono
-            autoFocus
+            ref={firstField}
             required
           />
         </Field>
