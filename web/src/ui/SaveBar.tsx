@@ -17,8 +17,8 @@ import { FieldError } from './Field'
 
 /**
  * The place of the unsaved dock on a split page: an element under the section list, which
- * `PageLayout` provides. From 768 px up, a SaveBar moves into it; without it, or on a phone, the
- * SaveBar draws itself where it is.
+ * `PageLayout` provides. From 768 px up, a SaveBar moves into it; without it, the SaveBar draws
+ * itself where it is, and on a phone it is a bar along the bottom (see SaveBar).
  */
 export const DockSlotContext = createContext<HTMLElement | null>(null)
 
@@ -35,10 +35,12 @@ function subscribeWide(onChange: () => void) {
  * Discard changes and Save. It shows while there are changes and stays out of the way otherwise.
  * - On a split page it docks under the section list (see DockSlotContext), clear of every row.
  * - Elsewhere it sticks to the bottom of the form, at its end, so the last row scrolls clear.
- * - On a phone it is a bar along the bottom; the form keeps room under its last row for it.
+ * - On a phone it is a bar along the bottom; the form keeps room under its last row for it. The
+ *   bar moves to the end of the page's `main` (or of its dialog): an ancestor's transform, such as
+ *   the one an entrance animation leaves, would otherwise hold it at that ancestor's foot.
  *
  * Put it inside the `<form>`, once per page: its Save button submits that form, even from the
- * dock (`form` attribute).
+ * dock or the bar (`form` attribute).
  */
 export function SaveBar({
   dirty,
@@ -73,12 +75,16 @@ export function SaveBar({
   const isWide = useSyncExternalStore(subscribeWide, () => matchMedia(wide).matches)
   const ownId = useId()
   const [formId, setFormId] = useState<string | undefined>(undefined)
+  const [phoneHost, setPhoneHost] = useState<HTMLElement | null>(null)
   const shown = dirty || saving
   const docked = slot !== null && isWide
+  const host = docked ? slot : isWide ? null : phoneHost
 
-  // The dock may leave the form's DOM for the slot: its Save button names the form by id.
+  // The dock may leave the form's DOM: its Save button names the form by id.
   useLayoutEffect(() => {
-    const form = anchor.current?.closest('form')
+    const at = anchor.current
+    setPhoneHost(at?.closest('dialog') ?? at?.closest('main') ?? document.body)
+    const form = at?.closest('form')
     if (!form) return
     if (form.id === '') form.id = `form-${ownId.replace(/[^a-zA-Z0-9_-]/g, '')}`
     setFormId(form.id)
@@ -100,7 +106,7 @@ export function SaveBar({
   const save = (
     <Button
       type="submit"
-      form={docked ? formId : undefined}
+      form={host ? formId : undefined}
       variant="primary"
       size="sm"
       icon={CheckIcon}
@@ -168,7 +174,7 @@ export function SaveBar({
       <p aria-live="polite" className="sr-only">
         {shown ? count : t.ui.allSaved}
       </p>
-      {docked ? createPortal(dock, slot) : dock}
+      {host ? createPortal(dock, host) : dock}
     </>
   )
 }
