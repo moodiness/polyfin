@@ -86,6 +86,33 @@ export function SaveBar({
 
   const count = changes === undefined ? t.ui.unsaved : t.ui.changes(changes)
 
+  const discard = onDiscard && (
+    <Button
+      size="sm"
+      onClick={onDiscard}
+      disabled={saving}
+      className={cx('max-md:ml-auto', docked ? 'md:w-full' : 'md:justify-self-start')}
+    >
+      {t.ui.discard}
+    </Button>
+  )
+
+  const save = (
+    <Button
+      type="submit"
+      form={docked ? formId : undefined}
+      variant="primary"
+      size="sm"
+      icon={CheckIcon}
+      loading={saving}
+      disabled={!shown}
+      // When the bar wraps on a narrow phone, Save stays at the right.
+      className={cx('max-md:ml-auto', docked && 'md:w-full')}
+    >
+      {saving ? (savingLabel ?? t.common.saving) : (saveLabel ?? t.common.save)}
+    </Button>
+  )
+
   const dock = (
     <div
       inert={!shown}
@@ -97,9 +124,11 @@ export function SaveBar({
           : 'pointer-events-none translate-y-8 opacity-0',
         // A bar along the bottom of a phone.
         'max-md:fixed max-md:inset-x-2.5 max-md:bottom-2.5 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-1.5 max-md:rounded-[1.125rem] max-md:py-1.5 max-md:pr-1.5 max-md:pl-3.5',
-        // A card under the section list, or at the end of the form, where a hidden card leaves
-        // no gap under the form.
-        'md:grid-cols-[1fr_auto] md:gap-x-2 md:gap-y-2.5 md:px-2.5 md:pt-3 md:pb-2.5',
+        // A card at the end of the form: Discard and Save side by side. Docked under the section
+        // list, the column is too narrow for both in most languages: one column, Save first and
+        // full width, Discard under it.
+        'md:gap-x-2 md:gap-y-2.5 md:px-2.5 md:pt-3 md:pb-2.5',
+        docked ? 'md:grid-cols-1' : 'md:grid-cols-[1fr_auto]',
         docked || shown ? 'md:grid' : 'md:hidden',
         docked ? 'md:w-full' : 'md:sticky md:bottom-7 md:mt-8 md:ml-auto md:w-max md:min-w-[16rem]',
       )}
@@ -113,31 +142,17 @@ export function SaveBar({
           {note}
         </p>
       )}
-      {onDiscard ? (
-        <Button
-          size="sm"
-          onClick={onDiscard}
-          disabled={saving}
-          className="max-md:ml-auto md:justify-self-start"
-        >
-          {t.ui.discard}
-        </Button>
+      {docked ? (
+        <>
+          {save}
+          {discard}
+        </>
       ) : (
-        <span className="max-md:hidden" />
+        <>
+          {discard ?? <span className="max-md:hidden" />}
+          {save}
+        </>
       )}
-      <Button
-        type="submit"
-        form={docked ? formId : undefined}
-        variant="primary"
-        size="sm"
-        icon={CheckIcon}
-        loading={saving}
-        disabled={!shown}
-        // When the bar wraps on a narrow phone, Save stays at the right.
-        className="max-md:ml-auto"
-      >
-        {saving ? (savingLabel ?? t.common.saving) : (saveLabel ?? t.common.save)}
-      </Button>
       {error && (
         <div className="basis-full pt-1 md:col-span-full md:px-2">
           <FieldError>{error}</FieldError>
