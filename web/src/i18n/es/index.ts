@@ -1,4 +1,4 @@
-import type { Messages } from '../index'
+import type { UpFrontMessages } from '../index'
 import common from './common'
 import nav from './nav'
 import home from './home'
@@ -9,14 +9,13 @@ import libraries from './libraries'
 import livetv from './livetv'
 import users from './users'
 import system from './system'
-import settings from './settings'
 import account from './account'
 import notifications from './notifications'
 import statistics from './statistics'
 import backups from './backups'
 import versions from './versions'
 
-const messages: Messages = {
+const messages: UpFrontMessages = {
   ...common,
   ...nav,
   ...home,
@@ -27,7 +26,6 @@ const messages: Messages = {
   ...livetv,
   ...users,
   ...system,
-  ...settings,
   ...account,
   ...notifications,
   ...statistics,

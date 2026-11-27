@@ -1,5 +1,6 @@
 import { createContext, use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type englishMessages from './en/index'
+import type englishSettings from './en/settings'
 
 /*
  * The messages are split into one file per area and language, `en/<area>.ts`, `fr/<area>.ts` and so
@@ -7,16 +8,26 @@ import type englishMessages from './en/index'
  * `index.ts`. English is the reference: each other language's file is typed with its English twin,
  * so a missing or extra key fails type checking. Each language is a file of its own, downloaded
  * when the interface first shows it: before the first draw, or before a switch to it shows.
+ *
+ * Settings' messages (`t.settings`, `t.settingsPage`), over a quarter of a language with their
+ * help, are a second file per language, which its `index.ts` leaves out. They download with the
+ * pages that read them, Settings, My account, Health and a title's versions
+ * (`withSettingsMessages` in `app/router.tsx`), and with the command palette, whose settings it
+ * finds by name: see `loadSettingsMessages`. Another page reading them must load with them too, or
+ * it fails to draw.
  */
 
 export type Language = 'en' | 'fr' | 'de' | 'es' | 'it' | 'pt-BR'
 
 export const languages: readonly Language[] = ['en', 'fr', 'de', 'es', 'it', 'pt-BR']
 
-/** Every message of the interface, in one language. */
-export type Messages = typeof englishMessages
+/** The messages a language's `index.ts` holds: every area's but Settings'. */
+export type UpFrontMessages = typeof englishMessages
 
-const loaders: Record<Language, () => Promise<{ default: Messages }>> = {
+/** Every message of the interface, in one language; Settings' once `loadSettingsMessages` is done. */
+export type Messages = UpFrontMessages & typeof englishSettings
+
+const upFrontLoaders: Record<Language, () => Promise<{ default: UpFrontMessages }>> = {
   en: () => import('./en/index'),
   fr: () => import('./fr/index'),
   de: () => import('./de/index'),
@@ -25,11 +36,75 @@ const loaders: Record<Language, () => Promise<{ default: Messages }>> = {
   'pt-BR': () => import('./pt-BR/index'),
 }
 
-const loaded: Partial<Record<Language, Messages>> = {}
+const settingsLoaders: Record<Language, () => Promise<{ default: typeof englishSettings }>> = {
+  en: () => import('./en/settings'),
+  fr: () => import('./fr/settings'),
+  de: () => import('./de/settings'),
+  es: () => import('./es/settings'),
+  it: () => import('./it/settings'),
+  'pt-BR': () => import('./pt-BR/settings'),
+}
 
-/** A language's messages, downloaded once. */
+type Downloads<T> = Partial<Record<Language, Promise<T>>>
+
+/** A download per language, made once; a failed one is made again when asked again. */
+function once<T>(downloads: Downloads<T>, language: Language, load: () => Promise<T>): Promise<T> {
+  return (downloads[language] ??= load().catch((error: unknown) => {
+    delete downloads[language]
+    throw error
+  }))
+}
+
+/** Each language's messages: one object per language, which Settings' join in place. */
+const loaded: Downloads<Messages> = {}
+const settingsJoined: Downloads<void> = {}
+
+/** Whether a page read Settings' messages: from then on, a switch to a language brings them too. */
+let settingsWanted = false
+
+/** A language's messages, downloaded once, with Settings' once a page wanted them. */
 async function loadMessages(language: Language): Promise<Messages> {
-  return (loaded[language] ??= (await loaders[language]()).default)
+  const messages = await once(
+    loaded,
+    language,
+    // Settings' are missing until joinSettings adds them.
+    async () => ({ ...(await upFrontLoaders[language]()).default }) as Messages,
+  )
+  if (settingsWanted) await joinSettings(language, messages)
+  return messages
+}
+
+/**
+ * Adds Settings' messages to a language's object, in place, so that the `t` already shown holds
+ * them when a page reading them draws.
+ */
+function joinSettings(language: Language, messages: Messages): Promise<void> {
+  return once(settingsJoined, language, async () => {
+    const settings = (await settingsLoaders[language]()).default
+    // Two areas defining the same top-level key would silently hide one of them.
+    if (import.meta.env.DEV) {
+      for (const key of Object.keys(settings)) {
+        if (Object.hasOwn(messages, key)) throw new Error(`i18n: "${key}" is defined twice`)
+      }
+    }
+    Object.assign(messages, settings)
+  })
+}
+
+/**
+ * Downloads Settings' messages in each language shown or on its way, and makes a later switch to
+ * a language bring them as well: a page reading `t.settings` or `t.settingsPage` draws once it is
+ * done.
+ */
+export async function loadSettingsMessages(): Promise<void> {
+  settingsWanted = true
+  await Promise.all(
+    languages.map(async (language) => {
+      // A language whose download fails is not shown; a switch to it again joins them.
+      const messages = await loaded[language]?.catch(() => undefined)
+      if (messages) await joinSettings(language, messages)
+    }),
+  )
 }
 
 /** The language the interface starts in, with its messages: the app draws once they are in. */
