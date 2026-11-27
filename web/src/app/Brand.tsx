@@ -31,7 +31,7 @@ export function Brand({ link = true }: { link?: boolean }) {
     <Link
       to="/"
       aria-label={`${t.header.productName}, ${t.nav.home}`}
-      className="focus-lit -ml-1 flex size-9 shrink-0 items-center justify-center rounded-[0.5rem] [--lift:1.06] max-[1180px]:ml-0"
+      className="focus-lit -ml-1 flex size-9 shrink-0 items-center justify-center rounded-[0.5rem] [--lift:1.06] max-md:ml-0"
     >
       {logo(32)}
     </Link>

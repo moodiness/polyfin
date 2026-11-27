@@ -47,11 +47,14 @@ function useWebClient(): boolean {
 /**
  * The top row of every signed-in page, which scrolls away with it: the logo, the five area words
  * (a member's own pages instead), then Search with ⌘K, the web player and the account. Search and
- * the web player show their words from 1280 px, their icons alone below. The area
- * words are 17 px, 16 under 1400 px and 15 under 1100 px; below 1180 px, where German ones
- * no longer fit, they move into the full-screen menu, behind the menu button. The account's name
- * gives way first when the row is short of room. `data-top-bar` marks it for the lists of
- * `Select` and `SuggestInput`, which stay under it.
+ * the web player show their words from 1280 px, their icons alone below. The area words are
+ * 17 px, 16 under 1400 px and 15 under 1100 px. They stay in the row down to the phone's
+ * 768 px, then move into the full-screen menu, behind the menu button. Measured with the web
+ * player's button shown, an administrator's words fit from 611 px in English, 640 in Spanish,
+ * 661 in Italian, 684 in German, 685 in Portuguese and 691 in French (a member's from 608 to
+ * 667), in Compact and Large alike: no language needs to fold sooner. The account's name gives
+ * way first when the row is short of room. `data-top-bar` marks it for the lists of `Select`
+ * and `SuggestInput`, which stay under it.
  *
  * Opened from the web player or inside a Jellyfin app, the web player opens in place, and a
  * phone shows a back arrow to it before the logo, where jellyfin-web's dashboard has its own.
@@ -69,7 +72,7 @@ export function TopBar({ user }: { user: SessionUser }) {
       <div
         className={cx(
           pageFrame,
-          'flex h-16 items-center gap-5 pt-2 max-[1400px]:gap-4 max-[1180px]:h-14 max-[1180px]:gap-2.5 max-[1180px]:pt-1.5',
+          'flex h-16 items-center gap-5 pt-2 max-[1400px]:gap-4 max-md:h-14 max-md:gap-2.5 max-md:pt-1.5',
         )}
       >
         {webClient && inPlace && (
@@ -77,13 +80,13 @@ export function TopBar({ user }: { user: SessionUser }) {
             {...webPlayerLink(true)}
             aria-label={t.nav.backToWebPlayer}
             title={t.nav.backToWebPlayer}
-            className={cx(topControl, 'size-10 justify-center bg-transparent min-[1180px]:hidden')}
+            className={cx(topControl, 'size-10 justify-center bg-transparent md:hidden')}
           >
             <ArrowLeftIcon size="1.125rem" aria-hidden="true" />
           </a>
         )}
         <Brand />
-        <nav aria-label={t.nav.label} className="shrink-0 max-[1180px]:hidden">
+        <nav aria-label={t.nav.label} className="shrink-0 max-md:hidden">
           <ul className="flex gap-0.5">
             {sections.map((section) => (
               <li key={section.id}>
@@ -92,7 +95,7 @@ export function TopBar({ user }: { user: SessionUser }) {
             ))}
           </ul>
         </nav>
-        <div className="ml-auto flex min-w-0 items-center gap-3.5 max-[1180px]:gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-3.5 max-md:gap-2">
           <button
             type="button"
             onClick={openPalette}
@@ -101,7 +104,7 @@ export function TopBar({ user }: { user: SessionUser }) {
             className={cx(
               topControl,
               'h-9.5 w-[14rem] gap-2 px-3 text-control text-ink-3 focus-visible:[--lift:1.03] max-[1400px]:w-[12rem]',
-              'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-[1180px]:size-10',
+              'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-md:size-10',
             )}
           >
             <MagnifyingGlassIcon
@@ -122,9 +125,9 @@ export function TopBar({ user }: { user: SessionUser }) {
               className={cx(
                 topControl,
                 'h-9.5 gap-2 px-3 text-control whitespace-nowrap',
-                'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-[1180px]:size-10',
+                'max-xl:w-9.5 max-xl:justify-center max-xl:px-0 max-md:size-10',
                 // In place, a phone has the back arrow before the logo already.
-                inPlace && 'max-[1180px]:hidden',
+                inPlace && 'max-md:hidden',
               )}
             >
               {inPlace ? (
@@ -136,7 +139,7 @@ export function TopBar({ user }: { user: SessionUser }) {
             </a>
           )}
           <AccountMenu user={user} />
-          <div className="min-[1180px]:hidden">
+          <div className="md:hidden">
             <MobileMenu user={user} webClient={webClient} inPlace={inPlace} />
           </div>
         </div>
@@ -145,7 +148,7 @@ export function TopBar({ user }: { user: SessionUser }) {
   )
 }
 
-/** One of the top row's area words, with the red count of Health's problems beside System. */
+/** One of the top row's area words, with the count of Health's problems beside System. */
 function AreaWord({ section, current }: { section: NavSection; current: boolean }) {
   const { t } = useI18n()
   return (
