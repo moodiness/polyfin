@@ -21,7 +21,7 @@ API details: [Versions as media sources](jellyfin-api.md#versions-as-media-sourc
 Jellyfin apps list the server's libraries in the order of **Content › Libraries**. To move a library:
 
 - **Drag** its row by the grip at its start, with the mouse or a finger. A line shows where it will land. A long list scrolls while the row is held near its edge. Escape, during a drag, leaves the library where it was.
-- **Arrows:** use the up and down arrows of the row, from the keyboard too. Screen readers announce each move.
+- **Arrows:** use the up and down arrows of the row, from the keyboard too. They show on the row under the mouse or holding the focus, and always on a touch screen. Screen readers announce each move.
 
 Save the new order with the list's **Save**, as for the libraries' names. Until then, apps keep the order saved last.
 

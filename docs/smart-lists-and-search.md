@@ -78,7 +78,7 @@ How rules combine:
 - **Maximum titles:** from 1 to 20,000, applied after the rules and the sort. Empty, the list has no maximum but its catalogs'.
 - **Shown as:** a library or a collection. A list shown as a collection shows an image Polyfin draws from its first titles, as an addon's collection without a poster does (see [Generated images](artwork-and-editing.md#generated-images)). A list shown as a library shows each user an image of the first titles it keeps for them (see [Images of Polyfin's views](artwork-and-editing.md#images-of-polyfin-s-views)).
 
-The list's page shows a preview of its titles as they stand now, before you save. It also says how many titles still wait for what their rules look at: their description, their votes or their studios.
+The list's page shows a preview of its titles as they stand now, before you save, leaving out a column no title fills. It also says how many titles still wait for what their rules look at: their description, their votes or their studios. Changes are saved with the unsaved dock; a new list shows it from the start, and **Create the list** in it makes the list.
 
 ### How a list is made
 

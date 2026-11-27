@@ -104,7 +104,7 @@ Polyfin makes these libraries only until the server has 20. The message after **
 
 To choose the rest, open **Content › Libraries**:
 
-1. Under **Available catalogs**, choose **Add** beside each catalog you want. It joins the end of **Shown in Jellyfin apps**.
+1. Under **Available catalogs**, choose **Add** beside each catalog you want. It joins the end of **Shown in Jellyfin apps**. Past 12 catalogs, each addon's open under its name when you choose it; **Filter** and **Type** show every match at once.
 2. Drag the libraries into the order apps should list them, and rename them in **Name in apps** if you like.
 3. Choose **Save**.
 
