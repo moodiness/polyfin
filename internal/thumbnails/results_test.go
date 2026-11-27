@@ -164,19 +164,29 @@ func TestMakeAgainReplacesTheImages(t *testing.T) {
 	if result := resultOf(t, ts, file.ID); result.State != StateCannot {
 		t.Fatalf("a file without video: %+v", result)
 	}
-	// The file was replaced by a video.
+	// The file was replaced by a video. The version leaves the queue once
+	// its images are made again and its result kept: the test waits for
+	// that rather than for a time, which the JPEG of the tile, slow under
+	// the race detector, overran on a loaded runner. The backstop only
+	// stops a test that would wait forever.
 	ts.mu.Lock()
 	ts.analysis = analysis
 	ts.mu.Unlock()
+	changed := ts.Changed()
 	if err := ts.MakeAgain(t.Context(), file, "Home video"); err != nil {
 		t.Fatal(err)
 	}
-	if !madeWithin(t, ts, file, 10*time.Second) {
-		t.Fatal("no thumbnails were made again")
+	select {
+	case <-changed:
+	case <-time.After(2 * time.Minute):
+		t.Fatal("the file still waits to be made again")
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for resultOf(t, ts, file.ID).State != StateMade && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
+	manifest, err := ts.Manifest(t.Context(), file.Item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest[file.ID]) != 1 {
+		t.Fatal("no thumbnails were made again")
 	}
 	if result := resultOf(t, ts, file.ID); result.State != StateMade || result.Count != 15 {
 		t.Errorf("made again: %+v", result)
