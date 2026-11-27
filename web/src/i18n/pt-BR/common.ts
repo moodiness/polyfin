@@ -35,6 +35,8 @@ const common: typeof en = {
   errors: {
     generic: 'Algo deu errado. Tente novamente.',
     network: 'Não foi possível acessar o servidor. Verifique se o Polyfin está em execução.',
+    internal:
+      'O Polyfin encontrou um erro. Tente novamente e, se acontecer de novo, consulte o log do servidor.',
     unauthenticated: 'Sua sessão expirou. Entre novamente.',
     forbidden: 'Você não tem permissão para fazer isso.',
     cross_origin: 'A solicitação foi rejeitada porque não veio desta página.',
@@ -708,7 +710,6 @@ const common: typeof en = {
     alertKind: { danger: 'Erro', warn: 'Aviso', info: 'Observação' },
     secret: {
       saved: 'Salvo',
-      notSet: 'Não definido',
       removing: 'Será removido ao salvar',
       pastePlaceholder: 'Cole aqui',
       replacePlaceholder: 'Cole o novo valor',
@@ -720,6 +721,15 @@ const common: typeof en = {
       show: 'Mostrar chave',
       hide: 'Ocultar chave',
       savedHidden: 'Chave salva, oculta',
+    },
+    loadFailure: {
+      unreachableTitle: 'O Polyfin não responde',
+      unreachable:
+        'Verifique se o Polyfin está em execução e se este dispositivo consegue acessá-lo, e tente novamente.',
+      databaseTitle: 'O banco de dados não responde',
+      database:
+        'O Polyfin está em execução, mas não consegue acessar seu banco de dados PostgreSQL. Verifique se o banco de dados está em execução e tente novamente.',
+      otherTitle: 'Não foi possível carregar esta página',
     },
   },
 }

@@ -39,6 +39,8 @@ const common = {
   errors: {
     generic: 'Something went wrong. Please try again.',
     network: 'The server could not be reached. Check that Polyfin is running.',
+    internal:
+      'Polyfin ran into an error. Try again, and if it happens again, look at the server log.',
     unauthenticated: 'Your session has expired. Please sign in again.',
     forbidden: 'You are not allowed to do this.',
     cross_origin: 'The request was rejected because it did not come from this page.',
@@ -686,7 +688,6 @@ const common = {
     alertKind: { danger: 'Error', warn: 'Warning', info: 'Note' },
     secret: {
       saved: 'Saved',
-      notSet: 'Not set',
       removing: 'Removed when you save',
       pastePlaceholder: 'Paste it here',
       replacePlaceholder: 'Paste the new one',
@@ -698,6 +699,16 @@ const common = {
       show: 'Show key',
       hide: 'Hide key',
       savedHidden: 'Saved key, hidden',
+    },
+    /** A load that failed because Polyfin or its database does not answer (InlineError). */
+    loadFailure: {
+      unreachableTitle: 'Polyfin does not answer',
+      unreachable:
+        'Check that Polyfin is running and that this device can reach it, then try again.',
+      databaseTitle: 'The database does not answer',
+      database:
+        'Polyfin is running, but cannot reach its PostgreSQL database. Check that the database is running, then try again.',
+      otherTitle: 'This page did not load',
     },
   },
 }

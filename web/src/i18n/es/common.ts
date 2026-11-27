@@ -35,6 +35,8 @@ const common: typeof en = {
   errors: {
     generic: 'Se ha producido un error. Inténtelo de nuevo.',
     network: 'No se pudo conectar con el servidor. Compruebe que Polyfin se está ejecutando.',
+    internal:
+      'Polyfin ha encontrado un error. Inténtelo de nuevo y, si vuelve a ocurrir, consulte el registro del servidor.',
     unauthenticated: 'Su sesión ha caducado. Vuelva a iniciar sesión.',
     forbidden: 'No tiene permiso para realizar esta acción.',
     cross_origin: 'Se ha rechazado la solicitud porque no procedía de esta página.',
@@ -729,7 +731,6 @@ const common: typeof en = {
     alertKind: { danger: 'Error', warn: 'Aviso', info: 'Nota' },
     secret: {
       saved: 'Guardada',
-      notSet: 'Sin definir',
       removing: 'Se eliminará al guardar',
       pastePlaceholder: 'Péguela aquí',
       replacePlaceholder: 'Pegue la nueva',
@@ -741,6 +742,15 @@ const common: typeof en = {
       show: 'Mostrar clave',
       hide: 'Ocultar clave',
       savedHidden: 'Clave guardada, oculta',
+    },
+    loadFailure: {
+      unreachableTitle: 'Polyfin no responde',
+      unreachable:
+        'Compruebe que Polyfin se está ejecutando y que este dispositivo puede conectarse a él, y vuelva a intentarlo.',
+      databaseTitle: 'La base de datos no responde',
+      database:
+        'Polyfin se está ejecutando, pero no puede conectarse a su base de datos PostgreSQL. Compruebe que la base de datos se está ejecutando y vuelva a intentarlo.',
+      otherTitle: 'No se pudo cargar esta página',
     },
   },
 }
