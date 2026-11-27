@@ -8,10 +8,10 @@ export const authForm = 'flex flex-col gap-4'
 export const wideButton = 'min-h-11 w-full text-lead'
 
 /**
- * The first field of a signed-out page, for its `ref`: typing works at once, yet the page opens
- * with nothing lit. Rather than taking the focus on arrival, which lights its well before anyone
- * acts, the field takes it at the first character typed while nothing else has it, and that
- * character goes into it. A click or Tab lights it as any field.
+ * The first field of a signed-out page, or of Quick Connect, for its `ref`: typing works at once,
+ * yet the page opens with nothing lit. Rather than taking the focus on arrival, which lights its
+ * well before anyone acts, the field takes it at the first character typed while nothing else
+ * has it, and that character goes into it. A click or Tab lights it as any field.
  */
 export function useFirstField() {
   const ref = useRef<HTMLInputElement>(null)

@@ -56,9 +56,9 @@ const blockSpacing = '[&>*+*]:mt-block'
 
 /**
  * The frame of a page inside the shell: its head (the title, the lede, the actions, and the area's
- * sub-area words under them), then its blocks, rising with a fade one after the other. The shell
- * already sets the width (1440 px with 56 px margins, 40 under 1400 px and 20 on a phone) and the
- * space under the top row.
+ * sub-area words under them), then its blocks. A page fades in (160 ms); Home, with its greeting,
+ * rises block after block. The shell already sets the width (1440 px with 56 px margins, 40 under
+ * 1400 px and 20 on a phone) and the space under the top row.
  *
  *   <PageLayout title={t.nav.health} lede={…} actions={<Button>…</Button>}>
  *     <Block title={…}>…</Block>
@@ -82,6 +82,7 @@ export function PageLayout({
   const claim = subArea?.claim
   useLayoutEffect(() => claim?.(), [claim])
   const [dock, setDock] = useState<HTMLElement | null>(null)
+  const entrance = greeting ? 'stagger' : 'animate-fade'
 
   const header = head ?? (
     <PageHeader
@@ -98,7 +99,7 @@ export function PageLayout({
     return (
       <InsidePage value>
         <DockSlotContext value={dock}>
-          <div className={cx('stagger', className)}>
+          <div className={cx(entrance, className)}>
             {header}
             <div className="grid items-start gap-10 md:grid-cols-[15rem_minmax(0,1fr)] max-xl:gap-8 max-lg:md:grid-cols-[13rem_minmax(0,1fr)] max-lg:gap-6 max-md:block">
               {/* As tall as the content beside it: the list stays in view while scrolling, and
@@ -125,7 +126,7 @@ export function PageLayout({
   }
   return (
     <InsidePage value>
-      <div className={cx('stagger', '[&>*:nth-child(n+3)]:mt-block', className)}>
+      <div className={cx(entrance, '[&>*:nth-child(n+3)]:mt-block', className)}>
         {header}
         {children}
       </div>

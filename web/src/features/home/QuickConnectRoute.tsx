@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router'
 import { ApiError, approveQuickConnect, lookupQuickConnect, queryClient, queryKeys } from '@/api'
 import { PageLayout } from '@/app/PageLayout'
 import { useSessionUser } from '@/app/session'
+import { useFirstField } from '@/features/auth/AuthFrame'
 import { dateTime, errorMessage, relativeTime } from '@/format'
 import { useI18n } from '@/i18n'
 import {
@@ -49,6 +50,8 @@ export default function QuickConnectRoute() {
   const [approvedDevice, setApprovedDevice] = useState<string | null>(null)
   const [method, setMethod] = useState<'code' | 'password'>('code')
   const [proof, setProof] = useState('')
+  // The code's well is not lit on arrival: the first figure typed goes into it.
+  const codeField = useFirstField()
   /** Typed whole: 8 digits, or 6 after a pause, unless they begin the 8 the link brought. */
   const typed =
     code.length === longLength ||
@@ -123,6 +126,7 @@ export default function QuickConnectRoute() {
                 className="max-w-[22rem]"
               >
                 <TextInput
+                  ref={codeField}
                   value={code}
                   onValue={(value) => {
                     approve.reset()
@@ -134,7 +138,6 @@ export default function QuickConnectRoute() {
                   pattern="[0-9]{6}([0-9]{2})?"
                   maxLength={longLength}
                   placeholder="000000"
-                  autoFocus
                   mono
                   className="h-15 max-sm:h-14 [&_input]:figures [&_input]:text-[1.75rem] [&_input]:tracking-[0.32em] max-sm:[&_input]:text-[1.5rem] max-sm:[&_input]:tracking-[0.24em]"
                 />

@@ -147,7 +147,8 @@ const firstTextField = [
  * A panel floating at the center of the page over a lightly blurred backdrop: the phone menu, a
  * form or an editor too large for a row. Modal like ConfirmDialog; the close button is always
  * there. The header and footer stay put while the body scrolls. A form opens on its first text
- * field, ready to type; a body without one opens on the close button.
+ * field, ready to type; a body without one opens on the panel itself, so nothing is lit before a
+ * key or the pointer: Tab then reaches the close button first.
  */
 export function Modal({
   open,
@@ -162,18 +163,23 @@ export function Modal({
   const dialog = useModal(open, onClose)
   const body = useRef<HTMLDivElement>(null)
   const titleId = useId()
-  // After showModal, which gives the focus to the first control, the close button. A field's
-  // autoFocus cannot do it: React runs it before the effect that shows the dialog.
+  // After showModal, which gives the focus to the first control, the close button: a text field
+  // takes it, else the panel. A field's autoFocus cannot do it: React runs it before the effect
+  // that shows the dialog.
   useEffect(() => {
-    if (open) body.current?.querySelector<HTMLElement>(firstTextField)?.focus()
-  }, [open])
+    if (!open) return
+    const field = body.current?.querySelector<HTMLElement>(firstTextField)
+    if (field) field.focus()
+    else dialog.current?.focus()
+  }, [open, dialog])
   return createPortal(
     <dialog
       ref={dialog}
+      tabIndex={-1}
       aria-labelledby={titleId}
       style={{ width: `min(${rem(width)}, calc(100vw - 1.5rem))` }}
       className={cx(
-        'm-auto max-h-[min(85dvh,calc(100dvh-1.5rem))] max-w-none flex-col overflow-hidden rounded-panel p-0 text-ink raised open:flex open:animate-modal',
+        'm-auto max-h-[min(85dvh,calc(100dvh-1.5rem))] max-w-none flex-col overflow-hidden rounded-panel p-0 text-ink raised outline-none open:flex open:animate-modal',
         'backdrop:bg-scrim backdrop:backdrop-blur-[6px]',
       )}
     >
