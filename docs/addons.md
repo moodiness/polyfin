@@ -588,7 +588,7 @@ To let users read titles in their own language:
 
 Leave **Language of its descriptions** at **None** on the metadata addon the server had first, the one the copies come from. Do so whatever language its configure page sets, even one that is not the server's. Name a language only on the extra copies. The addons left at **None** give every user the titles' facts and episodes.
 
-Each user then picks a **Metadata language** among those languages, under **My account**. An administrator can set it on the user's page under **Users** (see [Users](watch-state.md#metadata-language)). **The server's** is the default.
+Each user then picks a **Metadata language** among those languages, under **My account › Languages**. An administrator can set it on the user's page under **Users** (see [Users](watch-state.md#metadata-language)). **The server's** is the default.
 
 ### What a user with a language sees
 

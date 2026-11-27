@@ -166,9 +166,10 @@ Users make playlists of movies and episodes in their apps, with "Add to playlist
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Metadata language** | Its own section in **My account**; for administrators, its own panel on the user's page under **Users** | **The server's** | **The server's** shows the addons' descriptions without a language. The other choices are the languages the addons were given (see [Languages](addons.md#languages)). |
+| **Metadata language** | Under **My account › Languages**; for administrators, its own panel on the user's page under **Users** | **The server's** | **The server's** shows the addons' descriptions without a language. The other choices are the languages the addons were given (see [Languages](addons.md#languages)). |
 
 - **Reset my preferences** puts back **The server's** (see [Your own preferences](users.md#your-own-preferences)).
+- **No language yet:** while no addon of the server has a language, **My account** says titles are described in the server's. It tells a member that an administrator gives addons a language, and an administrator to give one a language on its page under **Content › Sources**, with **Open Sources**.
 - Users under parental control or blocking genres get their language too.
 - Genres, ratings, people, versions and subtitles are the same in every language. So parental control, blocked genres, hidden titles and smart lists judge every user alike.
 - A title no addon describes in the language shows the server's description.
@@ -185,7 +186,7 @@ API details: [Metadata language](jellyfin-api.md#metadata-language-for-apps).
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Audio region** | Its own section in **My account**; for administrators, its own panel on the user's page under **Users** | **None** (no region) | **French (France)** or **French (Quebec)**, **Spanish (Spain)** or **Spanish (Latin America)**, **Portuguese (Brazil)** or **Portuguese (Portugal)**. |
+| **Audio region** | Under **My account › Languages**; for administrators, its own panel on the user's page under **Users** | **None** (no region) | **French (France)** or **French (Quebec)**, **Spanish (Spain)** or **Spanish (Latin America)**, **Portuguese (Brazil)** or **Portuguese (Portugal)**. |
 
 - **Reset my preferences** puts back **None** (see [Your own preferences](users.md#your-own-preferences)).
 - It refines the audio language, when that is the region's language. The audio language is the one chosen in the app, else the server's **Default audio language**.

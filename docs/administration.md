@@ -59,29 +59,34 @@ The admin app is in English, French, German, Spanish, Italian and Brazilian Port
 
 ### My account
 
-**My account** has these sections:
+**My account** opens on the account itself. Its sections come in five groups, in the list on the left (a strip on a phone) and down the page, in this order:
 
-| Section | What it holds |
-|---|---|
-| **Statistics** | The hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)) |
-| **Tracking** | Your tracking services (see [Tracking services](tracking.md)) |
-| **Continue Watching**, **Next Up** and **Hidden titles** | What your apps resume and suggest next, and the titles you hid (see [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up)) |
-| **Home rows** | Your rows of the web player's home (see [Home rows](home-rows.md#rows-each-user-turns-off)) |
-| **Track choices** | Your remembered audio and subtitle choices, with **Forget my track choices** (see [Track choices](watch-state.md#track-choices)) |
-| **Taste profile** | What your recommendations follow (see [Taste profile](home-rows.md#the-taste-profile)) |
-| **Metadata language** | The language of titles' names and overviews in your apps (see [Metadata language](watch-state.md#metadata-language)) |
-| **Web player theme** | The web player's look on every browser you sign in with (see [Web player theme](themes-and-custom-code.md#theme-per-user)) |
-| **Audio region** | The region of the audio you prefer (see [Audio region](watch-state.md#audio-region)) |
-| **Interface size** | The admin app's size on every browser you sign in with: **Compact**, the default, or **Large**, which keeps a phone's sizes on a computer, a tablet or a TV, easier to read from across a room. A phone shows both alike, and a browser signed out keeps the last size it showed. |
-| **Sound** | Ways to make your videos louder (see [Louder sound](loudness.md#louder-sound)) |
-| **Shared links** | The share links you made (see [Share links](invite-and-share-links.md#share-links)) |
-| **Reminders** | The programmes and series you asked to be reminded of from the web player, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)) |
-| **Import from another server** | Your watch history from a Jellyfin, Emby or Plex server, or Letterboxd (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history)) |
-| **Import from an app** | Your watch history from an app such as Stremio or Nuvio (see [Importing from an app](moving-to-polyfin.md#importing-from-an-app)) |
-| **Notifications** | Your notification targets, with **Remind me before** and **Also show reminders on my apps** under them (see [Notifications](notifications.md)) |
-| **Devices** | The apps signed in with the account. Signing out a device asks first. |
-| **Password** | **Change password** |
-| **Two-step sign-in** | A code from an authenticator app after the password (see [Two-step sign-in](sign-in-and-security.md#two-step-sign-in)) |
+| Group | Section | What it holds |
+|---|---|---|
+| **Account** | **Password** | **Change password** |
+| | **Two-step sign-in** | A code from an authenticator app after the password (see [Two-step sign-in](sign-in-and-security.md#two-step-sign-in)) |
+| | **Identity provider** | **Link with …**, while the server offers a provider (see [Linking an existing account](sign-in-and-security.md#linking-an-existing-account)) |
+| | **Devices** | The apps signed in with the account. Signing out a device asks first. |
+| | **Appearance** | **Interface size**: the admin app's size on every browser you sign in with, **Compact**, the default, or **Large**, which keeps a phone's sizes on a computer, a tablet or a TV, easier to read from across a room. A phone shows both alike, and a browser signed out keeps the last size it showed. **Web player theme**: the web player's look on every browser you sign in with (see [Web player theme](themes-and-custom-code.md#theme-per-user)). |
+| **What I watch** | **Statistics** | The hours you watched, your most played titles, apps and devices, and your recent playbacks, with **Export CSV** (see [Statistics](statistics.md#my-account)) |
+| | **Continue Watching**, **Next Up** and **Hidden titles** | What your apps resume and suggest next, and the titles you hid (see [Continue Watching and Next Up](watch-state.md#continue-watching-and-next-up)) |
+| | **Home rows** | Your rows of the web player's home (see [Home rows](home-rows.md#rows-each-user-turns-off)) |
+| | **Taste profile** | What your recommendations follow (see [Taste profile](home-rows.md#the-taste-profile)) |
+| | **Shared links** | The share links you made, while you may share or have links (see [Share links](invite-and-share-links.md#share-links)) |
+| | **Reminders** | The programmes and series you asked to be reminded of from the web player, with **Delete**, shown with the **Live TV** permission (see [Programme reminders](live-tv.md#programme-reminders)) |
+| **Languages and sound** | **Languages** | **Metadata language**: the language of titles' names and overviews in your apps (see [Metadata language](watch-state.md#metadata-language)). **Audio region**: the region of the audio you prefer (see [Audio region](watch-state.md#audio-region)). |
+| | **Track choices** | Your remembered audio and subtitle choices, with **Forget my track choices** (see [Track choices](watch-state.md#track-choices)) |
+| | **Sound** | Ways to make your videos louder (see [Louder sound](loudness.md#louder-sound)) |
+| **Services** | **Tracking** | Your tracking services (see [Tracking services](tracking.md)) |
+| | **Notifications** | Your notification targets, with **Remind me before** and **Also show reminders on my apps** under them (see [Notifications](notifications.md)) |
+| | **Moonfin** | Moonfin's companion and the settings Moonfin's apps synced (see [Moonfin](moonfin.md)) |
+| **Import** | **Import from another server** | Your watch history from a Jellyfin, Emby or Plex server, or Letterboxd (see [Importing your own watch history](moving-to-polyfin.md#importing-your-own-watch-history)) |
+| | **Import from an app** | Your watch history from an app such as Stremio or Nuvio (see [Importing from an app](moving-to-polyfin.md#importing-from-an-app)) |
+
+- **Sections not shown:** a section with nothing for you is left out, and so is a group left empty: **Identity provider** without a provider, **Shared links** and **Reminders** as said above, the imports while **Settings › Security** turns them off. **Tracking** shows only the services the server has an app for (see [Connecting your accounts](tracking.md#connecting-your-accounts)); a member on a server with none has no **Tracking** section.
+- **The list:** it lights the section in view as the page scrolls. Links to a section, such as `/admin/me/account#tracking` in a notification, open on it. The old anchors of the settings now grouped (`#metadata-language`, `#audio-region`, `#web-theme`, `#interface-size`) still open on their row.
+- **Buttons:** **Change password** is the page's one main button. The other sections' buttons, such as **Turn on**, **Connect** or the imports' first step, are plain, until a step is under way.
+- **For administrators:** where a note would send a member to an administrator, it tells an administrator what to do, with **Open Sources**: when no addon has a language yet, under **Languages**, and when no metadata addon searches movies, for a Letterboxd import.
 
 ### Signing in and search
 
