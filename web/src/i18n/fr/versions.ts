@@ -174,6 +174,21 @@ const versions: typeof en = {
       notAnalyzed: 'pas analysée avant, donc pas essayée',
       passed: 'encore en lecture quand la lecture a continué',
     },
+    entries: 'Entrées du fournisseur',
+    entriesHelp:
+      'Les entrées du fournisseur IPTV qui partagent l’identifiant TMDB de ce titre, ses versions d’abord. L’identifiant TMDB d’un fournisseur peut être faux\u202f: une entrée tenue à part devient un titre à part entière, et ce que les utilisateurs ont fait du groupe reste au groupe. Quand la première entrée est tenue à part, elle garde ce titre et ce que les utilisateurs en ont fait, et les autres deviennent un nouveau titre.',
+    firstEntry: 'Première entrée',
+    keptApart: 'Tenue à part',
+    notListed: 'Plus listée',
+    keepApart: 'Tenir à part',
+    groupAgain: 'Regrouper',
+    keepApartTitle: (name: string) => `Tenir «\u202f${name}\u202f» à part\u202f?`,
+    keepApartOther:
+      'Cette entrée devient un titre à part entière, avec ses propres identifiants. Ce que les utilisateurs ont fait du groupe reste au groupe.',
+    keepApartFirst:
+      'C’est la première entrée\u202f: elle garde ce titre, ses identifiants et ce que les utilisateurs en ont fait. Les autres entrées deviennent un nouveau titre, auquel passe ce que leurs utilisateurs en ont fait.',
+    keptApartDone: 'L’entrée est tenue à part.',
+    groupedAgainDone: 'L’entrée est regroupée.',
     notFound: 'Ce titre est introuvable pour cet utilisateur.',
   },
 }

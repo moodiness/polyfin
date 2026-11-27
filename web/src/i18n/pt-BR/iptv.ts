@@ -173,6 +173,9 @@ const iptv: typeof en = {
       enrichment: 'Descrever títulos com os complementos de metadados',
       enrichmentHelp:
         'Quando um filme ou série tem um ID do TMDB ou do IMDb, abri-lo solicita ao complemento de metadados do servidor sua descrição, imagens e classificação etária: uma solicitação por título, na primeira vez que é aberto, depois mantida. Se desativado, os títulos mostram apenas o que o provedor fornece, sem classificação etária, então usuários que bloqueiam títulos sem classificação não os veem.',
+      titleVersions: 'Agrupar cópias de um título como versões',
+      titleVersionsHelp:
+        'Um filme ou série que o provedor lista mais de uma vez com o mesmo ID do TMDB vira um só título, cujas versões são o arquivo de cada cópia, identificadas por qualidade e categoria. Os episódios de uma série são associados pelo número da temporada e do episódio; um episódio que só uma cópia tem é mantido. Abrir um título assim pede ao provedor os detalhes de cada cópia, cerca de uma solicitação por segundo. O que os usuários fizeram com cada cópia (assistido, ponto de retomada, favorito, avaliação) passa para o título. Se desativado, as cópias voltam a ser títulos próprios, cada uma com seus dados, e os do grupo ficam no título da primeira cópia. Uma cópia associada por um ID do TMDB errado pode ser mantida à parte em Conteúdo › Versões.',
     },
     vodExclusions: {
       title: 'Categorias a importar',

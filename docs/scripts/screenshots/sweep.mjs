@@ -147,9 +147,10 @@ async function main() {
     { name: 'signed out', session: null },
   ]
   // The addresses of the routes without a parameter, or with optional ones left out, and those
-  // the pages cannot link to: an open invite, a title's versions, which a search opens, and an
-  // unknown page. Signed out, also an invite that does not exist, whose 404 is expected: only
-  // then, as each lookup counts against the address's sign-in attempts, which a dozen exhaust.
+  // the pages cannot link to: an open invite, titles' versions, which a search opens (a played
+  // movie's, and a movie's and an episode's of two provider entries each), and an unknown page.
+  // Signed out, also an invite that does not exist, whose 404 is expected: only then, as each
+  // lookup counts against the address's sign-in attempts, which a dozen exhaust.
   const badInvite = '/invite/no-such-invite'
   const start = [
     ...routes
@@ -157,6 +158,7 @@ async function main() {
       .map((route) => route.example.replace(/\/:[^/]+\?/g, '')),
     `/invite/${seeded.invite}`,
     `/versions/${seeded.title}`,
+    ...seeded.groupedTitles.map((id) => `/versions/${id}`),
     '/no-such-page',
   ]
 

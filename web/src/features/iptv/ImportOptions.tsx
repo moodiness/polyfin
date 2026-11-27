@@ -24,7 +24,8 @@ type Patch = (patch: Partial<IptvOptions>) => void
  * Everything a source imports and how, in the order an administrator decides it: what to import,
  * then the Live TV options and the movies and series options of what is on, each a group of setting
  * rows. `load` reads a preview. Used by the source page, which saves it as a whole with its dock,
- * and by the add-a-source flow. A tuner has live channels only.
+ * and by the add-a-source flow. A tuner has live channels only; only an Xtream account groups the
+ * copies of a title as its versions.
  */
 export function SourceOptions({
   value,
@@ -33,6 +34,7 @@ export function SourceOptions({
   load,
   saved,
   tuner = false,
+  xtream = false,
 }: {
   value: IptvOptions
   onChange: Patch
@@ -44,6 +46,7 @@ export function SourceOptions({
    */
   saved?: IptvOptions
   tuner?: boolean
+  xtream?: boolean
 }) {
   const { t } = useI18n()
   const text = t.lineup.content
@@ -68,7 +71,7 @@ export function SourceOptions({
       )}
       {vodTypes.length > 0 && (
         <OptionsGroup title={text.vodTitle}>
-          <VodFields value={value} saved={saved} onChange={onChange} />
+          <VodFields value={value} saved={saved} xtream={xtream} onChange={onChange} />
           <ExclusionPicker
             mode="vod"
             types={vodTypes}
@@ -175,14 +178,19 @@ function ContentFields({
   )
 }
 
-/** How movies and series become libraries, and whether they are described by metadata addons. */
+/**
+ * How movies and series become libraries, whether they are described by metadata addons, and for an
+ * Xtream account whether the copies of a title become its versions.
+ */
 function VodFields({
   value,
   saved,
+  xtream,
   onChange,
 }: {
   value: IptvOptions
   saved?: IptvOptions
+  xtream: boolean
   onChange: Patch
 }) {
   const { t } = useI18n()
@@ -209,6 +217,16 @@ function VodFields({
         saved={saved?.enrichment}
         onChange={(enrichment) => onChange({ enrichment })}
       />
+      {xtream && (
+        <SettingRow
+          kind="switch"
+          label={text.titleVersions}
+          help={text.titleVersionsHelp}
+          checked={value.titleVersions}
+          saved={saved?.titleVersions}
+          onChange={(titleVersions) => onChange({ titleVersions })}
+        />
+      )}
     </div>
   )
 }

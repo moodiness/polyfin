@@ -63,6 +63,7 @@ const common: typeof en = {
     two_step_own: 'Desactive su propio inicio de sesión en dos pasos desde «Mi cuenta».',
     not_found: 'Este elemento ya no existe. Se ha actualizado la lista.',
     not_local: 'Solo la versión de una carpeta local puede volver a crear sus miniaturas.',
+    invalid_entry: 'El proveedor ya no lista esta entrada para el título. Recargue la página.',
     thumbnails_off:
       'Las miniaturas y las imágenes de capítulos están desactivadas: active una en Ajustes › Miniaturas (trickplay).',
     not_set:

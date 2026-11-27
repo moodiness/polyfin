@@ -127,7 +127,13 @@ export function IptvSource({
         {section === 'summary' ? (
           <Summary scope={scope} addon={addon} source={source} forWhom={forWhom} />
         ) : section === 'options' ? (
-          <Options key={id} scope={scope} id={id} source={source} />
+          <Options
+            key={id}
+            scope={scope}
+            id={id}
+            source={source}
+            xtream={addon.kind === 'xtream'}
+          />
         ) : !liveTv ? (
           <LiveOff scope={scope} id={id} />
         ) : section === 'categories' ? (
@@ -514,7 +520,17 @@ function TunerPart({
   )
 }
 
-function Options({ scope, id, source }: { scope: Scope; id: string; source: Source }) {
+function Options({
+  scope,
+  id,
+  source,
+  xtream,
+}: {
+  scope: Scope
+  id: string
+  source: Source
+  xtream: boolean
+}) {
   const { t } = useI18n()
   const toast = useToast()
   const text = t.lineup.options
@@ -544,6 +560,7 @@ function Options({ scope, id, source }: { scope: Scope; id: string; source: Sour
         value={draft}
         saved={source.options}
         tuner={source.tuner !== null}
+        xtream={xtream}
         onChange={(patch) => {
           save.reset()
           setDraft((current) => ({ ...current, ...patch }))

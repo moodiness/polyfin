@@ -64,6 +64,8 @@ const common: typeof en = {
     not_found: 'Dieses Element existiert nicht mehr. Die Liste wurde aktualisiert.',
     not_local:
       'Nur bei einer Version aus einem lokalen Ordner können die Vorschaubilder neu erstellt werden.',
+    invalid_entry:
+      'Der Anbieter listet diesen Eintrag nicht mehr für den Titel. Lade die Seite neu.',
     thumbnails_off:
       'Vorschaubilder und Kapitelbilder sind aus: Schalte zuerst eines davon unter Einstellungen › Vorschaubilder (Trickplay) ein.',
     not_set:

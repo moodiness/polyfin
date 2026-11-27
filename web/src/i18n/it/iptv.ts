@@ -174,6 +174,9 @@ const iptv: typeof en = {
       enrichment: 'Descrivi i titoli con gli add-on dei metadati',
       enrichmentHelp:
         'Quando un film o una serie TV ha un ID TMDB o IMDb, aprirlo chiede all’add-on dei metadati del server descrizione, immagini e classificazione: una richiesta per titolo, la prima volta che viene aperto, poi conservata. Se disattivato, i titoli mostrano solo ciò che fornisce il provider, senza classificazione, quindi gli utenti che bloccano i titoli non classificati non li vedono.',
+      titleVersions: 'Raggruppa le copie di un titolo come versioni',
+      titleVersionsHelp:
+        'Un film o una serie TV che il provider elenca più volte con lo stesso ID TMDB diventa un solo titolo, le cui versioni sono il file di ciascuna copia, indicate per qualità e categoria. Gli episodi di una serie sono abbinati per numero di stagione ed episodio; un episodio che ha una sola copia viene mantenuto. Aprire un titolo così chiede al provider i dettagli di ciascuna copia, circa una richiesta al secondo. Ciò che gli utenti hanno fatto con ciascuna copia (visto, punto di ripresa, preferito, valutazione) passa al titolo. Se disattivato, le copie tornano titoli a sé, ognuna con i propri dati, e quelli del gruppo restano al titolo della prima copia. Una copia abbinata a un ID TMDB sbagliato può essere tenuta separata in Contenuti › Versioni.',
     },
     vodExclusions: {
       title: 'Categorie da importare',

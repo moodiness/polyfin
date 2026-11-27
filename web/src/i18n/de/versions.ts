@@ -172,6 +172,21 @@ const versions: typeof en = {
       notAnalyzed: 'zuvor nicht analysiert, daher nicht versucht',
       passed: 'wurde noch gelesen, als die Wiedergabe weiterging',
     },
+    entries: 'Einträge des Anbieters',
+    entriesHelp:
+      'Die Einträge des IPTV-Anbieters mit der TMDB-ID dieses Titels, seine Versionen zuerst. Die TMDB-ID eines Anbieters kann falsch sein: Ein getrennt gehaltener Eintrag wird ein eigener Titel, und was Benutzer mit der Gruppe getan haben, bleibt bei der Gruppe. Wird der erste Eintrag getrennt gehalten, behält er diesen Titel und was Benutzer damit getan haben, und die anderen werden ein neuer Titel.',
+    firstEntry: 'Erster Eintrag',
+    keptApart: 'Getrennt gehalten',
+    notListed: 'Nicht mehr gelistet',
+    keepApart: 'Getrennt halten',
+    groupAgain: 'Wieder gruppieren',
+    keepApartTitle: (name: string) => `„${name}“ getrennt halten?`,
+    keepApartOther:
+      'Dieser Eintrag wird ein eigener Titel mit eigenen Kennungen. Was Benutzer mit der Gruppe getan haben, bleibt bei der Gruppe.',
+    keepApartFirst:
+      'Dies ist der erste Eintrag: Er behält diesen Titel, seine Kennungen und was Benutzer damit getan haben. Die anderen Einträge werden ein neuer Titel, zu dem übergeht, was ihre Benutzer damit getan haben.',
+    keptApartDone: 'Der Eintrag wird getrennt gehalten.',
+    groupedAgainDone: 'Der Eintrag ist wieder gruppiert.',
     notFound: 'Dieser Titel ist für diesen Benutzer nicht zu finden.',
   },
 }
