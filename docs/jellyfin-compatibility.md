@@ -310,7 +310,7 @@ API details: [Refresh metadata for apps](jellyfin-api.md#refresh-metadata-for-ap
 
 ### Moonfin and its companion
 
-Moonfin's apps look on a server for a companion of their own, Moonbase, a plugin on Jellyfin. Polyfin answers its routes itself while **Serve Moonfin's companion**, in **Settings › General**, is on, as it is by default:
+Moonfin's apps look on a server for a companion of their own, Moonbase, a plugin on Jellyfin. Polyfin answers its routes itself while **Serve Moonfin's companion**, in **Settings › Moonfin**, is on, as it is by default:
 
 - each user's settings, synced across their devices, with the administrator's defaults;
 - each user's sign-in PIN for the apps' user picker, the same on every device;

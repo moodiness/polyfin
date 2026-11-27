@@ -26,6 +26,7 @@ const nav = {
     settingsSections: {
       general: 'General',
       playback: 'Playback',
+      versions: 'Version choice',
       conversion: 'Conversion (transcoding)',
       content: 'Content',
       catalogs: 'Catalogs',
@@ -39,6 +40,7 @@ const nav = {
       backups: 'Backups',
       notifications: 'Notifications',
       webPlayer: 'Web player',
+      moonfin: 'Moonfin',
       diagnostics: 'Diagnostics',
     },
     settingsSectionsLabel: 'Settings sections',

@@ -60,7 +60,7 @@ const sources: typeof en = {
     orderHelpMine:
       'Beschreibungen, Untertitel und Suchergebnisse folgen dieser Reihenfolge unter deinen Quellen, nach denen des Servers.',
     versionOrderLink:
-      'Die Reihenfolge der Versionen legst du unter Einstellungen › Wiedergabe fest.',
+      'Die Reihenfolge der Versionen legst du unter Einstellungen › Versionsauswahl fest.',
     problemsTitle: 'Braucht Aufmerksamkeit',
     inOrderTitle: 'In ihrer Reihenfolge',
     moved: (name: string, position: number, count: number) =>

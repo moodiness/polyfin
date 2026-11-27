@@ -65,7 +65,7 @@ flowchart TD
 | **Even the loudness of converted videos** | **Settings › Conversion (transcoding) › Audio** | Off | Brings converted video and channel audio to -16 LUFS. See [Evening the loudness](#evening-the-loudness). |
 | **Dynamic range of converted Dolby audio** | **Settings › Conversion (transcoding) › Audio** | **As encoded** | How converted AC-3 and E-AC-3 apply their stored compression. See [Dynamic range of Dolby audio](#dynamic-range-of-dolby-audio). |
 
-The other audio settings, **Most audio channels** and **Audio bitrate per channel in kb/s (0 = automatic)**, are on [Transcoding](transcoding.md#audio).
+The other audio settings, **Most audio channels** and **Audio bitrate per channel in kb/s**, are on [Transcoding](transcoding.md#audio).
 
 ## Mixing to stereo
 

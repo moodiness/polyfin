@@ -59,7 +59,7 @@ const sources: typeof en = {
       'Descrições, legendas e resultados de pesquisa seguem esta ordem entre as fontes do servidor; as fontes próprias dos membros vêm depois.',
     orderHelpMine:
       'Descrições, legendas e resultados de pesquisa seguem esta ordem entre as suas fontes, depois das do servidor.',
-    versionOrderLink: 'A ordem das versões fica em Configurações › Reprodução.',
+    versionOrderLink: 'A ordem das versões fica em Configurações › Escolha de versões.',
     problemsTitle: 'Precisam de atenção',
     inOrderTitle: 'Na ordem delas',
     moved: (name: string, position: number, count: number) =>

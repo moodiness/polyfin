@@ -43,9 +43,9 @@ flowchart TD
    - A restart forgets failures; changing a local folder's address or credentials forgets its files'.
    - Failures belong to the file: a failed torrent also hides its file's link for users without torrents, and vice versa.
 7. **Another title:** streams whose labels name another episode, a season without the episode, or another movie of the same name are left out. There is no setting, and like hide rules it never leaves out every version (see [Versions of another title](#versions-of-another-title)).
-8. **Hide rules:** **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Playback**. All are off by default, and none ever hides every version (see [Version order](#version-order)).
+8. **Hide rules:** **Hide versions larger than**, **Hide these video codecs**, **Hide versions whose labels contain** and **Hide low-quality releases**, under **Settings › Version choice**. All are off by default, and none ever hides every version (see [Version order](#version-order)).
 9. **Quality group:** the user's group leaves out taller versions while one fits. Default: **Original (no limit)** (see [Quality groups](user-limits.md#quality-groups)).
-10. **The order:** the addons' order, unless **Order versions by** under **Settings › Playback** has criteria (none by default). Ties keep the addons' order. With no criterion, the versions an addon says are not cached by its provider come after the others, which keep the addons' order (see [What the rules know of a version](#what-the-rules-know-of-a-version)). Then:
+10. **The order:** the addons' order, unless **Order versions by** under **Settings › Version choice** has criteria (none by default). Ties keep the addons' order. With no criterion, the versions an addon says are not cached by its provider come after the others, which keep the addons' order (see [What the rules know of a version](#what-the-rules-know-of-a-version)). Then:
     - **Prefer versions the app plays without conversion**, on by default, puts the versions cheapest for the app to play first, once Polyfin knows how the app plays (see [Prefer versions the app plays without conversion](#prefer-versions-the-app-plays-without-conversion)).
     - **Play local files first**, off by default, puts a user's local folder and network share versions first (see [Local files first for some users](#local-files-first-for-some-users)).
 11. **Plays without a pick:** `PlaybackInfo` leaves out versions passed over: unreadable, unplayable on the app, or torrents that did not start lately.
@@ -351,20 +351,20 @@ Before Polyfin knows the app, after a restart and until its first play, the app 
 
 ### Version order
 
-The **Version order** group of **Settings › Playback** orders and hides a movie's or episode's versions. By default it changes almost nothing: versions keep the addons' order, those an addon says are not cached by its provider last.
+**Settings › Version choice** orders and hides a movie's or episode's versions. By default it changes almost nothing: versions keep the addons' order, those an addon says are not cached by its provider last.
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Order versions by** | **Settings › Playback** | None | Up to six criteria, listed below. |
-| **Order of video codecs** | **Settings › Playback** | AV1, HEVC, VP9, H.264, VC-1, MPEG-4 Part 2, MPEG-2 | Order for the codec criterion. |
-| **Order of sources** | **Settings › Playback** | The order of **Content › Sources** | Order for the source criterion. |
-| **Order of editions** | **Settings › Playback** | Theatrical cut, Extended cut, Director's cut, IMAX | Order for the edition criterion. |
-| **Size per minute to aim at (MB, 0 = largest)** | **Settings › Playback** | 0 (up to 1,000) | Target for the size per minute criterion. |
-| **Hide versions larger than (GB, 0 = no limit)** | **Settings › Playback** | 0 (up to 1,000) | Hides versions known to be larger. |
-| **Hide these video codecs** | **Settings › Playback** | None | Hides versions known to be in these codecs. |
-| **Hide versions whose labels contain** | **Settings › Playback** | None (up to 50 lines) | Hides versions whose labels hold one of these words. |
-| **Hide low-quality releases** | **Settings › Playback** | None | Hides versions tagged as a kind ticked. |
-| **Label rules** | **Settings › Playback** | None (up to 40 rules) | Hide versions or score them (see [Label rules](#label-rules)). |
+| **Order versions by** | **Settings › Version choice** | None | Up to six criteria, listed below. |
+| **Order of video codecs** | **Settings › Version choice** | AV1, HEVC, VP9, H.264, VC-1, MPEG-4 Part 2, MPEG-2 | Order for the codec criterion. |
+| **Order of sources** | **Settings › Version choice** | The order of **Content › Sources** | Order for the source criterion. |
+| **Order of editions** | **Settings › Version choice** | Theatrical cut, Extended cut, Director's cut, IMAX | Order for the edition criterion. |
+| **Size per minute to aim at (MB)** | **Settings › Version choice** | 0, the largest first (up to 1,000) | Target for the size per minute criterion. |
+| **Hide versions larger than (GB)** | **Settings › Version choice** | 0, no limit (up to 1,000) | Hides versions known to be larger. |
+| **Hide these video codecs** | **Settings › Version choice** | None | Hides versions known to be in these codecs. |
+| **Hide versions whose labels contain** | **Settings › Version choice** | None (up to 50 lines) | Hides versions whose labels hold one of these words. |
+| **Hide low-quality releases** | **Settings › Version choice** | None | Hides versions tagged as a kind ticked. |
+| **Label rules** | **Settings › Version choice** | None (up to 40 rules) | Hide versions or score them (see [Label rules](#label-rules)). |
 
 - Each criterion groups versions, and the next sorts within them. Ties keep the addons' order. With no criterion, the versions an addon says are not cached come after the others; with criteria, only **Cached by the provider first** reads it.
 - The criteria: **Preferred audio language**; **Resolution, highest first** or **Resolution, lowest first**; **File size, largest first**, **File size, smallest first** or **Size per minute of runtime, as set below**; **Video codec, in the order below**; **HDR and Dolby Vision first** or **HDR and Dolby Vision last**; **Source, in the order below**; **Source: disc copy, Blu-ray, web, DVD, then TV**; **Audio: lossless and Atmos first, then most channels**; **Edition, in the order below**; **Score of the label rules, highest first**; **Cached by the provider first**, then those it says nothing of, then those not cached; **Most seeders first**.
@@ -484,7 +484,7 @@ While Polyfin follows an open title page (see [Title pages](#title-pages)), its 
 
 #### Label rules
 
-**Label rules**, last in the **Version order** group, read each version's name, description and file name. A rule is a word found anywhere, or with **Regular expression** ticked, an expression such as `\bx265\b` or `^\[[^]]*\]`; both ignore letter case.
+**Label rules**, last in **Settings › Version choice**, read each version's name, description and file name. A rule is a word found anywhere, or with **Regular expression** ticked, an expression such as `\bx265\b` or `^\[[^]]*\]`; both ignore letter case.
 
 | Action | Effect |
 |---|---|
@@ -510,7 +510,7 @@ While Polyfin follows an open title page (see [Title pages](#title-pages)), its 
 
 To put local files first for everyone:
 
-1. In **Settings › Playback › Version order**, under **Order versions by**, choose **Source, in the order below** and move it to **Criterion 1**. After another criterion, such as **Preferred audio language**, local files with unknown language, resolution or codec land after streams.
+1. In **Settings › Version choice**, under **Order versions by**, choose **Source, in the order below** and move it to **Criterion 1**. After another criterion, such as **Preferred audio language**, local files with unknown language, resolution or codec land after streams.
 2. Under **Order of sources**, move every local folder and network share above the addons, then **Save**. A folder below an addon stays after it.
 3. Open the title again: an open page keeps its menu.
 

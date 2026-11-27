@@ -59,7 +59,7 @@ const sources: typeof en = {
       'Les descriptions, les sous-titres et les résultats de recherche suivent cet ordre, parmi les sources du serveur\u202f; les sources personnelles des membres viennent après.',
     orderHelpMine:
       'Les descriptions, les sous-titres et les résultats de recherche suivent cet ordre parmi vos sources, après celles du serveur.',
-    versionOrderLink: 'L’ordre des versions se règle dans Paramètres › Lecture.',
+    versionOrderLink: 'L’ordre des versions se règle dans Paramètres › Choix des versions.',
     problemsTitle: 'À régler',
     inOrderTitle: 'Dans leur ordre',
     moved: (name: string, position: number, count: number) =>

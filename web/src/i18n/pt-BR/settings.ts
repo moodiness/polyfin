@@ -93,7 +93,6 @@ const settings: typeof en = {
       editorHelp:
         'Um objeto JSON das configurações do Moonfin, com os nomes delas no aplicativo. Uma configuração ausente continua à escolha do usuário. As chaves de API e os itens ocultos próprios de um usuário nunca são guardados aqui.',
       notObject: 'Escreva um objeto JSON, entre { e }.',
-      saved: (profile: string) => `Padrões do perfil ${profile} salvos.`,
       apply: 'Aplicar aos usuários',
       applyHelp:
         'Grava os padrões salvos nas configurações de cada usuário que sincronizou, cada perfil no mesmo perfil.',
@@ -281,14 +280,15 @@ const settings: typeof en = {
             return `${where}${problem.key} deve ser ${expected[problem.key] ?? 'válido'}.`
         }
       },
-      downloadLimit: 'Limite de download (Mbps, 0 = nenhum)',
-      downloadLimitHelp: (r: RangeText) => `De 0 a ${r.max}; ${r.default} por padrão.`,
-      uploadLimit: 'Limite de upload (Mbps, 0 = sem compartilhamento)',
+      downloadLimit: 'Limite de download (Mbps)',
+      downloadLimitHelp: (r: RangeText) =>
+        `0 significa sem limite. De 0 a ${r.max}; ${r.default} por padrão.`,
+      uploadLimit: 'Limite de upload (Mbps)',
       uploadLimitHelp: (r: RangeText) =>
-        `Os peers favorecem quem compartilha de volta, então o início pode ser mais lento com 0. O compartilhamento para quando a reprodução termina. De 0 a ${r.max}; ${r.default} por padrão.`,
-      atOnce: 'Torrents ao mesmo tempo (0 = sem limite)',
+        `Com 0, nada é compartilhado de volta, e os peers favorecem quem compartilha, então o início pode ser mais lento. O compartilhamento para quando a reprodução termina. De 0 a ${r.max}; ${r.default} por padrão.`,
+      atOnce: 'Torrents ao mesmo tempo',
       atOnceHelp: (r: RangeText) =>
-        `Quantos torrents podem rodar ao mesmo tempo, para todos os usuários juntos. No limite, um título reproduz outra de suas versões que não seja um torrent, ou é informado como impossível de reproduzir por enquanto; uma vaga é liberada quando um torrent para, 30 segundos após sua reprodução, ou na hora quando o mesmo dispositivo ou usuário reproduz outro título. De 0 a ${r.max}; ${r.default} por padrão.`,
+        `Quantos torrents podem rodar ao mesmo tempo, para todos os usuários juntos. No limite, um título reproduz outra de suas versões que não seja um torrent, ou é informado como impossível de reproduzir por enquanto; uma vaga é liberada quando um torrent para, 30 segundos após sua reprodução, ou na hora quando o mesmo dispositivo ou usuário reproduz outro título. 0 significa sem limite. De 0 a ${r.max}; ${r.default} por padrão.`,
       trackers: 'Trackers adicionados a cada torrent',
       trackersHelp: (r: RangeText) =>
         `URLs de anúncio, uma por linha, como udp://tracker.example:1337/announce. O Polyfin pede a eles os peers de cada torrent, além dos trackers que o complemento indica: assim, um torrent que o complemento lista sem nenhum não depende só da DHT. HTTP, HTTPS e UDP; no máximo ${r.max}. Um torrent privado consulta apenas os próprios trackers. Vazio por padrão: o Polyfin não vem com nenhuma lista.`,
@@ -398,7 +398,7 @@ const settings: typeof en = {
     nameHowVersionsPlay: 'Indicar no nome das versões como elas são reproduzidas',
     nameHowVersionsPlayHelp:
       'Os nomes das versões terminam com a forma como o aplicativo reproduz cada uma: “(reprodução direta)”, “(stream direta)” quando copiada sem conversão, “(convertida: motivo)” com o pedido do aplicativo, HDR, o limite de qualidade, as legendas, o vídeo ou o áudio como motivo, ou “(não reproduzível aqui)”. O Polyfin decide isso pelo perfil de dispositivo que o aplicativo enviou na última reprodução nesse dispositivo ou, antes disso, nas capacidades da sessão dele, e o mantém após uma reinicialização até o dispositivo sair, então os nomes não dizem nada enquanto o aplicativo não tiver reproduzido algo uma vez nesse dispositivo, a menos que as capacidades tenham trazido um perfil. As versões analisadas ou descritas indicam isso com exatidão: a que uma reprodução lê primeiro ao abrir um título, com “Preparar a reprodução com antecedência” ativado, as seguintes só se ela falhar, e até três em uma reprodução. As demais recebem uma estimativa a partir dos rótulos, como “(provavelmente convertida: áudio)”, quando eles nomeiam os codecs de vídeo e áudio; ela pode estar errada. Para indicações exatas antes de reproduzir, ative “Descrever versões pelo RemuxDB”, que envia os identificadores IMDb dos títulos a terceiros. Os nomes ficam no idioma dos nomes gerados. Nada é lido para isso.',
-    versionOrderGroup: 'Ordem das versões',
+    hiddenVersionsGroup: 'Versões ocultas',
     versionOrder: {
       label: 'Ordenar versões por',
       help: 'Cada critério agrupa as versões de um filme ou episódio, e o seguinte as ordena dentro de cada grupo; versões empatadas mantêm a ordem dos complementos. A primeira versão é a que “Reproduzir” inicia, e as versões tentadas quando ela não funciona vêm em seguida. O Polyfin se baseia no que sabe de uma versão sem ler o arquivo: sua análise depois de reproduzida, senão a descrição do RemuxDB, senão as palavras dos seus rótulos. Uma versão sobre a qual um critério não sabe nada fica depois das outras. O idioma de áudio preferido é o de cada usuário, definido no aplicativo dele, ou então o Idioma de áudio padrão: primeiro as versões conhecidas nesse idioma, depois as marcadas como MULTI ou DUAL, depois as de idioma desconhecido. Em Minha conta, um usuário também pode preferir uma região de áudio, como o francês do Québec: entre as versões no idioma dela, primeiro as dessa região, depois as de região desconhecida. “Em cache no provedor primeiro” e “Mais seeders primeiro” se baseiam no que o complemento diz de cada versão: se o provedor dele tem o arquivo pronto, e os seeders que ele informa ou escreve nos rótulos. Sem critérios, as versões que um complemento diz não estarem em cache ficam depois das outras. Enquanto a página de um título estiver aberta, as versões exibidas mantêm suas posições.',
@@ -447,7 +447,7 @@ const settings: typeof en = {
       directors: 'Versão do diretor',
       imax: 'IMAX',
     },
-    versionMbPerMinute: 'Tamanho por minuto desejado (MB, 0 = o maior)',
+    versionMbPerMinute: 'Tamanho por minuto desejado (MB)',
     versionMbPerMinuteHelp: (r: RangeText) =>
       `O critério Tamanho por minuto coloca primeiro as versões mais próximas desta quantidade de megabytes por minuto de duração, por exemplo 50 para uma boa codificação 1080p; 0 coloca primeiro a maior. A duração é a da versão depois de analisada, senão a do título. Até ${r.max}; ${r.default} por padrão.`,
     versionCodecs: {
@@ -459,9 +459,9 @@ const settings: typeof en = {
       mpeg4: 'MPEG-4 Parte 2 (Xvid, DivX)',
       mpeg2video: 'MPEG-2',
     },
-    hideVersionsLarger: 'Ocultar versões maiores que (GB, 0 = sem limite)',
+    hideVersionsLarger: 'Ocultar versões maiores que (GB)',
     hideVersionsLargerHelp: (r: RangeText) =>
-      `Versões sabidamente maiores não são listadas em lugar nenhum: nem nas páginas dos títulos, nem na reprodução, nem nos downloads. Quando as regras abaixo e esta ocultariam todas as versões de um título, nenhuma é ocultada. Até ${r.max} GB; ${r.default} por padrão.`,
+      `Versões sabidamente maiores não são listadas em lugar nenhum: nem nas páginas dos títulos, nem na reprodução, nem nos downloads. Quando as regras abaixo e esta ocultariam todas as versões de um título, nenhuma é ocultada. 0 não oculta nenhuma pelo tamanho. Até ${r.max} GB; ${r.default} por padrão.`,
     hiddenVersionCodecs: 'Ocultar estes codecs de vídeo',
     hiddenVersionCodecsHelp: 'Versões sabidamente nesses codecs não são listadas em lugar nenhum.',
     hiddenVersionWords: 'Ocultar versões cujos rótulos contêm',
@@ -548,9 +548,9 @@ const settings: typeof en = {
     weeklySummaryHour: 'Enviar o resumo semanal às',
     weeklySummaryHourHelp: (hour: string) =>
       `No fuso horário do servidor. A retrospectiva do mês e a retrospectiva do ano também são enviadas neste horário, no dia 1º. ${hour} por padrão.`,
-    maxConversions: 'Conversões de vídeo simultâneas (0 = sem limite)',
+    maxConversions: 'Conversões de vídeo simultâneas',
     maxConversionsHelp: (r: RangeText) =>
-      `Converter vídeo é o trabalho mais pesado que o servidor faz. Quando esse número de reproduções estiver com o vídeo sendo convertido (incluindo legendas gravadas na imagem), uma nova reprodução recebe uma versão que não precisa de conversão, ou não é iniciada. Reproduções já em andamento nunca são interrompidas. A TV ao Vivo também mantém seus próprios limites: 4 canais por usuário e 16 para o servidor. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
+      `Converter vídeo é o trabalho mais pesado que o servidor faz. Quando esse número de reproduções estiver com o vídeo sendo convertido (incluindo legendas gravadas na imagem), uma nova reprodução recebe uma versão que não precisa de conversão, ou não é iniciada. Reproduções já em andamento nunca são interrompidas. A TV ao Vivo também mantém seus próprios limites: 4 canais por usuário e 16 para o servidor. 0 significa sem limite. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     maxConversionHeight: 'Qualidade máxima do vídeo convertido',
     maxConversionHeightHelp:
       'O vídeo convertido é reduzido no máximo a esta altura, mantendo suas proporções, para que seja reproduzido bem em uma conexão mais lenta. Arquivos reproduzidos como estão ou apenas reempacotados mantêm sua qualidade. Uma placa de vídeo converte até 4K; o processador vai até 1080p e, quando converte HDR para SDR, até “Qualidade máxima do HDR convertido pelo processador”, em Conversão (transcodificação) › HDR.',
@@ -676,8 +676,8 @@ const settings: typeof en = {
         superfast: 'Super-rápido',
         ultrafast: 'Ultrarrápido (trabalho mais leve)',
       },
-      h264Quality: 'Qualidade H.264 (0 = pela taxa de bits)',
-      hevcQuality: 'Qualidade HEVC (0 = pela taxa de bits)',
+      h264Quality: 'Qualidade H.264',
+      hevcQuality: 'Qualidade HEVC',
       qualityHelp: (r: RangeText) =>
         `Um número menor gera uma imagem melhor e mais dados; a taxa de bits continua definindo o máximo. 0 visa apenas a taxa de bits. O Jellyfin usa 23 para H.264 e 28 para HEVC. 0, ou de ${r.min} a ${r.max}; ${r.default} por padrão.`,
       qualityIgnored:
@@ -719,10 +719,10 @@ const settings: typeof en = {
       height4k: '4K',
       measuredHeight: (height: number) => `Medido: ${height}p`,
       upToHeight: (height: number) => `até ${height}p`,
-      toneMappingPeak: 'Brilho máximo em nits (0 = o do vídeo)',
-      toneMappingDesat: 'Dessaturação das áreas claras (0 = desativada)',
+      toneMappingPeak: 'Brilho máximo em nits',
+      toneMappingDesat: 'Dessaturação das áreas claras',
       toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>
-        `Somente quando o processador converte HDR em SDR: uma placa de vídeo que faz isso os ignora. O pico substitui o nível mais claro que o vídeo diz atingir: 0, ou de ${peak.min} a ${peak.max}; ${peak.default} por padrão. A dessaturação atenua a cor das partes muito claras: de ${desat.min} a ${desat.max}; ${desat.default} por padrão.`,
+        `Somente quando o processador converte HDR em SDR: uma placa de vídeo que faz isso os ignora. O pico substitui o nível mais claro que o vídeo diz atingir, que 0 mantém: 0, ou de ${peak.min} a ${peak.max}; ${peak.default} por padrão. A dessaturação atenua a cor das partes muito claras, 0 nada: de ${desat.min} a ${desat.max}; ${desat.default} por padrão.`,
       processorCannotToneMap:
         'O FFmpeg não consegue fazer tone mapping no processador deste servidor.',
       deinterlaceMethod: 'Método de desentrelaçamento',
@@ -768,10 +768,10 @@ const settings: typeof en = {
             : channels === 2
               ? 'Estéreo'
               : '5.1',
-      audioBitratePerChannel: 'Taxa de bits de áudio por canal em kb/s (0 = automático)',
+      audioBitratePerChannel: 'Taxa de bits de áudio por canal em kb/s',
       audioBitratePerChannelHelp: (r: RangeText) =>
-        `Automático gera as taxas de bits do Jellyfin: 128 kb/s em mono, 384 kb/s em estéreo e 640 kb/s em 5.1, menos com um limite de taxa de bits baixo. 0, ou de ${r.min} a ${r.max}; ${r.default} por padrão.`,
-      encodingThreads: 'Threads do processador por conversão (0 = automático)',
+        `0, automático, gera as taxas de bits do Jellyfin: 128 kb/s em mono, 384 kb/s em estéreo e 640 kb/s em 5.1, menos com um limite de taxa de bits baixo. 0, ou de ${r.min} a ${r.max}; ${r.default} por padrão.`,
+      encodingThreads: 'Threads do processador por conversão',
       encodingThreadsHelp: (r: RangeText) =>
         `Limita o quanto do processador uma conversão usa, para deixar espaço para outras tarefas. De ${r.min} a ${r.max}; 0 deixa o FFmpeg escolher.`,
       aheadSeconds: 'Segundos preparados com antecedência',
@@ -878,10 +878,10 @@ const settings: typeof en = {
     collectionLibraryAppsHelp:
       'As bibliotecas de coleções são apresentadas aos aplicativos como bibliotecas de conteúdo misto, para que o jellyfin-web e o Streamyfin lhes deem uma linha na tela inicial. Os aplicativos marcados são informados de que elas contêm coleções, como faz a visualização Coleções do Jellyfin: os aplicativos que listam uma biblioteca pelo tipo mostram então suas coleções, e os títulos de uma coleção depois que ela é aberta, em vez dos títulos de todas as suas coleções juntos. O jellyfin-web e o Streamyfin deixam essas bibliotecas fora das linhas da tela inicial, então não os marque. A lista mostra os aplicativos que entraram neste servidor.',
     collectionLibraryAppsNone: 'Nenhum aplicativo entrou neste servidor ainda.',
-    localScanHours: 'Rastrear pastas locais a cada (horas, 0 = nunca)',
+    localScanHours: 'Rastrear pastas locais a cada (horas)',
     localScanHoursHelp: (r: RangeText) =>
       `Com que frequência cada pasta local é rastreada novamente em busca de arquivos adicionados, alterados ou removidos. As pastas também são rastreadas na inicialização, quando você solicita e quando as pastas monitoradas mudam. 0 desativa o agendamento. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
-    watchlistCheckHours: 'Procurar versões dos títulos para assistir a cada (horas, 0 = nunca)',
+    watchlistCheckHours: 'Procurar versões dos títulos para assistir a cada (horas)',
     watchlistCheckHoursHelp: (r: RangeText) =>
       `Com que frequência cada título não iniciado da playlist “Para assistir” de um usuário é verificado novamente em busca de versões, para as linhas iniciais “Já disponível” e “Ainda aguardando” e a mensagem que avisa o usuário de um título disponível. A cada hora, até 20 títulos de cada usuário são verificados, consultando os complementos de streams dele. 0 desativa as verificações. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
     watchLocalFolders: 'Monitorar alterações em pastas e compartilhamentos',
@@ -907,15 +907,15 @@ const settings: typeof en = {
     shareLinksHelp:
       'Usuários com “Pode compartilhar títulos”, na página deles em Usuários, podem dar um filme ou um episódio a alguém sem conta, por meio de um link que expira após 1 hora a 30 dias. O convidado assiste em um navegador, em no máximo 1080p e dentro do grupo de qualidade do usuário, e conta imediatamente entre as reproduções do usuário. Quando desativado, nenhum link pode ser criado e todos os links são recusados, sem serem excluídos. Desativado por padrão.',
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
-    loginAttempts: 'Bloquear uma conta após este número de senhas incorretas (0 = nunca)',
+    loginAttempts: 'Bloquear uma conta após este número de senhas incorretas',
     loginAttemptsHelp: (r: RangeText) =>
-      `Após este número de senhas incorretas seguidas a partir de um mesmo endereço, esse endereço não consegue entrar na conta por 15 minutos, mesmo com a senha correta. Os outros endereços e os dispositivos que a conta já usou continuam entrando. Um administrador pode desbloquear a conta antes na página Usuários. 0, ou de ${r.min} a ${r.max}.`,
+      `Após este número de senhas incorretas seguidas a partir de um mesmo endereço, esse endereço não consegue entrar na conta por 15 minutos, mesmo com a senha correta. Os outros endereços e os dispositivos que a conta já usou continuam entrando. Um administrador pode desbloquear a conta antes na página Usuários. 0 nunca a bloqueia. 0, ou de ${r.min} a ${r.max}.`,
     twoStepAdministrators: 'Exigir login em duas etapas para administradores',
     twoStepAdministratorsHelp:
       'Os administradores entram neste aplicativo de administração com um código de um aplicativo autenticador após a senha. Quem ainda não configurou faz isso logo após a senha, antes de obter uma sessão. A senha sozinha deixa então de entrar em qualquer aplicativo Jellyfin: eles usam o Quick Connect, aprovado aqui. As sessões e os dispositivos já conectados continuam conectados. Desativado por padrão.',
-    inactiveDeviceDays: 'Desconectar dispositivos sem uso há (dias, 0 = nunca)',
+    inactiveDeviceDays: 'Desconectar dispositivos sem uso há (dias)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
-      `Aplicativos Jellyfin sem uso há este número de dias são desconectados e precisam entrar novamente. A verificação ocorre a cada hora. O login nesta página de administração não é afetado. De ${r.min} a ${r.max}.`,
+      `Aplicativos Jellyfin sem uso há este número de dias são desconectados e precisam entrar novamente. A verificação ocorre a cada hora. O login nesta página de administração não é afetado. 0 nunca os desconecta. De ${r.min} a ${r.max}.`,
     knownProxies: 'Proxies conhecidos',
     knownProxiesHelp: (r: RangeText) =>
       `Os proxies reversos na frente do Polyfin, um por linha: um endereço IP, uma rede como 172.18.0.0/16 ou um nome de host como o nome de um contêiner em uma rede Docker (traefik), até ${r.max}. Um nome é resolvido a cada minuto e cada endereço para o qual ele resolve é considerado confiável, então liste apenas nomes que a sua própria rede resolve. Uma solicitação vinda de um deles vem do cliente indicado no cabeçalho X-Forwarded-For ou X-Real-IP: é esse endereço que limita as falhas de login, aparece nos dispositivos e indica a rede local. De qualquer outro endereço, X-Forwarded-For e X-Real-IP não indicam nenhum cliente, e uma solicitação que os traga conta como externa à rede local. Deixe vazio quando nada estiver na frente do Polyfin.`,
@@ -1088,9 +1088,9 @@ const settings: typeof en = {
     recordingPostPadding: 'Continuar gravando após o fim (minutos)',
     recordingPostPaddingHelp: (r: RangeText) =>
       `Quantos minutos após o programa uma gravação continua. De ${r.min} a ${r.max}; ${r.default} por padrão.`,
-    recordingRetentionDays: 'Manter gravações por (dias, 0 = para sempre)',
+    recordingRetentionDays: 'Manter gravações por (dias)',
     recordingRetentionDaysHelp: (r: RangeText) =>
-      `Gravações mais antigas que isso são excluídas. A verificação é feita todos os dias. De ${r.min} a ${r.max}.`,
+      `Gravações mais antigas que isso são excluídas. A verificação é feita todos os dias. 0 as mantém para sempre. De ${r.min} a ${r.max}.`,
     recordingCommercials: 'Encontrar comerciais nas gravações',
     recordingCommercialsHelp:
       'Quando uma gravação termina, o Polyfin a lê em segundo plano, uma gravação por vez, em busca dos momentos que são ao mesmo tempo pretos e silenciosos, e considera os trechos curtos entre eles como intervalos comerciais. Os aplicativos então oferecem pulá-los, conforme cada usuário escolheu nas configurações de reprodução do seu aplicativo, enquanto os botões de pular abertura e créditos estiverem ativados. Gravações com mais de 4 horas não são lidas.',
@@ -1447,10 +1447,21 @@ const settings: typeof en = {
       count === 1 ? '1 configuração encontrada' : `${count} configurações encontradas`,
     noMatchHelp: 'Tente outra palavra, como o nome de uma variável ou de um serviço.',
     variableHint: 'Variável de ambiente',
+    sectionGroups: {
+      server: 'Servidor',
+      streaming: 'Streaming',
+      library: 'Biblioteca',
+      apps: 'Apps e serviços',
+    },
     ledes: {
       general:
         'O nome do servidor, seu idioma, como os aplicativos entram e o encontram, e a verificação de novas versões.',
-      playback: 'Como o Polyfin escolhe e prepara as versões que reproduz.',
+      moonfin:
+        'O companheiro que os apps do Moonfin procuram, as configurações com que começam e as mensagens aos seus usuários.',
+      playback:
+        'Como o Polyfin prepara e lê o que reproduz, o que guarda dos arquivos lidos, o histórico de reprodução e os idiomas padrão.',
+      versions:
+        'Qual versão de um filme ou episódio é reproduzida primeiro e quais versões ficam ocultas.',
       content:
         'Botões para pular a introdução, títulos semelhantes, imagens geradas, avaliações, letras de músicas, volume uniforme entre as músicas e limites de reprodução.',
       catalogs: 'Quanto o Polyfin lê dos catálogos dos complementos, e com que frequência.',

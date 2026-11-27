@@ -24,9 +24,11 @@ import { jellyfinApp, webPlayerLink } from '@/jellyfinApps'
 import {
   Button,
   Checkbox,
+  cx,
   ExternalButtonLink,
   FieldError,
   Notice,
+  SettingHelp,
   SettingRow,
   Textarea,
 } from '@/ui'
@@ -79,7 +81,7 @@ function myAnimeListRedirect(publicAddress: string): string {
 function Address({ label, value }: { label: string; value: string }) {
   const { t } = useI18n()
   return (
-    <p className="mt-2 text-ink-3">
+    <p className="mt-2 text-small text-ink-3">
       {label}
       {t.common.colon}{' '}
       <code className="rounded-check bg-s3 px-1.5 py-0.5 font-mono text-micro break-all text-ink select-all">
@@ -92,7 +94,9 @@ function Address({ label, value }: { label: string; value: string }) {
 /** The fields of each section, drawn inside its SectionForm. */
 export const sectionFields: Record<SettingsSectionId, (api: SectionFormApi) => ReactNode> = {
   general: (api) => <General {...api} />,
+  moonfin: (api) => <Moonfin {...api} />,
   playback: (api) => <Playback {...api} />,
+  versions: (api) => <Versions {...api} />,
   conversion: (api) => <ConversionSection {...api} />,
   content: (api) => <Content {...api} />,
   catalogs: (api) => <Catalogs {...api} />,
@@ -192,25 +196,6 @@ function General({ form, update, error, range, limits, saved }: SectionFormApi) 
       />
       <SettingRow
         kind="switch"
-        anchor="moonfin"
-        label={s.moonfin}
-        help={s.moonfinHelp}
-        checked={form.moonfin}
-        onChange={(moonfin) => update({ moonfin })}
-        saved={saved.moonfin}
-      />
-      {form.moonfin && (
-        <PlainRow anchor="moonfin-defaults">
-          <MoonfinDefaults />
-        </PlainRow>
-      )}
-      {form.moonfin && (
-        <PlainRow anchor="moonfin-messages">
-          <MoonfinMessages />
-        </PlainRow>
-      )}
-      <SettingRow
-        kind="switch"
         anchor="update-check"
         label={s.updateCheck}
         help={s.updateCheckHelp}
@@ -307,6 +292,40 @@ function General({ form, update, error, range, limits, saved }: SectionFormApi) 
         error={error}
         limits={limits}
       />
+    </SettingsGroup>
+  )
+}
+
+/**
+ * Settings › Moonfin: whether Polyfin serves the companion Moonfin's apps look for, then, while it
+ * does, the defaults they start from (saved by the dock with the switch) and the messages to their
+ * users. The defaults stay drawn while the switch is off, hidden, so that turning it off and on
+ * again keeps their edits.
+ */
+function Moonfin({ form, update, saved, side }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings
+  return (
+    <SettingsGroup>
+      <SettingRow
+        kind="switch"
+        anchor="moonfin"
+        label={s.moonfin}
+        help={s.moonfinHelp}
+        checked={form.moonfin}
+        onChange={(moonfin) => update({ moonfin })}
+        saved={saved.moonfin}
+      />
+      <div className={form.moonfin ? 'contents' : 'hidden'}>
+        <PlainRow anchor="moonfin-defaults">
+          <MoonfinDefaults side={side} />
+        </PlainRow>
+      </div>
+      {form.moonfin && (
+        <PlainRow anchor="moonfin-messages">
+          <MoonfinMessages />
+        </PlainRow>
+      )}
     </SettingsGroup>
   )
 }
@@ -441,147 +460,6 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
         range={range}
         limits={limits}
       />
-      <SettingsGroup title={s.versionOrderGroup}>
-        <PlainRow anchor="version-order">
-          <VersionOrder
-            order={form.versionOrder}
-            choices={(form.bounds.versionOrder?.choices ?? []) as VersionCriterion[]}
-            onChange={(versionOrder) => update({ versionOrder })}
-            error={error('version-order')}
-          />
-        </PlainRow>
-        <PlainRow anchor="version-codec-order">
-          <CodecOrder
-            order={form.versionCodecOrder}
-            onChange={(versionCodecOrder) => update({ versionCodecOrder })}
-            error={error('version-codec-order')}
-          />
-        </PlainRow>
-        <PlainRow anchor="version-source-order">
-          <SourceOrder
-            order={form.versionSourceOrder}
-            sources={form.versionSources}
-            onChange={(versionSourceOrder) => update({ versionSourceOrder })}
-            error={error('version-source-order')}
-          />
-        </PlainRow>
-        <PlainRow anchor="version-edition-order">
-          <EditionOrder
-            order={form.versionEditionOrder}
-            onChange={(versionEditionOrder) => update({ versionEditionOrder })}
-            error={error('version-edition-order')}
-          />
-        </PlainRow>
-        <SettingRow
-          kind="number"
-          anchor="version-mb-per-minute"
-          label={s.versionMbPerMinute}
-          help={s.versionMbPerMinuteHelp(range('versionMbPerMinute'))}
-          error={error('version-mb-per-minute')}
-          {...minMax('versionMbPerMinute')}
-          step={1}
-          {...number('version-mb-per-minute', form.versionMbPerMinute, (value) =>
-            update({ versionMbPerMinute: Math.trunc(value) }),
-          )}
-          saved={saved.versionMbPerMinute}
-        />
-        <SettingRow
-          kind="number"
-          anchor="hide-versions-larger"
-          label={s.hideVersionsLarger}
-          help={s.hideVersionsLargerHelp(range('hideVersionsLargerGb'))}
-          error={error('hide-versions-larger')}
-          {...minMax('hideVersionsLargerGb')}
-          step={1}
-          {...number('hide-versions-larger', form.hideVersionsLargerGb, (value) =>
-            update({ hideVersionsLargerGb: Math.trunc(value) }),
-          )}
-          saved={saved.hideVersionsLargerGb}
-        />
-        <PlainRow anchor="hidden-version-codecs">
-          <fieldset aria-describedby="hidden-version-codecs-help">
-            <legend className="text-h3 text-ink max-md:text-[1.125rem]">
-              {s.hiddenVersionCodecs}
-            </legend>
-            <p id="hidden-version-codecs-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
-              {s.hiddenVersionCodecsHelp}
-            </p>
-            <div className="mt-3.5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {((form.bounds.hiddenVersionCodecs?.choices ?? []) as VersionCodec[]).map(
-                (codec, _, all) => (
-                  <Checkbox
-                    key={codec}
-                    label={s.versionCodecs[codec]}
-                    checked={form.hiddenVersionCodecs.includes(codec)}
-                    onChange={(checked) =>
-                      update({
-                        hiddenVersionCodecs: all.filter((other) =>
-                          other === codec ? checked : form.hiddenVersionCodecs.includes(other),
-                        ),
-                      })
-                    }
-                  />
-                ),
-              )}
-            </div>
-            {error('hidden-version-codecs') && (
-              <div className="mt-2">
-                <FieldError>{error('hidden-version-codecs')}</FieldError>
-              </div>
-            )}
-          </fieldset>
-        </PlainRow>
-        <FieldRow
-          anchor="hidden-version-words"
-          label={s.hiddenVersionWords}
-          help={s.hiddenVersionWordsHelp(range('hiddenVersionWords'))}
-          error={error('hidden-version-words')}
-        >
-          <WordList
-            value={form.hiddenVersionWords}
-            onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
-          />
-        </FieldRow>
-        <PlainRow anchor="hidden-releases">
-          <fieldset aria-describedby="hidden-releases-help">
-            <legend className="text-h3 text-ink max-md:text-[1.125rem]">{s.hiddenReleases}</legend>
-            <p id="hidden-releases-help" className="mt-2 max-w-[66ch] text-small text-ink-2">
-              {s.hiddenReleasesHelp}
-            </p>
-            <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
-              {((form.bounds.hiddenReleases?.choices ?? []) as ReleaseKind[]).map(
-                (kind, _, all) => (
-                  <Checkbox
-                    key={kind}
-                    label={s.releaseKinds[kind]}
-                    checked={form.hiddenReleases.includes(kind)}
-                    onChange={(checked) =>
-                      update({
-                        hiddenReleases: all.filter((other) =>
-                          other === kind ? checked : form.hiddenReleases.includes(other),
-                        ),
-                      })
-                    }
-                  />
-                ),
-              )}
-            </div>
-            {error('hidden-releases') && (
-              <div className="mt-2">
-                <FieldError>{error('hidden-releases')}</FieldError>
-              </div>
-            )}
-          </fieldset>
-        </PlainRow>
-        <PlainRow anchor="version-label-rules">
-          <LabelRules
-            rules={form.versionLabelRules}
-            max={limits('versionLabelRules').max ?? 0}
-            onChange={(versionLabelRules) => update({ versionLabelRules })}
-            error={error('version-label-rules')}
-          />
-        </PlainRow>
-      </SettingsGroup>
       <SettingsGroup title={s.playbackHistoryGroup}>
         <SettingRow
           kind="switch"
@@ -631,6 +509,189 @@ function Playback({ form, update, error, number, range, limits, saved, minMax }:
         />
       </SettingsGroup>
     </>
+  )
+}
+
+/**
+ * Settings › Version choice: which of a title's versions comes first (the criteria and the orders
+ * they follow) and which are hidden.
+ */
+function Versions({ form, update, error, number, range, limits, saved, minMax }: SectionFormApi) {
+  const { t } = useI18n()
+  const s = t.settings
+  return (
+    <>
+      <SettingsGroup title={s.versionOrder.label}>
+        <ListRows anchor="version-order" help={s.versionOrder.help}>
+          <VersionOrder
+            order={form.versionOrder}
+            choices={(form.bounds.versionOrder?.choices ?? []) as VersionCriterion[]}
+            onChange={(versionOrder) => update({ versionOrder })}
+            error={error('version-order')}
+          />
+        </ListRows>
+        <SettingRow
+          kind="number"
+          anchor="version-mb-per-minute"
+          label={s.versionMbPerMinute}
+          help={s.versionMbPerMinuteHelp(range('versionMbPerMinute'))}
+          error={error('version-mb-per-minute')}
+          {...minMax('versionMbPerMinute')}
+          step={1}
+          {...number('version-mb-per-minute', form.versionMbPerMinute, (value) =>
+            update({ versionMbPerMinute: Math.trunc(value) }),
+          )}
+          saved={saved.versionMbPerMinute}
+        />
+      </SettingsGroup>
+      <SettingsGroup title={s.versionCodecOrder.label}>
+        <ListRows anchor="version-codec-order" help={s.versionCodecOrder.help}>
+          <CodecOrder
+            order={form.versionCodecOrder}
+            onChange={(versionCodecOrder) => update({ versionCodecOrder })}
+            error={error('version-codec-order')}
+          />
+        </ListRows>
+      </SettingsGroup>
+      <SettingsGroup title={s.versionSourceOrder.label}>
+        <ListRows anchor="version-source-order" help={s.versionSourceOrder.help}>
+          <SourceOrder
+            order={form.versionSourceOrder}
+            sources={form.versionSources}
+            onChange={(versionSourceOrder) => update({ versionSourceOrder })}
+            error={error('version-source-order')}
+          />
+        </ListRows>
+      </SettingsGroup>
+      <SettingsGroup title={s.versionEditionOrder.label}>
+        <ListRows anchor="version-edition-order" help={s.versionEditionOrder.help}>
+          <EditionOrder
+            order={form.versionEditionOrder}
+            onChange={(versionEditionOrder) => update({ versionEditionOrder })}
+            error={error('version-edition-order')}
+          />
+        </ListRows>
+      </SettingsGroup>
+      <SettingsGroup title={s.hiddenVersionsGroup}>
+        <SettingRow
+          kind="number"
+          anchor="hide-versions-larger"
+          label={s.hideVersionsLarger}
+          help={s.hideVersionsLargerHelp(range('hideVersionsLargerGb'))}
+          error={error('hide-versions-larger')}
+          {...minMax('hideVersionsLargerGb')}
+          step={1}
+          {...number('hide-versions-larger', form.hideVersionsLargerGb, (value) =>
+            update({ hideVersionsLargerGb: Math.trunc(value) }),
+          )}
+          saved={saved.hideVersionsLargerGb}
+        />
+        <CheckboxRow
+          anchor="hidden-version-codecs"
+          label={s.hiddenVersionCodecs}
+          help={s.hiddenVersionCodecsHelp}
+          columns="grid-cols-2 sm:grid-cols-4"
+          choices={((form.bounds.hiddenVersionCodecs?.choices ?? []) as VersionCodec[]).map(
+            (codec) => ({ value: codec, label: s.versionCodecs[codec] }),
+          )}
+          value={form.hiddenVersionCodecs}
+          onChange={(hiddenVersionCodecs) => update({ hiddenVersionCodecs })}
+          error={error('hidden-version-codecs')}
+        />
+        <FieldRow
+          anchor="hidden-version-words"
+          label={s.hiddenVersionWords}
+          help={s.hiddenVersionWordsHelp(range('hiddenVersionWords'))}
+          error={error('hidden-version-words')}
+        >
+          <WordList
+            value={form.hiddenVersionWords}
+            onValue={(hiddenVersionWords) => update({ hiddenVersionWords })}
+          />
+        </FieldRow>
+        <CheckboxRow
+          anchor="hidden-releases"
+          label={s.hiddenReleases}
+          help={s.hiddenReleasesHelp}
+          columns="sm:grid-cols-2"
+          choices={((form.bounds.hiddenReleases?.choices ?? []) as ReleaseKind[]).map((kind) => ({
+            value: kind,
+            label: s.releaseKinds[kind],
+          }))}
+          value={form.hiddenReleases}
+          onChange={(hiddenReleases) => update({ hiddenReleases })}
+          error={error('hidden-releases')}
+        />
+      </SettingsGroup>
+      <SettingsGroup title={s.versionLabelRules.label}>
+        <ListRows
+          anchor="version-label-rules"
+          help={s.versionLabelRules.help(String(limits('versionLabelRules').max ?? 0))}
+        >
+          <LabelRules
+            rules={form.versionLabelRules}
+            max={limits('versionLabelRules').max ?? 0}
+            onChange={(versionLabelRules) => update({ versionLabelRules })}
+            error={error('version-label-rules')}
+          />
+        </ListRows>
+      </SettingsGroup>
+    </>
+  )
+}
+
+/**
+ * Several checkboxes as one setting, in a tile: its name and help, the boxes in the order of
+ * `choices`, and its error. `value` keeps that order.
+ */
+function CheckboxRow<T extends string>({
+  anchor,
+  label,
+  help,
+  columns,
+  choices,
+  value,
+  onChange,
+  error,
+}: {
+  anchor: string
+  label: string
+  help: string
+  /** The grid of the boxes: `grid-cols-2 sm:grid-cols-4`. */
+  columns: string
+  choices: { value: T; label: string }[]
+  value: T[]
+  onChange: (value: T[]) => void
+  error?: string
+}) {
+  return (
+    <PlainRow anchor={anchor}>
+      <fieldset aria-describedby={`${anchor}-help`}>
+        <legend className="text-h3 text-ink max-md:text-[1.125rem]">{label}</legend>
+        <SettingHelp id={`${anchor}-help`}>{help}</SettingHelp>
+        <div className={cx('mt-3.5 grid gap-3', columns)}>
+          {choices.map((choice) => (
+            <Checkbox
+              key={choice.value}
+              label={choice.label}
+              checked={value.includes(choice.value)}
+              onChange={(checked) =>
+                onChange(
+                  choices
+                    .map((other) => other.value)
+                    .filter((other) => (other === choice.value ? checked : value.includes(other))),
+                )
+              }
+            />
+          ))}
+        </div>
+        {error && (
+          <div className="mt-2">
+            <FieldError>{error}</FieldError>
+          </div>
+        )}
+      </fieldset>
+    </PlainRow>
   )
 }
 
@@ -1165,8 +1226,7 @@ function IdentityProvider({ form, update, error, limits, saved }: SectionFormApi
   const s = t.settings.provider
   return (
     <SettingsGroup title={s.title}>
-      <TextRow anchor="provider-setup">
-        <p className="max-w-[60ch]">{s.intro}</p>
+      <TextRow anchor="provider-setup" text={s.intro}>
         {form.providerRedirectUri === '' ? (
           <div className="mt-3 max-w-[60ch]">
             <Notice tone="warn">{s.noPublicAddress}</Notice>
@@ -1455,16 +1515,8 @@ function Tracking({ form, update, error, saved }: SectionFormApi) {
   return (
     <>
       <SettingsGroup title="Trakt">
-        <TextRow anchor="trakt-setup">
-          <p className="max-w-[60ch]">{s.traktSetup}</p>
-          <p className="mt-2 text-ink-3">
-            {s.redirectUri}
-            {t.common.colon}{' '}
-            <code className="rounded-check bg-s3 px-1.5 py-0.5 font-mono text-micro break-all text-ink select-all">
-              {traktRedirectUri}
-            </code>
-          </p>
-          <p className="mt-2 max-w-[60ch] text-ink-3">{s.traktOlderApps}</p>
+        <TextRow anchor="trakt-setup" text={`${s.traktSetup} ${s.traktOlderApps}`}>
+          <Address label={s.redirectUri} value={traktRedirectUri} />
         </TextRow>
         <SettingRow
           kind="text"
@@ -1489,9 +1541,7 @@ function Tracking({ form, update, error, saved }: SectionFormApi) {
         />
       </SettingsGroup>
       <SettingsGroup title="Simkl">
-        <TextRow anchor="simkl-setup">
-          <p className="max-w-[60ch]">{s.simklSetup}</p>
-        </TextRow>
+        <TextRow anchor="simkl-setup" text={s.simklSetup} />
         <SettingRow
           kind="text"
           anchor="simkl-client-id"
@@ -1505,8 +1555,7 @@ function Tracking({ form, update, error, saved }: SectionFormApi) {
         />
       </SettingsGroup>
       <SettingsGroup title="AniList">
-        <TextRow anchor="anilist-setup">
-          <p className="max-w-[60ch]">{s.aniListSetup}</p>
+        <TextRow anchor="anilist-setup" text={s.aniListSetup}>
           <Address label={s.redirectUri} value={aniListPinUri} />
         </TextRow>
         <SettingRow
@@ -1532,8 +1581,7 @@ function Tracking({ form, update, error, saved }: SectionFormApi) {
         />
       </SettingsGroup>
       <SettingsGroup title="MyAnimeList">
-        <TextRow anchor="myanimelist-setup">
-          <p className="max-w-[60ch]">{s.myAnimeListSetup}</p>
+        <TextRow anchor="myanimelist-setup" text={s.myAnimeListSetup}>
           <Address label={s.redirectUri} value={myAnimeListRedirect(form.publicAddress)} />
           <p className="mt-1 text-small text-ink-3">{s.myAnimeListRedirectHelp}</p>
         </TextRow>
@@ -1560,9 +1608,7 @@ function Tracking({ form, update, error, saved }: SectionFormApi) {
         />
       </SettingsGroup>
       <SettingsGroup title="Last.fm">
-        <TextRow anchor="lastfm-setup">
-          <p className="max-w-[60ch]">{s.lastFmSetup}</p>
-        </TextRow>
+        <TextRow anchor="lastfm-setup" text={s.lastFmSetup} />
         <SettingRow
           kind="text"
           anchor="lastfm-api-key"
@@ -2035,9 +2081,7 @@ function Notifications({ form, update, error, number, limits, saved, minMax }: S
         </SettingRow>
       </SettingsGroup>
       <SettingsGroup title={s.weeklySummary}>
-        <TextRow anchor="weekly-summary">
-          <p className="max-w-[60ch]">{s.weeklySummaryHelp}</p>
-        </TextRow>
+        <TextRow anchor="weekly-summary" text={s.weeklySummaryHelp} />
         <SettingRow
           kind="choice"
           anchor="weekly-summary-day"
@@ -2071,9 +2115,7 @@ function Notifications({ form, update, error, number, limits, saved, minMax }: S
         </PlainRow>
       </SettingsGroup>
       <SettingsGroup title={s.email}>
-        <TextRow anchor="email-setup">
-          <p className="max-w-[60ch]">{s.emailHelp}</p>
-        </TextRow>
+        <TextRow anchor="email-setup" text={s.emailHelp} />
         <SettingRow
           kind="text"
           anchor="smtp-host"

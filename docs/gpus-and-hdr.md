@@ -240,8 +240,8 @@ Where HDR goes, and why:
 | **Tone mapping method** | **Settings › Conversion (transcoding) › HDR** | **Automatic** | **Automatic** (BT.2390 on an NVIDIA GPU, Hable on the processor), BT.2390, Hable, Reinhard, Möbius, Clip or Linear. BT.2390 works on NVIDIA GPUs only: the processor's filter has none and uses Hable. Intel GPUs and VideoToolbox use their own curve and ignore the method. |
 | **Tone map HDR on the graphics card** | **Settings › Conversion (transcoding) › HDR** | On | NVIDIA GPUs, Intel GPUs through VAAPI or QSV, and VideoToolbox tone map HDR themselves, up to 4K, unless too slow for it (see [A GPU too slow for HDR](#a-gpu-too-slow-for-hdr)). Off: the processor tone maps it on every GPU, a way out when a GPU's colors look wrong. Dolby Vision without an HDR10 layer is then not converted. |
 | **Maximum quality of HDR converted by the processor** | **Settings › Conversion (transcoding) › HDR** | **Automatic (measured)** | **Automatic** (1080p or 720p, as measured at startup and again when the server is quiet, the best of the last 7 days, shown beside it), 720p, 1080p, 1440p or 4K. The processor's encoder stops at 1080p anyway: 1440p and 4K count only when a GPU encodes the video. |
-| **Peak brightness in nits (0 = from the video)** | **Settings › Conversion (transcoding) › HDR** | 0 (the video's), or 100 to 10,000 nits | Processor only. GPUs do not take it, so it is hidden when an NVIDIA GPU tone maps, unless the GPU is too slow for HDR. |
-| **Highlight desaturation (0 = off)** | **Settings › Conversion (transcoding) › HDR** | 0 to 10 | Processor only, shown as the peak is. |
+| **Peak brightness in nits** | **Settings › Conversion (transcoding) › HDR** | 0 (the video's), or 100 to 10,000 nits | Processor only. GPUs do not take it, so it is hidden when an NVIDIA GPU tone maps, unless the GPU is too slow for HDR. |
+| **Highlight desaturation** | **Settings › Conversion (transcoding) › HDR** | 0 (none) to 10 | Processor only, shown as the peak is. |
 
 **Compared with Jellyfin**
 

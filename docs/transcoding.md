@@ -265,7 +265,7 @@ API details: [Conversion permissions for apps](jellyfin-api.md#conversion-permis
 
 ## Video conversions at once
 
-**Video conversions at once (0 = no limit)**, in **Settings › Conversion (transcoding) › General**, caps the playbacks whose video the server converts. It is 0, no limit, by default, and goes up to 32.
+**Video conversions at once**, in **Settings › Conversion (transcoding) › General**, caps the playbacks whose video the server converts. It is 0, no limit, by default, and goes up to 32.
 
 - **What counts:** conversions of files and Live TV together, burning subtitles in included.
 - **Converted downloads:** those whose video is converted count from their start to their end (see [Converted downloads](#converted-downloads)). Each counts on its own, even next to the user's playback of the same title, as it runs a conversion of its own.
@@ -409,7 +409,7 @@ API details: [Audio track switching for apps](jellyfin-api.md#audio-track-switch
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Conversion (transcoding)** | **Settings › Conversion (transcoding) › General** | On | The server's switch for every conversion. See [Turning conversion and downloads on or off](#turning-conversion-and-downloads-on-or-off). |
-| **Video conversions at once (0 = no limit)** | **Settings › Conversion (transcoding) › General** | 0, no limit (up to 32) | How many playbacks may have their video converted at the same time. See [Video conversions at once](#video-conversions-at-once). |
+| **Video conversions at once** | **Settings › Conversion (transcoding) › General** | 0, no limit (up to 32) | How many playbacks may have their video converted at the same time. See [Video conversions at once](#video-conversions-at-once). |
 | **Maximum quality of converted video** | **Settings › Conversion (transcoding) › General** | **Original** (or 480p to 2160p) | The tallest picture converted video gets. See [Maximum quality of converted video](conversion-quality.md#maximum-quality-of-converted-video). |
 | **Converted downloads** | **Settings › Conversion (transcoding) › General** | Off | See [Converted downloads](#converted-downloads). |
 | **Conversion folder** | **Settings › Conversion (transcoding) › General** | Empty, `cache` in the data folder | The folder the segments of files converted or repackaged are written to, from the next start on. See [Folders for conversion, files being read and the cache](configuration.md#folders-for-conversion-files-being-read-and-the-cache). |
@@ -429,7 +429,7 @@ API details: [Audio track switching for apps](jellyfin-api.md#audio-track-switch
 | Setting | Where | Default | What it does |
 |---|---|---|---|
 | **Encoding speed** | **Settings › Conversion (transcoding) › Video** | **Automatic** | **Automatic** keeps Polyfin's speeds. The other choices, **Very slow (best picture)** to **Ultra fast (lightest work)**, are x264's presets, mapped to each encoder below. |
-| **H.264 quality (0 = by bitrate)** and **HEVC quality (0 = by bitrate)** | **Settings › Conversion (transcoding) › Video** | 0 (range 1 to 51) | 0 aims for the bitrate alone. A number is a quality factor that the video's peak caps (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)). Recordings converted to HEVC use it with every encoder. |
+| **H.264 quality** and **HEVC quality** | **Settings › Conversion (transcoding) › Video** | 0 (range 1 to 51) | 0 aims for the bitrate alone. A number is a quality factor that the video's peak caps (see [Bitrate of converted video](conversion-quality.md#bitrate-of-converted-video)). Recordings converted to HEVC use it with every encoder. |
 | **Allow converting to HEVC** | **Settings › Conversion (transcoding) › Video** | Off | On: apps that list HEVC before H.264 get HEVC. Off: H.264 comes first, and only apps that take no H.264 get HEVC. |
 | **Several qualities when converting** | **Settings › Conversion (transcoding) › Video** | Off | **Off**, **Outside the local network** or **Always**: converted video also offers up to two lower qualities that apps step down to on a slow connection. See [Adaptive quality](#adaptive-quality). |
 
@@ -448,7 +448,7 @@ The VAAPI drivers without QVBR, QSV and AMF ignore the quality number because th
 
 ### HDR
 
-**Convert HDR to SDR (tone mapping)**, **Tone mapping method**, **Tone map HDR on the graphics card**, **Maximum quality of HDR converted by the processor**, **Peak brightness in nits (0 = from the video)** and **Highlight desaturation (0 = off)**, in **Settings › Conversion (transcoding) › HDR**, are described in [HDR settings](gpus-and-hdr.md#hdr-settings).
+**Convert HDR to SDR (tone mapping)**, **Tone mapping method**, **Tone map HDR on the graphics card**, **Maximum quality of HDR converted by the processor**, **Peak brightness in nits** and **Highlight desaturation**, in **Settings › Conversion (transcoding) › HDR**, are described in [HDR settings](gpus-and-hdr.md#hdr-settings).
 
 ### Interlaced video
 
@@ -471,13 +471,13 @@ The VAAPI drivers without QVBR, QSV and AMF ignore the quality number because th
 | **Even the loudness of converted videos** | **Settings › Conversion (transcoding) › Audio** | Off | Brings the audio of the videos and channels the server converts to -16 LUFS, then limits it. Direct play, copied audio and music never change. See [Loudness](loudness.md#evening-the-loudness). |
 | **Dynamic range of converted Dolby audio** | **Settings › Conversion (transcoding) › Audio** | **As encoded** | **None (full range)** or **Night (quiet passages louder)**: how converted AC-3 and E-AC-3 apply the compression their tracks carry. See [Loudness](loudness.md#dynamic-range-of-dolby-audio). |
 | **Most audio channels** | **Settings › Conversion (transcoding) › Audio** | As many as the app takes | Or mono, stereo or 5.1. Shapes converted audio. |
-| **Audio bitrate per channel in kb/s (0 = automatic)** | **Settings › Conversion (transcoding) › Audio** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates, less under a low bitrate limit (see [Audio bitrate](conversion-quality.md#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
+| **Audio bitrate per channel in kb/s** | **Settings › Conversion (transcoding) › Audio** | 0 (range 32 to 320 kb/s) | 0 gives Jellyfin's bitrates, less under a low bitrate limit (see [Audio bitrate](conversion-quality.md#audio-bitrate)). A number gives that much per channel, whatever the limit. Shapes converted audio. |
 
 ### Performance
 
 | Setting | Where | Default | What it does |
 |---|---|---|---|
-| **Processor threads per conversion (0 = automatic)** | **Settings › Conversion (transcoding) › Performance** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
+| **Processor threads per conversion** | **Settings › Conversion (transcoding) › Performance** | 0, FFmpeg's choice (up to 64) | Number of encoding threads. |
 | **Seconds prepared ahead** | **Settings › Conversion (transcoding) › Performance** | 120 (range 30 to 600) | How many seconds of picture repackaging or converting a file makes past the last segment the app asked for, before it waits. |
 | **Keep the converted video when the audio track changes** | **Settings › Conversion (transcoding) › Performance** | Off | Keeps converted video 30 seconds once its play session stops, for a new session with another audio track to take over. See [Changing the audio track](#changing-the-audio-track). |
 | **Start remote plays faster** | **Settings › Conversion (transcoding) › Performance** | On | Starts plays of addon links and torrents whose first segment is long with quick 2-second segments, at 720p at most. See [A faster start for remote sources](#a-faster-start-for-remote-sources). |

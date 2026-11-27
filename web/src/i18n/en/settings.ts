@@ -68,7 +68,7 @@ const settings = {
     moonfin: 'Serve Moonfin’s companion',
     moonfinHelp:
       'Moonfin’s apps then find Polyfin’s own companion: each user’s settings synced across their devices, MDBList ratings and TMDB extras. Other apps see no change. Each user can be set apart on their page under Users.',
-    /** Moonfin's defaults, under Serve Moonfin's companion in Settings › General. */
+    /** Moonfin's defaults, under Serve Moonfin's companion in Settings › Moonfin. */
     moonfinDefaults: {
       title: 'Moonfin’s defaults',
       help: 'The settings Moonfin’s apps take for what a user never set. Global applies to every device; TV, Desktop and Mobile win over it on that kind of device.',
@@ -88,7 +88,6 @@ const settings = {
       editorHelp:
         'A JSON object of Moonfin’s settings, by their names in the app. A setting left out stays the user’s choice. A user’s own API keys and hidden items are never kept here.',
       notObject: 'Write a JSON object, between { and }.',
-      saved: (profile: string) => `${profile} defaults saved.`,
       apply: 'Apply to users',
       applyHelp:
         'Writes the saved defaults into the settings of every user who synced, each profile into the same profile.',
@@ -111,7 +110,7 @@ const settings = {
             ? '1 user updated.'
             : `${count} users updated.`,
     },
-    /** Messages to Moonfin's apps, under Serve Moonfin's companion in Settings › General. */
+    /** Messages to Moonfin's apps, under Serve Moonfin's companion in Settings › Moonfin. */
     moonfinMessages: {
       title: 'Messages to Moonfin’s apps',
       help: 'Notes for the users of Moonfin’s apps, shown in their messages window in this order. Each user gets only the messages meant for them, between their dates, even when their app was closed as you wrote them.',
@@ -272,14 +271,15 @@ const settings = {
             return `${where}${problem.key} must be ${expected[problem.key] ?? 'valid'}.`
         }
       },
-      downloadLimit: 'Download limit (Mbps, 0 = none)',
-      downloadLimitHelp: (r: RangeText) => `From 0 to ${r.max}; ${r.default} by default.`,
-      uploadLimit: 'Upload limit (Mbps, 0 = no sharing)',
+      downloadLimit: 'Download limit (Mbps)',
+      downloadLimitHelp: (r: RangeText) =>
+        `0 means no limit. From 0 to ${r.max}; ${r.default} by default.`,
+      uploadLimit: 'Upload limit (Mbps)',
       uploadLimitHelp: (r: RangeText) =>
-        `Peers favour those that share back, so a start may be slower at 0. Sharing stops when the playback ends. From 0 to ${r.max}; ${r.default} by default.`,
-      atOnce: 'Torrents at once (0 = no limit)',
+        `At 0, nothing is shared back, and peers favour those that share, so a start may be slower. Sharing stops when the playback ends. From 0 to ${r.max}; ${r.default} by default.`,
+      atOnce: 'Torrents at once',
       atOnceHelp: (r: RangeText) =>
-        `How many torrents may run at once, for every user together. At the limit, a title plays another of its versions that is not a torrent, or is said to be unplayable for now; a place frees as a torrent stops, 30 seconds after its playback, or at once when the same device or user plays another title. From 0 to ${r.max}; ${r.default} by default.`,
+        `How many torrents may run at once, for every user together. At the limit, a title plays another of its versions that is not a torrent, or is said to be unplayable for now; a place frees as a torrent stops, 30 seconds after its playback, or at once when the same device or user plays another title. 0 means no limit. From 0 to ${r.max}; ${r.default} by default.`,
       trackers: 'Trackers added to every torrent',
       trackersHelp: (r: RangeText) =>
         `Announce URLs, one a line, such as udp://tracker.example:1337/announce. Polyfin asks them for the peers of every torrent, besides the trackers its addon names: a torrent the addon lists without any is then not left to the DHT alone. HTTP, HTTPS and UDP; ${r.max} at most. A private torrent asks its own trackers only. Empty by default: Polyfin comes with no list.`,
@@ -388,7 +388,7 @@ const settings = {
     nameHowVersionsPlay: 'Say in version names how they play',
     nameHowVersionsPlayHelp:
       'Version names end with how the app plays each: “(direct play)”, “(direct stream)” when copied without conversion, “(converted: reason)” with the app’s request, HDR, the quality limit, subtitles, video or audio as the reason, or “(cannot play here)”. Polyfin decides it for the device profile the app sent at its last playback on that device, or before that in its session’s capabilities, and keeps it across restarts until the device signs out: names say nothing until the app has played once on that device, unless its capabilities carried a profile. Versions analyzed or described get an exact ending: the one a play reads first when a title opens, with “Prepare playback in advance” on, the next ones only when it fails, and up to three at a playback. The others get an estimate from their labels, such as “(likely converted: audio)”, when the labels name the video and audio codecs; it may be wrong. For exact endings before a play, turn on “Describe versions from RemuxDB”, which sends titles’ IMDb identifiers to a third party. Names are in the language of generated names. Nothing is read for them.',
-    versionOrderGroup: 'Version order',
+    hiddenVersionsGroup: 'Hidden versions',
     versionOrder: {
       label: 'Order versions by',
       help: 'Each criterion groups the versions of a movie or an episode, and the next one sorts them within each group; versions that tie keep the addons’ order. The first version is the one Play starts, and the versions tried when it does not work come next. Polyfin goes by what it knows of a version without reading the file: its analysis once played, else RemuxDB’s description, else the words of its labels. A version a criterion knows nothing of comes after the others. The preferred audio language is each user’s own, set in their app, else Default audio language: versions known in that language come first, then those labeled MULTI or DUAL, then those of unknown language. Under My account, a user may also prefer an audio region, such as French for Quebec: among the versions in its language, those of that region come first, then those of no known region. “Cached by the provider first” and “Most seeders first” go by what the addon tells of each version: whether its provider holds the file ready, and the seeders it gives or writes in the labels. With no criterion, the versions an addon says are not cached come after the others. While a title’s page is open, the versions it shows keep their places.',
@@ -437,7 +437,7 @@ const settings = {
       directors: 'Director’s cut',
       imax: 'IMAX',
     },
-    versionMbPerMinute: 'Size per minute to aim at (MB, 0 = largest)',
+    versionMbPerMinute: 'Size per minute to aim at (MB)',
     versionMbPerMinuteHelp: (r: RangeText) =>
       `The Size per minute criterion puts first the versions closest to this many megabytes a minute of runtime, such as 50 for a good 1080p encode; 0 puts the largest first. The runtime is a version’s own once it is analyzed, else the title’s. Up to ${r.max}; ${r.default} by default.`,
     versionCodecs: {
@@ -449,9 +449,9 @@ const settings = {
       mpeg4: 'MPEG-4 Part 2 (Xvid, DivX)',
       mpeg2video: 'MPEG-2',
     },
-    hideVersionsLarger: 'Hide versions larger than (GB, 0 = no limit)',
+    hideVersionsLarger: 'Hide versions larger than (GB)',
     hideVersionsLargerHelp: (r: RangeText) =>
-      `Versions known to be larger are listed nowhere: not on title pages, in playback or in downloads. When the rules below and this one would hide every version of a title, none is hidden. Up to ${r.max} GB; ${r.default} by default.`,
+      `Versions known to be larger are listed nowhere: not on title pages, in playback or in downloads. When the rules below and this one would hide every version of a title, none is hidden. 0 hides none by size. Up to ${r.max} GB; ${r.default} by default.`,
     hiddenVersionCodecs: 'Hide these video codecs',
     hiddenVersionCodecsHelp: 'Versions known to be in these codecs are listed nowhere.',
     hiddenVersionWords: 'Hide versions whose labels contain',
@@ -537,9 +537,9 @@ const settings = {
     weeklySummaryHour: 'Send the weekly summary at',
     weeklySummaryHourHelp: (hour: string) =>
       `In the server’s time zone. The month and year in review are sent at this hour too, on the 1st. ${hour} by default.`,
-    maxConversions: 'Video conversions at once (0 = no limit)',
+    maxConversions: 'Video conversions at once',
     maxConversionsHelp: (r: RangeText) =>
-      `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. From ${r.min} to ${r.max}; ${r.default} by default.`,
+      `Converting video is the heaviest work the server does. Once this many playbacks have their video converted (subtitles burned into the picture included), a new playback gets a version that needs no conversion, or does not start. Playbacks already running are never cut. Live TV keeps its own limits too: 4 channels per user and 16 for the server. 0 means no limit. From ${r.min} to ${r.max}; ${r.default} by default.`,
     maxConversionHeight: 'Maximum quality of converted video',
     maxConversionHeightHelp:
       'Converted video is scaled down to this height at most, keeping its shape, so that it plays well over a slower connection. Files played as they are or simply repackaged keep their quality. A graphics card converts up to 4K; the processor stops at 1080p, and when it converts HDR to SDR, at "Maximum quality of HDR converted by the processor", under Conversion (transcoding) › HDR.',
@@ -666,8 +666,8 @@ const settings = {
         superfast: 'Super fast',
         ultrafast: 'Ultra fast (lightest work)',
       },
-      h264Quality: 'H.264 quality (0 = by bitrate)',
-      hevcQuality: 'HEVC quality (0 = by bitrate)',
+      h264Quality: 'H.264 quality',
+      hevcQuality: 'HEVC quality',
       qualityHelp: (r: RangeText) =>
         `A lower number gives a better picture and more data; the bitrate still sets the maximum. 0 aims for the bitrate alone. Jellyfin uses 23 for H.264 and 28 for HEVC. 0, or from ${r.min} to ${r.max}; ${r.default} by default.`,
       qualityIgnored:
@@ -709,10 +709,10 @@ const settings = {
       height4k: '4K',
       measuredHeight: (height: number) => `Measured: ${height}p`,
       upToHeight: (height: number) => `up to ${height}p`,
-      toneMappingPeak: 'Peak brightness in nits (0 = from the video)',
-      toneMappingDesat: 'Highlight desaturation (0 = off)',
+      toneMappingPeak: 'Peak brightness in nits',
+      toneMappingDesat: 'Highlight desaturation',
       toneMappingPeakHelp: (peak: RangeText, desat: RangeText) =>
-        `Only when the processor converts HDR to SDR: a graphics card that does it ignores them. The peak replaces the brightest level the video says it reaches: 0, or from ${peak.min} to ${peak.max}; ${peak.default} by default. Desaturation fades the color of very bright parts: from ${desat.min} to ${desat.max}; ${desat.default} by default.`,
+        `Only when the processor converts HDR to SDR: a graphics card that does it ignores them. The peak replaces the brightest level the video says it reaches, which 0 keeps: 0, or from ${peak.min} to ${peak.max}; ${peak.default} by default. Desaturation fades the color of very bright parts, 0 not at all: from ${desat.min} to ${desat.max}; ${desat.default} by default.`,
       processorCannotToneMap: 'FFmpeg cannot do tone mapping on the processor on this server.',
       deinterlaceMethod: 'Deinterlacing method',
       deinterlaceMethodHelp:
@@ -757,10 +757,10 @@ const settings = {
             : channels === 2
               ? 'Stereo'
               : '5.1',
-      audioBitratePerChannel: 'Audio bitrate per channel in kb/s (0 = automatic)',
+      audioBitratePerChannel: 'Audio bitrate per channel in kb/s',
       audioBitratePerChannelHelp: (r: RangeText) =>
-        `Automatic gives Jellyfin’s bitrates: 128 kb/s in mono, 384 kb/s in stereo and 640 kb/s in 5.1, less under a low bitrate limit. 0, or from ${r.min} to ${r.max}; ${r.default} by default.`,
-      encodingThreads: 'Processor threads per conversion (0 = automatic)',
+        `0, automatic, gives Jellyfin’s bitrates: 128 kb/s in mono, 384 kb/s in stereo and 640 kb/s in 5.1, less under a low bitrate limit. 0, or from ${r.min} to ${r.max}; ${r.default} by default.`,
+      encodingThreads: 'Processor threads per conversion',
       encodingThreadsHelp: (r: RangeText) =>
         `Limits how much of the processor one conversion uses, to leave room for other work. From ${r.min} to ${r.max}; 0 lets FFmpeg choose.`,
       aheadSeconds: 'Seconds prepared ahead',
@@ -863,10 +863,10 @@ const settings = {
     collectionLibraryAppsHelp:
       'Collection libraries are told to apps as libraries of mixed content, so that jellyfin-web and Streamyfin give them a row on the home screen. The apps ticked are told they hold collections, as Jellyfin’s Collections view does: apps that list a library by its type then show its collections, and a collection’s titles once it is opened, rather than the titles of all its collections together. jellyfin-web and Streamyfin leave such libraries out of their home screen rows, so do not tick them. The list shows the apps that have signed in to this server.',
     collectionLibraryAppsNone: 'No app has signed in to this server yet.',
-    localScanHours: 'Scan local folders every (hours, 0 = never)',
+    localScanHours: 'Scan local folders every (hours)',
     localScanHoursHelp: (r: RangeText) =>
       `How often each local folder is scanned again for files added, changed or removed. Folders are also scanned at startup, when you ask, and when watched ones change. 0 turns the schedule off. From ${r.min} to ${r.max}; ${r.default} by default.`,
-    watchlistCheckHours: 'Look for versions of watchlist titles every (hours, 0 = never)',
+    watchlistCheckHours: 'Look for versions of watchlist titles every (hours)',
     watchlistCheckHoursHelp: (r: RangeText) =>
       `How often each title of a user’s Watchlist playlist they have not started is checked again for versions, for the Now available and Still waiting home rows and the message telling a user of a title found available. Each hour, up to 20 titles of each user are checked, asking their stream addons. 0 turns the checks off. From ${r.min} to ${r.max}; ${r.default} by default.`,
     watchLocalFolders: 'Watch folders and shares for changes',
@@ -891,15 +891,15 @@ const settings = {
     shareLinksHelp:
       'Users with Can share titles, on their page under Users, may give a movie or an episode to someone without an account, through a link that expires after 1 hour to 30 days. The guest watches in a browser, at 1080p at most and within the user’s quality group, and counts among the user’s playbacks at once. When off, no link can be made and every link is refused, without being deleted. Off by default.',
     importEveryChoice: (minutes: number) => (minutes < 60 ? `${minutes} min` : `${minutes / 60} h`),
-    loginAttempts: 'Block an account after this many wrong passwords (0 = never)',
+    loginAttempts: 'Block an account after this many wrong passwords',
     loginAttemptsHelp: (r: RangeText) =>
-      `After this many wrong passwords in a row from one address, that address cannot sign in to the account for 15 minutes, even with the right password. Other addresses, and devices the account already used, still sign in. An administrator can unblock the account sooner on the Users page. 0, or from ${r.min} to ${r.max}.`,
+      `After this many wrong passwords in a row from one address, that address cannot sign in to the account for 15 minutes, even with the right password. Other addresses, and devices the account already used, still sign in. An administrator can unblock the account sooner on the Users page. 0 never blocks it. 0, or from ${r.min} to ${r.max}.`,
     twoStepAdministrators: 'Require two-step sign-in for administrators',
     twoStepAdministratorsHelp:
       'Administrators sign in to this admin app with a code from an authenticator app after their password. One who has not set it up does so right after their password, before getting a session. Their password alone then signs in to no Jellyfin app: they use Quick Connect, approved here. The sessions and devices signed in already stay signed in. Off by default.',
-    inactiveDeviceDays: 'Sign out devices unused for (days, 0 = never)',
+    inactiveDeviceDays: 'Sign out devices unused for (days)',
     inactiveDeviceDaysHelp: (r: RangeText) =>
-      `Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. From ${r.min} to ${r.max}.`,
+      `Jellyfin apps not used for this many days are signed out and must sign in again. This is checked every hour. Signing in to this admin page is not affected. 0 never signs them out. From ${r.min} to ${r.max}.`,
     knownProxies: 'Known proxies',
     knownProxiesHelp: (r: RangeText) =>
       `The reverse proxies in front of Polyfin, one a line: an IP address, a network such as 172.18.0.0/16, or a host name such as a container’s name on a Docker network (traefik), up to ${r.max}. A name is looked up every minute and each address it resolves to is trusted, so list only names your own network resolves. A request from one of them comes from the client its X-Forwarded-For or X-Real-IP header names: that address limits failed sign-ins, shows on devices and tells the local network. From any other address, X-Forwarded-For and X-Real-IP name no client, and a request that carries them counts as outside the local network. Leave it empty when nothing stands in front of Polyfin.`,
@@ -1074,9 +1074,9 @@ const settings = {
     recordingPostPadding: 'Keep recording after the end (minutes)',
     recordingPostPaddingHelp: (r: RangeText) =>
       `How many minutes after the programme a recording goes on. From ${r.min} to ${r.max}; ${r.default} by default.`,
-    recordingRetentionDays: 'Keep recordings for (days, 0 = forever)',
+    recordingRetentionDays: 'Keep recordings for (days)',
     recordingRetentionDaysHelp: (r: RangeText) =>
-      `Recordings older than this are deleted. This is checked every day. From ${r.min} to ${r.max}.`,
+      `Recordings older than this are deleted. This is checked every day. 0 keeps them forever. From ${r.min} to ${r.max}.`,
     recordingCommercials: 'Find commercials in recordings',
     recordingCommercialsHelp:
       'Once a recording ends, Polyfin reads it in the background, one recording at a time, for the moments that are both black and silent, and takes the short pieces between them as commercial breaks. Apps then offer to skip them, as each user chose in their app’s playback settings, while the skip intro and credits buttons are on. Recordings longer than 4 hours are not read.',
@@ -1421,10 +1421,21 @@ const settings = {
     results: (count: number) => (count === 1 ? '1 setting found' : `${count} settings found`),
     noMatchHelp: 'Try another word, such as the name of a variable or a service.',
     variableHint: 'Environment variable',
+    sectionGroups: {
+      server: 'Server',
+      streaming: 'Streaming',
+      library: 'Library',
+      apps: 'Apps and services',
+    },
     ledes: {
       general:
         'The server’s name, its language, how apps sign in and find it, and the check for new versions.',
-      playback: 'How Polyfin picks and prepares the versions it plays.',
+      moonfin:
+        'The companion Moonfin’s apps look for, the settings they start from, and messages to their users.',
+      playback:
+        'How Polyfin prepares and reads what it plays, what it keeps of the files read, the playback history and the default languages.',
+      versions:
+        'Which version of a movie or an episode plays first, and which versions are hidden.',
       content:
         'Skip intro buttons, similar titles, generated images, ratings, song lyrics, even volume between songs and playback thresholds.',
       catalogs: 'How much Polyfin reads from the addons’ catalogs, and how often.',

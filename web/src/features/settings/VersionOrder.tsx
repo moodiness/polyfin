@@ -1,5 +1,5 @@
 import { DotsSixVerticalIcon, PlusIcon, XIcon } from '@phosphor-icons/react'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import type { VersionCodec, VersionCriterion, VersionEdition, VersionSource } from '@/api'
 import { useI18n } from '@/i18n'
 import { Button, cx, FieldError, IconButton, MoveButtons, Select } from '@/ui'
@@ -15,7 +15,7 @@ function kind(criterion: VersionCriterion) {
 /**
  * The criteria ordering a title's versions, in order: each row chooses one, moved with the arrows
  * or removed, and a button adds the next kind not chosen yet, up to six. A row offers the
- * criteria of its kind and of the kinds no other row has.
+ * criteria of its kind and of the kinds no other row has. Its title and help are its group's.
  */
 export default function VersionOrder({
   order,
@@ -31,7 +31,6 @@ export default function VersionOrder({
 }) {
   const { t } = useI18n()
   const text = t.settings.versionOrder
-  const id = useId()
   const [announcement, setAnnouncement] = useState('')
   const unused = choices.filter((choice) => !order.some((chosen) => kind(chosen) === kind(choice)))
   // Placed after another criterion, Source only orders the versions it ties on: a folder moved
@@ -47,24 +46,18 @@ export default function VersionOrder({
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
-        {text.label}
-      </p>
-      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
-        {text.help}
-      </p>
+    <div>
       <p className="sr-only" role="status">
         {announcement}
       </p>
       {order.length === 0 ? (
-        <p className="mt-4 text-small text-ink-2">{text.none}</p>
+        <p className="text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-1.5">
+        <ol aria-label={text.label} className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
           {order.map((criterion, index) => (
             <li
               key={kind(criterion)}
-              className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4"
+              className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 rounded-row bg-s1 py-2 pr-2.5 pl-4"
             >
               <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
                 {index + 1}
@@ -164,7 +157,10 @@ export function EditionOrder({
   )
 }
 
-/** An order of every one of a fixed set of values, moved with the arrows. */
+/**
+ * An order of every one of a fixed set of values, moved with the arrows. Its title and help are
+ * its group's.
+ */
 function FixedOrder<T extends string>({
   order,
   names,
@@ -174,12 +170,11 @@ function FixedOrder<T extends string>({
 }: {
   order: T[]
   names: Record<T, string>
-  text: { label: string; help: string }
+  text: { label: string }
   onChange: (order: T[]) => void
   error?: string
 }) {
   const { t } = useI18n()
-  const id = useId()
   const [announcement, setAnnouncement] = useState('')
 
   function move(from: number, to: number) {
@@ -191,21 +186,18 @@ function FixedOrder<T extends string>({
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
-        {text.label}
-      </p>
-      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
-        {text.help}
-      </p>
+    <div>
       <p className="sr-only" role="status">
         {announcement}
       </p>
-      <ol className="mt-4 grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5">
+      <ol
+        aria-label={text.label}
+        className="grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5"
+      >
         {order.map((codec, index) => (
           <li
             key={codec}
-            className="flex min-h-14 items-center gap-3 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4"
+            className="flex min-h-14 items-center gap-3 rounded-row bg-s1 py-2 pr-2.5 pl-4"
           >
             <span aria-hidden="true" className="figures w-5 text-right text-small text-ink-3">
               {index + 1}
@@ -232,7 +224,7 @@ function FixedOrder<T extends string>({
 /**
  * The order of the server's sources for the source criterion, moved by drag or with the arrows:
  * those `order` places first, in its order, then the others, in the order of Content › Sources. A
- * move places them all as they are shown.
+ * move places them all as they are shown. Its title and help are its group's.
  */
 export function SourceOrder({
   order,
@@ -249,7 +241,6 @@ export function SourceOrder({
 }) {
   const { t } = useI18n()
   const text = t.settings.versionSourceOrder
-  const id = useId()
   const [announcement, setAnnouncement] = useState('')
   const [dragged, setDragged] = useState<number | null>(null)
   const shown = [
@@ -266,20 +257,17 @@ export function SourceOrder({
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-label`} aria-describedby={`${id}-help`}>
-      <p id={`${id}-label`} className="text-h3 text-ink max-md:text-[1.125rem]">
-        {text.label}
-      </p>
-      <p id={`${id}-help`} className="mt-1.5 max-w-[66ch] text-small text-ink-2">
-        {text.help}
-      </p>
+    <div>
       <p className="sr-only" role="status">
         {announcement}
       </p>
       {shown.length === 0 ? (
-        <p className="mt-4 text-small text-ink-2">{text.none}</p>
+        <p className="text-small text-ink-2">{text.none}</p>
       ) : (
-        <ol className="mt-4 grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5">
+        <ol
+          aria-label={text.label}
+          className="grid max-w-[33.25rem] grid-cols-[minmax(0,1fr)] gap-1.5"
+        >
           {shown.map((source, index) => (
             <li
               key={source.id}
@@ -297,7 +285,7 @@ export function SourceOrder({
                 setDragged(null)
               }}
               className={cx(
-                'flex min-h-14 items-center gap-3 rounded-[1.125rem] bg-s2 py-2 pr-2.5 pl-4',
+                'flex min-h-14 items-center gap-3 rounded-row bg-s1 py-2 pr-2.5 pl-4',
                 dragged === index && 'opacity-40',
               )}
             >

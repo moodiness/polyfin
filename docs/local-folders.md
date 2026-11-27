@@ -85,7 +85,7 @@ A folder Polyfin cannot watch for changes is listed under **System › Health** 
 Folders are scanned:
 
 - at startup;
-- on the schedule of **Scan local folders every (hours, 0 = never)**, in **Settings › Catalogs**: 6 by default, and 0 turns the schedule off;
+- on the schedule of **Scan local folders every (hours)**, in **Settings › Catalogs**: 6 by default, and 0 turns the schedule off;
 - when an administrator chooses **Scan now** on a folder;
 - when an administrator runs **Scan local folders** under **System › Schedule**, which scans every folder.
 

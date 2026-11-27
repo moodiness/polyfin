@@ -26,6 +26,7 @@ const nav: typeof en = {
     settingsSections: {
       general: 'Generale',
       playback: 'Riproduzione',
+      versions: 'Scelta delle versioni',
       conversion: 'Conversione (transcodifica)',
       content: 'Contenuti',
       catalogs: 'Cataloghi',
@@ -39,6 +40,7 @@ const nav: typeof en = {
       backups: 'Backup',
       notifications: 'Notifiche',
       webPlayer: 'Lettore web',
+      moonfin: 'Moonfin',
       diagnostics: 'Diagnostica',
     },
     settingsSectionsLabel: 'Sezioni delle impostazioni',

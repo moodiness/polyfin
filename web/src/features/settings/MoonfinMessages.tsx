@@ -79,7 +79,7 @@ function isoTime(local: string): string {
 }
 
 /**
- * Settings › General › Messages to Moonfin's apps, under Serve Moonfin's companion: the messages
+ * Settings › Moonfin › Messages to Moonfin's apps, under Serve Moonfin's companion: the messages
  * the administrator writes to the users of Moonfin's apps, in the order the apps show them, each
  * with whom it is shown to, its dates and whether they show it now, Move, Edit and Delete, and
  * Write a message.

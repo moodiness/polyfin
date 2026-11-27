@@ -13,8 +13,9 @@ const sourceNames: Record<SegmentSource, string> = {
 }
 
 /**
- * The skip marker sources in their order of preference, moved with the arrows, each with a switch
- * turning it on or off. PublicMetaDB, on without a key, says it needs one.
+ * The skip marker sources in their order of preference, moved with the arrows, each with its name
+ * then a switch turning it on or off, as a setting row draws them. PublicMetaDB, on without a key,
+ * says it needs one.
  */
 export default function SegmentSources({
   order,
@@ -65,16 +66,6 @@ export default function SegmentSources({
               <span aria-hidden="true" className="figures w-4 text-right text-micro text-ink-3">
                 {index + 1}
               </span>
-              <Switch
-                checked={on}
-                label={text.turnOn(sourceNames[source])}
-                onChange={(checked) =>
-                  onChange(
-                    order,
-                    checked ? off.filter((other) => other !== source) : [...off, source],
-                  )
-                }
-              />
               <span
                 className={`min-w-[9.5rem] flex-1 truncate text-body font-medium ${on ? 'text-ink' : 'text-ink-3'}`}
               >
@@ -83,21 +74,33 @@ export default function SegmentSources({
               {on && source === 'publicmetadb' && !publicMetaDbKey && (
                 <StatusPill tone="warn">{text.needsKey}</StatusPill>
               )}
-              <span className="ml-auto flex">
-                <IconButton
-                  size="sm"
-                  icon={ArrowUpIcon}
-                  label={t.common.moveUp(sourceNames[source])}
-                  disabled={index === 0}
-                  onClick={() => move(index, index - 1)}
+              <span className="ml-auto flex items-center gap-3">
+                <Switch
+                  checked={on}
+                  label={text.turnOn(sourceNames[source])}
+                  onChange={(checked) =>
+                    onChange(
+                      order,
+                      checked ? off.filter((other) => other !== source) : [...off, source],
+                    )
+                  }
                 />
-                <IconButton
-                  size="sm"
-                  icon={ArrowDownIcon}
-                  label={t.common.moveDown(sourceNames[source])}
-                  disabled={index === order.length - 1}
-                  onClick={() => move(index, index + 1)}
-                />
+                <span className="flex">
+                  <IconButton
+                    size="sm"
+                    icon={ArrowUpIcon}
+                    label={t.common.moveUp(sourceNames[source])}
+                    disabled={index === 0}
+                    onClick={() => move(index, index - 1)}
+                  />
+                  <IconButton
+                    size="sm"
+                    icon={ArrowDownIcon}
+                    label={t.common.moveDown(sourceNames[source])}
+                    disabled={index === order.length - 1}
+                    onClick={() => move(index, index + 1)}
+                  />
+                </span>
               </span>
             </li>
           )

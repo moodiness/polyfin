@@ -57,7 +57,7 @@ const sources = {
       'Descriptions, subtitles and search results follow this order, among the server’s sources; members’ own sources come after them.',
     orderHelpMine:
       'Descriptions, subtitles and search results follow this order among your sources, after the server’s.',
-    versionOrderLink: 'The order of versions is in Settings › Playback.',
+    versionOrderLink: 'The order of versions is in Settings › Version choice.',
     problemsTitle: 'Needs attention',
     inOrderTitle: 'In their order',
     moved: (name: string, position: number, count: number) =>

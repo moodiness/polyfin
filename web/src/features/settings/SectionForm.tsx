@@ -46,6 +46,22 @@ export type SectionFormApi = {
    * rewrote, as saved, keeping the other changes not saved yet.
    */
   adopt: (patch: Partial<Settings>) => void
+  /**
+   * Hands the form edits of the section that are not settings (Moonfin's defaults), which the
+   * dock counts, saves after the settings and discards with them; null when there are none.
+   */
+  side: (edits: SideEdits | null) => void
+}
+
+/** Edits a section holds beside its settings, saved and discarded by the section's dock. */
+export type SideEdits = {
+  /** How many of them differ from what is saved. */
+  changes: number
+  /** Shows their own errors, such as a text that is not JSON, and says whether they can be saved. */
+  check: () => boolean
+  /** Saves them; a failure is shown in the dock and keeps them. */
+  save: () => Promise<void>
+  discard: () => void
 }
 
 /**
@@ -73,30 +89,37 @@ export default function SectionForm({
    * value.
    */
   const before = useRef(new Map<string, number>())
-  const changes = changedCount(form, saved, empty)
+  const [side, setSide] = useState<SideEdits | null>(null)
+  const settingsChanges = changedCount(form, saved, empty)
+  const changes = settingsChanges + (side?.changes ?? 0)
   const dirty = changes > 0
 
   const mutation = useMutation({
-    mutationFn: saveSettings,
-    onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.settings, result)
-      setSaved(result)
-      setForm(result)
-      before.current.clear()
-      toast(t.settings.saved, { tone: 'ok' })
-      // The server name is part of the public status.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
-      // Library names in apps follow the server language.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.scopes })
-      // Email targets can be added once an SMTP server is saved.
-      void queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      // The themes users are given follow the server's and its Custom texts.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.webThemes })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
-      // A user's age limit is picked among the rating country's ratings.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.parentalRatings })
+    mutationFn: async (payload: Settings | null) => {
+      if (payload !== null) adoptSaved(await saveSettings(payload))
+      if (side !== null && side.changes > 0) await side.save()
     },
+    onSuccess: () => toast(t.settings.saved, { tone: 'ok' }),
   })
+
+  /** Takes the server's answer to a save as the saved settings. */
+  function adoptSaved(result: Settings) {
+    queryClient.setQueryData(queryKeys.settings, result)
+    setSaved(result)
+    setForm(result)
+    before.current.clear()
+    // The server name is part of the public status.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+    // Library names in apps follow the server language.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.scopes })
+    // Email targets can be added once an SMTP server is saved.
+    void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    // The themes users are given follow the server's and its Custom texts.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.webThemes })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.ownWebTheme })
+    // A user's age limit is picked among the rating country's ratings.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.parentalRatings })
+  }
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -126,17 +149,25 @@ export default function SectionForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (empty.size > 0) {
-      event.currentTarget.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    if (empty.size > 0 || (side !== null && side.changes > 0 && !side.check())) {
+      // Once the errors the check showed are drawn.
+      const fields = event.currentTarget
+      requestAnimationFrame(() =>
+        fields.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      )
       return
     }
-    mutation.mutate({
-      ...form,
-      serverName: form.serverName.trim(),
-      traktClientId: form.traktClientId.trim(),
-      simklClientId: form.simklClientId.trim(),
-      lastFmApiKey: form.lastFmApiKey.trim(),
-    })
+    mutation.mutate(
+      settingsChanges === 0
+        ? null
+        : {
+            ...form,
+            serverName: form.serverName.trim(),
+            traktClientId: form.traktClientId.trim(),
+            simklClientId: form.simklClientId.trim(),
+            lastFmApiKey: form.lastFmApiKey.trim(),
+          },
+    )
   }
 
   return (
@@ -181,6 +212,7 @@ export default function SectionForm({
             current === undefined ? current : { ...current, ...patch },
           )
         },
+        side: setSide,
       })}
       <SaveBar
         dirty={dirty}
@@ -191,6 +223,7 @@ export default function SectionForm({
           setEmpty(new Set())
           before.current.clear()
           setForm(saved)
+          side?.discard()
         }}
         error={failedEntry === undefined ? failureText : undefined}
       />

@@ -242,7 +242,7 @@ From its end the account is refused like a disabled one, but signs out less:
 - Jellyfin apps see an ended account as disabled. Jellyfin has no end date: an app sending back the policy it read leaves **Can sign in** on, and only the admin app changes the date.
 - An administrator's account never ends, so the last administrator is never locked out. Administrators cannot get an end date, and becoming one clears it.
 - Live TV recordings, new episode notifications, the weekly summary and imports from an app stop, as for a disabled account.
-- Its devices still count as unused for **Sign out devices unused for (days, 0 = never)** (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices)).
+- Its devices still count as unused for **Sign out devices unused for (days)** (see [Signing out unused devices](sign-in-and-security.md#signing-out-unused-devices)).
 
 API details: [Account end dates](jellyfin-api.md#account-end-dates-for-apps).
 
