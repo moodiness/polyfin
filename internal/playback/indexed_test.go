@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -112,6 +113,95 @@ func TestTracksTooCostlyForTheirHostAreNotOffered(t *testing.T) {
 	s.trackShare = 1
 	if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 2 {
 		t.Errorf("located from a host serving several ranges: %v", located)
+	}
+}
+
+// Some hosts serve one range but answer 416 to a request for several the
+// file holds, telling its size or not: they serve one range per request.
+// The track is read so, a range per request after the one asked, rather
+// than the host taken as failing, and the check of whether a host serves
+// several ranges, for a track past its share, locates the version's other
+// tracks rather than failing them all.
+func TestHostsRefusingSeveralRangesWith416ServeOnePerRequest(t *testing.T) {
+	t.Parallel()
+	ffmpeg := os.Getenv("POLYFIN_TEST_FFMPEG")
+	if ffmpeg == "" {
+		t.Skip("POLYFIN_TEST_FFMPEG is not set")
+	}
+	// Uncompressed audio, 192 kB a second, sets the SubRip track's blocks
+	// at least 115 kB apart: each takes a range of its own, as a movie's.
+	dir := t.TempDir()
+	srt := filepath.Join("..", "container", "testdata", "subtitles.srt")
+	command := exec.CommandContext(t.Context(), ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+		"-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-i", srt, "-map", "0:a", "-map", "1", "-t", "12",
+		"-c:a", "pcm_s16le", "-c:s", "srt", filepath.Join(dir, "spread.mkv"))
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, output)
+	}
+	info, err := os.Stat(filepath.Join(dir, "spread.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	analysis := media.Analysis{Format: "matroska,webm", Duration: 12 * time.Second, Size: info.Size(), Streams: []media.Stream{
+		{Index: 0, Type: "audio", Codec: "pcm_s16le"}, {Index: 1, Type: "subtitle", Codec: "subrip"}}}
+	original, _ := os.ReadFile(srt)
+	want, _ := subtitles.Parse(original)
+	const srtStream = 1
+	for name, told := range map[string]bool{"telling the size": true, "telling none": false} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var several atomic.Int64
+			files := http.FileServer(http.Dir(dir))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.Contains(r.Header.Get("Range"), ",") {
+					files.ServeHTTP(w, r)
+					return
+				}
+				several.Add(1)
+				if told {
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", info.Size()))
+				}
+				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			}))
+			t.Cleanup(server.Close)
+			version := library.Version{ID: accounts.ID{7}, URL: server.URL + "/spread.mkv", Addon: "files"}
+			ctx := t.Context()
+
+			s := newService(t, &fileOpener{}, "ffprobe", nil)
+			s.analyses.Put(version.ID, analysis)
+			if located := s.SubtitlesLocated(ctx, version, analysis); !located[srtStream] || len(located) != 1 {
+				t.Fatalf("located: %v", located)
+			}
+			track, err := s.SubtitleTrack(ctx, version, analysis, srtStream)
+			if err != nil || track.Format != "srt" {
+				t.Fatalf("SubRip track: %s %v", track.Format, err)
+			}
+			if got, err := subtitles.Parse(track.Data); err != nil || !slices.EqualFunc(got, want, sameCue) {
+				t.Errorf("SubRip cues:\n got %+v\nwant %+v", got, want)
+			}
+			if several.Load() != 1 {
+				t.Errorf("%d requests for several ranges, want 1", several.Load())
+			}
+
+			// A track past its share has whether the host serves several
+			// ranges checked: it does not, which is kept for the host, and
+			// the version is located, without the track.
+			s = newService(t, &fileOpener{}, "ffprobe", nil)
+			s.analyses.Put(version.ID, analysis)
+			s.trackShare = 1
+			if located := s.SubtitlesLocated(ctx, version, analysis); len(located) != 0 {
+				t.Errorf("located from a host serving a range per request: %v", located)
+			}
+			if failure, failed := s.unlocated.Get(version.ID); failed {
+				t.Errorf("the version was not located: %v", failure)
+			}
+			if served, known := s.rangeHosts.Get(hostOf(version.URL)); !known || served {
+				t.Errorf("the host serves several ranges: %v, known: %v", served, known)
+			}
+			if several.Load() != 2 {
+				t.Errorf("%d requests for several ranges, want 2", several.Load())
+			}
+		})
 	}
 }
 

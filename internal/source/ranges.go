@@ -132,8 +132,9 @@ func (s *Source) fetched(response *http.Response, off int64, n int) ([]byte, err
 // the block cache, as Fetch reads one: result[i] holds ranges[i], shorter
 // only at the end of the file. Servers answer with a multipart/byteranges
 // body, whose parts they may merge and reorder, or with one part covering
-// every range. A source answering otherwise, as with the whole file, is
-// not read, and is remembered: then and since, ErrMultiRangeUnsupported.
+// every range. A source answering otherwise, as with the whole file or
+// with a 416 for ranges the file holds, is not read, and is remembered:
+// then and since, ErrMultiRangeUnsupported.
 func (s *Source) FetchRanges(ctx context.Context, ranges []container.Range) ([][]byte, error) {
 	return s.fetchRanges(ctx, ranges, false)
 }
@@ -242,7 +243,7 @@ func (m *multiRange) read(response *http.Response) error {
 		}
 		return fmt.Errorf("%w: HTTP 200", container.ErrMultiRangeUnsupported)
 	case http.StatusRequestedRangeNotSatisfiable:
-		return m.source.unsatisfiable(response, m.ranges[m.asked[0]].Off)
+		return m.unsatisfiable(response)
 	}
 	mediaType, params, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	switch {
@@ -281,6 +282,29 @@ func (m *multiRange) read(response *http.Response) error {
 		}
 	}
 	return nil
+}
+
+// unsatisfiable reads a 416 answer to the request for several ranges,
+// which exchange closes. Refusing ranges the file holds, by the size it
+// tells or the one known, tells a host that does not serve several ranges
+// at once, as the whole file does: some serve one range but refuse two. A
+// size that is not the file's makes it another file's answer, and ranges
+// all past the end, or an end unknown, io.EOF, as the 416 to one range
+// does.
+func (m *multiRange) unsatisfiable(response *http.Response) error {
+	if _, _, total, ok := contentRange(response.Header.Get("Content-Range")); ok && total >= 0 {
+		if err := m.source.learn(m.host, 0, total, ""); err != nil {
+			return fmt.Errorf("%w: %w", ErrUnavailable, err)
+		}
+	}
+	if size, known := m.source.knownSize(); known {
+		for _, i := range m.asked {
+			if off := m.ranges[i].Off; off < size {
+				return fmt.Errorf("%w: HTTP 416 at %d of %d bytes", container.ErrMultiRangeUnsupported, off, size)
+			}
+		}
+	}
+	return io.EOF
 }
 
 // part reads a part of the answer, the bytes value, its Content-Range,

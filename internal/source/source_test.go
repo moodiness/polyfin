@@ -822,6 +822,77 @@ func TestFetchRangesUnsupported(t *testing.T) {
 	}
 }
 
+// Some hosts serve one range but answer 416 to a request for several the
+// file holds: they do not serve several ranges at once, which is
+// remembered, and the ranges are read one by one. A 416 telling another
+// size than the file's, or for ranges past the end, keeps its meaning.
+func TestFetchRangesRefusedWith416(t *testing.T) {
+	t.Parallel()
+	data := make([]byte, 64<<10)
+	_, _ = rand.Read(data)
+	ranges := []container.Range{{Off: 1000, N: 100}, {Off: 5000, N: 10}}
+	for name, test := range map[string]struct {
+		// told is the Content-Range of the 416, none when empty, and
+		// sized whether a request for one range told the size before.
+		told  string
+		sized bool
+		want  error
+	}{
+		"telling the file's size":       {told: "bytes */" + strconv.Itoa(len(data)), want: container.ErrMultiRangeUnsupported},
+		"telling no size, known before": {sized: true, want: container.ErrMultiRangeUnsupported},
+		"telling another size":          {told: "bytes */1000", sized: true, want: errOtherFile},
+		"telling a size before them":    {told: "bytes */1000", want: io.EOF},
+		"telling no size, unknown":      {want: io.EOF},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var several atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.Contains(r.Header.Get("Range"), ",") {
+					http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
+					return
+				}
+				several.Add(1)
+				if test.told != "" {
+					w.Header().Set("Content-Range", test.told)
+				}
+				w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			}))
+			defer server.Close()
+			s := newCache(t, 1<<30).Open(accounts.ID{1}, Location{URL: server.URL + "/file"}, nil)
+			defer s.Release()
+			if test.sized {
+				if _, err := s.Fetch(t.Context(), 0, 10); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := s.FetchRanges(t.Context(), ranges); !errors.Is(err, test.want) {
+				t.Fatalf("got %v, want %v", err, test.want)
+			}
+			served, known := s.ServesRanges()
+			if test.want != container.ErrMultiRangeUnsupported {
+				if known {
+					t.Errorf("remembered as serving several ranges: %v", served)
+				}
+				return
+			}
+			if served || !known {
+				t.Errorf("serves several ranges: %v, known: %v", served, known)
+			}
+			// Remembered: the source is not asked again for several ranges,
+			// and serves them one by one.
+			if _, err := s.FetchRanges(t.Context(), ranges); !errors.Is(err, container.ErrMultiRangeUnsupported) || several.Load() != 1 {
+				t.Errorf("got %v after %d requests for several ranges", err, several.Load())
+			}
+			for _, r := range ranges {
+				if got, err := s.Fetch(t.Context(), r.Off, r.N); err != nil || !bytes.Equal(got, data[r.Off:r.Off+int64(r.N)]) {
+					t.Errorf("at %d: %v", r.Off, err)
+				}
+			}
+		})
+	}
+}
+
 func TestFetchStalledAttemptsAreRetried(t *testing.T) {
 	t.Parallel()
 	data := make([]byte, blockSize)

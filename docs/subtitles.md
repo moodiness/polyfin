@@ -288,6 +288,7 @@ A host that answers one byte range at a time would take a request for nearly eve
 - A track that would take such a host more than 64 requests is not read this way, nor offered as a file. The dialogue of a movie is one such track.
 - Before it offers such a track, Polyfin learns whether the host serves several ranges at once.
 - It learns this from what it already knows of the host, or with one request for two ranges.
+- A host that answers a request for several ranges with the whole file, or with `416` for ranges the file holds, answers one range at a time. Some hosts serve one range but refuse two this way. Polyfin then reads the shorter tracks one range a request, and the version's other tracks are still offered.
 - Polyfin logs the tracks it leaves out.
 
 <a id="tracks-offered-after-a-remux"></a>
