@@ -177,7 +177,8 @@ export function DraftForm({
       }}
     >
       <DraftContext value={report}>
-        <div className="[&>*+*]:mt-block">{children({ nameError })}</div>
+        {/* A gap rather than margins: a section hidden on a phone (useSectionPages) takes none. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-block">{children({ nameError })}</div>
       </DraftContext>
       <SaveBar
         dirty={changes > 0}

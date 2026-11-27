@@ -1,18 +1,20 @@
+import { CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react'
 import { useMutation } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { ApiError, createUser, queryClient, queryKeys, type GroupSummary, type User } from '@/api'
 import { errorMessage } from '@/format'
 import { useI18n } from '@/i18n'
-import { Button, Checkbox, Modal, Field, Notice, Select, TextInput, useToast } from '@/ui'
+import { Button, Modal, Field, Notice, Select, SettingRow, TextInput, useToast } from '@/ui'
 
 /** Codes about one field, shown under it rather than above the buttons. */
 const nameCodes = ['invalid_name', 'name_taken']
 const passwordCodes = ['invalid_password']
 
 /**
- * The form to create a user, in a floating panel over the list. The account may join a group and
- * follow it, unless it is an administrator's.
+ * The form to create a user, in a floating panel over the list: the name, the password and the
+ * group first, then the rarer choices under Advanced options, as switches like the user's page.
+ * The account may join a group and follow it, unless it is an administrator's.
  */
 export default function CreateUserModal({
   open,
@@ -35,6 +37,8 @@ export default function CreateUserModal({
   const [groupId, setGroupId] = useState('')
   // An account signing in through the identity provider only needs no password.
   const [providerOnly, setProviderOnly] = useState(false)
+  const [advanced, setAdvanced] = useState(false)
+  const advancedId = `${formId}-advanced`
 
   const mutation = useMutation({
     mutationFn: createUser,
@@ -45,6 +49,7 @@ export default function CreateUserModal({
       setShowOnSignIn(false)
       setGroupId('')
       setProviderOnly(false)
+      setAdvanced(false)
       // The new user's page needs it in the list before the refresh comes back.
       queryClient.setQueryData<User[]>(queryKeys.users, (old) => old && [...old, created])
       void queryClient.invalidateQueries({ queryKey: queryKeys.users })
@@ -109,12 +114,6 @@ export default function CreateUserModal({
             invalid={nameError !== undefined}
           />
         </Field>
-        <Checkbox
-          label={t.users.providerOnly}
-          help={t.users.providerOnlyHelp}
-          checked={providerOnly}
-          onChange={setProviderOnly}
-        />
         {!providerOnly && (
           <Field label={t.users.password} help={t.common.passwordRule} error={passwordError}>
             <TextInput
@@ -131,18 +130,6 @@ export default function CreateUserModal({
             />
           </Field>
         )}
-        <Checkbox
-          label={t.users.isAdministrator}
-          help={t.users.isAdministratorHelp}
-          checked={isAdministrator}
-          onChange={setIsAdministrator}
-        />
-        <Checkbox
-          label={t.users.showOnSignIn}
-          help={t.users.showOnSignInHelp}
-          checked={showOnSignIn}
-          onChange={setShowOnSignIn}
-        />
         {groups.length > 0 && (
           <Field
             label={t.groups.group}
@@ -159,6 +146,44 @@ export default function CreateUserModal({
             />
           </Field>
         )}
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            iconEnd={advanced ? CaretUpIcon : CaretDownIcon}
+            aria-expanded={advanced}
+            aria-controls={advanced ? advancedId : undefined}
+            onClick={() => setAdvanced((shown) => !shown)}
+            className="-ml-2.5"
+          >
+            {t.users.advancedOptions}
+          </Button>
+          {advanced && (
+            <div id={advancedId} className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-1.5">
+              <SettingRow
+                kind="switch"
+                label={t.users.isAdministrator}
+                help={t.users.isAdministratorHelp}
+                checked={isAdministrator}
+                onChange={setIsAdministrator}
+              />
+              <SettingRow
+                kind="switch"
+                label={t.users.showOnSignIn}
+                help={t.users.showOnSignInHelp}
+                checked={showOnSignIn}
+                onChange={setShowOnSignIn}
+              />
+              <SettingRow
+                kind="switch"
+                label={t.users.providerOnly}
+                help={t.users.providerOnlyHelp}
+                checked={providerOnly}
+                onChange={setProviderOnly}
+              />
+            </div>
+          )}
+        </div>
         {otherError && <Notice tone="danger">{otherError}</Notice>}
       </form>
     </Modal>

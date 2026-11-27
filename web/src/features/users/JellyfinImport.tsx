@@ -404,7 +404,13 @@ function ConnectForm({
   }
 
   return (
-    <Panel title={text.connectTitle(product)} description={text.connectHelp} flush>
+    // As wide as its fields, so that Connect stays beside them.
+    <Panel
+      title={text.connectTitle(product)}
+      description={text.connectHelp}
+      flush
+      className="max-w-[44rem]"
+    >
       <form onSubmit={submit} noValidate>
         <div className="flex max-w-[38rem] flex-col gap-4 px-5 max-md:px-4">
           <div className="flex flex-col gap-2">

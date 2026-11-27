@@ -27,8 +27,9 @@ const users = {
     resetPasswordHelp: 'Changing the password signs out all of this user’s Jellyfin devices.',
     passwordReset: 'The password has been reset.',
     accessTitle: 'Access',
-    isDisabled: 'Disabled',
-    isDisabledHelp: 'A disabled user cannot sign in, and all their devices are signed out.',
+    canSignIn: 'Can sign in',
+    canSignInHelp:
+      'Off, the account cannot sign in and all its devices are signed out. Everything it has stays.',
     providerOnly: 'Identity provider only',
     providerOnlyHelp:
       'The user signs in through the identity provider set up under Settings › Security, never with a password: the password is refused, and an account created so needs none. Jellyfin apps that cannot open the provider sign in with Quick Connect.',
@@ -68,6 +69,7 @@ const users = {
     noAudioTranscoding: 'No audio conversion',
     noDownloads: 'No downloads',
     turnOffDownloads: 'Turn off downloads for everyone',
+    turnOffDownloadsButton: 'Turn off',
     turnOffDownloadsConfirm:
       'Every user and every group lose the permission to download, also in the Jellyfin apps already signed in. You can give it back to a user or a group on their page, under Access.',
     turningOffDownloads: 'Turning off…',
@@ -86,6 +88,28 @@ const users = {
     disabling: 'Disabling…',
     disabledNow: (name: string) => `${name} has been disabled.`,
     enabledNow: (name: string) => `${name} can sign in again.`,
+    disableConfirm: (name: string, devices: number | null) =>
+      `${name} cannot sign in until you turn sign-in back on. ${
+        devices === null
+          ? 'All their devices are signed out'
+          : devices === 0
+            ? 'No device of theirs is signed in'
+            : devices === 1
+              ? 'Their device is signed out'
+              : `Their ${devices} devices are signed out`
+      }, and the links they shared stop working.`,
+    makeAdministrator: 'Make administrator',
+    makeAdministratorTitle: (name: string) => `Make ${name} an administrator?`,
+    makeAdministratorConfirm: (name: string, group: string | null) =>
+      `${name} can then manage users and server settings, and the account never ends.${
+        group === null
+          ? ''
+          : ` ${name} also leaves the group ${group}: its values stay as their own settings.`
+      }`,
+    removeAdministrator: 'Remove administrator rights',
+    removeAdministratorTitle: (name: string) => `Remove the administrator rights of ${name}?`,
+    removeAdministratorConfirm: (name: string) =>
+      `${name} can no longer manage users or server settings, and becomes a member with the permissions under Access.`,
     signOutAll: 'Sign out of all devices',
     signOutAllConfirm: (name: string) =>
       `Sign out every Jellyfin device of ${name}? Each app will need to sign in again.`,
@@ -111,7 +135,7 @@ const users = {
     moonfinSectionHelp:
       'Moonfin’s apps find Polyfin’s companion for this user: their settings synced across their devices, MDBList ratings and TMDB extras.',
     moonfinRow: 'Companion',
-    moonfinHelp: 'Server default follows Serve Moonfin’s companion, under Settings › General.',
+    moonfinHelp: 'Server default follows Serve Moonfin’s companion, under Settings › Moonfin.',
     moonfinChange: 'Let them change it',
     moonfinChangeHelp: 'Under My account › Moonfin. Off, the choice made here stays theirs.',
     moonfinResetTitle: (name: string) => `Reset ${name}’s synced settings?`,
@@ -302,12 +326,18 @@ const users = {
     metadataLanguageRow: 'Language of titles',
     webThemeRow: 'Theme',
     audioRegionRow: 'Dub region',
+    advancedOptions: 'Advanced options',
+    /** The heading words of a user's sections. */
+    navAccount: 'Account',
+    navPreferences: 'Preferences',
+    navLimits: 'Limits',
+    navActivity: 'Activity',
     jellyfinImport: {
       summary: 'Accounts and watch data from a Jellyfin, Emby or Plex server.',
       open: 'Import from another server',
       title: 'Import from another server',
       description:
-        'Bring accounts and their watch data over from a Jellyfin, Emby or Plex server: account names and administrator status, then for each user the movies and episodes played with their dates, resume points and favorites, matched by IMDb, TMDB or TVDB, and if you choose their ratings, the server’s collections and their playlists. Polyfin’s data is only added to, and nothing is written to the other server. Servers do not give out passwords: you set one for each new account, or keep the one a user signs in with.',
+        'Bring accounts and what they watched over from a Jellyfin, Emby or Plex server. Polyfin’s data is only added to, and nothing is written to the other server. Passwords do not come over: set one for each new account, or keep the one a user signs in with.',
       serverKind: 'Server',
       servers: {
         jellyfin: 'Jellyfin',
@@ -535,7 +565,7 @@ const users = {
       open: 'Import from an app',
       title: 'Import from an app',
       description:
-        'Bring a user’s watch data over from their account on an app built on addons: the movies and episodes they played with their dates, their resume points, and the app’s library, which goes to their Watchlist playlist in Jellyfin apps, matched by IMDb, TMDB or Kitsu. Polyfin’s data is only added to, and nothing is written to the app. You need the user’s sign-in to the app; users can also import themselves, under My account.',
+        'Bring a user’s watch data and library over from their account on an app built on addons, with their sign-in to it. Polyfin’s data is only added to. Users can also import their own, under My account.',
       user: 'Into the account of',
       userHelp: 'The Polyfin user whose watch data and addons the import adds to.',
     },
@@ -544,7 +574,7 @@ const users = {
       open: 'Import from Letterboxd',
       title: 'Import from Letterboxd',
       description:
-        'Bring a user’s movies over from their Letterboxd export file: the movies they watched with their dates and play counts, their watchlist, their ratings, and the movies they liked as favorites if you choose. Polyfin’s data is only added to. Users can also import their own, under My account.',
+        'Bring a user’s movies over from their Letterboxd export file: what they watched, their watchlist and their ratings. Polyfin’s data is only added to. Users can also import their own, under My account.',
       user: 'Into the account of',
       userHelp: 'The Polyfin user whose watch data the import adds to.',
     },
@@ -596,6 +626,9 @@ const users = {
     revokeConfirm: 'The link stops working at once. Accounts already created through it are kept.',
     revoking: 'Revoking…',
     revoked: 'The invite link is revoked.',
+    openLinks: 'Open invite links',
+    noneOpen: 'No invite link is open.',
+    closedLinks: (count: number) => (count === 1 ? '1 closed link' : `${count} closed links`),
   },
   groups: {
     tabsLabel: 'Users and groups',
@@ -625,7 +658,7 @@ const users = {
     pageHelp: 'Saved changes reach the members who follow the group at once.',
     updated: 'The group has been updated.',
     accessHelp:
-      'The permissions members take from the group. Their role, sign-in screen, Disabled and end date stay on their own page.',
+      'The permissions members take from the group. Their role, sign-in screen, Can sign in and end date stay on their own page.',
     delete: 'Delete group',
     deleteTitle: (name: string) => `Delete the group ${name}?`,
     deleteConfirm:
@@ -660,13 +693,19 @@ const users = {
       `Making this user an administrator takes them out of the group ${name}.`,
     newAccountGroupHelp: 'The accounts created join this group and follow it.',
     newUserGroupHelp: 'The user joins this group and follows it.',
-    values: 'Values',
     valuesHelp:
       'Taken from the group, the values change with it. Own, they are set on this page, and later changes to the group pass them by.',
     valuesFromGroup: (name: string) => `From the group ${name}`,
     valuesOwn: 'Own for this user',
+    valuesOf: (section: string) => `Values of ${section}`,
     followEverywhere: 'Follow the group everywhere',
-    setByGroup: (name: string) => `Set by the group ${name}.`,
+    follows: (name: string, following: number, total: number) =>
+      following === total
+        ? `Follows the group ${name} in every section.`
+        : following === 0
+          ? `In the group ${name}, with their own values in every section.`
+          : `Follows the group ${name} in ${following} of ${total} sections.`,
+    moreActions: (name: string) => `More actions for the group ${name}`,
     openGroup: 'Open the group',
     joinTitle: 'Join the group?',
     joinConfirm: (user: string, group: string) =>
@@ -694,13 +733,63 @@ const users = {
     changeWhoUses: 'Change who uses it on its page',
     sourceGiven: (name: string) => `The group gets ${name}.`,
     sourceTaken: (name: string) => `The group no longer gets ${name}.`,
+    /** The help of rows on a group's page, which names its members rather than one user. */
+    help: {
+      remoteAccessHelp:
+        'Lets the group’s members sign in, browse and play from anywhere. Turned off, they may only from the local network, as Known proxies under Settings › Security tells it. The links they share still play anywhere.',
+      remoteAccessUnknownProxy:
+        'Health sees a reverse proxy missing from Known proxies: everyone who comes through it counts as outside the local network, so the group’s members are refused through it, from the local network too.',
+      videoTranscodingHelp:
+        'Lets the server re-encode the video when a member’s app cannot play it as it is. Without it, the video plays as it is or simply repackaged, never re-encoded.',
+      audioTranscodingHelp:
+        'Lets the server re-encode the audio when a member’s app cannot play it as it is, the video copied when it can be. Without it, the audio plays as it is, never re-encoded.',
+      canDownloadHelp: 'Lets the group’s members save titles in Jellyfin apps to watch offline.',
+      canPlayTorrentsHelp:
+        'Offers the group’s members the torrents addons list, while Settings › Torrents plays them. Off until given.',
+      canAddAddonsHelp:
+        'Lets the group’s members add Stremio addons of their own, and make smart lists, on their My sources page. Without it, their addons and smart lists are kept but not used.',
+      canManageCollectionsHelp:
+        'Lets the group’s members create collections of titles in Jellyfin apps, add titles to them or take titles out, and delete them. Every user sees the collections, each with only the titles they may see.',
+      canManageSubtitlesHelp:
+        'Lets the group’s members add subtitle files to titles from their Jellyfin apps, and search the addons’ subtitles there.',
+      canShareHelp:
+        'Lets the group’s members give a movie or an episode to someone without an account, through a link that expires, from My account or a title’s page in the web player, while Settings › Security › Allow share links is on. Turning it off revokes their links.',
+      maxPlaybacksHelp:
+        'How many devices of each member can play at the same time. They can still sign in on more devices.',
+      maxBitrateHelp:
+        'Above it, the video is converted down when the members can use conversion; otherwise a lighter version plays.',
+      liveTvHelp: 'Shows the Live TV channels to the group’s members.',
+      remoteControlHelp:
+        'Lets the group’s members play, pause or send messages to the Jellyfin apps of other users. Everyone can control their own apps.',
+      localFirstHelp:
+        'Puts the versions of local folders and network shares before the others in the members’ version menus, whatever "Order versions by" says, so that Play starts them. Other users keep the server’s order.',
+      boostVolumeHelp:
+        'Makes videos louder in the members’ web player, in a browser and in the Jellyfin apps for Android and iOS: about 8 dB on quiet passages and 5 dB on loud ones, peaks held near full scale. The browser does the work, but for it to reach the streams of addons, the server sends the members’ web player those streams itself rather than sending the player to their source, which takes the server’s bandwidth. The apps’ own players are not reached, nor streams an iPhone or iPad plays as HLS.',
+      convertSoundHelp:
+        'The server converts the audio of the members’ videos and channels and evens it at -16 LUFS, the picture copied, so that every app plays it louder and evenly. The cost: nothing plays directly, each play takes a little of the server’s processor, and surround sound reaches a receiver converted rather than as the original track.',
+      qualityGroupHelp:
+        'The highest resolution the members are offered. Higher versions are left out while one fits; if none fits, they are converted down, or refused when the members cannot use conversion. Live TV is converted down too. Only versions that fit are downloaded as they are; with "Converted downloads" on under Settings › Conversion (transcoding), the apps that ask for it download the others converted down.',
+      maxRatingHelp:
+        'The ratings of the server’s Rating country, set under Settings › General. Titles rated above this limit in that country are hidden from the group’s members.',
+      visibleLibrariesHelp:
+        'The server’s libraries the members’ apps show. Libraries added later are shown. This only chooses the libraries shown: titles stay reachable through other libraries, search or links. To block titles, use parental control or blocked genres.',
+      noServerLibrariesHelp:
+        'Add a library in Content › Libraries, then choose here which ones the group’s members see.',
+      blockedGenresHelp:
+        'Titles of any of these genres are hidden from the group’s members everywhere, like titles above their parental control limit.',
+      liveTvChannelsHelp:
+        'The channels of the server’s Live TV sources the members see, chosen by group and by channel. Hidden channels are left out of the channel list, the guide, searches, Replay, recordings, timers and reminders, and do not play. The members’ own sources are not limited.',
+      allowedHoursHelp:
+        'When hours are set, the group’s members can only sign in and use the server during them, in the server’s time zone. Outside them, their apps are refused.',
+      noAllowedHours: 'No hours set: the group’s members can use the server at any time.',
+    },
   },
   resetDefaults: {
     button: 'Reset to defaults',
     title: (name: string) => `Reset the settings of ${name}?`,
     groupTitle: (name: string) => `Reset the settings of the group ${name}?`,
     userHelp: (name: string) =>
-      `The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings, those Create a user gives; ${name}’s apps already signed in have them at once. Their name and password, Administrator, Show on the sign-in screen, Disabled, Ends on, their group, their own addons, connections, tracking accounts and everything they watched stay.`,
+      `The permissions under Access, Playback and access with the Quality group, Parental control, Visible libraries, Blocked genres and Allowed hours go back to a new user’s settings, those Create a user gives; ${name}’s apps already signed in have them at once. Their name and password, Administrator, Show on the sign-in screen, Can sign in, Ends on, their group, their own addons, connections, tracking accounts and everything they watched stay.`,
     ownSettingsHelp: (group: string, sections: string) =>
       `Only the sections they keep as their own go back: ${sections}. They stay in the group ${group} and follow it in the others.`,
     groupHelp:

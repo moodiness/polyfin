@@ -1,4 +1,11 @@
-import { CheckIcon, CopyIcon, LinkIcon, ProhibitIcon } from '@phosphor-icons/react'
+import {
+  CaretDownIcon,
+  CaretUpIcon,
+  CheckIcon,
+  CopyIcon,
+  LinkIcon,
+  ProhibitIcon,
+} from '@phosphor-icons/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useId, useState, type FormEvent } from 'react'
 import {
@@ -59,6 +66,8 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
     queryFn: ({ signal }) => fetchInvites(signal),
   })
   const [asked, setAsked] = useState<Invite | null>(null)
+  const [closedShown, setClosedShown] = useState(false)
+  const closedId = useId()
   const revoke = useMutation({
     mutationFn: (invite: Invite) => revokeInvite(invite.id),
     onSuccess: () => {
@@ -72,8 +81,73 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
     },
   })
 
+  // Open links first; the closed ones (expired, used up, revoked) wait behind one button.
+  const open = (invites.data ?? []).filter((invite) => invite.state === 'active')
+  const closed = (invites.data ?? []).filter((invite) => invite.state !== 'active')
+
+  // A link is named by what it gives (its group, else whose settings) and when it ends.
+  const inviteRow = (invite: Invite) => (
+    <Row
+      key={invite.id}
+      leading={LinkIcon}
+      title={
+        <>
+          {invite.group !== null
+            ? t.groups.groupBadge(invite.group.name)
+            : invite.model === null
+              ? text.newUserSettings
+              : text.settingsOf(invite.model.name)}
+          {' · '}
+          {invite.expiresAt === null ? (
+            text.neverExpires
+          ) : (
+            <>
+              {invite.state === 'expired' ? text.expiredLabel : text.expiresLabel}{' '}
+              <RelativeTime iso={invite.expiresAt} />
+            </>
+          )}
+        </>
+      }
+      titleAside={
+        invite.state !== 'active' && (
+          <StatusPill tone={stateTones[invite.state]}>{text.states[invite.state]}</StatusPill>
+        )
+      }
+      muted={invite.state !== 'active'}
+      meta={
+        <span className="min-w-0">
+          {text.uses(invite.uses, invite.maxUses)}
+          {invite.group !== null &&
+            ` · ${invite.model === null ? text.newUserSettings : text.settingsOf(invite.model.name)}`}
+          {invite.accountsEndInDays !== null &&
+            ` · ${text.accountsEndAfter(invite.accountsEndInDays)}`}
+          {' · '}
+          {invite.createdBy === null
+            ? text.createdByDeleted
+            : text.createdBy(invite.createdBy.name)}{' '}
+          <RelativeTime iso={invite.createdAt} />
+        </span>
+      }
+      trailing={
+        invite.state !== 'active' ? undefined : (
+          <Button
+            size="sm"
+            variant="danger"
+            icon={ProhibitIcon}
+            loading={revoke.isPending && revoke.variables.id === invite.id}
+            onClick={() => {
+              revoke.reset()
+              setAsked(invite)
+            }}
+          >
+            {text.revoke}
+          </Button>
+        )
+      }
+    />
+  )
   return (
-    <Block title={text.title} count={invites.data?.length}>
+    <Block title={text.title} count={invites.data === undefined ? undefined : open.length}>
       {invites.isPending ? (
         <SkeletonRows rows={2} boxed label={t.common.loading} />
       ) : invites.isError ? (
@@ -93,59 +167,35 @@ export function InviteLinks({ onCreate }: { onCreate: () => void }) {
           {text.emptyHelp}
         </EmptyState>
       ) : (
-        <RowList aria-label={text.title}>
-          {invites.data.map((invite) => (
-            <Row
-              key={invite.id}
-              leading={LinkIcon}
-              title={text.uses(invite.uses, invite.maxUses)}
-              titleAside={
-                <StatusPill tone={stateTones[invite.state]}>{text.states[invite.state]}</StatusPill>
-              }
-              muted={invite.state !== 'active'}
-              meta={
-                <span className="min-w-0">
-                  {invite.model === null
-                    ? text.newUserSettings
-                    : text.settingsOf(invite.model.name)}
-                  {invite.group !== null && ` · ${t.groups.groupBadge(invite.group.name)}`}
-                  {' · '}
-                  {invite.expiresAt === null ? (
-                    text.neverExpires
-                  ) : (
-                    <>
-                      {invite.state === 'expired' ? text.expiredLabel : text.expiresLabel}{' '}
-                      <RelativeTime iso={invite.expiresAt} />
-                    </>
-                  )}
-                  {invite.accountsEndInDays !== null &&
-                    ` · ${text.accountsEndAfter(invite.accountsEndInDays)}`}
-                  {' · '}
-                  {invite.createdBy === null
-                    ? text.createdByDeleted
-                    : text.createdBy(invite.createdBy.name)}{' '}
-                  <RelativeTime iso={invite.createdAt} />
-                </span>
-              }
-              trailing={
-                invite.state !== 'active' ? undefined : (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    icon={ProhibitIcon}
-                    loading={revoke.isPending && revoke.variables.id === invite.id}
-                    onClick={() => {
-                      revoke.reset()
-                      setAsked(invite)
-                    }}
-                  >
-                    {text.revoke}
-                  </Button>
-                )
-              }
-            />
-          ))}
-        </RowList>
+        <>
+          {open.length > 0 ? (
+            <RowList aria-label={text.openLinks}>{open.map(inviteRow)}</RowList>
+          ) : (
+            <p className="text-small text-ink-2">{text.noneOpen}</p>
+          )}
+          {closed.length > 0 && (
+            <div className="mt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconEnd={closedShown ? CaretUpIcon : CaretDownIcon}
+                aria-expanded={closedShown}
+                aria-controls={closedShown ? closedId : undefined}
+                onClick={() => setClosedShown((shown) => !shown)}
+                className="-ml-2.5"
+              >
+                {text.closedLinks(closed.length)}
+              </Button>
+              {closedShown && (
+                <div id={closedId} className="mt-2">
+                  <RowList aria-label={text.closedLinks(closed.length)}>
+                    {closed.map(inviteRow)}
+                  </RowList>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
       <ConfirmDialog
         open={asked !== null}

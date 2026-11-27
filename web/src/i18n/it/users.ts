@@ -30,9 +30,9 @@ const users: typeof en = {
       'Cambiare la password disconnette tutti i dispositivi Jellyfin di questo utente.',
     passwordReset: 'La password è stata reimpostata.',
     accessTitle: 'Accesso',
-    isDisabled: 'Disabilitato',
-    isDisabledHelp:
-      'Un utente disabilitato non può accedere e tutti i suoi dispositivi vengono disconnessi.',
+    canSignIn: 'Può accedere',
+    canSignInHelp:
+      'Se disattivato, l’account non può accedere e tutti i suoi dispositivi vengono disconnessi. Tutto ciò che contiene viene conservato.',
     providerOnly: 'Solo provider di identità',
     providerOnlyHelp:
       'L’utente accede con il provider di identità configurato in Impostazioni › Sicurezza, mai con una password: la password viene rifiutata, e un account creato così non ne ha bisogno. Le applicazioni Jellyfin che non possono aprire il provider accedono con Quick Connect.',
@@ -72,6 +72,7 @@ const users: typeof en = {
     noAudioTranscoding: 'Nessuna conversione audio',
     noDownloads: 'Nessun download',
     turnOffDownloads: 'Disattiva i download per tutti',
+    turnOffDownloadsButton: 'Disattiva',
     turnOffDownloadsConfirm:
       'Tutti gli utenti e tutti i gruppi perdono il permesso di scaricare, anche nelle applicazioni Jellyfin con accesso già effettuato. Puoi restituirlo a un utente o a un gruppo dalla sua pagina, in Accesso.',
     turningOffDownloads: 'Disattivazione…',
@@ -91,6 +92,28 @@ const users: typeof en = {
     disabling: 'Disabilitazione…',
     disabledNow: (name: string) => `${name} è stato disabilitato.`,
     enabledNow: (name: string) => `${name} può di nuovo accedere.`,
+    disableConfirm: (name: string, devices: number | null) =>
+      `${name} non può accedere finché non riattivi l’accesso. ${
+        devices === null
+          ? 'Tutti i suoi dispositivi vengono disconnessi'
+          : devices === 0
+            ? 'Nessun suo dispositivo ha effettuato l’accesso'
+            : devices === 1
+              ? 'Il suo dispositivo viene disconnesso'
+              : `I suoi ${devices} dispositivi vengono disconnessi`
+      }, e i link che ha condiviso smettono di funzionare.`,
+    makeAdministrator: 'Rendi amministratore',
+    makeAdministratorTitle: (name: string) => `Rendere ${name} amministratore?`,
+    makeAdministratorConfirm: (name: string, group: string | null) =>
+      `${name} potrà gestire gli utenti e le impostazioni del server, e l’account non scadrà mai.${
+        group === null
+          ? ''
+          : ` ${name} lascia anche il gruppo ${group}: i suoi valori restano come impostazioni proprie.`
+      }`,
+    removeAdministrator: 'Rimuovi i diritti di amministratore',
+    removeAdministratorTitle: (name: string) => `Rimuovere i diritti di amministratore di ${name}?`,
+    removeAdministratorConfirm: (name: string) =>
+      `${name} non potrà più gestire gli utenti né le impostazioni del server, e diventa un membro con i permessi indicati in Accesso.`,
     signOutAll: 'Disconnetti tutti i dispositivi',
     signOutAllConfirm: (name: string) =>
       `Disconnettere tutti i dispositivi Jellyfin di ${name}? Ogni app dovrà accedere di nuovo.`,
@@ -117,7 +140,7 @@ const users: typeof en = {
       'Le app di Moonfin trovano il compagno di Polyfin per questo utente: le sue impostazioni sincronizzate tra i suoi dispositivi, le valutazioni di MDBList e gli extra di TMDB.',
     moonfinRow: 'Compagno',
     moonfinHelp:
-      'Il valore del server segue Offri il compagno di Moonfin, in Impostazioni › Generale.',
+      'Il valore del server segue Offri il compagno di Moonfin, in Impostazioni › Moonfin.',
     moonfinChange: 'Permettigli di cambiarlo',
     moonfinChangeHelp:
       'In Il mio account › Moonfin. Disattivato, la scelta fatta qui resta la sua.',
@@ -311,12 +334,18 @@ const users: typeof en = {
     metadataLanguageRow: 'Lingua dei titoli',
     webThemeRow: 'Tema',
     audioRegionRow: 'Regione del doppiaggio',
+    advancedOptions: 'Opzioni avanzate',
+    /** The heading words of a user's sections. */
+    navAccount: 'Account',
+    navPreferences: 'Preferenze',
+    navLimits: 'Limiti',
+    navActivity: 'Attività',
     jellyfinImport: {
       summary: 'Account e dati di visione da un server Jellyfin, Emby o Plex.',
       open: 'Importa da un altro server',
       title: 'Importa da un altro server',
       description:
-        'Trasferisci gli account e i relativi dati di visione da un server Jellyfin, Emby o Plex: nomi degli account e stato di amministratore, poi per ogni utente i film e gli episodi visti con le relative date, i punti di ripresa e i preferiti, abbinati tramite IMDb, TMDB o TVDB, e se vuoi le loro valutazioni, le collezioni del server e le loro playlist. I dati di Polyfin vengono solo integrati e sull’altro server non viene scritto nulla. I server non forniscono le password: ne imposti una per ogni nuovo account, oppure mantieni quella con cui l’utente accede.',
+        'Trasferisci gli account e ciò che hanno visto da un server Jellyfin, Emby o Plex. I dati di Polyfin vengono solo integrati e sull’altro server non viene scritto nulla. Le password non vengono trasferite: impostane una per ogni nuovo account, oppure mantieni quella con cui l’utente accede.',
       serverKind: 'Server',
       servers: {
         jellyfin: 'Jellyfin',
@@ -545,7 +574,7 @@ const users: typeof en = {
       open: 'Importa da un’applicazione',
       title: 'Importa da un’applicazione',
       description:
-        'Trasferisci i dati di visione di un utente dal suo account su un’applicazione basata su add-on: i film e gli episodi riprodotti con le relative date, i punti di ripresa e la libreria dell’applicazione, che finisce nella sua playlist «Da guardare» nelle applicazioni Jellyfin, abbinati tramite IMDb, TMDB o Kitsu. I dati di Polyfin vengono solo integrati e nulla viene scritto nell’applicazione. Ti servono le credenziali di accesso dell’utente all’applicazione; gli utenti possono anche importare da soli, in Il mio account.',
+        'Trasferisci i dati di visione e la libreria di un utente dal suo account su un’applicazione basata su add-on, con le sue credenziali di accesso. I dati di Polyfin vengono solo integrati. Gli utenti possono anche importare i propri, in Il mio account.',
       user: 'Nell’account di',
       userHelp: 'L’utente Polyfin ai cui dati di visione e add-on si aggiunge l’importazione.',
     },
@@ -554,7 +583,7 @@ const users: typeof en = {
       open: 'Importa da Letterboxd',
       title: 'Importa da Letterboxd',
       description:
-        'Trasferisci i film di un utente dal suo file di esportazione di Letterboxd: i film visti con le relative date e il numero di riproduzioni, la sua watchlist, i suoi voti e, se lo scegli, i film a cui ha messo «mi piace» come preferiti. I dati di Polyfin vengono solo integrati. Gli utenti possono anche importare i propri, in Il mio account.',
+        'Trasferisci i film di un utente dal suo file di esportazione di Letterboxd: ciò che ha visto, la sua watchlist e i suoi voti. I dati di Polyfin vengono solo integrati. Gli utenti possono anche importare i propri, in Il mio account.',
       user: 'Nell’account di',
       userHelp: 'L’utente Polyfin ai cui dati di visione si aggiunge l’importazione.',
     },
@@ -611,6 +640,9 @@ const users: typeof en = {
       'Il link smette subito di funzionare. Gli account già creati tramite il link vengono mantenuti.',
     revoking: 'Revoca in corso…',
     revoked: 'Il link di invito è stato revocato.',
+    openLinks: 'Link di invito aperti',
+    noneOpen: 'Nessun link di invito aperto.',
+    closedLinks: (count: number) => (count === 1 ? '1 link chiuso' : `${count} link chiusi`),
   },
   groups: {
     tabsLabel: 'Utenti e gruppi',
@@ -640,7 +672,7 @@ const users: typeof en = {
     pageHelp: 'Le modifiche salvate raggiungono subito i membri che seguono il gruppo.',
     updated: 'Il gruppo è stato aggiornato.',
     accessHelp:
-      'I permessi che i membri ricevono dal gruppo. Il loro ruolo, la schermata di accesso, «Disabilitato» e la data di fine restano nella loro pagina.',
+      'I permessi che i membri ricevono dal gruppo. Il loro ruolo, la schermata di accesso, «Può accedere» e la data di fine restano nella loro pagina.',
     delete: 'Elimina gruppo',
     deleteTitle: (name: string) => `Eliminare il gruppo ${name}?`,
     deleteConfirm:
@@ -678,13 +710,19 @@ const users: typeof en = {
       `Rendere questo utente amministratore lo rimuove dal gruppo ${name}.`,
     newAccountGroupHelp: 'Gli account creati entrano in questo gruppo e lo seguono.',
     newUserGroupHelp: 'L’utente entra in questo gruppo e lo segue.',
-    values: 'Valori',
     valuesHelp:
       'Presi dal gruppo, i valori cambiano con esso. Propri, si impostano in questa pagina e le modifiche successive del gruppo non li toccano.',
     valuesFromGroup: (name: string) => `Dal gruppo ${name}`,
     valuesOwn: 'Propri di questo utente',
+    valuesOf: (section: string) => `Valori di ${section}`,
     followEverywhere: 'Segui il gruppo ovunque',
-    setByGroup: (name: string) => `Impostato dal gruppo ${name}.`,
+    follows: (name: string, following: number, total: number) =>
+      following === total
+        ? `Segue il gruppo ${name} in ogni sezione.`
+        : following === 0
+          ? `Nel gruppo ${name}, con valori propri in ogni sezione.`
+          : `Segue il gruppo ${name} in ${following} sezioni su ${total}.`,
+    moreActions: (name: string) => `Altre azioni per il gruppo ${name}`,
     openGroup: 'Apri il gruppo',
     joinTitle: 'Entrare nel gruppo?',
     joinConfirm: (user: string, group: string) =>
@@ -712,13 +750,65 @@ const users: typeof en = {
     changeWhoUses: 'Cambia chi la usa nella sua pagina',
     sourceGiven: (name: string) => `Il gruppo riceve ${name}.`,
     sourceTaken: (name: string) => `Il gruppo non riceve più ${name}.`,
+    /** The help of rows on a group's page, which names its members rather than one user. */
+    help: {
+      remoteAccessHelp:
+        'Consente ai membri del gruppo di accedere, sfogliare e riprodurre da qualsiasi luogo. Se disattivato, possono farlo solo dalla rete locale, come la definiscono i Proxy conosciuti in Impostazioni › Sicurezza. I link che condividono restano riproducibili ovunque.',
+      remoteAccessUnknownProxy:
+        'Stato di salute vede un reverse proxy assente dai Proxy conosciuti: chiunque passi da lì viene considerato esterno alla rete locale, quindi i membri del gruppo vengono rifiutati attraverso di esso, anche dalla rete locale.',
+      videoTranscodingHelp:
+        'Consente al server di ricodificare il video quando l’applicazione di un membro non riesce a riprodurlo così com’è. Senza questa opzione, il video viene riprodotto così com’è o semplicemente reimpacchettato, mai ricodificato.',
+      audioTranscodingHelp:
+        'Consente al server di ricodificare l’audio quando l’applicazione di un membro non riesce a riprodurlo così com’è, con il video copiato quando possibile. Senza questa opzione, l’audio viene riprodotto così com’è, mai ricodificato.',
+      canDownloadHelp:
+        'Consente ai membri del gruppo di salvare titoli nelle applicazioni Jellyfin per guardarli offline.',
+      canPlayTorrentsHelp:
+        'Offre ai membri del gruppo l’elenco dei torrent degli add-on, mentre Impostazioni › Torrent li riproduce. Disattivato finché non viene concesso.',
+      canAddAddonsHelp:
+        'Consente ai membri del gruppo di aggiungere add-on Stremio personali, e di creare liste intelligenti, dalla loro pagina Le mie origini. Senza questa opzione, i loro add-on e le loro liste intelligenti vengono conservati ma non utilizzati.',
+      canManageCollectionsHelp:
+        'Consente ai membri del gruppo di creare collezioni di titoli nelle applicazioni Jellyfin, aggiungervi o rimuoverne titoli ed eliminarle. Ogni utente vede le collezioni, ciascuna solo con i titoli che può vedere.',
+      canManageSubtitlesHelp:
+        'Consente ai membri del gruppo di aggiungere file di sottotitoli ai titoli dalle loro applicazioni Jellyfin e di cercarvi i sottotitoli degli add-on.',
+      canShareHelp:
+        'Consente ai membri del gruppo di condividere un film o un episodio con qualcuno senza account, tramite un link con scadenza, da Il mio account o dalla pagina di un titolo nel lettore web, finché Impostazioni › Sicurezza › Consenti link di condivisione è attivo. Disattivandolo, i loro link vengono revocati.',
+      maxPlaybacksHelp:
+        'Quanti dispositivi di ogni membro possono riprodurre contemporaneamente. Possono comunque accedere da altri dispositivi.',
+      maxBitrateHelp:
+        'Oltre questo valore, il video viene convertito a una qualità inferiore se i membri possono usare la conversione; altrimenti viene riprodotta una versione più leggera.',
+      liveTvHelp: 'Mostra i canali della Diretta TV ai membri del gruppo.',
+      remoteControlHelp:
+        'Consente ai membri del gruppo di avviare, mettere in pausa o inviare messaggi alle applicazioni Jellyfin di altri utenti. Ognuno può controllare le proprie applicazioni.',
+      localFirstHelp:
+        'Mette le versioni delle cartelle locali e delle condivisioni di rete prima delle altre nei menu delle versioni dei membri, qualunque cosa dica «Ordina le versioni per», così la riproduzione parte da loro. Gli altri utenti mantengono l’ordine del server.',
+      boostVolumeHelp:
+        'Rende i video più forti nel lettore web dei membri, in un browser e nelle app Jellyfin per Android e iOS: circa 8 dB nei passaggi tranquilli e 5 dB in quelli forti, con i picchi tenuti vicino al fondo scala. Il lavoro lo fa il browser, ma perché raggiunga gli stream degli add-on, il server invia esso stesso quegli stream al lettore web dei membri invece di mandarlo alla loro sorgente, il che usa la banda del server. Non raggiunge i lettori propri delle app, né gli stream che un iPhone o un iPad riproduce come HLS.',
+      convertSoundHelp:
+        'Il server converte l’audio dei video e dei canali dei membri e lo uniforma a -16 LUFS, con l’immagine copiata, così ogni app lo riproduce più forte e in modo uniforme. Il costo: nulla viene riprodotto direttamente, ogni riproduzione usa un po’ del processore del server, e l’audio surround arriva a un amplificatore convertito invece che come traccia originale.',
+      qualityGroupHelp:
+        'La risoluzione massima offerta ai membri. Le versioni superiori vengono escluse finché ce n’è una adatta; se nessuna è adatta, vengono convertite a una qualità inferiore, oppure rifiutate se i membri non possono usare la conversione. Anche la Diretta TV viene convertita a una qualità inferiore. Solo le versioni adatte vengono scaricate così come sono; con «Download convertiti» attivo in Impostazioni › Conversione (transcodifica), le applicazioni che lo richiedono scaricano le altre convertite a una qualità inferiore.',
+      maxRatingHelp:
+        'Le classificazioni del Paese delle classificazioni del server, scelto in Impostazioni › Generale. I titoli con una classificazione superiore a questo limite in quel paese vengono nascosti ai membri del gruppo.',
+      visibleLibrariesHelp:
+        'Le librerie del server mostrate dalle applicazioni dei membri. Le librerie aggiunte in seguito vengono mostrate. Questa scelta riguarda solo le librerie mostrate: i titoli restano raggiungibili tramite altre librerie, la ricerca o i link. Per bloccare dei titoli, usa il controllo parentale o i generi bloccati.',
+      noServerLibrariesHelp:
+        'Aggiungi una libreria in Contenuti › Librerie, poi scegli qui quali possono vedere i membri del gruppo.',
+      blockedGenresHelp:
+        'I titoli di uno qualsiasi di questi generi sono nascosti ovunque ai membri del gruppo, come i titoli oltre il loro limite di controllo parentale.',
+      liveTvChannelsHelp:
+        'I canali delle sorgenti della Diretta TV del server che i membri vedono, scelti per gruppo e per canale. I canali nascosti non compaiono nell’elenco dei canali, nella guida, nelle ricerche, in Replay, nelle registrazioni, nei timer e nei promemoria, e non si riproducono. Le sorgenti proprie dei membri non sono limitate.',
+      allowedHoursHelp:
+        'Se sono impostati degli orari, i membri del gruppo possono accedere e usare il server solo durante tali orari, nel fuso orario del server. Al di fuori, le loro applicazioni vengono rifiutate.',
+      noAllowedHours:
+        'Nessun orario impostato: i membri del gruppo possono usare il server in qualsiasi momento.',
+    },
   },
   resetDefaults: {
     button: 'Ripristina i valori predefiniti',
     title: (name: string) => `Ripristinare le impostazioni di ${name}?`,
     groupTitle: (name: string) => `Ripristinare le impostazioni del gruppo ${name}?`,
     userHelp: (name: string) =>
-      `I permessi di Accesso, Riproduzione e accesso con il Gruppo di qualità, Controllo parentale, Librerie visibili, Generi bloccati e Orari consentiti tornano alle impostazioni di un nuovo utente, quelle date da «Crea un utente»; le app di ${name} già collegate le ricevono subito. Nome e password, Amministratore, Mostra nella schermata di accesso, Disabilitato, Scade il, il gruppo, i propri addon, le connessioni, gli account di tracciamento e tutto ciò che ha guardato restano.`,
+      `I permessi di Accesso, Riproduzione e accesso con il Gruppo di qualità, Controllo parentale, Librerie visibili, Generi bloccati e Orari consentiti tornano alle impostazioni di un nuovo utente, quelle date da «Crea un utente»; le app di ${name} già collegate le ricevono subito. Nome e password, Amministratore, Mostra nella schermata di accesso, Può accedere, Scade il, il gruppo, i propri addon, le connessioni, gli account di tracciamento e tutto ciò che ha guardato restano.`,
     ownSettingsHelp: (group: string, sections: string) =>
       `Tornano alle impostazioni di un nuovo utente solo le sezioni mantenute come proprie: ${sections}. Resta nel gruppo ${group} e lo segue nelle altre.`,
     groupHelp:
