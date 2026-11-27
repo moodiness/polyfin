@@ -785,7 +785,7 @@ A title's versions are the streams its addons and folders list. PlaybackInfo pic
 
 ### Direct play redirects for apps
 
-- `/Videos/{id}/stream`, `/Audio/{id}/stream`, `/Items/{id}/Download` and `/Items/{id}/File` answer the `302` only for a user who may be sent to the version's source (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)). Other users get `200` or `206` from Polyfin, byte ranges and `HEAD` included, whatever the address's grant asks: the rule is read at each request.
+- `/Videos/{id}/stream`, `/Audio/{id}/stream`, `/Items/{id}/Download` and `/Items/{id}/File` answer the `302` only for a user who may be sent to the version's source (see [Who is sent to the source](playback.md#who-is-sent-to-the-source)). Other users get `200` or `206` from Polyfin, byte ranges and `HEAD` included, whatever the address's grant asks: the rule is read at each request. So does a request over `http` to a stream route for an `https` source from a player that refuses redirects across protocols, known by its client name (Findroid) or by a User-Agent that starts with `Dalvik/` or `Java/`.
 - For those users, a version that is an HLS playlist is answered on the stream route with its lines replaced by Polyfin's addresses, once it is analyzed. It answers `404` before its analysis and on the download routes, as a DASH manifest does on all of them.
 - `/admin/api/settings` holds the setting as `sendToSource`: `owners`, `everyone` or `none`; another value answers `400` with `invalid_send_to_source`, and a `PUT` that leaves it out keeps it. It replaces `sendAppsToSource`, a boolean, which the server no longer reads: `true` became `everyone`, `false` `owners`.
 

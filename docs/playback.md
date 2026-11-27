@@ -120,6 +120,7 @@ Direct play sends the app to the source's own address. That address can hold wha
 - **Playlists:** a playlist's lines are addresses too. For a user who is not sent to the source, administrators included with **No one**, a version that is an HLS playlist is relayed only with its lines replaced: it cannot be downloaded, and is refused until its first analysis, which a play makes. A DASH manifest is not passed on as it is: it plays converted.
 - **At each request:** the rule is read when the stream is asked for, not when its address is given. Changing the choice, or taking an administrator's rights away, applies to the addresses apps already hold.
 - **Not concerned:** DLNA devices, Silo apps and guests of shared links always play through Polyfin, whatever the choice. Local files, network shares and torrents are never sent anywhere. A `.strm` file is the exception: it names a remote address, which counts as a server addon's link (see [.strm files](local-folders.md#strm-files)).
+- **Players that refuse a change of protocol:** some players never follow a redirect from `http` to `https`: Findroid's, and those on Android's default HTTP stack or the JDK's (their requests' User-Agent starts with `Dalvik/` or `Java/`). When such a player reaches Polyfin over `http`, an `https` source is relayed to it even for a user who is sent to the source. Over `https`, and for every other player, the choice above applies.
 
 API details: [Direct play redirects for apps](jellyfin-api.md#direct-play-redirects-for-apps).
 

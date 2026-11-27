@@ -489,12 +489,25 @@ const grantParameter = "PolyfinGrant"
 const relayParameter = "PolyfinRelay"
 
 // mustRelay reports whether a player cannot follow a redirect to the
-// version's source. Findroid's ExoPlayer refuses redirects from http to
-// https, so a server reached over http relays https sources to it.
+// version's source: one that refuses redirects from http to https (see
+// refusesCrossProtocolRedirects), reaching Polyfin over http, is relayed
+// https sources.
 func mustRelay(r *http.Request, version library.Version) bool {
-	device := callerFrom(r.Context()).Device
-	return strings.Contains(strings.ToLower(device.Client), "findroid") &&
-		requestScheme(r) == "http" && strings.HasPrefix(version.URL, "https:")
+	return requestScheme(r) == "http" && strings.HasPrefix(version.URL, "https:") && refusesCrossProtocolRedirects(r)
+}
+
+// refusesCrossProtocolRedirects reports whether the player making r
+// never follows a redirect from http to https: Findroid's ExoPlayer, known
+// by its client name, and the players on Android's default HTTP stack
+// (HttpURLConnection, whose User-Agent starts with "Dalvik/") or the
+// JDK's ("Java/"), known by the stream request itself, as the client name
+// of a PlaybackInfo request is that of the app's API client.
+func refusesCrossProtocolRedirects(r *http.Request) bool {
+	if strings.Contains(strings.ToLower(callerFrom(r.Context()).Device.Client), "findroid") {
+		return true
+	}
+	agent := r.Header.Get("User-Agent")
+	return strings.HasPrefix(agent, "Dalvik/") || strings.HasPrefix(agent, "Java/")
 }
 
 // baseURL is the address the player reached Polyfin at, with the base
