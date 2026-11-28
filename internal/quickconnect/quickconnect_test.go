@@ -65,7 +65,7 @@ func TestDecidedOnce(t *testing.T) {
 	if err := store.Authorize(denied.Code, alice); !errors.Is(err, ErrDecided) {
 		t.Errorf("approving a denied code: %v", err)
 	}
-	if _, err := store.Redeem(denied.Secret); !errors.Is(err, ErrUnknown) {
+	if _, err := store.Redeem(denied.Secret, "phone"); !errors.Is(err, ErrUnknown) {
 		t.Errorf("signing in with a denied code: %v", err)
 	}
 	if err := store.Authorize("12345", alice); !errors.Is(err, ErrUnknown) {
@@ -74,29 +74,45 @@ func TestDecidedOnce(t *testing.T) {
 }
 
 // A Jellyfin app signs in with its approved secret until the request
-// expires, one of Silo's apps once.
+// expires, under the device ID it first signed in with, whichever device
+// ID started the request; one of Silo's apps signs in once.
 func TestRedeem(t *testing.T) {
 	t.Parallel()
 	store := New()
 	user := accounts.ID{1}
-	jellyfin, _ := store.Initiate(home, "phone", "Phone", "Jellyfin", "1")
+	jellyfin, _ := store.Initiate(home, "phone-started", "Phone", "Jellyfin", "1")
 	silo, _ := store.InitiateSilo(home, "tv", "TV", "tvos", "Silo", "2")
 	for _, request := range []Request{jellyfin, silo} {
-		if _, err := store.Redeem(request.Secret); !errors.Is(err, ErrUnknown) {
+		if _, err := store.Redeem(request.Secret, request.DeviceID); !errors.Is(err, ErrUnknown) {
 			t.Errorf("before approval: %v", err)
 		}
 		if err := store.Authorize(request.Code, user); err != nil {
 			t.Fatal(err)
 		}
-		if redeemed, err := store.Redeem(request.Secret); err != nil || *redeemed.User != user {
-			t.Errorf("after approval: %v", err)
-		}
 	}
-	if _, err := store.Redeem(jellyfin.Secret); err != nil {
+	// The phone signs in under another device ID than the one it started
+	// with, as Jellyfin for Android TV does.
+	if redeemed, err := store.Redeem(jellyfin.Secret, "phone"); err != nil || *redeemed.User != user || redeemed.SignedIn != "phone" {
+		t.Errorf("a Jellyfin app after approval: %+v, %v", redeemed, err)
+	}
+	if _, err := store.Redeem(jellyfin.Secret, "phone"); err != nil {
 		t.Errorf("a Jellyfin app again: %v", err)
 	}
-	if _, err := store.Redeem(silo.Secret); !errors.Is(err, ErrUnknown) {
-		t.Errorf("a Silo app again: %v", err)
+	for _, other := range []string{"laptop", "phone-started"} {
+		if _, err := store.Redeem(jellyfin.Secret, other); !errors.Is(err, ErrUnknown) {
+			t.Errorf("%s with the phone's secret once it signed in: %v", other, err)
+		}
+	}
+	if found, _ := store.BySecret(jellyfin.Secret); found.State != Approved || found.SignedIn != "phone" {
+		t.Errorf("a Jellyfin app's request once used: %v for %q", found.State, found.SignedIn)
+	}
+	if redeemed, err := store.Redeem(silo.Secret, "tv-default"); err != nil || *redeemed.User != user {
+		t.Errorf("a Silo app after approval: %v", err)
+	}
+	for _, device := range []string{"tv-default", "tv"} {
+		if _, err := store.Redeem(silo.Secret, device); !errors.Is(err, ErrUnknown) {
+			t.Errorf("a Silo app again as %s: %v", device, err)
+		}
 	}
 	if found, _ := store.BySecret(silo.Secret); found.State != Collected {
 		t.Errorf("state %v", found.State)
@@ -121,13 +137,13 @@ func TestCancel(t *testing.T) {
 	if state, _ := store.Cancel(approved.Secret); state != Canceled {
 		t.Errorf("an approval not used yet: %v", state)
 	}
-	if _, err := store.Redeem(approved.Secret); !errors.Is(err, ErrUnknown) {
+	if _, err := store.Redeem(approved.Secret, approved.DeviceID); !errors.Is(err, ErrUnknown) {
 		t.Errorf("signing in once withdrawn: %v", err)
 	}
 
 	used, _ := store.InitiateSilo(home, "tv", "TV", "tvos", "Silo", "2")
 	_ = store.Authorize(used.Code, accounts.ID{1})
-	_, _ = store.Redeem(used.Secret)
+	_, _ = store.Redeem(used.Secret, used.DeviceID)
 	if state, _ := store.Cancel(used.Secret); state != Collected {
 		t.Errorf("a used request: %v", state)
 	}
@@ -155,7 +171,7 @@ func TestExpiry(t *testing.T) {
 	if err := store.Authorize(pending.Code, accounts.ID{1}); !errors.Is(err, ErrUnknown) {
 		t.Errorf("approving an expired code: %v", err)
 	}
-	if _, err := store.Redeem(approved.Secret); !errors.Is(err, ErrUnknown) {
+	if _, err := store.Redeem(approved.Secret, approved.DeviceID); !errors.Is(err, ErrUnknown) {
 		t.Errorf("signing in with an expired approval: %v", err)
 	}
 }
@@ -313,12 +329,12 @@ func TestWithdrawEndsWhatAUserApproved(t *testing.T) {
 		}
 	}
 	// A Jellyfin app's request stays approved once it signed in.
-	if _, err := store.Redeem(used.Secret); err != nil {
+	if _, err := store.Redeem(used.Secret, used.DeviceID); err != nil {
 		t.Fatal(err)
 	}
 	store.Withdraw(alice)
 	for name, request := range map[string]Request{"an approval not used yet": waits, "an approval used": used} {
-		if _, err := store.Redeem(request.Secret); !errors.Is(err, ErrUnknown) {
+		if _, err := store.Redeem(request.Secret, request.DeviceID); !errors.Is(err, ErrUnknown) {
 			t.Errorf("signing in with %s, once withdrawn: %v", name, err)
 		}
 		if found, err := store.BySecret(request.Secret); err != nil || found.State != Denied || found.User != nil {
@@ -328,7 +344,7 @@ func TestWithdrawEndsWhatAUserApproved(t *testing.T) {
 			t.Errorf("approving %s again, once withdrawn: %v", name, err)
 		}
 	}
-	if _, err := store.Redeem(others.Secret); err != nil {
+	if _, err := store.Redeem(others.Secret, others.DeviceID); err != nil {
 		t.Errorf("another user's approval: %v", err)
 	}
 	if found, err := store.ByCode(pending.Code); err != nil || found.State != Pending {
@@ -338,7 +354,8 @@ func TestWithdrawEndsWhatAUserApproved(t *testing.T) {
 
 // A code is decided once, and the secret of one of Silo's apps signs in
 // once, when sixteen requests race for each; a Jellyfin app's signs in
-// each time, until it expires.
+// one device of those that race for it, and that device each time, until
+// it expires.
 func TestRequestsAreDecidedAndCollectedOnceAtOnce(t *testing.T) {
 	t.Parallel()
 	store := New()
@@ -366,7 +383,7 @@ func TestRequestsAreDecidedAndCollectedOnceAtOnce(t *testing.T) {
 	if won := race(func(i int) bool { return store.Authorize(request.Code, accounts.ID{byte(i + 1)}) == nil }); won != 1 {
 		t.Errorf("one code was approved for %d users at once, want 1", won)
 	}
-	if won := race(func(int) bool { _, err := store.Redeem(request.Secret); return err == nil }); won != 1 {
+	if won := race(func(i int) bool { _, err := store.Redeem(request.Secret, fmt.Sprintf("tv-%d", i)); return err == nil }); won != 1 {
 		t.Errorf("one secret of Silo's apps signed in %d times at once, want 1", won)
 	}
 	jellyfin, err := store.Initiate(home, "phone-id", "Phone", "Jellyfin", "1.0")
@@ -376,8 +393,18 @@ func TestRequestsAreDecidedAndCollectedOnceAtOnce(t *testing.T) {
 	if err := store.Authorize(jellyfin.Code, accounts.ID{1}); err != nil {
 		t.Fatal(err)
 	}
-	if won := race(func(int) bool { _, err := store.Redeem(jellyfin.Secret); return err == nil }); won != racers {
-		t.Errorf("a Jellyfin app's secret signed in %d times of %d", won, racers)
+	if won := race(func(i int) bool {
+		_, err := store.Redeem(jellyfin.Secret, fmt.Sprintf("phone-%d", i))
+		return err == nil
+	}); won != 1 {
+		t.Errorf("a Jellyfin app's secret signed in %d devices at once, want 1", won)
+	}
+	first, err := store.BySecret(jellyfin.Secret)
+	if err != nil || first.SignedIn == "" {
+		t.Fatalf("the device that signed in first: %q, %v", first.SignedIn, err)
+	}
+	if won := race(func(int) bool { _, err := store.Redeem(jellyfin.Secret, first.SignedIn); return err == nil }); won != racers {
+		t.Errorf("a Jellyfin app's secret signed its device in %d times of %d", won, racers)
 	}
 	// Requests opened at once, by one client, leave it its share.
 	var opened sync.Map

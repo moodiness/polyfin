@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/moodiness/polyfin/internal/accounts"
@@ -114,10 +116,48 @@ func TestUnknownQuickConnectCodesCountAsFailedAttemptsOfTheirUser(t *testing.T) 
 	}
 }
 
-// An approved request signs in the device that asked for it, by its
-// identifier, each time it asks until the request ends, and no other
-// device that holds its secret.
-func TestAnApprovedQuickConnectRequestSignsInItsOwnDevice(t *testing.T) {
+// The secret signs in: an app that starts a request under one device ID
+// and signs in under another, as Jellyfin for Android TV 0.20.1 does, is
+// signed in, as the device ID it signs in with. That device signs in again
+// with the secret until the request ends, and no other device does, the
+// one that started it included.
+func TestAnApprovedQuickConnectRequestSignsInTheDevicePresentingItsSecret(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t, 10)
+	alice := s.user("alice", nil)
+	tv := initiated(t, s.call, "tv-started")
+	secret := map[string]string{"Secret": tv.Secret}
+	signIn := func(device string) (int, AuthenticationResult) {
+		status, body := s.call(http.MethodPost, "/Users/AuthenticateWithQuickConnect", app(device, ""), secret)
+		var result AuthenticationResult
+		_ = json.Unmarshal(body, &result)
+		return status, result
+	}
+	if status, _ := signIn("tv"); status != http.StatusNotFound {
+		t.Errorf("the secret before approval: %d, want 404", status)
+	}
+	if err := s.handler.QuickConnect.Authorize(tv.Code, alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := range 2 {
+		status, result := signIn("tv")
+		if status != http.StatusOK || result.User.Id != alice.ID.String() || result.SessionInfo.DeviceId != "tv-id" || result.SessionInfo.DeviceName != "tv" {
+			t.Errorf("the TV's sign-in %d under its other device ID: %d %+v", attempt+1, status, result.SessionInfo)
+		}
+	}
+	for _, other := range []string{"laptop", "tv-started"} {
+		if status, result := signIn(other); status != http.StatusNotFound || result.AccessToken != "" {
+			t.Errorf("%s with the secret once the TV signed in: %d, want 404 and no token", other, status)
+		}
+	}
+	devices, err := s.store.Devices(t.Context(), alice.ID)
+	if err != nil || len(devices) != 1 || devices[0].DeviceID != "tv-id" {
+		t.Errorf("alice's devices: %+v, %v, want the TV alone", devices, err)
+	}
+}
+
+// Devices that race with one approved secret: one of them signs in.
+func TestQuickConnectSignsInOneOfTheDevicesRacingWithASecret(t *testing.T) {
 	t.Parallel()
 	s := newTestServer(t, 10)
 	alice := s.user("alice", nil)
@@ -125,19 +165,26 @@ func TestAnApprovedQuickConnectRequestSignsInItsOwnDevice(t *testing.T) {
 	if err := s.handler.QuickConnect.Authorize(tv.Code, alice.ID); err != nil {
 		t.Fatal(err)
 	}
-	secret := map[string]string{"Secret": tv.Secret}
-	if status, body := s.call(http.MethodPost, "/Users/AuthenticateWithQuickConnect", app("laptop", ""), secret); status != http.StatusNotFound {
-		t.Errorf("another device with the TV's secret: %d %s, want 404", status, body)
+	const racers = 8
+	var signedIn atomic.Int32
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range racers {
+		wg.Go(func() {
+			<-start
+			status, _ := s.call(http.MethodPost, "/Users/AuthenticateWithQuickConnect", app(fmt.Sprintf("racer-%d", i), ""), map[string]string{"Secret": tv.Secret})
+			if status == http.StatusOK {
+				signedIn.Add(1)
+			}
+		})
 	}
-	if devices, err := s.store.Devices(t.Context(), alice.ID); err != nil || len(devices) != 0 {
-		t.Errorf("devices signed in by another device's attempt: %d, %v", len(devices), err)
+	close(start)
+	wg.Wait()
+	if won := signedIn.Load(); won != 1 {
+		t.Errorf("devices signed in with one secret at once: %d, want 1", won)
 	}
-	for attempt := range 2 {
-		status, body := s.call(http.MethodPost, "/Users/AuthenticateWithQuickConnect", app("tv", ""), secret)
-		var result AuthenticationResult
-		if status != http.StatusOK || json.Unmarshal(body, &result) != nil || result.User.Id != alice.ID.String() || result.SessionInfo.DeviceId != "tv-id" {
-			t.Errorf("the TV's sign-in %d: %d %s", attempt+1, status, body)
-		}
+	if devices, err := s.store.Devices(t.Context(), alice.ID); err != nil || len(devices) != 1 {
+		t.Errorf("alice's devices: %d, %v, want 1", len(devices), err)
 	}
 }
 
