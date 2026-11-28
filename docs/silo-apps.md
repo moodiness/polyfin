@@ -476,7 +476,7 @@ The apps are told so, and offer none of these.
 
 - Jellyfin does not answer Silo's apps.
 - Silo's TV apps take 8-digit codes, which Polyfin gives them from the same requests. Jellyfin's Quick Connect codes have 6 digits.
-- A Silo TV's secret signs it in once, as Silo's apps expect. The secret a Jellyfin app polls with signs it in until its request expires, as in Jellyfin, so that an app retrying after a network error is not refused.
+- A Silo TV's secret signs it in once, as Silo's apps expect. The secret a Jellyfin app polls with signs in the device that first signed in with it until its request expires, as in Jellyfin, so that an app retrying after a network error is not refused.
 
 API details: [Silo TV sign-in with a code](jellyfin-api.md#silo-tv-sign-in-with-a-code).
 

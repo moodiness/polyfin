@@ -48,13 +48,14 @@ Polyfin bounds what Quick Connect takes:
 
 - **Wrong codes:** a code no device waits with counts as a wrong password does, toward the failed attempts of the user who entered it and of their address (429 once too many). The page, Jellyfin apps and Silo's apps count them together. A device that waits keeps waiting.
 - **Requests:** an address holds 5 requests at a time, an IPv6 address counted by its /64, and a device one. A new request takes the place of the device's last one, or of the address's oldest. Polyfin keeps 1,000 requests in all, and the oldest gives way to a new one: no request is refused because others wait.
-- **Its own device:** an approved request signs in the device that asked for it, and no other device that would hold its secret.
+- **The secret signs in:** a device that asks for a code receives a secret with it, which no page shows. Once the code is approved, the first device to sign in with that secret is signed in, as itself: Jellyfin for Android TV asks for the code under one device identifier and signs in under another. Until the request expires, that device signs in again with the secret, after a network error for instance, and no other device does.
 - **Password change:** a new password signs the account out everywhere, and takes back what the account approved: a device approved before signs in no more with that approval, and asks for a new code. So does disabling the account.
 
 **Compared with Jellyfin**
 
 - Jellyfin has no second step of its own. Polyfin keeps Jellyfin's sign-in as it is for the apps, and asks for the code in the admin app only.
 - The web player's own Quick Connect page, and Jellyfin apps that approve a code, send the code alone, as on Jellyfin: the device's address, the typed confirmation and the two-step confirmation are the admin app's. The bounds above hold for them too.
+- Jellyfin signs in whoever sends an approved secret, as the device that asked for the code, each time until the request expires. Polyfin signs in the device that sends the secret first, as that device, and then only it.
 
 API details: [Quick Connect for two-step accounts](jellyfin-api.md#quick-connect-for-two-step-accounts).
 
