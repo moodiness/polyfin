@@ -8,6 +8,7 @@ import {
 } from 'react-router'
 import InviteRoute from '@/features/auth/InviteRoute'
 import { loadSettingsMessages } from '@/i18n'
+import { AppError, PageError } from './ErrorPage'
 import { isSettingsSection, settingsPath } from './navigation'
 import { SectionTabs } from './SectionTabs'
 import { AdminOnly, SessionGate } from './SessionGate'
@@ -80,8 +81,10 @@ const moved: RouteObject[] = [
 ]
 
 /**
- * The development gallery of the design system. Imported lazily under `import.meta.env.DEV` so
- * that production builds drop it entirely: a static import would ship it.
+ * The development gallery of the design system, and two pages that fail, to see the error page:
+ * one that fails to draw, and one whose file is gone, as after an update. Imported lazily under
+ * `import.meta.env.DEV` so that production builds drop them entirely: a static import would ship
+ * them.
  */
 const development: RouteObject[] = import.meta.env.DEV
   ? [
@@ -89,151 +92,215 @@ const development: RouteObject[] = import.meta.env.DEV
         path: 'dev/ui',
         lazy: async () => ({ Component: (await import('./dev/UiGallery')).default }),
       },
+      {
+        path: 'dev/error',
+        lazy: async () => ({ Component: (await import('./dev/FailingPage')).default }),
+      },
+      {
+        path: 'dev/error/updated',
+        lazy: () => import(/* @vite-ignore */ `${import.meta.env.BASE_URL}assets/gone.js`),
+      },
     ]
   : []
 
 /**
  * Every page of the admin app, under `/admin`. Each route renders a component of
  * `src/features/<area>/`; the session gate wraps them all but the page an invite link opens, which
- * needs no session, and AdminOnly the administrators' ones.
+ * needs no session, and AdminOnly the administrators' ones. A page that fails shows the error in
+ * its place, in the shell; when the shell itself fails, or the invite page, the error takes the
+ * whole window.
  */
 export const router = createBrowserRouter(
   [
     {
-      path: 'invite/:token',
-      element: (
-        <PublicShell>
-          <InviteRoute />
-        </PublicShell>
-      ),
-    },
-    {
-      element: <SessionGate />,
-      // On the first load, the session check and the shell go on while the page's file downloads.
-      hydrateFallbackElement: <SessionGate />,
+      errorElement: <AppError />,
       children: [
-        { index: true, lazy: page(() => import('@/features/home/HomeRoute')) },
-        // Reached once setup or sign-in is done: continue home.
-        { path: 'setup', element: <Navigate to="/" replace /> },
-        { path: 'login', element: <Navigate to="/" replace /> },
-
-        // Every user's own pages.
         {
-          path: 'me/account',
-          lazy: page(withSettingsMessages(() => import('@/features/account/AccountRoute'))),
-        },
-        // Where MyAnimeList sends the browser back once the user allowed Polyfin.
-        {
-          path: 'me/account/myanimelist',
-          lazy: page(() => import('@/features/account/MyAnimeListReturn')),
-        },
-        { path: 'me/sources', lazy: page(() => import('@/features/sources/MySourcesRoute')) },
-        {
-          path: 'me/sources/smart/:id',
-          lazy: page(() => import('@/features/libraries/SmartListRoute'), { scope: 'me' }),
+          path: 'invite/:token',
+          element: (
+            <PublicShell>
+              <InviteRoute />
+            </PublicShell>
+          ),
         },
         {
-          path: 'me/sources/:id/:section?',
-          lazy: page(() => import('@/features/sources/SourceRoute'), { scope: 'me' }),
-        },
-        {
-          path: 'me/quick-connect',
-          lazy: page(() => import('@/features/home/QuickConnectRoute')),
-        },
-
-        // Content, with its tabs. A source or catalog may be a user's own: the API checks which.
-        {
-          element: <SectionTabs section="content" />,
+          element: <SessionGate />,
+          // On the first load, the session check and the shell go on while the page's file
+          // downloads.
+          hydrateFallbackElement: <SessionGate />,
           children: [
             {
-              path: 'sources/:scope/:id/:section?',
-              lazy: page(() => import('@/features/sources/SourceRoute')),
-            },
-            {
-              path: 'live-tv/guides/:scope/:addonId/:catalogId/:section?',
-              lazy: page(() => import('@/features/livetv/CatalogGuidesRoute')),
-            },
-            {
-              element: <AdminOnly />,
+              errorElement: <PageError />,
               children: [
-                { path: 'sources', lazy: page(() => import('@/features/sources/SourcesRoute')) },
+                { index: true, lazy: page(() => import('@/features/home/HomeRoute')) },
+                // Reached once setup or sign-in is done: continue home.
+                { path: 'setup', element: <Navigate to="/" replace /> },
+                { path: 'login', element: <Navigate to="/" replace /> },
+
+                // Every user's own pages.
                 {
-                  path: 'libraries',
-                  lazy: page(() => import('@/features/libraries/LibrariesRoute')),
+                  path: 'me/account',
+                  lazy: page(withSettingsMessages(() => import('@/features/account/AccountRoute'))),
+                },
+                // Where MyAnimeList sends the browser back once the user allowed Polyfin.
+                {
+                  path: 'me/account/myanimelist',
+                  lazy: page(() => import('@/features/account/MyAnimeListReturn')),
                 },
                 {
-                  path: 'libraries/smart/:id',
-                  lazy: page(() => import('@/features/libraries/SmartListRoute'), {
-                    scope: 'shared',
-                  }),
+                  path: 'me/sources',
+                  lazy: page(() => import('@/features/sources/MySourcesRoute')),
                 },
                 {
-                  path: 'libraries/collections/:id',
-                  lazy: page(() => import('@/features/libraries/CollectionRoute')),
+                  path: 'me/sources/smart/:id',
+                  lazy: page(() => import('@/features/libraries/SmartListRoute'), { scope: 'me' }),
                 },
-                { path: 'live-tv', lazy: page(() => import('@/features/livetv/LiveTvRoute')) },
                 {
-                  path: 'live-tv/channels/:id',
-                  lazy: page(() => import('@/features/livetv/OwnChannels')),
+                  path: 'me/sources/:id/:section?',
+                  lazy: page(() => import('@/features/sources/SourceRoute'), { scope: 'me' }),
                 },
-                { path: 'versions', lazy: page(() => import('@/features/versions/VersionsRoute')) },
                 {
-                  path: 'versions/:id',
-                  lazy: page(
-                    withSettingsMessages(() => import('@/features/versions/TitleVersionsRoute')),
-                  ),
+                  path: 'me/quick-connect',
+                  lazy: page(() => import('@/features/home/QuickConnectRoute')),
                 },
+
+                // Content, with its tabs. A source or catalog may be a user's own: the API checks
+                // which. A page of it that fails shows the error under the tabs, which lead to the
+                // others.
+                {
+                  element: <SectionTabs section="content" />,
+                  children: [
+                    {
+                      errorElement: <PageError />,
+                      children: [
+                        {
+                          path: 'sources/:scope/:id/:section?',
+                          lazy: page(() => import('@/features/sources/SourceRoute')),
+                        },
+                        {
+                          path: 'live-tv/guides/:scope/:addonId/:catalogId/:section?',
+                          lazy: page(() => import('@/features/livetv/CatalogGuidesRoute')),
+                        },
+                        {
+                          element: <AdminOnly />,
+                          children: [
+                            {
+                              path: 'sources',
+                              lazy: page(() => import('@/features/sources/SourcesRoute')),
+                            },
+                            {
+                              path: 'libraries',
+                              lazy: page(() => import('@/features/libraries/LibrariesRoute')),
+                            },
+                            {
+                              path: 'libraries/smart/:id',
+                              lazy: page(() => import('@/features/libraries/SmartListRoute'), {
+                                scope: 'shared',
+                              }),
+                            },
+                            {
+                              path: 'libraries/collections/:id',
+                              lazy: page(() => import('@/features/libraries/CollectionRoute')),
+                            },
+                            {
+                              path: 'live-tv',
+                              lazy: page(() => import('@/features/livetv/LiveTvRoute')),
+                            },
+                            {
+                              path: 'live-tv/channels/:id',
+                              lazy: page(() => import('@/features/livetv/OwnChannels')),
+                            },
+                            {
+                              path: 'versions',
+                              lazy: page(() => import('@/features/versions/VersionsRoute')),
+                            },
+                            {
+                              path: 'versions/:id',
+                              lazy: page(
+                                withSettingsMessages(
+                                  () => import('@/features/versions/TitleVersionsRoute'),
+                                ),
+                              ),
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+
+                {
+                  element: <AdminOnly />,
+                  children: [
+                    {
+                      path: 'users/jellyfin-import',
+                      lazy: page(() => import('@/features/users/JellyfinImport')),
+                    },
+                    {
+                      path: 'users/app-import',
+                      lazy: page(() => import('@/features/users/AppImportRoute')),
+                    },
+                    {
+                      path: 'users/letterboxd-import',
+                      lazy: page(() => import('@/features/users/LetterboxdImportRoute')),
+                    },
+                    {
+                      path: 'users/groups/:id?',
+                      lazy: page(() => import('@/features/users/GroupsRoute')),
+                    },
+                    { path: 'users/:id?', lazy: page(() => import('@/features/users/UsersRoute')) },
+                    {
+                      path: 'system',
+                      element: <SectionTabs section="system" />,
+                      children: [
+                        // As in Content: an error under the tabs.
+                        {
+                          errorElement: <PageError />,
+                          children: [
+                            { index: true, element: <Navigate to="/system/health" replace /> },
+                            {
+                              path: 'health',
+                              lazy: page(
+                                withSettingsMessages(() => import('@/features/system/HealthRoute')),
+                              ),
+                            },
+                            {
+                              path: 'statistics',
+                              lazy: page(() => import('@/features/statistics/StatisticsRoute')),
+                            },
+                            {
+                              path: 'schedule',
+                              lazy: page(() => import('@/features/system/ScheduleRoute')),
+                            },
+                            {
+                              path: 'logs',
+                              lazy: page(() => import('@/features/system/LogsRoute')),
+                            },
+                            {
+                              path: 'api-keys',
+                              lazy: page(() => import('@/features/system/ApiKeysRoute')),
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                    { path: 'settings', element: <SettingsIndex /> },
+                    {
+                      path: 'settings/:section',
+                      lazy: page(
+                        withSettingsMessages(() => import('@/features/settings/SettingsRoute')),
+                      ),
+                    },
+                  ],
+                },
+
+                ...moved,
+                ...development,
+                { path: '*', lazy: page(() => import('@/features/home/NotFoundRoute')) },
               ],
             },
           ],
         },
-
-        {
-          element: <AdminOnly />,
-          children: [
-            {
-              path: 'users/jellyfin-import',
-              lazy: page(() => import('@/features/users/JellyfinImport')),
-            },
-            {
-              path: 'users/app-import',
-              lazy: page(() => import('@/features/users/AppImportRoute')),
-            },
-            {
-              path: 'users/letterboxd-import',
-              lazy: page(() => import('@/features/users/LetterboxdImportRoute')),
-            },
-            { path: 'users/groups/:id?', lazy: page(() => import('@/features/users/GroupsRoute')) },
-            { path: 'users/:id?', lazy: page(() => import('@/features/users/UsersRoute')) },
-            {
-              path: 'system',
-              element: <SectionTabs section="system" />,
-              children: [
-                { index: true, element: <Navigate to="/system/health" replace /> },
-                {
-                  path: 'health',
-                  lazy: page(withSettingsMessages(() => import('@/features/system/HealthRoute'))),
-                },
-                {
-                  path: 'statistics',
-                  lazy: page(() => import('@/features/statistics/StatisticsRoute')),
-                },
-                { path: 'schedule', lazy: page(() => import('@/features/system/ScheduleRoute')) },
-                { path: 'logs', lazy: page(() => import('@/features/system/LogsRoute')) },
-                { path: 'api-keys', lazy: page(() => import('@/features/system/ApiKeysRoute')) },
-              ],
-            },
-            { path: 'settings', element: <SettingsIndex /> },
-            {
-              path: 'settings/:section',
-              lazy: page(withSettingsMessages(() => import('@/features/settings/SettingsRoute'))),
-            },
-          ],
-        },
-
-        ...moved,
-        ...development,
-        { path: '*', lazy: page(() => import('@/features/home/NotFoundRoute')) },
       ],
     },
   ],

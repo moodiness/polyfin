@@ -46,7 +46,8 @@ const stepWidths = [1440, 1024, 768, 390]
  * The states a visit never reaches, each a page and what to do on it once it has settled. `act`
  * returns findings when it cannot reach the state; `check`, run in the page once it has settled
  * again, findings of its own. The page's usual checks follow, on the state. `widths`, when set,
- * the only widths of `stepWidths` the step is taken at.
+ * the only widths of `stepWidths` the step is taken at; `expected`, when set, tells the console
+ * errors the step causes on purpose.
  */
 const steps = [
   {
@@ -109,7 +110,46 @@ const steps = [
       await other.focus()
     },
   },
+  {
+    // A tab left open over an update: Statistics' file is gone when Health's tab leads there.
+    // The error page shows in its place, under System's tabs, the shell around it, and its
+    // details unfold.
+    name: 'page file gone',
+    url: '/system/health',
+    async act(page) {
+      // The tab reloaded for the update a moment ago, so main.tsx does not reload it again.
+      await page.evaluate(() =>
+        sessionStorage.setItem('polyfin.reloadedForUpdate', String(Date.now())),
+      )
+      const gone = (request) => {
+        if (request.isInterceptResolutionHandled()) return
+        if (goneFile.test(request.url())) void request.respond({ status: 404, body: '' })
+        else void request.continue()
+      }
+      page.on('request', gone)
+      // Without it, the browser's cache could serve the file, had an earlier step loaded it.
+      await page.setCacheEnabled(false)
+      await page.setRequestInterception(true)
+      try {
+        const tab = await page.$('main a[href="/admin/system/statistics"]')
+        if (!tab) return [{ kind: 'step', detail: 'no Statistics tab on Health' }]
+        await tab.click()
+        const details = await page.waitForSelector('main [data-error-page] [aria-expanded]', {
+          timeout: 5000,
+        })
+        await details.click()
+      } finally {
+        page.off('request', gone)
+        await page.setRequestInterception(false)
+        await page.setCacheEnabled(true)
+      }
+    },
+    check: updatedPageShown,
+    expected: (error) => goneFile.test(error.source) && /\b404\b/.test(error.text),
+  },
 ]
+/** Statistics' own file, which the step `page file gone` answers with a 404. */
+const goneFile = /\/admin\/assets\/StatisticsRoute-[^/]+\.js$/
 /**
  * The GETs of the admin API a page may send more than once while it loads, each with its reason:
  * `path` matches the address, without the server, query included. Keep it short: a page asks
@@ -463,7 +503,7 @@ class Sweep {
       page.off('requestfailed', onDone)
     }
     for (const error of errors) {
-      if (this.expected(where, url, error)) continue
+      if (this.expected(where, url, error) || step?.expected?.(error)) continue
       found.push({
         kind: 'console',
         detail: `${error.text}${error.source ? ` (${error.source.replace(this.stage.server.url, '')})` : ''}`,
@@ -482,7 +522,7 @@ class Sweep {
 
   /**
    * The console errors expected: signed out, the 401 of the session check; and the 404 of an
-   * invite that does not exist.
+   * invite that does not exist. A step's own are its `expected`.
    */
   expected(where, url, error) {
     const source = error.source.replace(this.stage.server.url, '')
@@ -608,6 +648,29 @@ function settingsGroupsShown() {
   )
   if (groups.length === 4) return []
   return [{ kind: 'step', detail: `${groups.length} of Settings' 4 group headings show` }]
+}
+
+/**
+ * Runs in the page once a page's file failed to load: the error page says Polyfin was updated, in
+ * the page's place with the top bar around it and System's tabs under its title, its details
+ * unfolded.
+ */
+function updatedPageShown() {
+  const found = []
+  const error = document.querySelector('main [data-error-page]')
+  if (!document.querySelector('[data-top-bar]')) {
+    found.push({ kind: 'step', detail: 'the top bar is gone: the error took the whole window' })
+  }
+  if (error?.getAttribute('data-error-page') !== 'updated') {
+    found.push({ kind: 'step', detail: 'no error page saying Polyfin was updated' })
+  }
+  if (!error?.querySelector('header a[href="/admin/system/health"]')) {
+    found.push({ kind: 'step', detail: "System's tabs do not show under the error page's title" })
+  }
+  if (!error?.querySelector('pre')?.checkVisibility()) {
+    found.push({ kind: 'step', detail: "the error page's details do not unfold" })
+  }
+  return found
 }
 
 /**

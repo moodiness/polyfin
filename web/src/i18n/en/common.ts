@@ -696,6 +696,24 @@ const common = {
     description: 'Only administrators can open this page.',
     home: 'Back to the home page',
   },
+  /** The page shown in place of a page, or of the whole app, that failed. */
+  appError: {
+    title: 'This page could not be shown',
+    description: 'Polyfin ran into an error while showing it. Reload to try again.',
+    /** When a file of the app is gone: the tab runs the version before an update. */
+    updatedTitle: 'Polyfin was updated',
+    updatedDescription:
+      'This tab still runs the version from before the update. Reload to use the new one.',
+    reload: 'Reload',
+    home: 'Back to the home page',
+    details: 'Details for a bug report',
+    copy: 'Copy the details',
+    copied: 'Details copied.',
+    copyFailed: 'The details could not be copied. Select them and copy them by hand.',
+    version: 'Version',
+    address: 'Address',
+    browser: 'Browser',
+  },
   time: {
     justNow: 'just now',
   },

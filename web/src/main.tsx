@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'
 import { queryClient } from '@/api'
+import { AppErrorScreen } from '@/app/ErrorPage'
 import { router } from '@/app/router'
 import { answerAppNavigation } from '@/appNavigation'
 import { LanguageProvider, loadInitialLanguage } from '@/i18n'
@@ -28,10 +29,10 @@ const root = document.getElementById('root')
 if (!root) throw new Error('Missing #root element')
 
 // The interface's language is a file of its own: drawn once its messages are in, while the router
-// already downloads the page's own file.
-const initial = await loadInitialLanguage()
-createRoot(root).render(
-  <StrictMode>
+// already downloads the page's own file. When it does not load, the error page shows instead, in
+// its own words.
+const app = await loadInitialLanguage().then(
+  (initial) => (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider initial={initial}>
         <ToastProvider>
@@ -39,5 +40,7 @@ createRoot(root).render(
         </ToastProvider>
       </LanguageProvider>
     </QueryClientProvider>
-  </StrictMode>,
+  ),
+  (error: unknown) => <AppErrorScreen error={error} />,
 )
+createRoot(root).render(<StrictMode>{app}</StrictMode>)

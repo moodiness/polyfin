@@ -741,6 +741,22 @@ const common: typeof en = {
     description: 'Solo los administradores pueden abrir esta página.',
     home: 'Volver a la página de inicio',
   },
+  appError: {
+    title: 'No se pudo mostrar esta página',
+    description: 'Polyfin encontró un error al mostrarla. Recargue para intentarlo de nuevo.',
+    updatedTitle: 'Polyfin se ha actualizado',
+    updatedDescription:
+      'Esta pestaña aún usa la versión anterior a la actualización. Recargue para usar la nueva.',
+    reload: 'Recargar',
+    home: 'Volver a la página de inicio',
+    details: 'Detalles para un informe de error',
+    copy: 'Copiar los detalles',
+    copied: 'Detalles copiados.',
+    copyFailed: 'No se pudieron copiar los detalles. Selecciónelos y cópielos manualmente.',
+    version: 'Versión',
+    address: 'Dirección',
+    browser: 'Navegador',
+  },
   time: {
     justNow: 'ahora mismo',
   },
