@@ -100,7 +100,7 @@ function SettingsPage({ section }: { section: SettingsSectionId }) {
           label={t.nav.settingsSectionsLabel}
           items={settingsGroups.map((group) => ({
             id: group,
-            label: text.sectionGroups[group],
+            label: t.nav.settingsGroups[group],
             items: settingsSections
               .filter((item) => item.group === group)
               .map((item) => ({

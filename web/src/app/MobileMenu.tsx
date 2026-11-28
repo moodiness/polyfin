@@ -13,7 +13,7 @@ import {
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { userImageUrl, type SessionUser } from '@/api'
-import { useI18n, type Messages } from '@/i18n'
+import { useI18n, type UpFrontMessages } from '@/i18n'
 import { webPlayerLink } from '@/jellyfinApps'
 import { Avatar, cx } from '@/ui'
 import { LanguageSwitch, repositoryUrl } from './Brand'
@@ -46,7 +46,7 @@ type PageGroup = { id: string; label?: string; pages: readonly { to: string; lab
  * The pages under an area, as the menu lists them: Content's and System's in one group, Settings'
  * sections in its groups under their heading words (Server, Streaming…), as its section list has.
  */
-function areaPages(section: NavSection, t: Messages): readonly PageGroup[] {
+function areaPages(section: NavSection, t: UpFrontMessages): readonly PageGroup[] {
   if (section.pages) {
     return [
       {
@@ -58,7 +58,7 @@ function areaPages(section: NavSection, t: Messages): readonly PageGroup[] {
   if (section.id === 'settings') {
     return settingsGroups.map((group) => ({
       id: group,
-      label: t.settingsPage.sectionGroups[group],
+      label: t.nav.settingsGroups[group],
       pages: settingsSections
         .filter((each) => each.group === group)
         .map((each) => ({ to: settingsPath(each.id), label: t.nav.settingsSections[each.key] })),

@@ -648,6 +648,44 @@ const common: typeof en = {
       'La cuenta de un administrador nunca termina. Conviértalo primero en miembro para darle una fecha de fin.',
     invalid_invite_account_end: 'Elija en la lista cuándo terminan las cuentas.',
   },
+  wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+    const where = problem.line > 0 ? `Línea ${problem.line}: ` : ''
+    const expected: Record<string, string> = {
+      PrivateKey: 'una clave de 32 bytes en base64',
+      PublicKey: 'una clave de 32 bytes en base64',
+      PresharedKey: 'una clave de 32 bytes en base64',
+      Address: 'direcciones IP, como 10.2.0.2/32, separadas por comas',
+      DNS: 'direcciones IP separadas por comas',
+      MTU: 'un número de 576 a 65535',
+      ListenPort: 'un puerto de 0 a 65535',
+      Endpoint: 'un nombre de host o una dirección IP con un puerto, como vpn.example.com:51820',
+      AllowedIPs:
+        'direcciones IP con la longitud de su prefijo, como 0.0.0.0/0, separadas por comas',
+      PersistentKeepalive: 'off, o un número de segundos de 0 a 65535',
+    }
+    switch (problem.reason) {
+      case 'too_long':
+        return 'La configuración de WireGuard debe ser un texto de 8192 bytes como máximo.'
+      case 'syntax':
+        return `${where}cada línea debe ser una [sección], una Clave = Valor o un comentario #.`
+      case 'outside':
+        return `${where}${problem.key} aparece antes de [Interface] o [Peer].`
+      case 'unknown':
+        return `${where}${problem.key} no forma parte de una configuración de WireGuard.`
+      case 'repeated':
+        return problem.key === 'Peer'
+          ? `${where}solo se admite una sección [Peer].`
+          : `${where}${problem.key} aparece dos veces.`
+      case 'missing':
+        return `${where}falta ${problem.key} en la configuración de WireGuard.`
+      case 'no_ipv4':
+        return `${where}Address necesita una dirección IPv4, que usan los trackers UDP y la DHT.`
+      case 'not_all':
+        return `${where}AllowedIPs necesita 0.0.0.0/0: los pares de un torrent están en cualquier parte.`
+      default:
+        return `${where}${problem.key} debe ser ${expected[problem.key] ?? 'válido'}.`
+    }
+  },
   status: {
     title: 'Estado del servidor',
     version: 'Versión',

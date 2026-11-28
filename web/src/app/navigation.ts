@@ -32,14 +32,14 @@ import {
   UsersIcon,
   type Icon,
 } from '@phosphor-icons/react'
-import type { Messages } from '@/i18n'
+import type { UpFrontMessages } from '@/i18n'
 
 /** A page the navigation links to. */
 export type NavPage = {
   id: string
   /** Its address. */
   to: string
-  label: (t: Messages) => string
+  label: (t: UpFrontMessages) => string
   icon: Icon
 }
 
@@ -96,7 +96,7 @@ export const settingsSections = [
   { id: 'tracking', key: 'tracking', group: 'apps', icon: ListChecksIcon },
 ] as const satisfies readonly {
   id: string
-  key: keyof Messages['nav']['settingsSections']
+  key: keyof UpFrontMessages['nav']['settingsSections']
   group: (typeof settingsGroups)[number]
   icon: Icon
 }[]

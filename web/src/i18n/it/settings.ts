@@ -245,44 +245,6 @@ const settings: typeof en = {
       wireGuardNoDns:
         'Non indica alcun server DNS: i tracker indicati da un nome host non vengono raggiunti, quelli indicati da un indirizzo sì.',
       wireGuardReplace: 'Incolla un’altra configurazione per sostituire quella salvata.',
-      wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
-        const where = problem.line > 0 ? `Riga ${problem.line}: ` : ''
-        const expected: Record<string, string> = {
-          PrivateKey: 'una chiave di 32 byte in base64',
-          PublicKey: 'una chiave di 32 byte in base64',
-          PresharedKey: 'una chiave di 32 byte in base64',
-          Address: 'indirizzi IP, come 10.2.0.2/32, separati da virgole',
-          DNS: 'indirizzi IP separati da virgole',
-          MTU: 'un numero da 576 a 65535',
-          ListenPort: 'una porta da 0 a 65535',
-          Endpoint: 'un nome host o un indirizzo IP con una porta, come vpn.example.com:51820',
-          AllowedIPs:
-            'indirizzi IP con la lunghezza del prefisso, come 0.0.0.0/0, separati da virgole',
-          PersistentKeepalive: 'off, oppure un numero di secondi da 0 a 65535',
-        }
-        switch (problem.reason) {
-          case 'too_long':
-            return 'La configurazione WireGuard deve essere un testo di al massimo 8192 byte.'
-          case 'syntax':
-            return `${where}ogni riga deve essere una [sezione], una Chiave = Valore o un commento #.`
-          case 'outside':
-            return `${where}${problem.key} viene prima di [Interface] o [Peer].`
-          case 'unknown':
-            return `${where}${problem.key} non fa parte di una configurazione WireGuard.`
-          case 'repeated':
-            return problem.key === 'Peer'
-              ? `${where}è supportata una sola sezione [Peer].`
-              : `${where}${problem.key} è indicato due volte.`
-          case 'missing':
-            return `${where}${problem.key} manca nella configurazione WireGuard.`
-          case 'no_ipv4':
-            return `${where}Address richiede un indirizzo IPv4, usato dai tracker UDP e dalla DHT.`
-          case 'not_all':
-            return `${where}AllowedIPs richiede 0.0.0.0/0: i peer di un torrent sono ovunque.`
-          default:
-            return `${where}${problem.key} deve essere ${expected[problem.key] ?? 'valido'}.`
-        }
-      },
       downloadLimit: 'Limite di download (Mbps)',
       downloadLimitHelp: (r: RangeText) =>
         `0 significa nessun limite. Da 0 a ${r.max}; ${r.default} per impostazione predefinita.`,
@@ -1459,12 +1421,6 @@ const settings: typeof en = {
       count === 1 ? '1 impostazione trovata' : `${count} impostazioni trovate`,
     noMatchHelp: 'Prova con un’altra parola, ad esempio il nome di una variabile o di un servizio.',
     variableHint: 'Variabile d’ambiente',
-    sectionGroups: {
-      server: 'Server',
-      streaming: 'Streaming',
-      library: 'Libreria',
-      apps: 'App e servizi',
-    },
     ledes: {
       general:
         'Il nome del server, la sua lingua, come le applicazioni accedono e lo trovano, e il controllo di nuove versioni.',
