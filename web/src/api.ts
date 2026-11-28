@@ -1596,6 +1596,11 @@ export type IptvOptions = {
   /** Whether titles with a TMDB or IMDb id are described by the server's metadata addons. */
   enrichment: boolean
   /**
+   * Whether a title described by a metadata addon takes that addon's name once opened. It works
+   * only while `enrichment` is on.
+   */
+  metadataNames: boolean
+  /**
    * Xtream accounts only: whether the titles of one type listed more than once with the same TMDB
    * id become one title, each copy a version of it.
    */
@@ -1629,6 +1634,7 @@ export const defaultIptvOptions: IptvOptions = {
   vodExcluded: [],
   vodLibraries: 'type',
   enrichment: true,
+  metadataNames: false,
   titleVersions: false,
   favoritesOnly: false,
 }

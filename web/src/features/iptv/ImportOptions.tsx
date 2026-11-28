@@ -179,8 +179,10 @@ function ContentFields({
 }
 
 /**
- * How movies and series become libraries, whether they are described by metadata addons, and for an
- * Xtream account whether the copies of a title become its versions.
+ * How movies and series become libraries, whether they are described by metadata addons and then
+ * named after them, and for an Xtream account whether the copies of a title become its versions.
+ * The names need the description: while it is off, their row is inactive, shows Off and keeps no
+ * "was …", which the dock does not count either.
  */
 function VodFields({
   value,
@@ -216,6 +218,15 @@ function VodFields({
         checked={value.enrichment}
         saved={saved?.enrichment}
         onChange={(enrichment) => onChange({ enrichment })}
+      />
+      <SettingRow
+        kind="switch"
+        label={text.metadataNames}
+        help={text.metadataNamesHelp}
+        checked={value.enrichment && value.metadataNames}
+        saved={saved && (value.enrichment ? saved.metadataNames : false)}
+        disabled={!value.enrichment}
+        onChange={(metadataNames) => onChange({ metadataNames })}
       />
       {xtream && (
         <SettingRow
