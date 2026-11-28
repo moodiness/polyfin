@@ -104,6 +104,15 @@ Sign in to the admin app with the account's name and password. An account with t
 
 Addresses from before this layout, such as `/admin/health` or `/admin/settings#settings-tracking`, still open the right page.
 
+### When a page fails
+
+A page of the admin app that runs into an error shows **This page could not be shown** in its place. The top bar and the phone menu stay, and so do the smaller words of Content's and System's pages under the title, so another page opens as usual, and leaving the page clears the error. When the app's frame fails too, the message takes the whole window, under the logo.
+
+- **Reload** loads the page again. **Back to the home page** opens **Home**.
+- **Polyfin was updated:** a tab left open over an update may ask for a file of the version before, which is gone. The admin app then loads the new version by itself, at most once a minute. When a file is still missing within that minute, the page says **Polyfin was updated** instead of the error, and **Reload** loads the new version.
+- **Details for a bug report** unfolds what a report needs: Polyfin's version, the page's address without its query, the browser, and the error with its stack. **Copy the details** copies them, to paste into the [bug report form](https://github.com/moodiness/polyfin/issues/new?template=bug_report.yml) with what you did just before. A browser that does not allow copying, as on a plain `http` address other than `localhost`, gets the details selected instead: copy them with ⌘C on a Mac, or Ctrl C.
+- **Language:** when the admin app's language could not load, the message shows in English.
+
 **Compared with Jellyfin**
 
 - None of the admin app's pages exist in Jellyfin's API. They use Polyfin's admin API only.
