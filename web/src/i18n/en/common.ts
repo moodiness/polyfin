@@ -605,6 +605,44 @@ const common = {
       'An administrator’s account never ends. Make them a member first to give it an end date.',
     invalid_invite_account_end: 'Choose when the accounts end from the list.',
   },
+  /** A WireGuard configuration the server refused: its line, key and reason. */
+  wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+    const where = problem.line > 0 ? `Line ${problem.line}: ` : ''
+    const expected: Record<string, string> = {
+      PrivateKey: 'a key of 32 bytes in base64',
+      PublicKey: 'a key of 32 bytes in base64',
+      PresharedKey: 'a key of 32 bytes in base64',
+      Address: 'IP addresses, such as 10.2.0.2/32, separated by commas',
+      DNS: 'IP addresses separated by commas',
+      MTU: 'a number from 576 to 65535',
+      ListenPort: 'a port from 0 to 65535',
+      Endpoint: 'a host name or an IP address with a port, such as vpn.example.com:51820',
+      AllowedIPs: 'IP addresses with their prefix length, such as 0.0.0.0/0, separated by commas',
+      PersistentKeepalive: 'off, or a number of seconds from 0 to 65535',
+    }
+    switch (problem.reason) {
+      case 'too_long':
+        return 'The WireGuard configuration must be text of at most 8192 bytes.'
+      case 'syntax':
+        return `${where}each line must be a [section], a Key = Value, or a # comment.`
+      case 'outside':
+        return `${where}${problem.key} comes before [Interface] or [Peer].`
+      case 'unknown':
+        return `${where}${problem.key} is not part of a WireGuard configuration.`
+      case 'repeated':
+        return problem.key === 'Peer'
+          ? `${where}only one [Peer] is supported.`
+          : `${where}${problem.key} is given twice.`
+      case 'missing':
+        return `${where}${problem.key} is missing from the WireGuard configuration.`
+      case 'no_ipv4':
+        return `${where}Address needs an IPv4 address, which UDP trackers and the DHT use.`
+      case 'not_all':
+        return `${where}AllowedIPs needs 0.0.0.0/0: the peers of a torrent are anywhere.`
+      default:
+        return `${where}${problem.key} must be ${expected[problem.key] ?? 'valid'}.`
+    }
+  },
   status: {
     title: 'Server status',
     version: 'Version',

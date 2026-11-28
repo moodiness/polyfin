@@ -1,17 +1,17 @@
 import { ApiError, unanswered } from '@/api'
-import type { Messages } from '@/i18n'
+import type { Messages, UpFrontMessages } from '@/i18n'
 
-type ErrorCode = keyof Messages['errors']
+type ErrorCode = keyof UpFrontMessages['errors']
 
 /**
  * Maps an API error code to localized text; unknown codes fall back to a generic message. No
  * answer from Polyfin, or a reverse proxy's in its place, says so. A WireGuard configuration
  * refused tells its line, key and reason.
  */
-export function errorMessage(t: Messages, error: unknown): string {
+export function errorMessage(t: UpFrontMessages, error: unknown): string {
   if (unanswered(error)) return t.errors.network
   if (error instanceof ApiError) {
-    if (error.wireGuard !== null) return t.settings.torrents.wireGuardInvalid(error.wireGuard)
+    if (error.wireGuard !== null) return t.wireGuardInvalid(error.wireGuard)
     return Object.hasOwn(t.errors, error.code)
       ? t.errors[error.code as ErrorCode]
       : t.errors.generic

@@ -653,6 +653,44 @@ const common: typeof en = {
       'Le compte d’un administrateur ne prend jamais fin. Faites-en d’abord un membre pour lui donner une date de fin.',
     invalid_invite_account_end: 'Choisissez dans la liste quand les comptes prennent fin.',
   },
+  wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+    const where = problem.line > 0 ? `Ligne ${problem.line}\u202f: ` : ''
+    const expected: Record<string, string> = {
+      PrivateKey: 'une clé de 32 octets en base64',
+      PublicKey: 'une clé de 32 octets en base64',
+      PresharedKey: 'une clé de 32 octets en base64',
+      Address: 'des adresses IP, comme 10.2.0.2/32, séparées par des virgules',
+      DNS: 'des adresses IP séparées par des virgules',
+      MTU: 'un nombre de 576 à 65535',
+      ListenPort: 'un port de 0 à 65535',
+      Endpoint: 'un nom d’hôte ou une adresse IP avec un port, comme vpn.example.com:51820',
+      AllowedIPs:
+        'des adresses IP avec la longueur de leur préfixe, comme 0.0.0.0/0, séparées par des virgules',
+      PersistentKeepalive: 'off, ou un nombre de secondes de 0 à 65535',
+    }
+    switch (problem.reason) {
+      case 'too_long':
+        return 'La configuration WireGuard doit être un texte d’au plus 8192 octets.'
+      case 'syntax':
+        return `${where}chaque ligne doit être une [section], une Clé = Valeur ou un commentaire #.`
+      case 'outside':
+        return `${where}${problem.key} vient avant [Interface] ou [Peer].`
+      case 'unknown':
+        return `${where}${problem.key} ne fait pas partie d’une configuration WireGuard.`
+      case 'repeated':
+        return problem.key === 'Peer'
+          ? `${where}une seule section [Peer] est prise en charge.`
+          : `${where}${problem.key} est donné deux fois.`
+      case 'missing':
+        return `${where}${problem.key} manque dans la configuration WireGuard.`
+      case 'no_ipv4':
+        return `${where}Address doit contenir une adresse IPv4, qu’utilisent les trackers UDP et le DHT.`
+      case 'not_all':
+        return `${where}AllowedIPs doit contenir 0.0.0.0/0\u202f: les pairs d’un torrent sont partout.`
+      default:
+        return `${where}${problem.key} doit être ${expected[problem.key] ?? 'valide'}.`
+    }
+  },
   status: {
     title: 'État du serveur',
     version: 'Version',

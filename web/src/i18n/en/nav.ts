@@ -23,6 +23,13 @@ const nav = {
     trail: (section: string, page: string) => `${section} › ${page}`,
     contentTabs: 'Content pages',
     systemTabs: 'System pages',
+    /** The heading words of Settings' section groups, as its section list and the phone menu show them. */
+    settingsGroups: {
+      server: 'Server',
+      streaming: 'Streaming',
+      library: 'Library',
+      apps: 'Apps and services',
+    },
     settingsSections: {
       general: 'General',
       playback: 'Playback',

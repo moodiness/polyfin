@@ -628,6 +628,44 @@ const common: typeof en = {
       'A conta de um administrador nunca é encerrada. Torne-o membro primeiro para definir uma data de encerramento.',
     invalid_invite_account_end: 'Escolha na lista quando as contas serão encerradas.',
   },
+  wireGuardInvalid: (problem: { line: number; key: string; reason: string }) => {
+    const where = problem.line > 0 ? `Linha ${problem.line}: ` : ''
+    const expected: Record<string, string> = {
+      PrivateKey: 'uma chave de 32 bytes em base64',
+      PublicKey: 'uma chave de 32 bytes em base64',
+      PresharedKey: 'uma chave de 32 bytes em base64',
+      Address: 'endereços IP, como 10.2.0.2/32, separados por vírgulas',
+      DNS: 'endereços IP separados por vírgulas',
+      MTU: 'um número de 576 a 65535',
+      ListenPort: 'uma porta de 0 a 65535',
+      Endpoint: 'um nome de host ou um endereço IP com uma porta, como vpn.example.com:51820',
+      AllowedIPs:
+        'endereços IP com o comprimento do prefixo, como 0.0.0.0/0, separados por vírgulas',
+      PersistentKeepalive: 'off, ou um número de segundos de 0 a 65535',
+    }
+    switch (problem.reason) {
+      case 'too_long':
+        return 'A configuração do WireGuard deve ser um texto de no máximo 8192 bytes.'
+      case 'syntax':
+        return `${where}cada linha deve ser uma [seção], uma Chave = Valor ou um comentário #.`
+      case 'outside':
+        return `${where}${problem.key} vem antes de [Interface] ou [Peer].`
+      case 'unknown':
+        return `${where}${problem.key} não faz parte de uma configuração do WireGuard.`
+      case 'repeated':
+        return problem.key === 'Peer'
+          ? `${where}só uma seção [Peer] é suportada.`
+          : `${where}${problem.key} aparece duas vezes.`
+      case 'missing':
+        return `${where}${problem.key} está faltando na configuração do WireGuard.`
+      case 'no_ipv4':
+        return `${where}Address precisa de um endereço IPv4, usado pelos trackers UDP e pela DHT.`
+      case 'not_all':
+        return `${where}AllowedIPs precisa de 0.0.0.0/0: os peers de um torrent estão em qualquer lugar.`
+      default:
+        return `${where}${problem.key} deve ser ${expected[problem.key] ?? 'válido'}.`
+    }
+  },
   status: {
     title: 'Status do servidor',
     version: 'Versão',

@@ -23,6 +23,12 @@ const nav: typeof en = {
     trail: (section: string, page: string) => `${section} › ${page}`,
     contentTabs: 'Páginas de conteúdo',
     systemTabs: 'Páginas do sistema',
+    settingsGroups: {
+      server: 'Servidor',
+      streaming: 'Streaming',
+      library: 'Biblioteca',
+      apps: 'Apps e serviços',
+    },
     settingsSections: {
       general: 'Geral',
       playback: 'Reprodução',

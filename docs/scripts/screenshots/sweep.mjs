@@ -45,9 +45,24 @@ const stepWidths = [1440, 1024, 768, 390]
 /**
  * The states a visit never reaches, each a page and what to do on it once it has settled. `act`
  * returns findings when it cannot reach the state; `check`, run in the page once it has settled
- * again, findings of its own. The page's usual checks follow, on the state.
+ * again, findings of its own. The page's usual checks follow, on the state. `widths`, when set,
+ * the only widths of `stepWidths` the step is taken at.
  */
 const steps = [
+  {
+    // Home loaded anew, so that only the messages every page has are there: the menu reads none
+    // of Settings' own, which download with its pages.
+    name: 'phone menu',
+    url: '/',
+    widths: [390],
+    async act(page) {
+      const menu = await page.$('header button[aria-haspopup="dialog"]')
+      if (!menu) return [{ kind: 'step', detail: 'no menu button' }]
+      await menu.click()
+      await page.waitForSelector('dialog[open] nav', { timeout: 3000 })
+    },
+    check: settingsGroupsShown,
+  },
   {
     name: 'unsaved',
     url: '/settings/conversion',
@@ -342,6 +357,7 @@ class Sweep {
       // Leaving a page with unsaved changes asks first.
       page.on('dialog', (dialog) => dialog.accept())
       for (const step of steps) {
+        if (step.widths && !step.widths.includes(width)) continue
         await this.visit(page, { role: role.name, width, language }, step.url, step)
       }
     } finally {
@@ -578,6 +594,20 @@ async function rest(page) {
   await page.evaluate(
     () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
   )
+}
+
+/**
+ * Runs in the page with the phone menu open: Settings' sections show under their four group
+ * headings, each with words and with links to its sections.
+ */
+function settingsGroupsShown() {
+  const groups = [...document.querySelectorAll('dialog[open] nav [role="group"]')].filter(
+    (group) =>
+      document.getElementById(group.getAttribute('aria-labelledby'))?.textContent.trim() &&
+      group.querySelector('a[href^="/admin/settings/"]'),
+  )
+  if (groups.length === 4) return []
+  return [{ kind: 'step', detail: `${groups.length} of Settings' 4 group headings show` }]
 }
 
 /**
