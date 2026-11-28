@@ -1,6 +1,7 @@
 package iptv
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"maps"
@@ -32,8 +33,9 @@ import (
 // transactions. A description kept serves while its source's version is
 // still the one read with it, which takes one statement at each use; a
 // request marked by CheckOnce reads the version of each source once. The
-// details stored when a title is opened or played (see details) make its
-// description be read again. A request opening a title (see Opening)
+// details stored when a title is opened or played (see details), and a
+// name it learned (see titlenames.go), make its description be read
+// again. A request opening a title (see Opening)
 // serves the one kept too, unless the provider is to be asked for the
 // title's details: then it reads the title whole. What is kept never
 // changes an answer.
@@ -85,7 +87,8 @@ type descriptionKey struct {
 
 // description is what describes a title a source shows: its list data,
 // its source's kind, its details when known with their version and when
-// they were fetched, an M3U series' episodes, and the version of the
+// they were fetched, an M3U series' episodes, the name it learned while
+// its source names titles so (see titlenames.go), and the version of the
 // source they were read at. It is shared: never changed once kept.
 type description struct {
 	version        string
@@ -95,11 +98,14 @@ type description struct {
 	detailsVersion string
 	detailsAt      *time.Time
 	videos         []stremio.Video
+	learned        string
 }
 
 // meta describes the title, as titleMeta does.
 func (d *description) meta(source accounts.ID) stremio.Meta {
-	return describedTitle(source, d.title, d.kind, d.details, d.videos)
+	meta := describedTitle(source, d.title, d.kind, d.details, d.videos)
+	meta.Name = cmp.Or(d.learned, meta.Name)
+	return meta
 }
 
 // fetchDue reports whether opening the title at now asks its provider for
@@ -146,16 +152,17 @@ func (s *Service) description(ctx context.Context, state sourceState, source acc
 }
 
 // readDescription reads a title's description, with the version of its
-// source in the same statement.
+// source in the same statement, and the name it shows (see
+// titlenames.go): its group's leader's for a group's face, else its own.
 func (s *Service) readDescription(ctx context.Context, source accounts.ID, typ, key string) (*description, error) {
 	var t storedTitle
 	d := &description{}
 	err := scanTitle(s.db.QueryRow(ctx, `SELECT `+titleColumns+`, a.kind, i.xmin::text || ' ' || coalesce(i.fetched_at::text, ''), x.details,
-		coalesce(x.version, ''), x.fetched_at
+		coalesce(x.version, ''), x.fetched_at, `+learnedName+`
 		FROM iptv_titles t JOIN iptv_sources i ON i.addon_id = t.addon_id JOIN addons a ON a.id = t.addon_id
-		LEFT JOIN iptv_details x ON x.addon_id = t.addon_id AND x.type = t.type AND x.key = t.key
+		LEFT JOIN iptv_details x ON x.addon_id = t.addon_id AND x.type = t.type AND x.key = t.key`+groupOfFace+learnedNames+`
 		WHERE t.addon_id = $1 AND t.type = $2 AND t.key = $3 AND `+shownTitle, source, typ, key), &t, &d.kind, &d.version, &d.details,
-		&d.detailsVersion, &d.detailsAt)
+		&d.detailsVersion, &d.detailsAt, &d.learned)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, stremio.ErrNotFound
 	}
@@ -172,11 +179,13 @@ func (s *Service) readDescription(ctx context.Context, source accounts.ID, typ, 
 }
 
 // sourceState is what a description reads of its source: its version
-// (see CatalogVersion), whether it is enriched (see Enrichment) and
-// whether it groups its titles (see groups.go).
+// (see CatalogVersion), whether it is enriched (see Enrichment), whether
+// it names its titles after the metadata addons, which needs enrichment
+// (see titlenames.go), and whether it groups its titles (see groups.go).
 type sourceState struct {
 	version       string
 	enrichment    bool
+	metadataNames bool
 	titleVersions bool
 }
 
@@ -191,8 +200,8 @@ func (s *Service) sourceState(ctx context.Context, source accounts.ID) (sourceSt
 
 func (s *Service) readSourceState(ctx context.Context, source accounts.ID) (sourceState, error) {
 	var state sourceState
-	err := s.db.QueryRow(ctx, `SELECT xmin::text || ' ' || coalesce(fetched_at::text, ''), enrichment, title_versions FROM iptv_sources
-		WHERE addon_id = $1`, source).Scan(&state.version, &state.enrichment, &state.titleVersions)
+	err := s.db.QueryRow(ctx, `SELECT xmin::text || ' ' || coalesce(fetched_at::text, ''), enrichment, enrichment AND metadata_names, title_versions
+		FROM iptv_sources WHERE addon_id = $1`, source).Scan(&state.version, &state.enrichment, &state.metadataNames, &state.titleVersions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return sourceState{}, stremio.ErrNotFound
 	}
@@ -253,7 +262,7 @@ func (c *sourceChecks) state(ctx context.Context, s *Service, source accounts.ID
 // memory: its structures and its texts.
 func descriptionSize(d *description) int {
 	t := d.title
-	n := int(unsafe.Sizeof(description{})) + len(d.version) + len(d.kind) +
+	n := int(unsafe.Sizeof(description{})) + len(d.version) + len(d.kind) + len(d.learned) +
 		texts(t.Type, t.Key, t.Name, t.Category, t.Poster, t.Rating, t.Extension, t.Quality, t.TMDB, t.IMDb, t.URL, t.Version) +
 		texts(t.Listing.Plot, t.Listing.Released, t.Listing.Background, t.Listing.Trailer) +
 		texts(t.Listing.Cast...) + texts(t.Listing.Director...) + texts(t.Listing.Genres...)

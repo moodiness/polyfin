@@ -328,14 +328,16 @@ type Service struct {
 
 // IPTV answers, for Polyfin's own IPTV sources, the catalog, meta and
 // stream requests addons answer over HTTP (see package iptv), which
-// channels have an archive of past programmes (see replay.go), and which
+// channels have an archive of past programmes (see replay.go), which
 // title a movie, series or episode is a version of now (Grouped, see
-// RelinkedTitle).
+// RelinkedTitle), and keeps the names its titles learn from the metadata
+// addons (LearnName, see enrich.go).
 type IPTV interface {
 	Channels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)
 	Catalog(ctx context.Context, source accounts.ID, catalogType, catalogID string, skip int, genre, search string) ([]stremio.Meta, error)
 	CatalogWindow(ctx context.Context, source accounts.ID, catalogType, catalogID, genre, search string, start, count int) ([]stremio.Meta, int, error)
-	Enrichment(ctx context.Context, source accounts.ID) bool
+	Enrichment(ctx context.Context, source accounts.ID) (enriched, named bool)
+	LearnName(ctx context.Context, source accounts.ID, id, name string) error
 	Meta(ctx context.Context, source accounts.ID, id string) (stremio.Meta, error)
 	Streams(ctx context.Context, source accounts.ID, id string) ([]stremio.Stream, error)
 	MappingChannels(ctx context.Context, source accounts.ID) ([]stremio.Meta, error)

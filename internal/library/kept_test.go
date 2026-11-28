@@ -931,10 +931,12 @@ func TestDescribedArtworkOutlivesARestart(t *testing.T) {
 }
 
 // enrichingIPTV is an IPTV source whose movies and series the other addons
-// complete: enrich asks nothing else of it.
+// complete, keeping the source's names: enrich asks nothing else of it.
 type enrichingIPTV struct{ IPTV }
 
-func (enrichingIPTV) Enrichment(context.Context, accounts.ID) bool { return true }
+func (enrichingIPTV) Enrichment(context.Context, accounts.ID) (enriched, named bool) {
+	return true, false
+}
 
 // After a restart, an IPTV movie is completed from the metadata addon's
 // description kept in the database, without asking the addon, as its

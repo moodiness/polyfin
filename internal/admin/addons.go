@@ -260,6 +260,9 @@ type optionsJSON struct {
 	VODExcluded  []string `json:"vodExcluded"`
 	VODLibraries string   `json:"vodLibraries"`
 	Enrichment   bool     `json:"enrichment"`
+	// MetadataNames names the titles after the metadata addons that
+	// describe them, while Enrichment is on.
+	MetadataNames bool `json:"metadataNames"`
 	// TitleVersions makes an Xtream account's titles of the same TMDB id
 	// versions of one title.
 	TitleVersions bool `json:"titleVersions"`
@@ -362,7 +365,7 @@ func (h *handler) addonJSON(r *http.Request, scope addons.Scope, addon addons.Ad
 		NextAt: source.NextAt, Error: source.Error, UserAgent: source.UserAgent,
 		Options: optionsJSON{Categories: o.Categories, Channels: o.Channels, Excluded: o.Excluded, NewChannels: o.NewChannels, Numbering: o.Numbering,
 			LiveTv: o.LiveTv, Movies: o.Movies, Series: o.Series, VODExcluded: o.VODExcluded, VODLibraries: o.VODLibraries, Enrichment: o.Enrichment,
-			TitleVersions: o.TitleVersions, FavoritesOnly: o.FavoritesOnly},
+			MetadataNames: o.MetadataNames, TitleVersions: o.TitleVersions, FavoritesOnly: o.FavoritesOnly},
 		Lineup: lineupJSON{Categories: n.Categories, EnabledCategories: n.EnabledCategories, Channels: n.Channels, EnabledChannels: n.EnabledChannels,
 			ShownChannels: n.ShownChannels, Mapped: n.Mapped, Unmapped: n.Unmapped, Archived: n.Archived},
 		VOD: vodJSON(vod)}

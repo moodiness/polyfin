@@ -223,6 +223,9 @@ type OptionsPatch struct {
 	VODExcluded  *[]string `json:"vodExcluded"`
 	VODLibraries *string   `json:"vodLibraries"`
 	Enrichment   *bool     `json:"enrichment"`
+	// MetadataNames names the titles after the metadata addons that
+	// describe them (see titlenames.go).
+	MetadataNames *bool `json:"metadataNames"`
 	// TitleVersions groups an Xtream account's titles of the same TMDB id
 	// (see groups.go).
 	TitleVersions *bool `json:"titleVersions"`
@@ -258,6 +261,7 @@ func (o Options) apply(patch *OptionsPatch) (Options, error) {
 		turn(&o.Movies, patch.Movies)
 		turn(&o.Series, patch.Series)
 		turn(&o.Enrichment, patch.Enrichment)
+		turn(&o.MetadataNames, patch.MetadataNames)
 		turn(&o.TitleVersions, patch.TitleVersions)
 		turn(&o.FavoritesOnly, patch.FavoritesOnly)
 	}
@@ -364,7 +368,7 @@ func (s *Service) Add(ctx context.Context, scope addons.Scope, source NewSource,
 	addon, err := s.addons.Create(ctx, scope, source.Account.Kind, address,
 		func(id accounts.ID) stremio.Manifest { return manifest(id, source.Account.Kind, name, options, nil) },
 		func(tx pgx.Tx, addon addons.Addon) error {
-			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+", user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+			if _, err := tx.Exec(ctx, "INSERT INTO iptv_sources (addon_id, "+optionColumns+", user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
 				append(append([]any{addon.ID}, options.values()...), agent)...); err != nil {
 				return err
 			}
@@ -470,7 +474,7 @@ func (s *Service) Update(ctx context.Context, scope addons.Scope, id accounts.ID
 	}
 	at := s.now()
 	_, err = s.addons.Update(ctx, scope, id, addon.Kind, address, renamed(addon.Manifest, name), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+", user_agent) = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) WHERE addon_id = $1",
+		if _, err := tx.Exec(ctx, "UPDATE iptv_sources SET ("+optionColumns+", user_agent) = ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) WHERE addon_id = $1",
 			append(append([]any{id}, options.values()...), agent)...); err != nil {
 			return err
 		}

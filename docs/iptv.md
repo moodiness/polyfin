@@ -140,7 +140,7 @@ The step then previews the **Categories to import**, to include or leave out:
 - With movies or series on, their categories for each type, with title counts and search, and **Include all** and **Exclude all**.
 - The preview downloads the list once, and reuses it for 5 minutes.
 
-The step also shows the [import options](#import-options). For movies and series, it shows the libraries choice, and whether the metadata addons describe titles (see [Movies and series libraries](iptv-movies-and-series.md#movies-and-series-libraries)).
+The step also shows the [import options](#import-options). For movies and series, it shows the libraries choice, whether the metadata addons describe titles, and whether titles take those addons' names once opened (see [Movies and series libraries](iptv-movies-and-series.md#movies-and-series-libraries) and [Names from the metadata addons](iptv-movies-and-series.md#names-from-the-metadata-addons)).
 
 ## Import options
 
@@ -202,7 +202,7 @@ The **Summary** shows the counts, movies and series included, and the last and n
 
 ### Import options on the source page
 
-The same choices as when adding the source, applied to the list already downloaded. They include **What to import**, the libraries choice, enrichment and, for an Xtream account, **Group copies of a title as versions** (see [Versions of the same title](iptv-movies-and-series.md#versions-of-the-same-title)).
+The same choices as when adding the source, applied to the list already downloaded. They include **What to import**, the libraries choice, enrichment, **Name titles after the metadata addons** (see [Names from the metadata addons](iptv-movies-and-series.md#names-from-the-metadata-addons)) and, for an Xtream account, **Group copies of a title as versions** (see [Versions of the same title](iptv-movies-and-series.md#versions-of-the-same-title)).
 
 ### Categories
 

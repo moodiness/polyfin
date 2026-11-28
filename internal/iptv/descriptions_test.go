@@ -117,14 +117,18 @@ func TestDescriptionsFollowTheirSource(t *testing.T) {
 		t.Errorf("series on again: %d episodes, %q", len(listed.Videos), listed.Description)
 	}
 
-	// The enrichment follows its toggle, in a request checking its
-	// sources once too.
-	for _, enriched := range []bool{true, false} {
-		if err := e.service.Update(ctx, shared, source, Changes{Options: &OptionsPatch{Enrichment: &enriched}}, false); err != nil {
+	// The enrichment and the names follow their toggles, in a request
+	// checking its sources once too; the names need the enrichment.
+	for _, toggles := range []struct{ enriched, names bool }{{true, false}, {true, true}, {false, true}, {false, false}} {
+		if err := e.service.Update(ctx, shared, source, Changes{Options: &OptionsPatch{Enrichment: &toggles.enriched, MetadataNames: &toggles.names}},
+			false); err != nil {
 			t.Fatal(err)
 		}
-		if got, once := e.service.Enrichment(ctx, source), e.service.Enrichment(CheckOnce(ctx), source); got != enriched || once != enriched {
-			t.Errorf("enrichment %v: %v, checked once %v", enriched, got, once)
+		enriched, named := e.service.Enrichment(ctx, source)
+		enrichedOnce, namedOnce := e.service.Enrichment(CheckOnce(ctx), source)
+		want := toggles.enriched && toggles.names
+		if enriched != toggles.enriched || enrichedOnce != toggles.enriched || named != want || namedOnce != want {
+			t.Errorf("%+v: enriched %v, named %v, checked once %v %v", toggles, enriched, named, enrichedOnce, namedOnce)
 		}
 	}
 }
@@ -185,7 +189,7 @@ func TestDescriptionsAreKeptWithinTheirBound(t *testing.T) {
 	if n := sent(func() {
 		for _, id := range ids[:3] {
 			_ = must(e.service.Meta(once, source, id))
-			_ = e.service.Enrichment(once, source)
+			_, _ = e.service.Enrichment(once, source)
 		}
 	}); n != 1 {
 		t.Errorf("three descriptions kept, checked once: %d statements", n)
