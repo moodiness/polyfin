@@ -96,6 +96,9 @@ type Request struct {
 	Origin Origin
 	// User is set once a signed-in user approved the code.
 	User *accounts.ID
+	// SignedIn is the device ID that signed in with the request first,
+	// the only one that signs in with it again (see Redeem).
+	SignedIn string
 
 	// client is the client the request counts toward (see clientOf), and
 	// order its rank among the requests opened: the lowest is the oldest.
@@ -308,18 +311,26 @@ func (s *Store) decide(code string, decision func(*Request)) error {
 	return nil
 }
 
-// Redeem returns the approved request an app signs in with. A Jellyfin
-// app's stays valid until it expires, as in Jellyfin, so that an app
-// retrying after a network error is not refused; the request of one of
-// Silo's apps signs in once, as their contract hands tokens over once.
-func (s *Store) Redeem(secret string) (Request, error) {
+// Redeem returns the approved request the device deviceID signs in with.
+// The secret is the credential: the device that asked holds it, and no
+// one is shown it; a device ID is the app's own word, sent beside the
+// secret, and an app may start a request under one and sign in under
+// another, as Jellyfin for Android TV does. So the first device to sign in
+// with a request is the one presenting its secret, whatever its device ID,
+// and the request keeps that ID. A Jellyfin app's request then stays valid
+// until it expires, as in Jellyfin, so that an app retrying after a
+// network error is not refused, for that device ID only; the request of
+// one of Silo's apps signs in once, as their contract hands tokens over
+// once.
+func (s *Store) Redeem(secret, deviceID string) (Request, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.expire()
 	request, ok := s.bySecret[strings.ToUpper(secret)]
-	if !ok || request.State != Approved {
+	if !ok || request.State != Approved || request.SignedIn != "" && request.SignedIn != deviceID {
 		return Request{}, ErrUnknown
 	}
+	request.SignedIn = deviceID
 	if request.Kind == Silo {
 		request.State = Collected
 	}

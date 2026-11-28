@@ -120,12 +120,19 @@ func (h *Handler) quickConnectAuthorize(w http.ResponseWriter, r *http.Request) 
 }
 
 // authenticateWithQuickConnect signs in the app holding an approved
-// request's secret. Like Jellyfin, the secret of a Jellyfin app's request
-// stays valid until the request expires, so an app retrying after a network
-// error is not refused; that of one of Silo's apps signs in once (see
-// quickconnect.Store.Redeem). It signs in the device that asked, by its
-// identifier, and no other; and no longer once the approver's account was
-// signed out everywhere (see quickconnect.Store.Withdraw).
+// request's secret, under the device ID it signs in with. Like Jellyfin,
+// which looks the approval up by its secret alone
+// (Emby.Server.Implementations/QuickConnect/QuickConnectManager.cs,
+// GetAuthorizedRequest, lines 173-184 at v12.4), it does not ask for the
+// device ID that started the request: the secret is the credential, and an
+// app may start under one device ID and sign in under another (Jellyfin
+// for Android TV 0.20.1 does). The first device to sign in keeps the
+// request: the secret of a Jellyfin app's request stays valid until the
+// request expires, for that device ID only, so an app retrying after a
+// network error is not refused; that of one of Silo's apps signs in once
+// (see quickconnect.Store.Redeem). And no device signs in once the
+// approver's account was signed out everywhere (see
+// quickconnect.Store.Withdraw).
 func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Request) {
 	c := readCredentials(r, h.Accounts.Settings().LegacyAuthorization)
 	var body struct{ Secret string }
@@ -138,7 +145,7 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 		return
 	}
 	request, err := h.QuickConnect.BySecret(body.Secret)
-	if err != nil || request.State != quickconnect.Approved || request.DeviceID != c.DeviceID {
+	if err != nil || request.State != quickconnect.Approved || request.SignedIn != "" && request.SignedIn != c.DeviceID {
 		processingError(w, http.StatusNotFound)
 		return
 	}
@@ -160,8 +167,9 @@ func (h *Handler) authenticateWithQuickConnect(w http.ResponseWriter, r *http.Re
 	if h.signInRefusedRemote(w, r, user) {
 		return
 	}
-	// Redeemed last, so that a refused account leaves it as it was.
-	if _, err := h.QuickConnect.Redeem(body.Secret); err != nil {
+	// Redeemed last, so that a refused account leaves it as it was; it
+	// decides between devices that race with one secret.
+	if _, err := h.QuickConnect.Redeem(body.Secret, c.DeviceID); err != nil {
 		processingError(w, http.StatusNotFound)
 		return
 	}
