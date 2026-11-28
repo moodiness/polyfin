@@ -80,6 +80,8 @@ Every kind takes `saved`: a row whose value differs keeps a dot, "was …", and 
 | A note, a warning or a tip inside a page             | `Notice`                                                            |
 | "Saved", or an action whose result is elsewhere      | `useToast()`; never `window.alert`                                  |
 
+A page that fails as it draws, or whose file does not load, needs nothing of its own: the router shows `PageError` (`src/app/ErrorPage.tsx`) in its place, inside the shell and under its area's sub-area words, and `AppError` over the whole window when the shell itself fails. A new layout route that carries navigation takes its own `errorElement: <PageError />` around its pages, as `SectionTabs`' do. `/admin/dev/error` and `/admin/dev/error/updated` (development builds only) show them.
+
 ## Forms
 
 | Need                                      | Use                                                                                    |

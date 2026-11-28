@@ -190,3 +190,11 @@ export function useI18n(): I18nContextValue {
   if (!value) throw new Error('useI18n must be used inside LanguageProvider')
   return value
 }
+
+/**
+ * The language shown, or null outside LanguageProvider: for the error page, which draws with
+ * words of its own when the language's file could not load.
+ */
+export function useShownLanguage(): ShownLanguage | null {
+  return use(I18nContext)
+}
