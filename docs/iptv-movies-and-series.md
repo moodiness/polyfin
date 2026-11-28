@@ -31,7 +31,7 @@ The libraries are ordinary library rows of the source in **Content › Libraries
 - An episode's name gives its series, season and episode: `S01E02`, `S01 E02`, `1x02` or `Season 1 Episode 2`.
 - Episodes whose names give no numbers are numbered by their place.
 - Episodes group into series by name, whatever its case.
-- Titles are named without the list's dressing: a language or country prefix such as `EN -` or `|FR|`, and quality tags.
+- Titles are named without the list's dressing: a language or country prefix such as `EN -` or `|FR|`, and quality tags. With **Name titles after the metadata addons**, a title takes its metadata addon's name once opened (see [Names from the metadata addons](#names-from-the-metadata-addons)).
 - A year written after a name becomes the title's year.
 - Titles keep the provider's identifier. Their item identifiers survive refreshes, changes of order and new credentials.
 - So do users' played state, resume points, favorites and next up. Grouping copies of a title changes this for the entries it groups (see [Versions of the same title](#versions-of-the-same-title)).
@@ -74,7 +74,7 @@ An MPEG-TS file has no index to cut it by its keyframes. This also holds for add
 **Group copies of a title as versions** is an import option of Xtream accounts, off by default. Providers often list a movie or a series more than once, in another quality or category, each entry with the same TMDB id. With the option on, a source's entries of one type that share a TMDB id are one title, whose versions are each entry's file.
 
 - **Which entries:** those the source imports, their type on and their category not left out, that the provider's list gives a TMDB id (`tmdb` or `tmdb_id` in `get_vod_streams` and `get_series`). A TMDB id only in a title's details groups nothing. Entries of two sources are never grouped.
-- **The title:** it takes the identifiers of its first entry, the first in the provider's order when the title formed. Libraries, counts, search, latest and genres list it once, with the name, poster and category of its first entry while the provider lists it, else of the entry that joined next. With one library per category, it is in that entry's category's library. Search finds it by that entry's name.
+- **The title:** it takes the identifiers of its first entry, the first in the provider's order when the title formed. Libraries, counts, search, latest and genres list it once, with the name, poster and category of its first entry while the provider lists it, else of the entry that joined next. With one library per category, it is in that entry's category's library. Search finds it by that entry's name. With **Name titles after the metadata addons**, it shows the name it learned, and search finds it by that name too (see [Names from the metadata addons](#names-from-the-metadata-addons)).
 - **Its versions:** one per entry the provider lists, in the order the entries joined, labelled by quality and category, such as `4K · 4K Movies`, then by name, or by the provider's identifier, when two are alike. The version choice settings order them as any title's (see [Version order](versions.md#version-order)).
 - **A series' episodes:** matched by season and episode number. An episode another entry also has plays either file. An episode only one entry has is listed too, and plays that entry's file. An episode without a number, or a second episode of the same numbers in one entry, is listed apart, with its own file.
 - **Details:** opening the title asks the provider for the details of each entry not known yet or old (`get_vod_info` or `get_series_info`), at most once a second per host: a title of three entries takes about two seconds more to open the first time. Playing an episode, the watchlist checks and the versions listed ahead ask for them too.
@@ -119,5 +119,21 @@ Enrichment is an import option, on by default. It brings the posters, cast and a
 - It asks only the administrator's own addons, once for each title opened.
 - A title the provider gives a TMDB or IMDb identifier is described by the first of the user's addons that describes that identifier.
 - The provider's description fills what the addon lacks.
-- The title's name, category and episodes stay the provider's.
+- The title's category and episodes stay the provider's.
+- So do its name and its episodes' titles, unless **Name titles after the metadata addons** is on (see below).
+
+### Names from the metadata addons
+
+**Name titles after the metadata addons** is an import option, off by default, beside enrichment, which it needs: while enrichment is off, the option is unavailable. Provider lists often name titles with a brand or a number Polyfin cannot tell from the name, such as `D+ - …`. With the option on, a movie or series takes the name of the metadata addon that describes it.
+
+- **When:** once the title is described with the addon's description, which an app opening it asks for (see [Ratings and enrichment](#ratings-and-enrichment)). It takes no request beyond enrichment's.
+- **Where:** the title's details, its libraries, latest, search, sorting by name and the item Polyfin stores. Search finds it by either name, the addon's or the provider's, the titles whose name shown starts with the words first. A listing sorted by name catches up with a new name within a few minutes.
+- **Episodes:** each takes the addon's title of the same season and episode number, where the addon has one. The others keep the provider's. Episode titles are not stored: they follow the addon's description Polyfin keeps, and show the provider's again while it has none.
+- **Lists mix both names** until their titles are opened: a title not opened yet keeps the provider's name, cleaned as above. Once opened, it can move in a listing sorted by name.
+- **Which addon:** the one enrichment uses, without a language. A source the server's users share takes names only from the server's own addons that everyone uses: never from an addon whose **Used by** is limited, nor from a user's own addon. A user's own source takes names from that user's addons too.
+- **A group of copies** (see [Versions of the same title](#versions-of-the-same-title)) takes the name learned under its first entry's identifiers, and keeps it while the group lasts, even once the provider no longer lists that entry.
+- **What stays the provider's:** item identifiers, what users did with the titles, groups and the labels of their versions, the entries **Content › Versions** lists under **Provider entries**, and M3U series, which group their episodes by the provider's names.
+- **An administrator's name wins:** a name set with [Edit metadata](artwork-and-editing.md#edit-metadata) shows over the addon's. It also fixes the wrong name a wrong TMDB or IMDb id in the provider's list gives.
+- **Off:** turning the option off, or enrichment off, shows the provider's names again. The names learned are kept, and show again when the option is turned back on, without opening the titles again.
+- **A name goes** with its title: once the provider no longer lists it, unless it leads a group of copies, or lists it under another TMDB or IMDb id. Turning **Movies** or **Series** off forgets that type's names, but for the first entries of groups of copies, as their titles are no longer imported. Turning **Group copies of a title as versions** off, or keeping a first entry apart, forgets the name of a first entry the provider no longer lists.
 

@@ -111,10 +111,8 @@ const notGroupedAway = `NOT EXISTS (SELECT 1 FROM iptv_title_members m JOIN iptv
 	ON g.addon_id = m.addon_id AND g.type = m.type AND g.tmdb = m.tmdb
 	WHERE m.addon_id = t.addon_id AND m.type = t.type AND m.key = t.key AND g.face <> t.key)`
 
-// groupLeader is, for t, the leader of the group it is the face of, null
-// for none.
-const groupLeader = `(SELECT g.leader FROM iptv_title_groups g WHERE g.addon_id = t.addon_id AND g.type = t.type AND g.tmdb = t.tmdb
-	AND g.face = t.key)`
+// groupOfFace joins, as g, the group t is the face of, if any.
+const groupOfFace = ` LEFT JOIN iptv_title_groups g ON g.addon_id = t.addon_id AND g.type = t.type AND g.tmdb = t.tmdb AND g.face = t.key`
 
 // titleGroup is a group of a source's titles of a type: its TMDB id, its
 // leader, its members in the order they joined it (the leader first) and
@@ -211,12 +209,15 @@ type groupMember struct {
 	title   Title
 	kind    string
 	details *details
+	learned string
 }
 
 // groupMeta describes a group: its face's description under its leader's
 // identifier and, for a series, the episodes of all its listed members
-// (see groupVideos). Opening it asks the provider for the details of each
-// listed member that are due, as titleMeta does for one title.
+// (see groupVideos), under the name its leader learned, else its face,
+// while its source names titles so (see titlenames.go). Opening it asks
+// the provider for the details of each listed member that are due, as
+// titleMeta does for one title.
 func (s *Service) groupMeta(ctx context.Context, state sourceState, source accounts.ID, g *titleGroup) (stremio.Meta, error) {
 	members := make([]groupMember, 0, len(g.listed))
 	for _, key := range g.listed {
@@ -240,7 +241,7 @@ func (s *Service) groupMeta(ctx context.Context, state sourceState, source accou
 				return stremio.Meta{}, err
 			}
 		}
-		members = append(members, groupMember{title: kept.title, kind: kept.kind, details: d})
+		members = append(members, groupMember{title: kept.title, kind: kept.kind, details: d, learned: kept.learned})
 	}
 	if len(members) == 0 {
 		return stremio.Meta{}, stremio.ErrNotFound
@@ -248,6 +249,9 @@ func (s *Service) groupMeta(ctx context.Context, state sourceState, source accou
 	face := members[0]
 	meta := describedTitle(source, face.title, face.kind, face.details, nil)
 	meta.ID = titleID(source, g.typ, g.leader)
+	// The face's description shows the name the group's leader learned,
+	// else its own (see readDescription).
+	meta.Name = cmp.Or(face.learned, meta.Name)
 	if g.typ != typeSeries {
 		return meta, nil
 	}
@@ -1006,8 +1010,10 @@ func titleOfID(id string) (accounts.ID, string, string, bool) {
 
 // KeepApart keeps a source's movie or series of key apart from the others
 // of its TMDB id, or lets it be grouped again, and regroups the source's
-// titles at once, in one transaction that updates the source's row (see
-// CatalogVersion), then tells OnChange, as new options do.
+// titles at once, forgetting the names of the leaders of groups that end
+// whose titles are gone (see titlenames.go), in one transaction that
+// updates the source's row (see CatalogVersion), then tells OnChange, as
+// new options do.
 // addons.ErrNotFound reports a source of no row.
 func (s *Service) KeepApart(ctx context.Context, source accounts.ID, typ, key string, apart bool) error {
 	if typ != typeMovie && typ != typeSeries || key == "" {
@@ -1032,7 +1038,10 @@ func (s *Service) KeepApart(ctx context.Context, source accounts.ID, typ, key st
 		if err != nil {
 			return err
 		}
-		return s.reconcileGroups(ctx, tx, source, options)
+		if err := s.reconcileGroups(ctx, tx, source, options); err != nil {
+			return err
+		}
+		return forgetGoneNames(ctx, tx, source)
 	})
 	if err == nil {
 		s.lineupChanged(ctx, source)

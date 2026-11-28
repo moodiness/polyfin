@@ -256,7 +256,9 @@ func youTubeID(trailer string) string {
 // genre (a category) in a catalog of a type, or those whose name holds
 // search, newest first, then in the provider's order. A group of titles
 // is listed once, as its face, under its leader's identifier (see
-// groups.go).
+// groups.go). A title shows the name it learned while its source names
+// titles so, and a search matches it as well as the provider's (see
+// titlenames.go).
 func (s *Service) Catalog(ctx context.Context, source accounts.ID, catalogType, catalog string, skip int, genre, search string) ([]stremio.Meta, error) {
 	metas, _, err := s.catalogWindow(ctx, source, catalogType, catalog, genre, search, skip, vodPage, false)
 	return metas, err
@@ -290,11 +292,19 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 		args = append(args, hash)
 		filter += " AND left(encode(sha256(convert_to(t.category, 'UTF8')), 'hex'), 16) = $" + strconv.Itoa(len(args))
 	}
-	order := "t.added DESC NULLS LAST, t.position"
+	// rank lists first, in a search, the titles whose name shown starts
+	// with the term.
+	rank := "false"
 	if search = strings.TrimSpace(search); search != "" {
 		args = append(args, likePattern(search), strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(Fold(search))+"%")
-		filter += " AND t.search LIKE $" + strconv.Itoa(len(args)-1)
-		order = "t.search LIKE $" + strconv.Itoa(len(args)) + " DESC, " + order
+		// The provider's name, or the keys of the names shown that match
+		// (see learnedMatch), filter the titles as they are read.
+		matches := func(pattern int) string {
+			n := strconv.Itoa(pattern)
+			return "(t.search LIKE $" + n + " OR " + learnedMatch(n) + ")"
+		}
+		filter += " AND " + matches(len(args)-1)
+		rank = matches(len(args))
 	} else if catalog == searchCatalogID(catalogType) {
 		return nil, 0, nil
 	}
@@ -310,19 +320,24 @@ func (s *Service) catalogWindow(ctx context.Context, source accounts.ID, catalog
 			return nil, 0, err
 		}
 	}
-	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+`, `+groupLeader+from+` ORDER BY `+order+fmt.Sprintf(" LIMIT %d OFFSET %d", max(limit, 0),
-		max(skip, 0)), args...)
+	// The page is read first, then its titles' groups and names.
+	page := `SELECT t.*, ` + rank + ` AS search_rank` + from + ` ORDER BY search_rank DESC, t.added DESC NULLS LAST, t.position` +
+		fmt.Sprintf(" LIMIT %d OFFSET %d", max(limit, 0), max(skip, 0))
+	rows, err := s.db.Query(ctx, `SELECT `+titleColumns+`, g.leader, `+learnedName+` FROM (`+page+`) t JOIN iptv_sources i ON i.addon_id = t.addon_id`+
+		groupOfFace+learnedNames+` ORDER BY t.search_rank DESC, t.added DESC NULLS LAST, t.position`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
 	metas, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (stremio.Meta, error) {
 		var t storedTitle
 		var leader *string
-		err := scanTitle(row, &t, &leader)
+		var learned string
+		err := scanTitle(row, &t, &leader, &learned)
 		meta := listingMeta(source, t.Title)
 		if leader != nil {
 			meta.ID = titleID(source, t.Type, *leader)
 		}
+		meta.Name = cmp.Or(learned, meta.Name)
 		return meta, err
 	})
 	if metas == nil {
@@ -348,7 +363,8 @@ func (s *Service) title(ctx context.Context, source accounts.ID, typ, key string
 
 // titleMeta describes a title a source shows: its list data, completed by
 // its details when they are known or the request opens it (see Opening),
-// and, for a series, its episodes: the description kept (see
+// and, for a series, its episodes, under the name it learned while its
+// source names titles so (see titlenames.go): the description kept (see
 // descriptions.go), unless opening the title asks its provider for its
 // details. A group of titles is described under its leader's identifier
 // (see groupMeta); its other members' are not found.
@@ -388,7 +404,9 @@ func (s *Service) titleMeta(ctx context.Context, source accounts.ID, typ, key st
 			return stremio.Meta{}, err
 		}
 	}
-	return describedTitle(source, t.Title, t.kind, d, videos), nil
+	meta := describedTitle(source, t.Title, t.kind, d, videos)
+	meta.Name = cmp.Or(kept.learned, meta.Name)
+	return meta, nil
 }
 
 // m3uEpisodes lists an M3U series' episodes.
@@ -862,10 +880,12 @@ func (s *Service) episodeDetails(ctx context.Context, source accounts.ID, t stor
 }
 
 // Enrichment reports whether a source describes its titles through the
-// server's metadata addons, read once for a request marked by CheckOnce.
-func (s *Service) Enrichment(ctx context.Context, source accounts.ID) bool {
+// server's metadata addons, and whether it then names them after those
+// addons (see titlenames.go), read once for a request marked by
+// CheckOnce.
+func (s *Service) Enrichment(ctx context.Context, source accounts.ID) (enriched, named bool) {
 	state, err := s.sourceState(ctx, source)
-	return err == nil && state.enrichment
+	return err == nil && state.enrichment, err == nil && state.metadataNames
 }
 
 // VODCounts count a source's titles: movies and series in its lists,

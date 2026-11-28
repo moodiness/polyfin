@@ -27,19 +27,19 @@ func randomKey() string {
 // optionColumns are the columns of iptv_sources that store Options, in the
 // order of Options.fields.
 const optionColumns = "category_mode, channel_mode, excluded, new_channels, numbering, live_tv, movies, series, vod_excluded, vod_libraries, enrichment, " +
-	"title_versions, favorites_only"
+	"metadata_names, title_versions, favorites_only"
 
 // fields are pointers to the options' fields, in the order of
 // optionColumns.
 func (o *Options) fields() []any {
 	return []any{&o.Categories, &o.Channels, &o.Excluded, &o.NewChannels, &o.Numbering, &o.LiveTv, &o.Movies, &o.Series, &o.VODExcluded,
-		&o.VODLibraries, &o.Enrichment, &o.TitleVersions, &o.FavoritesOnly}
+		&o.VODLibraries, &o.Enrichment, &o.MetadataNames, &o.TitleVersions, &o.FavoritesOnly}
 }
 
 // values are the options' values, in the order of optionColumns.
 func (o Options) values() []any {
 	return []any{o.Categories, o.Channels, o.Excluded, o.NewChannels, o.Numbering, o.LiveTv, o.Movies, o.Series, o.VODExcluded, o.VODLibraries,
-		o.Enrichment, o.TitleVersions, o.FavoritesOnly}
+		o.Enrichment, o.MetadataNames, o.TitleVersions, o.FavoritesOnly}
 }
 
 // loadOptions reads a source's import options.
@@ -75,7 +75,8 @@ type existingChannel struct {
 
 // reconcile makes a source follow its stored lists and options, in tx:
 // its line-up while it imports live channels, then its titles, the groups
-// of its titles (see groups.go) and its catalogs. Its row in iptv_sources
+// of its titles (see groups.go), the names they learned (see
+// titlenames.go) and its catalogs. Its row in iptv_sources
 // is always updated, which changes its version (see CatalogVersion).
 func (s *Service) reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, at time.Time) error {
 	var kind, name string
@@ -99,6 +100,9 @@ func (s *Service) reconcile(ctx context.Context, tx pgx.Tx, source accounts.ID, 
 		return err
 	}
 	if err := s.reconcileGroups(ctx, tx, source, options); err != nil {
+		return err
+	}
+	if err := forgetGoneNames(ctx, tx, source); err != nil {
 		return err
 	}
 	return syncManifest(ctx, tx, source, kind, name, options)

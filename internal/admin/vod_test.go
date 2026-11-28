@@ -22,7 +22,7 @@ func TestIPTVVODOptions(t *testing.T) {
 	source := body["source"].(map[string]any)
 	options, vod := source["options"].(map[string]any), source["vod"].(map[string]any)
 	if options["liveTv"] != true || options["movies"] != true || options["series"] != false || options["vodLibraries"] != "type" ||
-		options["enrichment"] != true || fmt.Sprint(options["vodExcluded"]) != "[movie:Kids]" {
+		options["enrichment"] != true || options["metadataNames"] != false || fmt.Sprint(options["vodExcluded"]) != "[movie:Kids]" {
 		t.Errorf("options: %v", options)
 	}
 	if vod["movies"] != 2.0 || vod["shownMovies"] != 1.0 || vod["series"] != 0.0 || vod["movieCategories"] != 2.0 {
@@ -59,9 +59,10 @@ func TestIPTVVODOptions(t *testing.T) {
 		}
 	}
 	status, body, _ = administrator.call(http.MethodPatch, "/scopes/shared/iptv/"+id, map[string]any{"options": map[string]any{"series": true,
-		"vodLibraries": "category"}})
-	if status != http.StatusOK || body["source"].(map[string]any)["vod"].(map[string]any)["series"] != 1.0 {
-		t.Errorf("series by category: %d %v", status, body)
+		"vodLibraries": "category", "metadataNames": true}})
+	if status != http.StatusOK || body["source"].(map[string]any)["vod"].(map[string]any)["series"] != 1.0 ||
+		body["source"].(map[string]any)["options"].(map[string]any)["metadataNames"] != true {
+		t.Errorf("series by category, named after the metadata addons: %d %v", status, body)
 	}
 	rows = nil
 	for _, l := range administrator.libraries("shared") {

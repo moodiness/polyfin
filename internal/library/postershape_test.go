@@ -42,10 +42,10 @@ func TestPosterShapeFollowsThePoster(t *testing.T) {
 	}
 
 	own := stremio.Meta{Poster: "own.jpg", PosterShape: "landscape"}
-	if got := enriched(own, stremio.Meta{Poster: "addon.jpg"}); got.Poster != "addon.jpg" || got.Shape() != "" {
+	if got := enriched(own, stremio.Meta{Poster: "addon.jpg"}, false); got.Poster != "addon.jpg" || got.Shape() != "" {
 		t.Errorf("enriched with a poster: %+v", got)
 	}
-	if got := enriched(own, stremio.Meta{}); got.Poster != "own.jpg" || got.Shape() != stremio.ShapeLandscape {
+	if got := enriched(own, stremio.Meta{}, false); got.Poster != "own.jpg" || got.Shape() != stremio.ShapeLandscape {
 		t.Errorf("enriched without a poster: %+v", got)
 	}
 
