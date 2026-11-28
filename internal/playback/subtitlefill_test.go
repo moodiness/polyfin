@@ -346,11 +346,13 @@ func TestAFillThatCannotEndOffersNoTrack(t *testing.T) {
 }
 
 // queued queues the fill of version, which runs only when the test runs
-// it, and returns its job.
+// it, and returns its job. The fills' loop is taken as running, so that
+// queueFill starts none: the loop would run the job once the test makes it
+// ready, beside the test's own fills of the version.
 func queued(t *testing.T, s *Service, version library.Version, analysis media.Analysis) *fillJob {
 	t.Helper()
 	s.fills.mu.Lock()
-	s.fills.quiet, s.fills.wait = time.Hour, time.Hour
+	s.fills.running = true
 	s.fills.mu.Unlock()
 	s.queueFill(version, analysis)
 	s.fills.mu.Lock()
